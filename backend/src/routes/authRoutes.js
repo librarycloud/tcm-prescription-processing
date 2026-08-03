@@ -12,12 +12,18 @@ import {
 import { verifyToken } from '../middlewares/auth.js';
 
 export default async function authRoutes(fastify) {
-  fastify.post('/login', loginController);
-  fastify.post('/user-login', userLoginController);
-  fastify.post('/wechat-login', wechatLoginController);
+  fastify.addHook('preHandler', fastify.rateLimit());
+
+  fastify.post('/login', { preHandler: fastify.rateLimit() }, loginController);
+  fastify.post('/user-login', { preHandler: fastify.rateLimit() }, userLoginController);
+  fastify.post('/wechat-login', { preHandler: fastify.rateLimit() }, wechatLoginController);
   fastify.post('/wechat-bind', { preHandler: verifyToken }, bindWechatController);
   fastify.post('/wechat-rebind', { preHandler: verifyToken }, rebindWechatController);
-  fastify.post('/wechat-bind-pickup', bindWechatByPickupCodeController);
+  fastify.post(
+    '/wechat-bind-pickup',
+    { preHandler: fastify.rateLimit() },
+    bindWechatByPickupCodeController,
+  );
   fastify.get('/wechat-status', { preHandler: verifyToken }, wechatStatusController);
   fastify.post('/wechat-unbind', { preHandler: verifyToken }, unbindWechatController);
   fastify.post('/logout', { preHandler: verifyToken }, logoutController);

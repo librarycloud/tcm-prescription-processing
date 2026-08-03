@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import bcrypt from "bcrypt";
 import test from "node:test";
-import { config } from "../src/config.js";
 import { E6_IMPORT_STATUS } from "../src/constants/e6Integration.js";
 import {
   confirmE6Import,
@@ -68,18 +67,14 @@ test("enabling a store E6 integration generates a one-time API key", async () =>
 
   assert.equal(result.config.enabled, 1);
   assert.match(result.config.apiKey, /^e6_[A-Za-z0-9_-]+$/);
-  assert.equal(storedStore.e6ApiKeyHash.length, 64);
-  assert.equal(
-    storedStore.e6ApiKeyHash,
-    createHmac("sha256", config.e6ApiKeyHashSecret)
-      .update(result.config.apiKey)
-      .digest("hex"),
-  );
+  assert.equal(storedStore.e6ApiKeyHash.length, 60);
+  assert.equal(await bcrypt.compare(result.config.apiKey, storedStore.e6ApiKeyHash), true);
   assert.equal("apiKeyHash" in result.config, false);
 });
 
-function syncFixture({ mapped = false } = {}) {
+async function syncFixture({ mapped = false } = {}) {
   const apiKey = "e6_test_key";
+  const apiKeyHash = await bcrypt.hash(apiKey, 12);
   const state = { import: null, prescriptionCreates: 0, operationLogs: [] };
   const prisma = {
     store: {
@@ -89,9 +84,7 @@ function syncFixture({ mapped = false } = {}) {
         name: "苏州店",
         status: 1,
         e6Enabled: 1,
-        e6ApiKeyHash: createHmac("sha256", config.e6ApiKeyHashSecret)
-          .update(apiKey)
-          .digest("hex"),
+        e6ApiKeyHash: apiKeyHash,
       }),
       update: async () => ({ id: 3 }),
     },
@@ -130,7 +123,7 @@ function syncFixture({ mapped = false } = {}) {
 }
 
 test("E6 synchronization only creates an import and deduplicates the original order", async () => {
-  const { apiKey, prisma, state } = syncFixture();
+  const { apiKey, prisma, state } = await syncFixture();
 
   const first = await receiveE6Prescription(prisma, payload, apiKey);
   const second = await receiveE6Prescription(prisma, payload, apiKey);
@@ -147,7 +140,7 @@ test("E6 synchronization only creates an import and deduplicates the original or
 });
 
 test("E6 synchronization rejects an API key from another store", async () => {
-  const { prisma, state } = syncFixture();
+  const { prisma, state } = await syncFixture();
   await assert.rejects(
     () => receiveE6Prescription(prisma, payload, "wrong-key"),
     { statusCode: 401 },
@@ -156,7 +149,7 @@ test("E6 synchronization rejects an API key from another store", async () => {
 });
 
 test("a mapped E6 doctor leaves the synchronized order pending confirmation", async () => {
-  const { apiKey, prisma } = syncFixture({ mapped: true });
+  const { apiKey, prisma } = await syncFixture({ mapped: true });
   const result = await receiveE6Prescription(prisma, payload, apiKey);
   assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_PENDING);
 });

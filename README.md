@@ -90,13 +90,10 @@ npm run dev
 ```env
 DATABASE_URL="mysql://root:password@127.0.0.1:3306/tcm"
 JWT_SECRET="replace-with-a-long-random-secret"
-E6_API_KEY_HASH_SECRET="replace-with-another-long-random-secret"
 SETTINGS_ENCRYPTION_KEY="replace-with-a-long-random-secret"
 PORT=3000
 HOST="0.0.0.0"
 ```
-
-`E6_API_KEY_HASH_SECRET` 用于 E6 接入密钥的服务端 HMAC。生产环境请配置独立的随机值，并在升级后为已有 E6 接入重新生成密钥。
 
 MariaDB 使用兼容的 Prisma `mysql` provider，因此连接字符串仍以 `mysql://` 开头。
 
@@ -169,6 +166,8 @@ DELETE /admin/e6/doctor-mappings/:id
 E6 对接人员请参阅：[E6 处方数据同步 API 对接文档](docs/E6处方同步API对接文档.md)。
 
 E6 通过门店管理中生成的 API Key 调用同步接口。同步只创建 E6 导入记录，管理员确认后才会在同一事务中创建处方和加工计划。
+
+升级到 bcrypt 密钥存储后，已有 E6 接入需要在门店管理中重新生成一次 API Key。
 
 ```http
 POST /integrations/e6/v1/prescriptions

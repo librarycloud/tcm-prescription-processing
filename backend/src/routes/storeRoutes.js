@@ -8,6 +8,7 @@ import {
 } from '../controllers/storeController.js';
 
 export default async function storeRoutes(fastify) {
+  fastify.addHook('preHandler', fastify.rateLimit());
   fastify.addHook('preHandler', verifyToken);
   fastify.addHook('preHandler', verifySuperAdmin);
 

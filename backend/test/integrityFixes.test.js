@@ -439,6 +439,7 @@ test("operation logs route is protected by the super-admin guard", async () => {
   const routes = [];
   const fastify = {
     addHook() {},
+    rateLimit: () => async () => {},
     get: (...args) => routes.push({ method: "GET", args }),
     post: (...args) => routes.push({ method: "POST", args }),
     put: (...args) => routes.push({ method: "PUT", args }),
@@ -449,7 +450,10 @@ test("operation logs route is protected by the super-admin guard", async () => {
   const route = routes.find(
     (item) => item.method === "GET" && item.args[0] === "/operation-logs",
   );
-  assert.equal(route.args[1].preHandler, verifySuperAdmin);
+  const preHandlers = Array.isArray(route.args[1].preHandler)
+    ? route.args[1].preHandler
+    : [route.args[1].preHandler];
+  assert.equal(preHandlers.includes(verifySuperAdmin), true);
 });
 
 test("store admins only list ordinary users", async () => {

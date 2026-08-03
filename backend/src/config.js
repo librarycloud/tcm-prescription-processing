@@ -28,7 +28,6 @@ export const config = {
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || '0.0.0.0',
   jwtSecret,
-  e6ApiKeyHashSecret: process.env.E6_API_KEY_HASH_SECRET || jwtSecret,
   wxAppId: process.env.WX_APPID || '',
   wxSecret: process.env.WX_SECRET || '',
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),

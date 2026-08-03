@@ -151,6 +151,7 @@ import {
 } from "../controllers/e6IntegrationController.js";
 
 export default async function adminRoutes(fastify) {
+  fastify.addHook("preHandler", fastify.rateLimit());
   fastify.addHook("preHandler", verifyToken);
   fastify.addHook("preHandler", verifyManager);
 
@@ -212,7 +213,11 @@ export default async function adminRoutes(fastify) {
   fastify.post("/packages", createController);
   fastify.put("/packages/:id", updateController);
   fastify.delete("/packages/:id", deleteController);
-  fastify.post("/packages/verify", verifyController);
+  fastify.post(
+    "/packages/verify",
+    { preHandler: fastify.rateLimit() },
+    verifyController,
+  );
   fastify.get("/prescriptions", listPrescriptionController);
   fastify.get("/prescriptions/:id", prescriptionDetailController);
   fastify.post("/prescriptions", createPrescriptionController);
@@ -353,7 +358,7 @@ export default async function adminRoutes(fastify) {
   );
   fastify.get(
     "/login-logs",
-    { preHandler: verifySuperAdmin },
+    { preHandler: [fastify.rateLimit(), verifySuperAdmin] },
     listLoginLogsController,
   );
   fastify.get(

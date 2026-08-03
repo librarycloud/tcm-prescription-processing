@@ -1,10 +1,5 @@
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "node:crypto";
-import { config } from "../config.js";
+import bcrypt from "bcrypt";
+import { createHash, randomBytes } from "node:crypto";
 import { AppError } from "../utils/appError.js";
 import { normalizeOptionalPhone, toPositiveInt } from "../utils/validators.js";
 import { isSuperAdmin } from "../constants/roles.js";
@@ -68,24 +63,10 @@ function positiveInteger(value, label) {
   return number;
 }
 
-function hashApiKey(value) {
-  return createHmac("sha256", config.e6ApiKeyHashSecret)
-    .update(String(value))
-    .digest("hex");
-}
+const API_KEY_HASH_ROUNDS = 12;
 
-function hashesEqual(left, right) {
-  if (!left || !right || left.length !== right.length) return false;
-  try {
-    const leftBuffer = Buffer.from(left, "hex");
-    const rightBuffer = Buffer.from(right, "hex");
-    return (
-      leftBuffer.length === rightBuffer.length &&
-      timingSafeEqual(leftBuffer, rightBuffer)
-    );
-  } catch {
-    return false;
-  }
+function hashApiKey(value) {
+  return bcrypt.hash(String(value), API_KEY_HASH_ROUNDS);
 }
 
 function createApiKey() {
@@ -138,7 +119,7 @@ export async function saveE6StoreConfig(
   };
   if (shouldRotate) {
     apiKey = createApiKey();
-    data.e6ApiKeyHash = hashApiKey(apiKey);
+    data.e6ApiKeyHash = await hashApiKey(apiKey);
     data.e6ApiKeyHint = apiKey.slice(-6);
     data.e6RotatedAt = new Date();
   }
@@ -347,11 +328,13 @@ async function authenticateStore(prisma, storeCode, apiKey) {
       deletedAt: null,
     },
   });
-  const suppliedHash = hashApiKey(apiKey || "");
+  const matches = store?.e6ApiKeyHash
+    ? await bcrypt.compare(String(apiKey || ""), store.e6ApiKeyHash)
+    : false;
   if (
     !store ||
     store.e6Enabled !== E6_CONFIG_STATUS.ENABLED ||
-    !hashesEqual(store.e6ApiKeyHash, suppliedHash)
+    !matches
   ) {
     throw new AppError("E6接入凭证无效", 401);
   }
