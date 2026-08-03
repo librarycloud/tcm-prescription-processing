@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import test from "node:test";
+import { config } from "../src/config.js";
 import { E6_IMPORT_STATUS } from "../src/constants/e6Integration.js";
 import {
   confirmE6Import,
@@ -70,7 +71,9 @@ test("enabling a store E6 integration generates a one-time API key", async () =>
   assert.equal(storedStore.e6ApiKeyHash.length, 64);
   assert.equal(
     storedStore.e6ApiKeyHash,
-    createHash("sha256").update(result.config.apiKey).digest("hex"),
+    createHmac("sha256", config.e6ApiKeyHashSecret)
+      .update(result.config.apiKey)
+      .digest("hex"),
   );
   assert.equal("apiKeyHash" in result.config, false);
 });
@@ -86,7 +89,9 @@ function syncFixture({ mapped = false } = {}) {
         name: "苏州店",
         status: 1,
         e6Enabled: 1,
-        e6ApiKeyHash: createHash("sha256").update(apiKey).digest("hex"),
+        e6ApiKeyHash: createHmac("sha256", config.e6ApiKeyHashSecret)
+          .update(apiKey)
+          .digest("hex"),
       }),
       update: async () => ({ id: 3 }),
     },

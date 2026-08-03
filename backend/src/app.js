@@ -27,7 +27,12 @@ export async function buildApp() {
 
   await fastify.register(cors, { origin: true });
   await fastify.register(helmet);
-  await fastify.register(rateLimit, { max: 200, timeWindow: '1 minute' });
+  await fastify.register(rateLimit, {
+    global: false,
+    max: 200,
+    timeWindow: '1 minute'
+  });
+  fastify.addHook('onRequest', fastify.rateLimit());
   await fastify.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
   await fastify.register(jwt, { secret: config.jwtSecret });
   await fastify.register(prismaPlugin);

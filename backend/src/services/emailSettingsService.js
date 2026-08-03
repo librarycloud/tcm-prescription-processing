@@ -2,6 +2,7 @@ import { EMAIL_SCENE_NAMES, EMAIL_TEMPLATE_VARIABLES } from '../constants/email.
 import { PICKUP_METHOD_NAMES } from '../constants/notification.js';
 import { AppError } from '../utils/appError.js';
 import { encryptSetting } from '../utils/settingsEncryption.js';
+import { isValidEmail } from '../utils/validators.js';
 
 const DEFAULT_TEMPLATES = [
   {
@@ -26,7 +27,7 @@ function clean(value, max, label) {
 
 function validateEmail(value) {
   const email = String(value || '').trim().toLowerCase();
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email && !isValidEmail(email)) {
     throw new AppError('邮箱格式不正确', 400);
   }
   return email;

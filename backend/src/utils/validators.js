@@ -20,6 +20,38 @@ export function normalizeOptionalPhone(phone, fieldName = '手机号') {
   return normalized;
 }
 
+const EMAIL_LOCAL_ALLOWED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.!#$%&'*+-/=?^_`{|}~";
+const EMAIL_DOMAIN_ALLOWED = 'abcdefghijklmnopqrstuvwxyz0123456789-';
+
+export function isValidEmail(value) {
+  const email = String(value ?? '').trim().toLowerCase();
+  if (!email || email.length > 254) return false;
+
+  const atIndex = email.indexOf('@');
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf('@') || atIndex === email.length - 1) {
+    return false;
+  }
+
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+  if (local.length > 64 || local.startsWith('.') || local.endsWith('.') || local.includes('..')) {
+    return false;
+  }
+  for (const character of local) {
+    if (!EMAIL_LOCAL_ALLOWED.includes(character)) return false;
+  }
+
+  const labels = domain.split('.');
+  if (labels.length < 2 || labels.some((label) => !label || label.length > 63)) return false;
+  for (const label of labels) {
+    if (label.startsWith('-') || label.endsWith('-')) return false;
+    for (const character of label) {
+      if (!EMAIL_DOMAIN_ALLOWED.includes(character)) return false;
+    }
+  }
+  return true;
+}
+
 export function toPositiveInt(value, defaultValue = 1) {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed) || parsed <= 0) return defaultValue;

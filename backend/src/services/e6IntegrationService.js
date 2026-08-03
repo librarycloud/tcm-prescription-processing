@@ -1,8 +1,10 @@
 import {
   createHash,
+  createHmac,
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
+import { config } from "../config.js";
 import { AppError } from "../utils/appError.js";
 import { normalizeOptionalPhone, toPositiveInt } from "../utils/validators.js";
 import { isSuperAdmin } from "../constants/roles.js";
@@ -67,7 +69,9 @@ function positiveInteger(value, label) {
 }
 
 function hashApiKey(value) {
-  return createHash("sha256").update(String(value)).digest("hex");
+  return createHmac("sha256", config.e6ApiKeyHashSecret)
+    .update(String(value))
+    .digest("hex");
 }
 
 function hashesEqual(left, right) {

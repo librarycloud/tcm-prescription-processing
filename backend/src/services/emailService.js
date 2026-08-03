@@ -3,12 +3,13 @@ import { randomInt } from 'node:crypto';
 import { sendSmtpEmail } from '../providers/email/smtpProvider.js';
 import { AppError } from '../utils/appError.js';
 import { decryptSetting } from '../utils/settingsEncryption.js';
+import { isValidEmail } from '../utils/validators.js';
 import { ensureEmailDefaults } from './emailSettingsService.js';
 import { renderEmailTemplate } from './emailTemplateService.js';
 
 function validateEmail(value) {
   const email = String(value || '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AppError('邮箱格式不正确', 400);
+  if (!isValidEmail(email)) throw new AppError('邮箱格式不正确', 400);
   return email;
 }
 
