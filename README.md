@@ -59,7 +59,6 @@
 ## 目录结构
 
 ```text
-wechat-pickup-system/
   backend/              Fastify API、Prisma schema 与迁移
   web-admin/            管理端 Web 应用
   web-user/             普通用户 Web 应用
@@ -71,7 +70,7 @@ wechat-pickup-system/
 创建 MariaDB 数据库：
 
 ```sql
-CREATE DATABASE wechat_pickup DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE tcm DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 后端：
@@ -89,7 +88,7 @@ npm run dev
 主要环境变量：
 
 ```env
-DATABASE_URL="mysql://root:password@127.0.0.1:3306/wechat_pickup"
+DATABASE_URL="mysql://root:password@127.0.0.1:3306/tcm"
 JWT_SECRET="replace-with-a-long-random-secret"
 E6_API_KEY_HASH_SECRET="replace-with-another-long-random-secret"
 SETTINGS_ENCRYPTION_KEY="replace-with-a-long-random-secret"
