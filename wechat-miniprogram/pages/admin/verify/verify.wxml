@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="app-card">
+    <t-input label="取货码" value="{{pickupCode}}" placeholder="扫码或输入取货码" bind:change="onCodeChange" />
+    <view class="verify-actions">
+      <t-button theme="light" bind:tap="scan">扫码</t-button>
+      <t-button theme="primary" loading="{{lookupLoading}}" bind:tap="lookup">查询包裹</t-button>
+    </view>
+  </view>
+
+  <view class="app-card" wx:if="{{packageInfo}}">
+    <view class="status-row verify-header">
+      <view>
+        <view class="code">{{packageInfo.pickupCode}}</view>
+        <view class="muted">{{packageInfo.itemName}}</view>
+      </view>
+      <t-tag theme="{{packageInfo.statusTheme}}">{{packageInfo.statusText}}</t-tag>
+    </view>
+
+    <t-cell-group>
+      <t-cell title="收件人" note="{{packageInfo.receiverName}}" />
+      <t-cell title="手机号" note="{{packageInfo.receiverPhone || '-'}}" />
+      <t-cell title="备注" note="{{packageInfo.itemInfo || '-'}}" />
+      <t-cell title="录入时间" note="{{packageInfo.createdAtText}}" />
+    </t-cell-group>
+
+    <picker mode="selector" range="{{pickupMethodOptions}}" range-key="label" value="{{pickupMethodIndex}}" bindchange="onPickupMethodChange" disabled="{{packageInfo.isPicked}}">
+      <view class="picker-row">
+        <text>实际取货方式</text>
+        <text class="picker-value {{pickupMethod === null ? 'placeholder' : ''}}">{{pickupMethod === null ? '请选择取货方式' : pickupMethodText}}</text>
+      </view>
+    </picker>
+
+    <view wx:if="{{pickupMethod === 2}}" class="tracking-row">
+      <t-input label="快递单号" value="{{expressTrackingNo}}" maxlength="100" placeholder="输入或扫描顺丰单号" bind:change="onTrackingNoChange" bind:click="scanTrackingNo">
+        <t-icon slot="suffix-icon" name="scan" size="40rpx" color="#0052d9" />
+      </t-input>
+    </view>
+
+    <view class="confirm-action">
+      <t-button theme="primary" block disabled="{{packageInfo.isPicked}}" loading="{{verifyLoading}}" bind:tap="submit">确认核销</t-button>
+    </view>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

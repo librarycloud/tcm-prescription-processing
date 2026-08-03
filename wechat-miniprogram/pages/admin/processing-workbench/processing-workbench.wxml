@@ -1,0 +1,114 @@
+<view class="page">
+  <view class="page-actions">
+    <t-button theme="primary" bind:tap="goCreatePlan">新建加工计划</t-button>
+  </view>
+
+  <view class="mode-switch">
+    <view class="mode-item {{mode === 'plans' ? 'active' : ''}}" data-mode="plans" bind:tap="switchMode">加工计划</view>
+    <view class="mode-item {{mode === 'pickup' ? 'active' : ''}}" data-mode="pickup" bind:tap="switchMode">待领取</view>
+  </view>
+
+  <view wx:if="{{mode === 'plans'}}" class="stats-grid">
+    <view
+      class="stat-item {{activeView === item.view ? 'active' : ''}}"
+      wx:for="{{statCards}}"
+      wx:key="key"
+      data-view="{{item.view}}"
+      bind:tap="switchView"
+    >
+      <view class="stat-value">{{item.value}}</view>
+      <view class="muted">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="toolbar workbench-toolbar">
+    <view class="workbench-search">
+      <t-input borderless suffix="搜索" value="{{keyword}}" placeholder="姓名/手机号/备注" bind:change="onKeywordChange" bind:click="search" bind:enter="search" />
+    </view>
+  </view>
+  <picker wx:if="{{isSuperAdmin}}" class="store-filter" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange">
+    <t-button size="small" variant="outline">{{storeName}}</t-button>
+  </picker>
+
+  <block wx:if="{{mode === 'plans'}}">
+    <view class="app-card task-card" wx:for="{{list}}" wx:key="id">
+      <view class="status-row">
+        <view class="task-main">
+          <view class="task-title">{{item.customerName}} · {{item.processTypeName}}</view>
+          <view class="muted">{{item.customerPhone}} · {{item.doctorName}}</view>
+        </view>
+        <view class="tag-group">
+          <t-tag wx:if="{{item.isUrgent}}" theme="danger">加急</t-tag>
+          <t-tag theme="{{item.stageTheme}}">{{item.stageText}}</t-tag>
+        </view>
+      </view>
+      <view class="task-info">
+        <view>第 {{item.batchNo}} 批 · {{item.totalDose}} 剂</view>
+        <view wx:if="{{item.isDecoction}}">代煎规格：{{item.bagCount}} 袋 · {{item.volumeMl}} ml</view>
+        <view>取货方式：{{item.pickupMethodLabel}}</view>
+        <view>计划开工：{{item.scheduleText}}</view>
+        <view wx:if="{{item.storeName}}">门店：{{item.storeName}}</view>
+        <view wx:if="{{item.startDate}}">实际开工：{{item.startDateText}}</view>
+        <view wx:if="{{item.finishDate}}">完成时间：{{item.finishDateText}}</view>
+        <view wx:if="{{item.processRemark || item.remark}}">备注：{{item.processRemark || item.remark}}</view>
+      </view>
+      <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view class="task-actions {{item.fewActions ? 'few' : 'many'}} {{item.singleAction ? 'one' : ''}}">
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" size="small" variant="outline" data-id="{{item.id}}" bind:tap="showPlanDetail">详情</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" size="small" variant="outline" data-id="{{item.prescriptionId}}" bind:tap="goPrescriptionDetail">处方</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canReceiveNotice}}" size="small" theme="primary" data-id="{{item.id}}" bind:tap="receiveNotice">收到通知</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canStart}}" size="small" theme="primary" data-id="{{item.id}}" bind:tap="startPlan">开始加工</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canFinish}}" size="small" theme="success" data-id="{{item.id}}" bind:tap="finishPlan">加工完成</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canGeneratePackage}}" size="small" theme="success" data-id="{{item.id}}" bind:tap="generatePlanPackage">生成包裹</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canDelay}}" size="small" theme="default" data-id="{{item.id}}" bind:tap="delayPlan">延期</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canEdit}}" size="small" theme="primary" variant="outline" data-id="{{item.id}}" bind:tap="editPlan">编辑</t-button>
+          <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canDelete}}" size="small" theme="danger" variant="outline" data-id="{{item.id}}" bind:tap="removePlan">删除</t-button>
+        </view>
+      </scroll-view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="app-card pickup-card" wx:for="{{list}}" wx:key="id">
+      <view class="status-row">
+        <view class="task-main">
+          <view class="task-title">{{item.receiverName}} · {{item.processTypeName}}</view>
+          <view class="muted">{{item.receiverPhone}} · {{item.totalDose}} 剂</view>
+        </view>
+        <view class="tag-group">
+          <t-tag theme="{{item.scopeTheme}}" variant="outline">{{item.scopeText}}</t-tag>
+          <t-tag theme="{{item.statusTheme}}">{{item.statusText}}</t-tag>
+        </view>
+      </view>
+      <view class="task-info">
+        <view class="pickup-code">取货码：{{item.pickupCode}}</view>
+        <view>完成时间：{{item.finishDateText}}</view>
+        <view wx:if="{{item.storeName}}">门店：{{item.storeName}}</view>
+        <view wx:if="{{item.pickedAt}}">取货时间：{{item.pickedAtText}}</view>
+      </view>
+      <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view class="task-actions few {{item.singleAction ? 'one' : ''}}">
+          <t-button size="small" variant="outline" data-id="{{item.id}}" bind:tap="goPackageDetail">详情</t-button>
+          <t-button wx:if="{{item.canVerify}}" size="small" theme="success" data-code="{{item.pickupCode}}" bind:tap="goVerify">核销</t-button>
+        </view>
+      </scroll-view>
+    </view>
+  </block>
+
+  <t-loading wx:if="{{loading}}" text="加载中" />
+  <t-empty wx:elif="{{!list.length}}" description="{{mode === 'plans' ? '暂无加工计划' : '暂无领取任务'}}" />
+
+  <view class="pager">
+    <t-button theme="light" size="small" disabled="{{page <= 1}}" bind:tap="prevPage">上一页</t-button>
+    <view class="muted">{{page}} / {{pages}}</view>
+    <t-button size="small" disabled="{{page >= pages}}" bind:tap="nextPage">下一页</t-button>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

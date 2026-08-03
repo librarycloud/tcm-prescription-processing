@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "包裹详情",
+  "usingComponents": {    "t-cell": "tdesign-miniprogram/cell/cell",
+    "t-cell-group": "tdesign-miniprogram/cell-group/cell-group",
+    "t-tag": "tdesign-miniprogram/tag/tag",
+    "qr-code": "../../../components/qr-code/qr-code"
+  }
+}

@@ -1,0 +1,817 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  username        String    @db.VarChar(64)
+  password        String    @db.VarChar(255)
+  phone           String    @unique @db.VarChar(20)
+  openid          String?   @unique @db.VarChar(64)
+  unionid         String?   @unique @db.VarChar(64)
+  wechatBoundAt   DateTime? @map("wechat_bound_at")
+  role            Int       @default(1) @db.TinyInt
+  status          Int       @default(1) @db.TinyInt
+  storeId         Int?      @map("store_id")
+  nickname        String?   @db.VarChar(64)
+  name            String?   @db.VarChar(64)
+  email           String?   @unique @db.VarChar(191)
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  remark          String?   @db.VarChar(500)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       Int?      @map("created_by")
+  updatedBy       Int?      @map("updated_by")
+
+  createdPackages            Package[]                @relation("PackageCreatedBy")
+  verifiedPackages           Package[]                @relation("PackageVerifiedBy")
+  modifiedPackages           Package[]                @relation("PackageModifiedBy")
+  store                      Store?                   @relation(fields: [storeId], references: [id])
+  emailVerificationCodes     EmailVerificationCode[]
+  prescriptionsCreated       Prescription[]           @relation("PrescriptionCreatedBy")
+  processingPlansCreated     ProcessingPlan[]         @relation("ProcessingPlanCreatedBy")
+  printTemplatesCreated      PrintTemplate[]          @relation("PrintTemplateCreatedBy")
+  storeTransfersCreated      StoreTransfer[]          @relation("StoreTransferCreatedBy")
+  transferReturns            StoreTransferReturn[]    @relation("StoreTransferReturnOperator")
+  confirmedTransferReturns   StoreTransferReturn[]    @relation("StoreTransferReturnConfirmedBy")
+  confirmedTransferOutbounds StoreTransfer[]          @relation("StoreTransferOutboundConfirmedBy")
+  robotConfigsCreated        RobotConfig[]            @relation("RobotConfigCreatedBy")
+  robotConfigsUpdated        RobotConfig[]            @relation("RobotConfigUpdatedBy")
+  robotEventConfigsCreated   RobotEventConfig[]       @relation("RobotEventConfigCreatedBy")
+  robotEventConfigsUpdated   RobotEventConfig[]       @relation("RobotEventConfigUpdatedBy")
+  robotNotificationEvents    RobotNotificationEvent[] @relation("RobotNotificationEventOperator")
+  productDiffLogsCreated     ProductsDiffLog[]        @relation("ProductsDiffLogCreatedBy")
+
+  @@index([role])
+  @@index([status])
+  @@index([storeId])
+  @@map("users")
+}
+
+model Store {
+  id                   Int       @id @default(autoincrement())
+  name                 String    @unique @db.VarChar(100)
+  code                 String    @unique @db.VarChar(50)
+  address              String?   @db.VarChar(255)
+  phone                String?   @db.VarChar(20)
+  status               Int       @default(1) @db.TinyInt
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  createdBy            Int?      @map("created_by")
+  updatedBy            Int?      @map("updated_by")
+  deletedAt            DateTime? @map("deleted_at")
+  deletedBy            Int?      @map("deleted_by")
+  drawerLayerCount     Int       @default(8) @map("drawer_layer_count") @db.TinyInt
+  drawerUnitCount      Int       @default(5) @map("drawer_unit_count") @db.TinyInt
+  drawerLayerColumns   String    @default("[6,6,6,6,6,6,6,3]") @map("drawer_layer_columns") @db.VarChar(255)
+  drawerTopColumnCount Int       @default(6) @map("drawer_top_column_count") @db.TinyInt
+  bigCabinetUnitCount  Int       @default(5) @map("big_cabinet_unit_count") @db.TinyInt
+  bigCabinetLayerCount Int       @default(3) @map("big_cabinet_layer_count") @db.TinyInt
+  e6Enabled            Int       @default(0) @map("e6_enabled") @db.TinyInt
+  e6ApiKeyHash         String?   @map("e6_api_key_hash") @db.VarChar(64)
+  e6ApiKeyHint         String?   @map("e6_api_key_hint") @db.VarChar(16)
+  e6LastUsedAt         DateTime? @map("e6_last_used_at")
+  e6RotatedAt          DateTime? @map("e6_rotated_at")
+
+  users            User[]
+  packages         Package[]
+  prescriptions    Prescription[]
+  processingPlans  ProcessingPlan[]
+  printTemplates   PrintTemplate[]
+  loginLogs        LoginLog[]
+  operationLogs    OperationLog[]
+  transfersOut     StoreTransfer[]   @relation("StoreTransferFromStore")
+  transfersIn      StoreTransfer[]   @relation("StoreTransferToStore")
+  herbs            Herb[]
+  herbLocations    HerbLocation[]
+  robotConfigs     RobotConfig[]
+  products         Product[]
+  productDiffLogs  ProductsDiffLog[]
+  e6DoctorMappings E6DoctorMapping[]
+  e6Imports        E6Import[]
+
+  @@index([status])
+  @@index([e6Enabled])
+  @@map("stores")
+}
+
+model Herb {
+  id            Int      @id @default(autoincrement())
+  storeId       Int      @map("store_id")
+  code          String?  @db.VarChar(64)
+  name          String   @db.VarChar(100)
+  specification String?  @db.VarChar(100)
+  status        Int      @default(1) @db.TinyInt
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdBy     Int?     @map("created_by")
+  updatedBy     Int?     @map("updated_by")
+
+  store       Store                    @relation(fields: [storeId], references: [id])
+  assignments HerbLocationAssignment[]
+
+  @@index([storeId, name])
+  @@index([storeId, code])
+  @@map("herbs")
+}
+
+model Product {
+  id            Int       @id @default(autoincrement())
+  storeId       Int       @map("store_id")
+  productCode   String    @map("product_code") @db.VarChar(64)
+  name          String    @db.VarChar(120)
+  specification String?   @db.VarChar(120)
+  unit          String    @db.VarChar(20)
+  retailPrice   Decimal   @default(0) @map("retail_price") @db.Decimal(14, 2)
+  diffQuantity  Decimal   @default(0) @map("diff_quantity") @db.Decimal(12, 3)
+  status        Int       @default(1) @db.TinyInt
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdBy     Int?      @map("created_by")
+  updatedBy     Int?      @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     Int?      @map("deleted_by")
+
+  store    Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  diffLogs ProductsDiffLog[]
+
+  @@unique([storeId, productCode])
+  @@index([storeId, name])
+  @@index([storeId, status])
+  @@index([storeId, diffQuantity])
+  @@map("products")
+}
+
+model ProductsDiffLog {
+  id               Int      @id @default(autoincrement())
+  operationNo      String   @map("operation_no") @db.VarChar(32)
+  storeId          Int      @map("store_id")
+  productId        Int      @map("product_id")
+  operationType    String   @map("operation_type") @db.VarChar(32)
+  changeQuantity   Decimal  @map("change_quantity") @db.Decimal(12, 3)
+  balanceAfter     Decimal  @map("balance_after") @db.Decimal(12, 3)
+  businessDate     DateTime @map("business_date") @db.Date
+  batchNote        String?  @map("batch_note") @db.VarChar(120)
+  borrowerName     String?  @map("borrower_name") @db.VarChar(100)
+  supplierName     String?  @map("supplier_name") @db.VarChar(120)
+  relatedLogId     Int?     @map("related_log_id")
+  systemDocumentNo String?  @map("system_document_no") @db.VarChar(100)
+  remark           String?  @db.VarChar(500)
+  createdBy        Int      @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  store      Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  creator    User              @relation("ProductsDiffLogCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  relatedLog ProductsDiffLog?  @relation("ProductsDiffLogRelated", fields: [relatedLogId], references: [id], onDelete: Restrict)
+  childLogs  ProductsDiffLog[] @relation("ProductsDiffLogRelated")
+
+  @@index([storeId, businessDate])
+  @@index([productId, createdAt])
+  @@index([operationNo])
+  @@index([operationType, businessDate])
+  @@index([relatedLogId])
+  @@map("products_diff_logs")
+}
+
+model HerbLocation {
+  id               Int      @id @default(autoincrement())
+  storeId          Int      @map("store_id")
+  locationCode     String   @map("location_code") @db.VarChar(20)
+  locationType     String   @map("location_type") @db.Char(1)
+  unitNo           Int      @map("unit_no") @db.TinyInt
+  layerNo          Int      @map("layer_no") @db.TinyInt
+  columnNo         Int?     @map("column_no") @db.TinyInt
+  medicineCapacity Int?     @map("medicine_capacity") @db.TinyInt
+  status           Int      @default(1) @db.TinyInt
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdBy        Int?     @map("created_by")
+  updatedBy        Int?     @map("updated_by")
+
+  store       Store                    @relation(fields: [storeId], references: [id])
+  assignments HerbLocationAssignment[]
+
+  @@unique([storeId, locationCode])
+  @@index([storeId, locationType, unitNo, layerNo, columnNo], map: "herb_location_scope_idx")
+  @@map("herb_locations")
+}
+
+model HerbLocationAssignment {
+  id         Int      @id @default(autoincrement())
+  locationId Int      @map("location_id")
+  herbId     Int      @map("herb_id")
+  slotNo     Int?     @map("slot_no") @db.TinyInt
+  createdAt  DateTime @default(now()) @map("created_at")
+  createdBy  Int?     @map("created_by")
+
+  location HerbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  herb     Herb         @relation(fields: [herbId], references: [id], onDelete: Restrict)
+
+  @@unique([locationId, herbId])
+  @@unique([locationId, slotNo])
+  @@index([herbId])
+  @@map("herb_location_assignments")
+}
+
+model Package {
+  id                 Int       @id @default(autoincrement())
+  storeId            Int       @map("store_id")
+  pickupCode         String    @unique @map("pickup_code") @db.VarChar(6)
+  itemName           String    @map("item_name") @db.VarChar(120)
+  itemInfo           String?   @map("item_info") @db.VarChar(500)
+  receiverName       String    @map("receiver_name") @db.VarChar(64)
+  receiverPhone      String?   @map("receiver_phone") @db.VarChar(20)
+  status             Int       @default(0) @db.TinyInt
+  pickupMethod       Int?      @map("pickup_method") @db.TinyInt
+  expressTrackingNo  String?   @map("express_tracking_no") @db.VarChar(100)
+  expressAddress     String?   @map("express_address") @db.VarChar(500)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  pickedAt           DateTime? @map("picked_at")
+  modifiedAt         DateTime? @map("modified_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  createdBy          Int       @map("created_by")
+  verifiedBy         Int?      @map("verified_by")
+  modifiedBy         Int?      @map("modified_by")
+  updatedBy          Int?      @map("updated_by")
+  deletedAt          DateTime? @map("deleted_at")
+  deletedBy          Int?      @map("deleted_by")
+  notificationStatus Int       @default(0) @map("notification_status") @db.TinyInt
+  notificationCount  Int       @default(0) @map("notification_count")
+  lastNotificationAt DateTime? @map("last_notification_at")
+  processingPlanId   Int?      @unique @map("processing_plan_id")
+
+  creator        User            @relation("PackageCreatedBy", fields: [createdBy], references: [id])
+  verifier       User?           @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
+  modifier       User?           @relation("PackageModifiedBy", fields: [modifiedBy], references: [id])
+  store          Store           @relation(fields: [storeId], references: [id])
+  processingPlan ProcessingPlan? @relation(fields: [processingPlanId], references: [id])
+
+  @@index([storeId, deletedAt, status, createdAt])
+  @@index([receiverPhone])
+  @@index([status])
+  @@index([createdAt])
+  @@index([pickedAt])
+  @@index([modifiedAt])
+  @@index([modifiedBy])
+  @@index([notificationStatus])
+  @@map("packages")
+}
+
+model Dictionary {
+  id        Int       @id @default(autoincrement())
+  type      String    @db.VarChar(50)
+  code      String    @db.VarChar(50)
+  name      String    @db.VarChar(100)
+  status    Int       @default(1) @db.TinyInt
+  sort      Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  updatedBy Int?      @map("updated_by")
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy Int?      @map("deleted_by")
+
+  prescriptionSources Prescription[]   @relation("PrescriptionSource")
+  processingTypes     ProcessingPlan[] @relation("ProcessingType")
+  notifyPlans         ProcessingPlan[] @relation("ProcessingPlanNotifyType")
+
+  @@unique([type, code])
+  @@index([type, status, sort])
+  @@map("dictionaries")
+}
+
+model Doctor {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(100)
+  status    Int       @default(1) @db.TinyInt
+  sort      Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  updatedBy Int?      @map("updated_by")
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy Int?      @map("deleted_by")
+
+  prescriptions    Prescription[]
+  e6DoctorMappings E6DoctorMapping[]
+
+  @@index([status, sort])
+  @@map("doctors")
+}
+
+model Prescription {
+  id               Int       @id @default(autoincrement())
+  prescriptionNo   String    @unique @map("prescription_no") @db.VarChar(24)
+  customerName     String    @map("customer_name") @db.VarChar(64)
+  phone            String?   @db.VarChar(20)
+  doctorId         Int       @map("doctor_id")
+  sourceId         Int       @map("source_id")
+  isExternal       Int       @default(0) @map("is_external") @db.TinyInt
+  externalHospital String?   @map("external_hospital") @db.VarChar(150)
+  externalDoctor   String?   @map("external_doctor") @db.VarChar(100)
+  externalRemark   String?   @map("external_remark") @db.VarChar(500)
+  remark           String?   @db.VarChar(500)
+  totalPrice       Decimal?  @map("total_price") @db.Decimal(14, 2)
+  storeId          Int       @map("store_id")
+  status           Int       @default(0) @db.TinyInt
+  createdBy        Int       @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  updatedBy        Int?      @map("updated_by")
+  deletedAt        DateTime? @map("deleted_at")
+  deletedBy        Int?      @map("deleted_by")
+
+  doctor   Doctor           @relation(fields: [doctorId], references: [id])
+  source   Dictionary       @relation("PrescriptionSource", fields: [sourceId], references: [id])
+  store    Store            @relation(fields: [storeId], references: [id])
+  creator  User             @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
+  plans    ProcessingPlan[]
+  e6Import E6Import?
+
+  @@index([phone])
+  @@index([doctorId])
+  @@index([sourceId])
+  @@index([storeId, status, createdAt])
+  @@map("prescriptions")
+}
+
+model ProcessingPlan {
+  id             Int       @id @default(autoincrement())
+  prescriptionId Int       @map("prescription_id")
+  batchNo        Int       @map("batch_no")
+  processTypeId  Int       @map("process_type_id")
+  totalDose      Int       @map("total_dose")
+  bagCount       Int?      @map("bag_count")
+  volumeMl       Int?      @map("volume_ml")
+  usageMethod    String?   @map("usage_method") @db.VarChar(200)
+  takenDose      Int       @default(0) @map("taken_dose")
+  remainingDose  Int       @map("remaining_dose")
+  scheduleType   Int       @map("schedule_type") @db.TinyInt
+  processDate    DateTime? @map("process_date")
+  startDate      DateTime? @map("start_date")
+  finishDate     DateTime? @map("finish_date")
+  status         Int       @default(0) @db.TinyInt
+  priority       Int       @default(0) @db.TinyInt
+  notifyType     Int       @map("notify_type")
+  notifyStatus   Int       @default(0) @map("notify_status") @db.TinyInt
+  notifyTime     DateTime? @map("notify_time")
+  processRemark  String?   @map("process_remark") @db.VarChar(500)
+  paymentStatus  Int       @default(1) @map("payment_status") @db.TinyInt
+  pickupMethod   Int       @default(0) @map("pickup_method") @db.TinyInt
+  pickupCode     String?   @unique @map("pickup_code") @db.VarChar(6)
+  expressAddress String?   @map("express_address") @db.VarChar(500)
+  queueOrder     Int?      @map("queue_order")
+  remark         String?   @db.VarChar(500)
+  createdBy      Int       @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      Int?      @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      Int?      @map("deleted_by")
+  storeId        Int       @map("store_id")
+
+  prescription         Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  processType          Dictionary   @relation("ProcessingType", fields: [processTypeId], references: [id])
+  notifyTypeDictionary Dictionary   @relation("ProcessingPlanNotifyType", fields: [notifyType], references: [id], onDelete: Restrict)
+  creator              User         @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
+  store                Store        @relation(fields: [storeId], references: [id])
+  package              Package?
+  e6Import             E6Import?
+
+  @@unique([prescriptionId, batchNo])
+  @@index([storeId, status, scheduleType, processDate])
+  @@index([priority, processDate, queueOrder])
+  @@index([processTypeId])
+  @@map("processing_plans")
+}
+
+model E6DoctorMapping {
+  id           Int      @id @default(autoincrement())
+  storeId      Int      @map("store_id")
+  e6DoctorCode String   @map("e6_doctor_code") @db.VarChar(100)
+  doctorId     Int      @map("doctor_id")
+  status       Int      @default(1) @db.TinyInt
+  createdBy    Int?     @map("created_by")
+  updatedBy    Int?     @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  store  Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, e6DoctorCode])
+  @@index([doctorId])
+  @@index([storeId, status])
+  @@map("e6_doctor_mappings")
+}
+
+model E6Import {
+  id               Int       @id @default(autoincrement())
+  storeId          Int       @map("store_id")
+  externalOrderNo  String    @map("external_order_no") @db.VarChar(100)
+  customerName     String    @map("customer_name") @db.VarChar(64)
+  phone            String?   @db.VarChar(20)
+  e6DoctorCode     String    @map("e6_doctor_code") @db.VarChar(100)
+  totalPrice       Decimal   @map("total_price") @db.Decimal(14, 2)
+  doseCount        Int       @map("dose_count")
+  remark           String?   @db.VarChar(500)
+  rawPayload       String    @map("raw_payload") @db.LongText
+  payloadHash      String    @map("payload_hash") @db.Char(64)
+  status           Int       @default(0) @db.TinyInt
+  errorCode        String?   @map("error_code") @db.VarChar(50)
+  errorMessage     String?   @map("error_message") @db.VarChar(500)
+  sourceCreatedAt  DateTime? @map("source_created_at")
+  sourceUpdatedAt  DateTime? @map("source_updated_at")
+  syncedAt         DateTime  @default(now()) @map("synced_at")
+  lastSyncedAt     DateTime  @default(now()) @map("last_synced_at")
+  syncCount        Int       @default(1) @map("sync_count")
+  prescriptionId   Int?      @unique @map("prescription_id")
+  processingPlanId Int?      @unique @map("processing_plan_id")
+  confirmedBy      Int?      @map("confirmed_by")
+  confirmedAt      DateTime? @map("confirmed_at")
+  rejectedBy       Int?      @map("rejected_by")
+  rejectedAt       DateTime? @map("rejected_at")
+  rejectReason     String?   @map("reject_reason") @db.VarChar(500)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  prescription   Prescription?   @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  processingPlan ProcessingPlan? @relation(fields: [processingPlanId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, externalOrderNo])
+  @@index([storeId, status, syncedAt])
+  @@index([e6DoctorCode])
+  @@index([lastSyncedAt])
+  @@map("e6_imports")
+}
+
+model SmsConfig {
+  id              Int      @id @default(autoincrement())
+  provider        String   @unique @db.VarChar(20)
+  enabled         Int      @default(0) @db.TinyInt
+  accessKeyId     String?  @map("access_key_id") @db.VarChar(255)
+  secretEncrypted String?  @map("secret_encrypted") @db.Text
+  signName        String?  @map("sign_name") @db.VarChar(100)
+  sdkAppId        String?  @map("sdk_app_id") @db.VarChar(64)
+  smsAccount      String?  @map("sms_account") @db.VarChar(128)
+  region          String?  @db.VarChar(64)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  updatedBy       Int?     @map("updated_by")
+
+  @@map("sms_configs")
+}
+
+model SmsTemplate {
+  id              Int      @id @default(autoincrement())
+  provider        String   @db.VarChar(20)
+  pickupMethod    Int      @map("pickup_method") @db.TinyInt
+  name            String   @db.VarChar(100)
+  templateCode    String?  @map("template_code") @db.VarChar(128)
+  contentPreview  String?  @map("content_preview") @db.VarChar(500)
+  variableMapping String?  @map("variable_mapping") @db.Text
+  enabled         Int      @default(0) @db.TinyInt
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  updatedBy       Int?     @map("updated_by")
+
+  @@unique([provider, pickupMethod])
+  @@map("sms_templates")
+}
+
+model NotificationLog {
+  id                Int       @id @default(autoincrement())
+  packageId         Int?      @map("package_id")
+  channel           String    @db.VarChar(20)
+  provider          String?   @db.VarChar(20)
+  recipient         String    @db.VarChar(191)
+  templateId        Int?      @map("template_id")
+  templateCode      String?   @map("template_code") @db.VarChar(128)
+  templateParams    String?   @map("template_params") @db.Text
+  status            Int       @default(0) @db.TinyInt
+  requestId         String    @unique @map("request_id") @db.VarChar(64)
+  providerRequestId String?   @map("provider_request_id") @db.VarChar(128)
+  providerMessage   String?   @map("provider_message") @db.VarChar(500)
+  errorCode         String?   @map("error_code") @db.VarChar(100)
+  errorMessage      String?   @map("error_message") @db.VarChar(500)
+  operatorId        Int?      @map("operator_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  sentAt            DateTime? @map("sent_at")
+
+  @@index([packageId, createdAt])
+  @@index([recipient])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notification_logs")
+}
+
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  phone     String?  @db.VarChar(20)
+  loginType String   @map("login_type") @db.VarChar(20)
+  success   Int      @db.TinyInt
+  ip        String   @db.VarChar(45)
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  message   String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  storeId   Int?     @map("store_id")
+  store     Store?   @relation(fields: [storeId], references: [id])
+
+  @@index([userId])
+  @@index([phone])
+  @@index([ip])
+  @@index([success])
+  @@index([loginType])
+  @@index([createdAt])
+  @@index([storeId, createdAt])
+  @@map("login_logs")
+}
+
+model EmailConfig {
+  id                Int      @id @default(autoincrement())
+  configKey         String   @unique @default("default") @map("config_key") @db.VarChar(32)
+  host              String?  @db.VarChar(255)
+  port              Int      @default(465)
+  secure            Int      @default(1) @db.TinyInt
+  username          String?  @db.VarChar(255)
+  passwordEncrypted String?  @map("password_encrypted") @db.Text
+  fromName          String?  @map("from_name") @db.VarChar(100)
+  fromEmail         String?  @map("from_email") @db.VarChar(191)
+  enabled           Int      @default(0) @db.TinyInt
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  updatedBy         Int?     @map("updated_by")
+
+  @@map("email_configs")
+}
+
+model EmailTemplate {
+  id        Int      @id @default(autoincrement())
+  scene     String   @unique @db.VarChar(32)
+  name      String   @db.VarChar(100)
+  subject   String   @db.VarChar(255)
+  content   String   @db.Text
+  enabled   Int      @default(0) @db.TinyInt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy Int?     @map("updated_by")
+
+  @@map("email_templates")
+}
+
+model EmailVerificationCode {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  email     String    @db.VarChar(191)
+  codeHash  String    @map("code_hash") @db.VarChar(255)
+  attempts  Int       @default(0)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, email, createdAt])
+  @@index([expiresAt])
+  @@map("email_verification_codes")
+}
+
+model RobotConfig {
+  id               Int       @id @default(autoincrement())
+  name             String    @db.VarChar(100)
+  platform         String    @db.VarChar(20)
+  scopeType        String    @map("scope_type") @db.VarChar(20)
+  storeId          Int?      @map("store_id")
+  webhookEncrypted String    @map("webhook_encrypted") @db.Text
+  secretEncrypted  String?   @map("secret_encrypted") @db.Text
+  enabled          Int       @default(0) @db.TinyInt
+  remark           String?   @db.VarChar(500)
+  deletedAt        DateTime? @map("deleted_at")
+  createdBy        Int?      @map("created_by")
+  updatedBy        Int?      @map("updated_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  store        Store?             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  creator      User?              @relation("RobotConfigCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?              @relation("RobotConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  eventConfigs RobotEventConfig[]
+  deliveryLogs RobotDeliveryLog[]
+
+  @@index([scopeType, storeId, enabled])
+  @@index([deletedAt])
+  @@map("robot_configs")
+}
+
+model RobotEventConfig {
+  id              Int      @id @default(autoincrement())
+  robotId         Int      @map("robot_id")
+  eventCode       String   @map("event_code") @db.VarChar(64)
+  enabled         Int      @default(0) @db.TinyInt
+  templateContent String   @map("template_content") @db.Text
+  createdBy       Int?     @map("created_by")
+  updatedBy       Int?     @map("updated_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  robot   RobotConfig @relation(fields: [robotId], references: [id], onDelete: Cascade)
+  creator User?       @relation("RobotEventConfigCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater User?       @relation("RobotEventConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([robotId, eventCode])
+  @@index([eventCode, enabled])
+  @@map("robot_event_configs")
+}
+
+model RobotNotificationEvent {
+  id              Int      @id @default(autoincrement())
+  eventKey        String   @unique @map("event_key") @db.VarChar(160)
+  eventCode       String   @map("event_code") @db.VarChar(64)
+  businessType    String   @map("business_type") @db.VarChar(32)
+  businessId      Int      @map("business_id")
+  primaryStoreId  Int?     @map("primary_store_id")
+  relatedStoreIds Json?    @map("related_store_ids")
+  variables       Json
+  operatorId      Int?     @map("operator_id")
+  occurredAt      DateTime @map("occurred_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  operator     User?              @relation("RobotNotificationEventOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  deliveryLogs RobotDeliveryLog[]
+
+  @@index([eventCode, occurredAt])
+  @@index([businessType, businessId])
+  @@index([primaryStoreId, occurredAt])
+  @@map("robot_notification_events")
+}
+
+model RobotDeliveryLog {
+  id                Int       @id @default(autoincrement())
+  eventId           Int       @map("event_id")
+  robotId           Int       @map("robot_id")
+  platform          String    @db.VarChar(20)
+  templateContent   String    @map("template_content") @db.Text
+  renderedContent   String    @map("rendered_content") @db.Text
+  status            Int       @default(0) @db.TinyInt
+  attemptCount      Int       @default(0) @map("attempt_count")
+  nextRetryAt       DateTime? @map("next_retry_at")
+  providerRequestId String?   @map("provider_request_id") @db.VarChar(128)
+  providerResponse  String?   @map("provider_response") @db.Text
+  errorCode         String?   @map("error_code") @db.VarChar(100)
+  errorMessage      String?   @map("error_message") @db.VarChar(500)
+  sentAt            DateTime? @map("sent_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  event RobotNotificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  robot RobotConfig            @relation(fields: [robotId], references: [id], onDelete: Restrict)
+
+  @@unique([eventId, robotId])
+  @@index([status, nextRetryAt])
+  @@index([robotId, createdAt])
+  @@map("robot_delivery_logs")
+}
+
+model PrintTemplate {
+  id           Int      @id @default(autoincrement())
+  storeId      Int      @map("store_id")
+  templateType String   @map("template_type") @db.VarChar(32)
+  name         String   @db.VarChar(100)
+  widthMm      Decimal  @map("width_mm") @db.Decimal(8, 2)
+  heightMm     Decimal  @map("height_mm") @db.Decimal(8, 2)
+  layoutJson   String   @map("layout_json") @db.LongText
+  enabled      Int      @default(1) @db.TinyInt
+  isDefault    Int      @default(0) @map("is_default") @db.TinyInt
+  defaultScope String?  @unique(map: "print_templates_one_default_per_scope") @map("default_scope") @db.VarChar(64)
+  createdBy    Int?     @map("created_by")
+  updatedBy    Int?     @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  creator User? @relation("PrintTemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  store   Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, templateType, name])
+  @@index([storeId, templateType, enabled])
+  @@index([storeId, templateType, isDefault])
+  @@map("print_templates")
+}
+
+model PrescriptionDailySequence {
+  sequenceDate DateTime @id @map("sequence_date") @db.Date
+  currentValue Int      @default(0) @map("current_value")
+
+  @@map("prescription_daily_sequences")
+}
+
+model StoreTransfer {
+  id                  Int       @id @default(autoincrement())
+  transferNo          String    @unique @map("transfer_no") @db.VarChar(18)
+  fromStoreId         Int       @map("from_store_id")
+  toStoreId           Int       @map("to_store_id")
+  transferDate        DateTime  @map("transfer_date") @db.Date
+  expectedReturnDate  DateTime  @map("expected_return_date") @db.Date
+  status              Int       @default(0) @db.TinyInt
+  outboundStatus      Int       @default(0) @map("outbound_status") @db.TinyInt
+  outboundConfirmedAt DateTime? @map("outbound_confirmed_at")
+  outboundConfirmedBy Int?      @map("outbound_confirmed_by")
+  remark              String?   @db.VarChar(500)
+  cancelledAt         DateTime? @map("cancelled_at")
+  cancelledBy         Int?      @map("cancelled_by")
+  cancelReason        String?   @map("cancel_reason") @db.VarChar(500)
+  createdBy           Int       @map("created_by")
+  updatedBy           Int?      @map("updated_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  fromStore         Store               @relation("StoreTransferFromStore", fields: [fromStoreId], references: [id])
+  toStore           Store               @relation("StoreTransferToStore", fields: [toStoreId], references: [id])
+  creator           User                @relation("StoreTransferCreatedBy", fields: [createdBy], references: [id])
+  outboundConfirmer User?               @relation("StoreTransferOutboundConfirmedBy", fields: [outboundConfirmedBy], references: [id])
+  items             StoreTransferItem[]
+
+  @@index([fromStoreId, status, transferDate])
+  @@index([toStoreId, status, transferDate])
+  @@index([expectedReturnDate, status])
+  @@index([outboundStatus])
+  @@map("store_transfers")
+}
+
+model StoreTransferItem {
+  id            Int      @id @default(autoincrement())
+  transferId    Int      @map("transfer_id")
+  itemName      String   @map("item_name") @db.VarChar(120)
+  specification String?  @db.VarChar(120)
+  batchNo       String?  @map("batch_no") @db.VarChar(100)
+  quantity      Decimal  @db.Decimal(12, 3)
+  unit          String   @db.VarChar(20)
+  remark        String?  @db.VarChar(500)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  transfer StoreTransfer         @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  returns  StoreTransferReturn[]
+
+  @@index([transferId])
+  @@index([itemName])
+  @@index([batchNo])
+  @@map("store_transfer_items")
+}
+
+model StoreTransferReturn {
+  id             Int       @id @default(autoincrement())
+  transferItemId Int       @map("transfer_item_id")
+  quantity       Decimal   @db.Decimal(12, 3)
+  returnDate     DateTime  @map("return_date") @db.Date
+  operatorId     Int       @map("operator_id")
+  status         Int       @default(0) @db.TinyInt
+  confirmedAt    DateTime? @map("confirmed_at")
+  confirmedBy    Int?      @map("confirmed_by")
+  remark         String?   @db.VarChar(500)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  transferItem StoreTransferItem @relation(fields: [transferItemId], references: [id], onDelete: Restrict)
+  operator     User              @relation("StoreTransferReturnOperator", fields: [operatorId], references: [id])
+  confirmer    User?             @relation("StoreTransferReturnConfirmedBy", fields: [confirmedBy], references: [id])
+
+  @@index([transferItemId, createdAt])
+  @@index([status])
+  @@index([returnDate])
+  @@map("store_transfer_returns")
+}
+
+model StoreTransferDailySequence {
+  sequenceDate DateTime @id @map("sequence_date") @db.Date
+  currentValue Int      @default(0) @map("current_value")
+
+  @@map("store_transfer_daily_sequences")
+}
+
+model OperationLog {
+  id          Int      @id @default(autoincrement())
+  actorId     Int?     @map("actor_id")
+  actorRole   Int?     @map("actor_role")
+  actorName   String?  @map("actor_name") @db.VarChar(100)
+  storeId     Int?     @map("store_id")
+  module      String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  targetId    Int?     @map("target_id")
+  description String   @db.VarChar(500)
+  ip          String?  @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  store Store? @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([module, action, createdAt])
+  @@map("operation_logs")
+}

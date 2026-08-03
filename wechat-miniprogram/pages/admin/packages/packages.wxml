@@ -1,0 +1,64 @@
+<view class="page">
+  <view class="quick-actions">
+    <view class="quick-action-item">
+      <t-button size="small" theme="primary" bind:tap="goCreate">新增包裹</t-button>
+    </view>
+    <view class="quick-action-item">
+      <t-button size="small" variant="outline" bind:tap="goVerify">扫码/取货码核销</t-button>
+    </view>
+  </view>
+
+  <view class="toolbar package-toolbar">
+    <view class="package-search">
+      <t-input borderless suffix="搜索" value="{{keyword}}" placeholder="取货码/手机号/姓名/物品" bind:change="onKeywordChange" bind:click="search" bind:enter="search" />
+    </view>
+  </view>
+
+  <view class="filters">
+    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange">
+      <t-button size="small" variant="outline">{{storeName}}</t-button>
+    </picker>
+    <view class="status-filter">
+      <t-button size="small" theme="{{status === '' ? 'primary' : 'default'}}" bind:tap="setAll">全部</t-button>
+      <t-button size="small" theme="{{status === 0 ? 'primary' : 'default'}}" bind:tap="setPending">待取</t-button>
+      <t-button size="small" theme="{{status === 1 ? 'primary' : 'default'}}" bind:tap="setPicked">已取</t-button>
+    </view>
+    <view class="sort-filter">
+      <t-button size="small" variant="outline" bind:tap="toggleSort">按{{sortByText}}排序</t-button>
+    </view>
+  </view>
+
+  <view class="app-card" wx:for="{{list}}" wx:key="id" bind:tap="goDetail" data-id="{{item.id}}">
+    <view class="status-row">
+      <view>
+        <view class="item-title">{{item.itemName}}</view>
+        <view class="muted">{{item.receiverName}} {{item.receiverPhoneMasked}}</view>
+        <view class="muted">取货码：{{item.pickupCode}}</view>
+        <view class="muted" wx:if="{{item.storeName}}">门店：{{item.storeName}}</view>
+      </view>
+      <view class="package-tags">
+        <t-tag theme="primary">{{item.pickupMethodText}}</t-tag>
+        <t-tag theme="{{item.statusTheme}}">{{item.statusText}}</t-tag>
+      </view>
+    </view>
+    <view class="item-actions" wx:if="{{item.isPending}}">
+      <t-button theme="light" size="small" variant="outline" data-id="{{item.id}}" catch:tap="goEdit">编辑</t-button>
+    </view>
+  </view>
+
+  <t-empty wx:if="{{!list.length}}" description="暂无包裹" />
+
+  <view class="pager">
+    <t-button theme="light" size="small" disabled="{{page <= 1}}" bind:tap="prevPage">上一页</t-button>
+    <view class="muted">{{page}} / {{pages}}</view>
+    <t-button size="small" disabled="{{page >= pages}}" bind:tap="nextPage">下一页</t-button>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

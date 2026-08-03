@@ -1,0 +1,78 @@
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.quick-action-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.quick-action-item > t-button {
+  display: inline-block;
+}
+
+.package-toolbar {
+  display: block;
+}
+
+.package-search {
+  overflow: hidden;
+  border: 1rpx solid #dcdcdc;
+  border-radius: 6px;
+  background: #ffffff;
+  --td-input-bg-color: transparent;
+  --td-input-vertical-padding: 16rpx 24rpx;
+  --td-input-suffix-text-color: #0052d9;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-bottom: 20rpx;
+}
+
+.status-filter {
+  display: flex;
+  gap: 12rpx;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.sort-filter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.item-title {
+  margin-bottom: 8rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.package-tags {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 10rpx;
+}
+
+.item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20rpx;
+}
+
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24rpx;
+  margin: 32rpx 0;
+}

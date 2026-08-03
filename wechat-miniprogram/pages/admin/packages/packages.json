@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "包裹列表",
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button",    "t-cell": "tdesign-miniprogram/cell/cell",
+    "t-input": "tdesign-miniprogram/input/input",
+    "t-tag": "tdesign-miniprogram/tag/tag",
+    "t-empty": "tdesign-miniprogram/empty/empty"
+  }
+}

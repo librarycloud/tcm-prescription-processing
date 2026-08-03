@@ -1,0 +1,53 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/admin/dashboard/dashboard",
+    "pages/admin/prescriptions/prescriptions",
+    "pages/admin/prescription-form/prescription-form",
+    "pages/admin/prescription-detail/prescription-detail",
+    "pages/admin/processing-workbench/processing-workbench",
+    "pages/admin/processing-plan-form/processing-plan-form",
+    "pages/admin/processing-plan-batch/processing-plan-batch",
+    "pages/admin/packages/packages",
+    "pages/admin/package-form/package-form",
+    "pages/admin/package-edit/package-edit",
+    "pages/admin/package-detail/package-detail",
+    "pages/admin/verify/verify",
+    "pages/admin/store-transfers/store-transfers",
+    "pages/admin/herb-locations/herb-locations",
+    "pages/admin/product-differences/product-differences",
+    "pages/admin/profile/profile",
+    "pages/agreement/service/service",
+    "pages/agreement/privacy/privacy",
+    "pages/user/packages/packages",
+    "pages/user/profile/profile",
+    "pages/user/package-detail/package-detail"
+  ],
+  "window": {
+    "navigationBarTitleText": "中药处方加工与取药管理系统",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f7fa"
+  },
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-cell": "tdesign-miniprogram/cell/cell",
+    "t-cell-group": "tdesign-miniprogram/cell-group/cell-group",
+    "t-input": "tdesign-miniprogram/input/input",
+    "t-textarea": "tdesign-miniprogram/textarea/textarea",
+    "t-toast": "tdesign-miniprogram/toast/toast",
+    "t-dialog": "tdesign-miniprogram/dialog/dialog",
+    "t-tag": "tdesign-miniprogram/tag/tag",
+    "t-tab-bar": "tdesign-miniprogram/tab-bar/tab-bar",
+    "t-tab-bar-item": "tdesign-miniprogram/tab-bar-item/tab-bar-item",
+    "t-tabs": "tdesign-miniprogram/tabs/tabs",
+    "t-tab-panel": "tdesign-miniprogram/tab-panel/tab-panel",
+    "t-picker": "tdesign-miniprogram/picker/picker",
+    "t-navbar": "tdesign-miniprogram/navbar/navbar",
+    "t-loading": "tdesign-miniprogram/loading/loading",
+    "t-empty": "tdesign-miniprogram/empty/empty"
+  },
+  "style": "v2",
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json"
+}

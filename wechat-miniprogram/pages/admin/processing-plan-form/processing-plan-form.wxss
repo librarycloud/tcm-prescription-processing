@@ -1,0 +1,40 @@
+.form-card {
+  padding-top: 8rpx;
+}
+
+.prescription-search {
+  overflow: hidden;
+  border: 1rpx solid #dcdcdc;
+  border-radius: 6px;
+  background: #ffffff;
+  --td-input-bg-color: transparent;
+  --td-input-vertical-padding: 16rpx 24rpx;
+  --td-input-suffix-text-color: #0052d9;
+  margin: 16rpx 0;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  min-height: 96rpx;
+  border-bottom: 1rpx solid #eef0f5;
+}
+
+.picker-value {
+  max-width: 68%;
+  overflow: hidden;
+  color: #1f2329;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-value.placeholder {
+  color: #b0b5bd;
+}
+
+.submit {
+  margin-top: 32rpx;
+}

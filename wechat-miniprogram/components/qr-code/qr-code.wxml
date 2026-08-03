@@ -1,0 +1,3 @@
+<view class="qr-wrap">
+  <canvas canvas-id="{{canvasId}}" class="qr-canvas" style="width: {{size}}px; height: {{size}}px;"></canvas>
+</view>

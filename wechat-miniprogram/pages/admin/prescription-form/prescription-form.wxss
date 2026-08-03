@@ -1,0 +1,32 @@
+.form-card {
+  padding-top: 8rpx;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 96rpx;
+  border-bottom: 1rpx solid #eef0f5;
+}
+
+.picker-value {
+  max-width: 65%;
+  color: #1f2329;
+  text-align: right;
+}
+
+.picker-value.placeholder {
+  color: #b0b5bd;
+}
+
+.external-fields {
+  margin: 20rpx 0;
+  padding: 0 20rpx 12rpx;
+  border-radius: 8rpx;
+  background: #f7f8fa;
+}
+
+.submit {
+  margin-top: 32rpx;
+}

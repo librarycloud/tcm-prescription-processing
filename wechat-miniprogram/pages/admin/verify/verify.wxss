@@ -1,0 +1,39 @@
+.verify-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20rpx;
+  margin-top: 32rpx;
+}
+
+.verify-header {
+  margin-bottom: 20rpx;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 96rpx;
+  margin-top: 20rpx;
+  border-top: 1rpx solid #eef0f5;
+  border-bottom: 1rpx solid #eef0f5;
+}
+
+.picker-value {
+  color: #1f2329;
+}
+
+.picker-value.placeholder {
+  color: #b0b5bd;
+}
+
+.confirm-action {
+  margin-top: 32rpx;
+}
+
+.tracking-row {
+  width: 100%;
+  min-width: 0;
+  margin-top: 20rpx;
+}

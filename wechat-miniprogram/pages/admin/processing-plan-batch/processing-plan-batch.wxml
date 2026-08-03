@@ -1,0 +1,48 @@
+<view class="page batch-page">
+  <view class="mode-switch">
+    <view class="mode-item {{prescriptionMode === 'existing' ? 'active' : ''}}" data-mode="existing" bind:tap="switchPrescriptionMode">选择已有处方</view>
+    <view class="mode-item {{prescriptionMode === 'new' ? 'active' : ''}}" data-mode="new" bind:tap="switchPrescriptionMode">新建处方</view>
+  </view>
+
+  <view wx:if="{{prescriptionMode === 'existing'}}" class="app-card prescription-card">
+    <view class="section-title">选择处方</view>
+    <view class="search-row"><t-input borderless suffix="搜索" value="{{searchKeyword}}" placeholder="处方编号/姓名/手机号" bind:change="onSearchKeywordChange" bind:click="searchPrescriptions" bind:enter="searchPrescriptions" /></view>
+    <picker mode="selector" range="{{prescriptions}}" range-key="label" value="{{prescriptionIndex}}" bindchange="onPrescriptionChange"><view class="picker-row"><text>处方</text><text class="picker-value {{!prescriptionId ? 'placeholder' : ''}}">{{prescriptionId ? prescriptionLabel : '请选择处方'}}</text></view></picker>
+  </view>
+
+  <view wx:else class="app-card prescription-card">
+    <view class="section-title">新建处方</view>
+    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange"><view class="picker-row"><text>所属门店</text><text class="picker-value {{!prescription.storeId ? 'placeholder' : ''}}">{{prescription.storeId ? prescription.storeName : '请选择门店'}}</text></view></picker>
+    <t-input label="顾客姓名" value="{{prescription.customerName}}" maxlength="64" placeholder="请输入顾客姓名" data-field="customerName" bind:change="onPrescriptionFieldChange" />
+    <t-input label="手机号" value="{{prescription.phone}}" type="number" maxlength="11" placeholder="选填" data-field="phone" bind:change="onPrescriptionFieldChange" />
+    <picker mode="selector" range="{{doctors}}" range-key="name" value="{{doctorIndex}}" bindchange="onDoctorChange"><view class="picker-row"><text>医生</text><text class="picker-value {{!prescription.doctorId ? 'placeholder' : ''}}">{{prescription.doctorId ? prescription.doctorName : '请选择医生'}}</text></view></picker>
+    <picker mode="selector" range="{{sources}}" range-key="name" value="{{sourceIndex}}" bindchange="onSourceChange"><view class="picker-row"><text>处方来源</text><text class="picker-value {{!prescription.sourceId ? 'placeholder' : ''}}">{{prescription.sourceId ? prescription.sourceName : '请选择来源'}}</text></view></picker>
+    <picker mode="selector" range="{{externalOptions}}" range-key="label" value="{{externalIndex}}" bindchange="onExternalChange"><view class="picker-row"><text>处方类型</text><text class="picker-value">{{externalOptions[externalIndex].label}}</text></view></picker>
+    <block wx:if="{{prescription.isExternal}}"><t-input label="医院名称" value="{{prescription.externalHospital}}" data-field="externalHospital" bind:change="onPrescriptionFieldChange" /><t-input label="外方医生" value="{{prescription.externalDoctor}}" data-field="externalDoctor" bind:change="onPrescriptionFieldChange" /><t-textarea t-class-textarea="compact-textarea" label="外方备注" value="{{prescription.externalRemark}}" data-field="externalRemark" bind:change="onPrescriptionFieldChange" /></block>
+    <t-textarea t-class-textarea="compact-textarea" label="处方备注" value="{{prescription.remark}}" data-field="remark" bind:change="onPrescriptionFieldChange" />
+  </view>
+
+  <view class="batch-heading"><view><view class="section-title">加工批次</view><view class="muted">共 {{plans.length}} 个计划</view></view><t-button size="small" theme="primary" variant="outline" bind:tap="addPlan">添加批次</t-button></view>
+
+  <view class="app-card plan-card" wx:for="{{plans}}" wx:key="key" wx:for-item="plan" wx:for-index="index">
+    <view class="plan-heading"><view class="plan-title">第 {{plan.batchNo || index + 1}} 批</view><view class="plan-actions"><t-button wx:if="{{index > 0}}" size="small" variant="outline" data-index="{{index}}" bind:tap="copyPrevious">复制上批</t-button><t-button wx:if="{{plans.length > 1}}" size="small" theme="danger" variant="outline" data-index="{{index}}" bind:tap="removePlan">删除</t-button></view></view>
+    <t-input label="批次号" type="number" value="{{plan.batchNo}}" data-index="{{index}}" data-field="batchNo" bind:change="onPlanFieldChange" />
+    <picker mode="selector" range="{{processTypes}}" range-key="name" value="{{plan.processTypeIndex}}" data-index="{{index}}" bindchange="onProcessTypeChange"><view class="picker-row"><text>加工方式</text><text class="picker-value {{!plan.processTypeId ? 'placeholder' : ''}}">{{plan.processTypeId ? plan.processTypeName : '请选择加工方式'}}</text></view></picker>
+    <picker mode="selector" range="{{pickupMethodOptions}}" range-key="label" value="{{plan.pickupMethodIndex}}" data-index="{{index}}" data-type="pickup" bindchange="onPlanOptionChange"><view class="picker-row"><text>取货方式</text><text class="picker-value">{{plan.pickupMethodText}}</text></view></picker>
+    <t-textarea t-class-textarea="compact-textarea" wx:if="{{plan.pickupMethod === 1 || plan.pickupMethod === 2}}" label="地址" value="{{plan.expressAddress}}" maxlength="500" placeholder="选填" data-index="{{index}}" data-field="expressAddress" bind:change="onPlanFieldChange" />
+    <t-input label="剂数" type="number" value="{{plan.totalDose}}" data-index="{{index}}" data-field="totalDose" bind:change="onPlanFieldChange" />
+    <t-input wx:if="{{plan.isDecoction}}" label="袋数" type="number" value="{{plan.bagCount}}" data-index="{{index}}" data-field="bagCount" bind:change="onPlanFieldChange" />
+    <t-input wx:if="{{plan.isDecoction}}" label="毫升数" type="number" value="{{plan.volumeMl}}" data-index="{{index}}" data-field="volumeMl" bind:change="onPlanFieldChange" />
+    <picker mode="selector" range="{{priorityOptions}}" range-key="label" value="{{plan.priorityIndex}}" data-index="{{index}}" data-type="priority" bindchange="onPlanOptionChange"><view class="picker-row"><text>优先级</text><text class="picker-value">{{plan.priorityText}}</text></view></picker>
+    <picker mode="selector" range="{{scheduleOptions}}" range-key="label" value="{{plan.scheduleIndex}}" data-index="{{index}}" data-type="schedule" bindchange="onPlanOptionChange"><view class="picker-row"><text>调度方式</text><text class="picker-value">{{plan.scheduleText}}</text></view></picker>
+    <picker wx:if="{{plan.scheduleType === 1}}" mode="date" value="{{plan.processDate}}" data-index="{{index}}" bindchange="onPlanDateChange"><view class="picker-row"><text>计划开工</text><text class="picker-value">{{plan.processDate}}</text></view></picker>
+    <picker mode="selector" range="{{notifyTypes}}" range-key="name" value="{{plan.notifyTypeIndex}}" data-index="{{index}}" data-type="notify" bindchange="onPlanOptionChange"><view class="picker-row"><text>提醒方式</text><text class="picker-value">{{plan.notifyTypeName}}</text></view></picker>
+    <picker mode="selector" range="{{paymentOptions}}" range-key="label" value="{{plan.paymentIndex}}" data-index="{{index}}" data-type="payment" bindchange="onPlanOptionChange"><view class="picker-row"><text>收费状态</text><text class="picker-value">{{plan.paymentText}}</text></view></picker>
+    <t-textarea t-class-textarea="compact-textarea" label="加工备注" value="{{plan.processRemark}}" maxlength="500" data-index="{{index}}" data-field="processRemark" bind:change="onPlanFieldChange" />
+    <t-textarea t-class-textarea="compact-textarea" label="其它备注" value="{{plan.remark}}" maxlength="500" data-index="{{index}}" data-field="remark" bind:change="onPlanFieldChange" />
+  </view>
+
+  <view class="submit"><t-button theme="primary" block loading="{{loading}}" bind:tap="submit">创建 {{plans.length}} 个加工计划</t-button></view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange"><t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item><t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item><t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item><t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item><t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item></t-tab-bar>
+</view>

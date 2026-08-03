@@ -1,0 +1,14 @@
+:root {
+  --el-color-primary: #2563eb;
+  --el-color-primary-light-3: #60a5fa;
+  --el-color-primary-light-5: #93c5fd;
+  --el-color-primary-light-7: #bfdbfe;
+  --el-color-primary-light-8: #dbeafe;
+  --el-color-primary-light-9: #eff6ff;
+  --el-color-primary-dark-2: #1d4ed8;
+  --app-bg: #f5f7fb;
+  --app-border: #e5eaf3;
+  --app-text: #1f2937;
+  --app-muted: #6b7280;
+  --app-sidebar: #ffffff;
+}

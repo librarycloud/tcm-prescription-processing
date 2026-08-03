@@ -1,0 +1,152 @@
+<view class="page profile-page">
+  <view class="app-card profile-card">
+    <view class="avatar">{{avatarText}}</view>
+    <view class="profile-main">
+      <view class="profile-name">{{user.nickname || user.phone || '未设置昵称'}}</view>
+      <view class="muted">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : '用户')}}</view>
+    </view>
+  </view>
+
+  <view class="app-card profile-info" wx:if="{{!editing}}">
+    <view class="info-row">
+      <view class="info-label">
+        <view class="info-label-text">
+          <text>手</text>
+          <text>机</text>
+          <text>号</text>
+        </view>
+        <text class="info-label-colon">：</text>
+      </view>
+      <view class="info-value">{{user.phone || '-'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">
+        <view class="info-label-text">
+          <text>昵</text>
+          <text>称</text>
+        </view>
+        <text class="info-label-colon">：</text>
+      </view>
+      <view class="info-value">{{user.nickname || '未设置'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">
+        <view class="info-label-text">
+          <text>账</text>
+          <text>号</text>
+          <text>角</text>
+          <text>色</text>
+        </view>
+        <text class="info-label-colon">：</text>
+      </view>
+      <view class="info-value">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : '用户')}}</view>
+    </view>
+    <view class="info-row" wx:if="{{user.role === 2}}">
+      <view class="info-label">
+        <view class="info-label-text"><text>所</text><text>属</text><text>门</text><text>店</text></view>
+        <text class="info-label-colon">：</text>
+      </view>
+      <view class="info-value">{{user.store.name || '-'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">
+        <view class="info-label-text"><text>微</text><text>信</text><text>绑</text><text>定</text></view>
+        <text class="info-label-colon">：</text>
+      </view>
+      <view class="info-value wechat-value" hover-class="wechat-value-active" bind:tap="openWechatBinding">
+        <text class="wechat-status {{user.openidBound ? 'bound' : ''}}">{{user.openidBound ? '已绑定-' : '未绑定-'}}</text>
+        <text class="wechat-action-text">{{wechatBindingLoading ? '，处理中...' : (user.openidBound ? '点击修改' : '点击绑定')}}</text>
+      </view>
+    </view>
+    <view wx:if="{{wechatBindingVisible}}" class="wechat-binding-panel">
+      <view class="wechat-binding-title">修改微信绑定</view>
+      <view class="muted">输入当前账号密码，确认后绑定到当前微信。</view>
+      <view class="form-control-wrap wechat-password-wrap">
+        <input class="form-control password-control" value="{{wechatPassword}}" password="{{!wechatPasswordVisible}}" placeholder="请输入当前密码" bindinput="onWechatPasswordChange" />
+        <view class="password-eye" bindtap="toggleWechatPasswordVisible">
+          <t-icon name="{{wechatPasswordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+      <view class="wechat-binding-actions">
+        <t-button size="small" bind:tap="closeWechatBinding">取消</t-button>
+        <t-button size="small" theme="primary" loading="{{wechatBindingLoading}}" bind:tap="submitWechatBinding">确认修改</t-button>
+      </view>
+    </view>
+    <view class="submit">
+      <t-button theme="primary" block bind:tap="startEdit">修改资料</t-button>
+    </view>
+  </view>
+
+  <view class="app-card" wx:else>
+    <view class="form-row">
+      <view class="form-label">
+        <view class="form-label-text">
+          <text>手</text>
+          <text>机</text>
+          <text>号</text>
+        </view>
+        <text class="form-label-colon">：</text>
+      </view>
+      <input class="form-control" value="{{form.phone}}" type="number" placeholder="请输入手机号" data-field="phone" bindinput="onChange" />
+    </view>
+    <view class="form-row">
+      <view class="form-label">
+        <view class="form-label-text">
+          <text>昵</text>
+          <text>称</text>
+        </view>
+        <text class="form-label-colon">：</text>
+      </view>
+      <input class="form-control" value="{{form.nickname}}" placeholder="请输入昵称" data-field="nickname" bindinput="onChange" />
+    </view>
+    <view class="form-row">
+      <view class="form-label">
+        <view class="form-label-text">
+          <text>新</text>
+          <text>密</text>
+          <text>码</text>
+        </view>
+        <text class="form-label-colon">：</text>
+      </view>
+      <view class="form-control-wrap">
+        <input class="form-control password-control" value="{{form.password}}" password="{{!passwordVisible}}" placeholder="不修改请留空" data-field="password" bindinput="onChange" />
+        <view class="password-eye" aria-label="显示或隐藏密码" bindtap="togglePasswordVisible">
+          <t-icon name="{{passwordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+    </view>
+    <view class="form-row">
+      <view class="form-label">
+        <view class="form-label-text">
+          <text>确</text>
+          <text>认</text>
+          <text>密</text>
+          <text>码</text>
+        </view>
+        <text class="form-label-colon">：</text>
+      </view>
+      <view class="form-control-wrap">
+        <input class="form-control password-control" value="{{form.confirmPassword}}" password="{{!passwordVisible}}" placeholder="再次输入新密码" data-field="confirmPassword" bindinput="onChange" />
+        <view class="password-eye" aria-label="显示或隐藏密码" bindtap="togglePasswordVisible">
+          <t-icon name="{{passwordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+    </view>
+    <view class="edit-actions">
+      <t-button bind:tap="cancelEdit">取消</t-button>
+      <t-button theme="primary" loading="{{saving}}" bind:tap="submit">保存修改</t-button>
+    </view>
+  </view>
+
+  <view class="logout">
+    <t-button variant="outline" block bind:tap="logout">退出登录</t-button>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

@@ -1,0 +1,92 @@
+.login-page {
+  display: flex;
+  flex-direction: column;
+  padding-top: 120rpx;
+}
+
+.brand {
+  margin-bottom: 40rpx;
+}
+
+.title {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #1f2329;
+}
+
+.subtitle {
+  margin-top: 12rpx;
+  color: #86909c;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.hint {
+  color: #4e5969;
+  line-height: 1.7;
+}
+
+.login-action {
+  margin-top: 32rpx;
+}
+
+.bind-methods {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-eye {
+  position: absolute;
+  right: 20rpx;
+  bottom: 24rpx;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34rpx;
+  height: 34rpx;
+  color: #86909c;
+}
+
+.agreement {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: auto;
+  padding: 18rpx 20rpx;
+  border-radius: 8rpx;
+  background: #ffffff;
+  color: #5f6673;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.agreement-check {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48rpx;
+}
+
+.agreement-text {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 48rpx;
+}
+
+.link {
+  color: #0052d9;
+  font-weight: 500;
+}

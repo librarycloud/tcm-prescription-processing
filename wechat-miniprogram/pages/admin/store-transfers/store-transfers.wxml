@@ -1,0 +1,54 @@
+<view class="page transfer-page">
+  <view class="page-actions"><t-button theme="primary" bind:tap="openCreate">新建调拨</t-button></view>
+  <view class="stats-grid">
+    <view class="stat-item"><view class="stat-value">{{stats.borrowing}}</view><view class="muted">借出中</view></view>
+    <view class="stat-item"><view class="stat-value">{{stats.partReturned}}</view><view class="muted">部分归还</view></view>
+    <view class="stat-item"><view class="stat-value">{{stats.overdue}}</view><view class="muted">已逾期</view></view>
+  </view>
+  <view class="toolbar transfer-toolbar"><view class="transfer-search"><t-input borderless suffix="搜索" value="{{keyword}}" placeholder="单号/门店/物品/批号" bind:change="onKeywordChange" bind:click="search" bind:enter="search" /></view></view>
+  <view class="filters">
+    <picker mode="selector" range="{{statusOptions}}" range-key="label" value="{{statusIndex}}" bindchange="onStatusChange"><view class="filter-picker">状态：{{statusOptions[statusIndex].label}}</view></picker>
+    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange"><view class="filter-picker">{{storeId ? '已选门店' : '全部门店'}}</view></picker>
+  </view>
+
+  <view class="app-card transfer-card" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bind:tap="openDetail">
+    <view class="status-row"><view class="transfer-title">{{item.transferNo}}</view><t-tag theme="{{item.statusTheme}}">{{item.statusLabel}}</t-tag></view>
+    <view class="muted">{{item.fromStore.name}} → {{item.toStore.name}}</view>
+    <view class="transfer-meta">{{item.itemSummary}}<text wx:if="{{item.itemCount > 2}}"> 等{{item.itemCount}}项</text></view>
+    <view class="muted">调拨：{{item.transferDateText}}　预计归还：{{item.expectedReturnDateText}}</view>
+    <view class="tag-line"><t-tag wx:if="{{item.outboundPending}}" theme="warning" variant="outline">待确认调出</t-tag><t-tag wx:if="{{item.overdue}}" theme="danger" variant="outline">已逾期</t-tag></view>
+  </view>
+  <t-loading wx:if="{{loading}}" text="加载中" />
+  <t-empty wx:elif="{{!list.length}}" description="暂无调拨记录" />
+  <view class="pager"><t-button size="small" theme="light" disabled="{{page <= 1}}" bind:tap="prevPage">上一页</t-button><text class="muted">{{page}} / {{pages}}</text><t-button size="small" disabled="{{page >= pages}}" bind:tap="nextPage">下一页</t-button></view>
+
+  <view wx:if="{{createVisible}}" class="overlay" catch:tap="closeCreate"><view class="modal-card" catch:tap="noop">
+    <view class="modal-title">新建调拨</view>
+    <picker mode="selector" range="{{stores}}" range-key="name" value="{{fromStoreIndex}}" bindchange="onCreateStoreChange" data-field="fromStoreId"><view class="picker-row"><text>调出门店</text><text class="picker-value">{{fromStoreName}}</text></view></picker>
+    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{toStoreIndex}}" bindchange="onCreateStoreChange" data-field="toStoreId"><view class="picker-row"><text>调入门店</text><text class="picker-value">{{toStoreName}}</text></view></picker>
+    <view wx:else class="picker-row"><text>调入门店</text><text class="picker-value">当前门店</text></view>
+    <picker mode="date" value="{{createForm.transferDate}}" bindchange="onCreateDateChange" data-field="transferDate"><view class="picker-row"><text>调拨日期</text><text class="picker-value">{{createForm.transferDate}}</text></view></picker>
+    <picker mode="date" value="{{createForm.expectedReturnDate}}" bindchange="onCreateDateChange" data-field="expectedReturnDate"><view class="picker-row"><text>预计归还</text><text class="picker-value">{{createForm.expectedReturnDate}}</text></view></picker>
+    <view class="item-header"><text>调拨明细</text><t-button size="small" variant="outline" bind:tap="addItem">添加明细</t-button></view>
+    <view class="item-editor" wx:for="{{createForm.items}}" wx:key="index" wx:for-item="item" wx:for-index="index">
+      <view class="item-header"><text>明细 {{index + 1}}</text><t-button wx:if="{{createForm.items.length > 1}}" size="small" theme="danger" variant="outline" data-index="{{index}}" bind:tap="removeItem">删除</t-button></view>
+      <t-input label="名称" value="{{item.itemName}}" data-index="{{index}}" data-field="itemName" bind:change="onCreateItemChange" /><t-input label="规格" value="{{item.specification}}" data-index="{{index}}" data-field="specification" bind:change="onCreateItemChange" /><t-input label="数量" type="number" value="{{item.quantity}}" data-index="{{index}}" data-field="quantity" bind:change="onCreateItemChange" /><t-input label="单位" value="{{item.unit}}" data-index="{{index}}" data-field="unit" bind:change="onCreateItemChange" />
+    </view>
+    <t-textarea t-class-textarea="compact-textarea" label="备注" value="{{createForm.remark}}" data-field="remark" bind:change="onCreateFieldChange" />
+    <view class="modal-actions"><t-button variant="outline" bind:tap="closeCreate">取消</t-button><t-button theme="primary" loading="{{saving}}" bind:tap="saveCreate">提交</t-button></view>
+  </view></view>
+
+  <view wx:if="{{detailVisible}}" class="overlay" catch:tap="closeDetail"><view class="modal-card detail-modal" catch:tap="noop">
+    <view class="modal-title">调拨详情 <text class="close" bind:tap="closeDetail">×</text></view>
+    <block wx:if="{{detail}}"><view class="status-row"><text>{{detail.fromStore.name}} → {{detail.toStore.name}}</text><t-tag theme="{{detail.statusTheme}}">{{detail.statusLabel}}</t-tag></view><view class="detail-lines"><view>调拨单号：{{detail.transferNo}}</view><view>调拨日期：{{detail.transferDateText}}</view><view>预计归还：{{detail.expectedReturnDateText}}</view><view>创建人：{{detail.creatorName}}</view></view>
+      <view class="sub-title">调拨明细</view><view wx:for="{{detail.items}}" wx:key="id" class="detail-item"><view>{{item.itemName}} {{item.specification}}</view><view class="muted">借调 {{item.quantityText}}{{item.unit}} · 剩余 {{item.remainingQuantityText}}{{item.unit}}</view></view>
+      <view class="sub-title">归还记录</view><view wx:for="{{detail.returnRecords}}" wx:key="id" class="detail-item"><view>{{item.itemName}} {{item.quantityText}}</view><view class="muted">{{item.statusText}} · {{item.returnDateText}}</view><t-button wx:if="{{item.canConfirm && detail.permissions.canConfirmReturn}}" size="small" theme="primary" data-index="{{index}}" bind:tap="confirmReturn">确认收货</t-button></view>
+      <view class="modal-actions action-wrap"><t-button wx:if="{{detail.permissions.canConfirmOutbound}}" size="small" theme="primary" bind:tap="confirmOutbound">确认调出</t-button><t-button wx:if="{{detail.permissions.canSubmitReturn}}" size="small" variant="outline" bind:tap="openReturn">发起归还</t-button><t-button wx:if="{{detail.permissions.canUpdate}}" size="small" variant="outline" bind:tap="openDateEditor">改预计日期</t-button><t-button wx:if="{{detail.permissions.canCancel}}" size="small" theme="danger" variant="outline" bind:tap="cancelTransfer">取消调拨</t-button></view>
+    </block>
+  </view></view>
+
+  <view wx:if="{{returnVisible}}" class="overlay" catch:tap="closeReturn"><view class="modal-card" catch:tap="noop"><view class="modal-title">发起归还</view><picker mode="date" value="{{returnForm.returnDate}}" bindchange="onReturnDateChange"><view class="picker-row"><text>归还日期</text><text class="picker-value">{{returnForm.returnDate}}</text></view></picker><view wx:for="{{returnForm.items}}" wx:key="transferItemId" class="return-row"><view>{{item.itemName}}（可归还{{item.available}}{{item.unit}}）</view><t-input type="number" label="本次数量" value="{{item.quantity}}" data-index="{{index}}" bind:change="onReturnQuantityChange" /></view><t-textarea t-class-textarea="compact-textarea" label="备注" value="{{returnForm.remark}}" bind:change="onReturnRemarkChange" /><view class="modal-actions"><t-button variant="outline" bind:tap="closeReturn">取消</t-button><t-button theme="primary" loading="{{saving}}" bind:tap="saveReturn">提交</t-button></view></view></view>
+  <view wx:if="{{dateVisible}}" class="overlay" catch:tap="noop"><view class="modal-card" catch:tap="noop"><view class="modal-title">修改预计归还日期</view><picker mode="date" value="{{dateValue}}" bindchange="onDateEditorChange"><view class="picker-row"><text>预计归还</text><text class="picker-value">{{dateValue}}</text></view></picker><view class="modal-actions"><t-button variant="outline" bind:tap="closeDateEditor">取消</t-button><t-button theme="primary" loading="{{saving}}" bind:tap="saveExpectedDate">保存</t-button></view></view></view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange"><t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item><t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item><t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item><t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item><t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item></t-tab-bar>
+</view>

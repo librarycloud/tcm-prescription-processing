@@ -1,0 +1,59 @@
+<view class="page login-page">
+  <t-toast id="t-toast" />
+  <view class="brand">
+    <view class="title">中药处方加工与取药管理系统</view>
+    <view class="subtitle">微信登录后，用手机号和取货码绑定</view>
+  </view>
+
+  <view class="mode-tabs">
+    <t-button size="small" theme="{{mode === 'wechat' ? 'primary' : 'default'}}" bind:tap="switchWechat">用户</t-button>
+    <t-button size="small" theme="{{mode === 'admin' ? 'primary' : 'default'}}" bind:tap="switchAdmin">管理员</t-button>
+  </view>
+
+  <view class="app-card" wx:if="{{mode === 'wechat'}}">
+    <view wx:if="{{!requiresBind}}">
+      <view class="hint">使用微信身份进入，首次使用需用账号密码绑定微信。</view>
+      <view class="login-action">
+        <t-button theme="primary" block loading="{{loading}}" bind:tap="submitWechat">微信一键登录</t-button>
+      </view>
+    </view>
+
+    <view wx:else>
+      <view class="bind-methods">
+        <t-button size="small" theme="{{bindMethod === 'password' ? 'primary' : 'default'}}" data-method="password" bind:tap="switchBindMethod">账号密码</t-button>
+        <t-button size="small" theme="{{bindMethod === 'pickup' ? 'primary' : 'default'}}" data-method="pickup" bind:tap="switchBindMethod">取货码</t-button>
+      </view>
+      <t-input label="手机号" value="{{phone}}" placeholder="请输入账号手机号" type="number" bind:change="onPhoneChange" />
+      <view wx:if="{{bindMethod === 'password'}}" class="password-field">
+        <t-input label="密码" value="{{password}}" placeholder="请输入账号密码" type="{{passwordVisible ? 'text' : 'password'}}" bind:change="onPasswordChange" />
+        <view class="password-eye" bindtap="togglePasswordVisible">
+          <t-icon name="{{passwordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+      <t-input wx:else label="取货码" value="{{pickupCode}}" placeholder="请输入待取包裹取货码" bind:change="onPickupCodeChange" />
+      <view class="login-action">
+        <t-button theme="primary" block loading="{{loading}}" bind:tap="submitBind">绑定并登录</t-button>
+      </view>
+    </view>
+  </view>
+
+  <view class="app-card" wx:if="{{mode === 'admin'}}">
+    <t-input label="手机号" value="{{adminPhone}}" placeholder="请输入管理员手机号" type="number" bind:change="onAdminPhoneChange" />
+    <t-input label="密码" value="{{adminPassword}}" placeholder="请输入管理员密码" type="password" bind:change="onAdminPasswordChange" />
+    <view class="login-action">
+      <t-button theme="primary" block loading="{{loading}}" bind:tap="submitAdmin">管理员登录</t-button>
+    </view>
+  </view>
+
+  <view class="agreement" bindtap="selectProtocol">
+    <view class="agreement-check">
+      <t-radio value="agree" checked="{{agreeProtocol}}" bind:change="onProtocolChange" />
+    </view>
+    <view class="agreement-text">
+      <text>我已阅读并同意</text>
+      <text class="link" catchtap="goService">《用户服务协议》</text>
+      <text>和</text>
+      <text class="link" catchtap="goPrivacy">《隐私政策》</text>
+    </view>
+  </view>
+</view>

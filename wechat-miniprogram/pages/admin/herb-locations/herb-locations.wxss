@@ -1,0 +1,30 @@
+.herb-page { max-width: 100vw; padding-bottom: 220rpx; box-sizing: border-box; overflow-x: hidden; }
+.page-heading, .status-row, .toolbar, .detail-actions, .row-actions, .modal-actions { display: flex; align-items: center; }
+.page-heading { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 12rpx; margin-bottom: 18rpx; }
+.page-heading-main, .page-heading-action { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.page-heading-action { overflow: hidden; }
+.page-heading-action > t-button { display: block; width: 100%; min-width: 0; max-width: 100%; }
+.heading-action-button { width: 100% !important; min-width: 0 !important; max-width: 100% !important; padding-right: 16rpx !important; padding-left: 16rpx !important; overflow: hidden; box-sizing: border-box; font-size: 26rpx !important; }
+.store-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page-title { font-size: 36rpx; font-weight: 700; }
+.toolbar { gap: 12rpx; margin: 16rpx 0; }
+.herb-toolbar { display: block; }
+.herb-search { overflow: hidden; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #fff; --td-input-bg-color: transparent; --td-input-vertical-padding: 16rpx 24rpx; --td-input-suffix-text-color: #0052d9; }
+.grow { flex: 1; min-width: 0; }
+.filter-picker { min-height: 76rpx; margin-bottom: 14rpx; padding: 18rpx 20rpx; box-sizing: border-box; border: 1rpx solid #e5e6eb; border-radius: 8rpx; color: #4e5969; background: #fff; }
+.location-card { margin-bottom: 14rpx; }
+.location-code { color: #0052d9; font-size: 30rpx; font-weight: 700; }
+.herb-summary { margin-top: 12rpx; color: #1f2329; line-height: 1.5; }
+.overlay { position: fixed; z-index: 1001; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: flex-end; background: rgba(0, 0, 0, .42); }
+.modal-card { width: 100%; max-width: 100vw; max-height: 88vh; padding: 28rpx; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; border-radius: 24rpx 24rpx 0 0; background: #fff; }
+.modal-title { margin-bottom: 20rpx; font-size: 34rpx; font-weight: 700; }
+.close { float: right; color: #86909c; font-size: 44rpx; font-weight: 400; }
+.detail-actions { justify-content: flex-end; margin: 18rpx 0; }
+.herb-row { width: 100%; min-width: 0; padding: 16rpx 0; box-sizing: border-box; overflow: hidden; border-bottom: 1rpx solid #eef0f5; }
+.herb-main { width: 100%; min-width: 0; }
+.herb-name { font-size: 30rpx; font-weight: 600; }
+.herb-description { overflow-wrap: anywhere; word-break: break-all; }
+.row-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8rpx; width: 100%; min-width: 0; margin-top: 12rpx; }
+.row-action-cell { display: flex; align-items: center; justify-content: center; width: 100%; min-width: 0; max-width: 100%; }
+.row-action-cell > t-button { display: inline-flex; width: auto; min-width: 0; max-width: 100%; }
+.modal-actions { justify-content: flex-end; gap: 12rpx; margin-top: 20rpx; }

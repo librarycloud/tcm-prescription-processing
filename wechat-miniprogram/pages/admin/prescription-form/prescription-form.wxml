@@ -1,0 +1,44 @@
+<view class="page">
+  <view class="app-card form-card">
+    <picker wx:if="{{isSuperAdmin && !isEdit}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange">
+      <view class="picker-row">
+        <text>所属门店</text>
+        <text class="picker-value {{!form.storeId ? 'placeholder' : ''}}">{{form.storeId ? form.storeName : '请选择所属门店'}}</text>
+      </view>
+    </picker>
+    <view wx:elif="{{isEdit}}" class="picker-row"><text>所属门店</text><text class="picker-value">{{form.storeName || '-'}}</text></view>
+
+    <t-input label="顾客姓名" value="{{form.customerName}}" maxlength="64" placeholder="请输入顾客姓名" data-field="customerName" bind:change="onChange" />
+    <t-input label="手机号" value="{{form.phone}}" type="number" maxlength="11" placeholder="选填" data-field="phone" bind:change="onChange" />
+
+    <picker mode="selector" range="{{doctors}}" range-key="name" value="{{doctorIndex}}" bindchange="onDoctorChange">
+      <view class="picker-row"><text>医生</text><text class="picker-value {{!form.doctorId ? 'placeholder' : ''}}">{{form.doctorId ? form.doctorName : '请选择医生'}}</text></view>
+    </picker>
+    <picker mode="selector" range="{{sources}}" range-key="name" value="{{sourceIndex}}" bindchange="onSourceChange">
+      <view class="picker-row"><text>处方来源</text><text class="picker-value {{!form.sourceId ? 'placeholder' : ''}}">{{form.sourceId ? form.sourceName : '请选择处方来源'}}</text></view>
+    </picker>
+    <picker mode="selector" range="{{externalOptions}}" range-key="label" value="{{externalIndex}}" bindchange="onExternalChange">
+      <view class="picker-row"><text>处方类型</text><text class="picker-value">{{externalOptions[externalIndex].label}}</text></view>
+    </picker>
+
+    <view wx:if="{{form.isExternal}}" class="external-fields">
+      <t-input label="医院名称" value="{{form.externalHospital}}" maxlength="150" placeholder="选填" data-field="externalHospital" bind:change="onChange" />
+      <t-input label="外方医生" value="{{form.externalDoctor}}" maxlength="100" placeholder="选填" data-field="externalDoctor" bind:change="onChange" />
+      <t-textarea t-class-textarea="compact-textarea" label="外方备注" value="{{form.externalRemark}}" maxlength="500" placeholder="选填" data-field="externalRemark" bind:change="onChange" />
+    </view>
+
+    <picker wx:if="{{isEdit}}" mode="selector" range="{{statusOptions}}" range-key="label" value="{{statusIndex}}" bindchange="onStatusChange">
+      <view class="picker-row"><text>处方状态</text><text class="picker-value">{{form.statusText}}</text></view>
+    </picker>
+    <t-textarea t-class-textarea="compact-textarea" label="备注" value="{{form.remark}}" maxlength="500" placeholder="请输入备注" data-field="remark" bind:change="onChange" />
+    <view class="submit"><t-button theme="primary" block loading="{{loading}}" bind:tap="submit">保存</t-button></view>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

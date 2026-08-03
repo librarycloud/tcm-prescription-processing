@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="app-card form-card">
+    <view wx:if="{{!isEdit}}" class="prescription-search">
+      <t-input borderless suffix="搜索" value="{{searchKeyword}}" placeholder="搜索处方编号/姓名/手机号" bind:change="onSearchKeywordChange" bind:click="searchPrescriptions" bind:enter="searchPrescriptions" />
+    </view>
+    <picker wx:if="{{!isEdit}}" mode="selector" range="{{prescriptions}}" range-key="label" value="{{prescriptionIndex}}" bindchange="onPrescriptionChange">
+      <view class="picker-row"><text>处方</text><text class="picker-value {{!form.prescriptionId ? 'placeholder' : ''}}">{{form.prescriptionId ? form.prescriptionLabel : '请选择处方'}}</text></view>
+    </picker>
+    <view wx:else class="picker-row"><text>处方</text><text class="picker-value">{{form.prescriptionLabel}}</text></view>
+
+    <picker mode="selector" range="{{processTypes}}" range-key="name" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
+      <view class="picker-row"><text>加工方式</text><text class="picker-value {{!form.processTypeId ? 'placeholder' : ''}}">{{form.processTypeId ? form.processTypeName : '请选择加工方式'}}</text></view>
+    </picker>
+    <t-input label="批次号" value="{{form.batchNo}}" type="number" placeholder="请输入批次号" data-field="batchNo" bind:change="onChange" />
+    <t-input label="剂数" value="{{form.totalDose}}" type="number" placeholder="请输入剂数" data-field="totalDose" bind:change="onChange" />
+    <t-input wx:if="{{isDecoction}}" label="袋数" value="{{form.bagCount}}" type="number" placeholder="请输入袋数" data-field="bagCount" bind:change="onChange" />
+    <t-input wx:if="{{isDecoction}}" label="毫升数" value="{{form.volumeMl}}" type="number" placeholder="请输入毫升数" data-field="volumeMl" bind:change="onChange" />
+
+    <picker mode="selector" range="{{priorityOptions}}" range-key="label" value="{{priorityIndex}}" bindchange="onPriorityChange">
+      <view class="picker-row"><text>优先级</text><text class="picker-value">{{form.priorityText}}</text></view>
+    </picker>
+    <picker mode="selector" range="{{scheduleOptions}}" range-key="label" value="{{scheduleIndex}}" bindchange="onScheduleChange">
+      <view class="picker-row"><text>调度方式</text><text class="picker-value">{{form.scheduleText}}</text></view>
+    </picker>
+    <picker wx:if="{{form.scheduleType === 1}}" mode="date" value="{{form.processDate}}" bindchange="onDateChange">
+      <view class="picker-row"><text>计划开工日期</text><text class="picker-value">{{form.processDate}}</text></view>
+    </picker>
+    <picker mode="selector" range="{{notifyTypes}}" range-key="name" value="{{notifyTypeIndex}}" bindchange="onNotifyTypeChange">
+      <view class="picker-row"><text>提醒方式</text><text class="picker-value">{{form.notifyTypeName}}</text></view>
+    </picker>
+    <picker mode="selector" range="{{paymentOptions}}" range-key="label" value="{{paymentIndex}}" bindchange="onPaymentChange">
+      <view class="picker-row"><text>收费状态</text><text class="picker-value">{{form.paymentText}}</text></view>
+    </picker>
+    <picker mode="selector" range="{{pickupMethodOptions}}" range-key="label" value="{{pickupMethodIndex}}" bindchange="onPickupMethodChange">
+      <view class="picker-row"><text>取货方式</text><text class="picker-value">{{form.pickupMethodText}}</text></view>
+    </picker>
+    <t-textarea t-class-textarea="compact-textarea" wx:if="{{form.pickupMethod === 1 || form.pickupMethod === 2}}" label="地址" value="{{form.expressAddress}}" maxlength="500" placeholder="选填" data-field="expressAddress" bind:change="onChange" />
+
+    <t-textarea t-class-textarea="compact-textarea" label="加工备注" value="{{form.processRemark}}" maxlength="500" placeholder="请输入加工备注" data-field="processRemark" bind:change="onChange" />
+    <t-textarea t-class-textarea="compact-textarea" label="其它备注" value="{{form.remark}}" maxlength="500" placeholder="请输入其它备注" data-field="remark" bind:change="onChange" />
+    <view class="submit"><t-button theme="primary" block loading="{{loading}}" bind:tap="submit">保存</t-button></view>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

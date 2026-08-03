@@ -1,0 +1,46 @@
+{
+  "description": "中药处方加工与取药管理系统",
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "file",
+        "value": "node_modules/pinyin-pro/dist/index.mjs"
+      },
+      {
+        "type": "folder",
+        "value": "node_modules/pinyin-pro/types"
+      },
+      {
+        "type": "file",
+        "value": "node_modules/pinyin-pro/README.md"
+      },
+      {
+        "type": "file",
+        "value": "node_modules/tdesign-miniprogram/CHANGELOG.md"
+      },
+      {
+        "type": "file",
+        "value": "node_modules/tdesign-miniprogram/miniprogram_dist/.wechatide.ib.json"
+      }
+    ]
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "lazyloadPlaceholderEnable": false,
+    "preloadBackgroundData": false,
+    "autoAudits": false,
+    "showShadowRootInWxmlPanel": true,
+    "scopeDataCheck": false,
+    "useCompilerPlugins": false
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.8.0",
+  "appid": "touristappid",
+  "projectname": "tcm-prescription-processing",
+  "condition": {}
+}

@@ -1,0 +1,19 @@
+<view class="page" wx:if="{{detail}}">
+  <view class="app-card">
+    <view class="status-row">
+      <view class="code">{{detail.pickupCode}}</view>
+      <t-tag theme="{{detail.statusTheme}}">{{detail.statusText}}</t-tag>
+    </view>
+    <qr-code text="{{detail.pickupCode}}" />
+  </view>
+
+  <t-cell-group>
+    <t-cell title="物品名称" note="{{detail.itemName}}" />
+    <t-cell title="备注" note="{{detail.itemInfo || '-'}}" />
+    <t-cell title="取货方式" note="{{detail.pickupMethodText}}" />
+    <t-cell title="录入时间" note="{{detail.createdAtText}}" />
+    <t-cell title="状态" note="{{detail.statusText}}" />
+    <t-cell wx:if="{{detail.isPicked}}" title="取货时间" note="{{detail.pickedAtText}}" />
+    <t-cell wx:if="{{detail.verifier}}" title="核销人" note="{{detail.verifier.nickname || detail.verifier.phone}}" />
+  </t-cell-group>
+</view>

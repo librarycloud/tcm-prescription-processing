@@ -1,0 +1,29 @@
+<view class="page" wx:if="{{detail}}">
+  <view class="app-card">
+    <view class="status-row">
+      <view class="code">{{detail.pickupCode}}</view>
+      <t-tag theme="{{detail.statusTheme}}">{{detail.statusText}}</t-tag>
+    </view>
+    <qr-code text="{{detail.pickupCode}}" />
+  </view>
+
+  <t-cell-group>
+    <t-cell title="物品名称" note="{{detail.itemName}}" />
+    <t-cell title="备注" note="{{detail.itemInfo || '-'}}" />
+    <t-cell title="收件人" note="{{detail.receiverName}}" />
+    <t-cell title="手机号" note="{{detail.receiverPhone || '-'}}" />
+    <t-cell title="取货方式" note="{{detail.pickupMethodText}}" />
+    <t-cell wx:if="{{detail.pickupMethod === 1 || detail.pickupMethod === 2}}" title="地址" note="{{detail.expressAddress || '-'}}" />
+    <t-cell wx:if="{{detail.pickupMethod === 2}}" title="快递单号" note="{{detail.expressTrackingNo || '-'}}" />
+    <t-cell title="录入时间" note="{{detail.createdAtText}}" />
+    <t-cell title="取货时间" note="{{detail.pickedAtText}}" />
+    <t-cell title="录入管理员" note="{{detail.creator.nickname || detail.creator.phone}}" />
+    <t-cell wx:if="{{detail.modifiedAt}}" title="最后修改时间" note="{{detail.modifiedAtText}}" />
+    <t-cell wx:if="{{detail.modifier}}" title="最后修改人" note="{{detail.modifier.nickname || detail.modifier.phone}}" />
+    <t-cell wx:if="{{detail.verifier}}" title="核销人" note="{{detail.verifier.nickname || detail.verifier.phone}}" />
+  </t-cell-group>
+
+  <view class="actions" wx:if="{{detail.isPending}}">
+    <t-button theme="primary" block bind:tap="verify">确认核销</t-button>
+  </view>
+</view>

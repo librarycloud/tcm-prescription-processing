@@ -1,0 +1,24 @@
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 96rpx;
+  border-bottom: 1rpx solid #eef0f5;
+}
+
+.picker-value {
+  color: #1f2329;
+}
+
+.picker-value.placeholder {
+  color: #b0b5bd;
+}
+
+.submit {
+  margin-top: 32rpx;
+}
+
+.tracking-row {
+  width: 100%;
+  min-width: 0;
+}

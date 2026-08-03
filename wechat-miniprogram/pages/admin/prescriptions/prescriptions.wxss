@@ -1,0 +1,124 @@
+.filter-scroll {
+  width: 100%;
+  margin-bottom: 20rpx;
+}
+
+.filter-row {
+  display: grid;
+  align-items: center;
+  gap: 6rpx;
+  width: 100%;
+  min-width: 0;
+}
+
+.filter-row-five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.filter-row-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.filter-row > t-button,
+.filter-row > picker,
+.filter-row > picker > t-button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.filter-button {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding-right: 6rpx !important;
+  padding-left: 6rpx !important;
+  overflow: hidden;
+  box-sizing: border-box;
+  font-size: 24rpx !important;
+}
+
+.prescription-card {
+  border-left: 6rpx solid #0052d9;
+}
+
+.card-main {
+  min-width: 0;
+}
+
+.prescription-no {
+  color: #0052d9;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.customer-name {
+  margin-top: 8rpx;
+  font-weight: 600;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx 20rpx;
+  margin: 20rpx 0 12rpx;
+  font-size: 26rpx;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  margin-top: 24rpx;
+}
+
+.pager-current {
+  min-width: 120rpx;
+  color: #1d2129;
+  text-align: center;
+  font-size: 26rpx;
+}
+
+.pager > t-button {
+  flex: 0 0 auto;
+  width: auto !important;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.card-actions > t-button {
+  flex: 0 0 auto;
+  width: auto !important;
+}
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20rpx;
+}
+
+.prescription-toolbar {
+  display: block;
+}
+
+.prescription-search {
+  overflow: hidden;
+  border: 1rpx solid #dcdcdc;
+  border-radius: 6px;
+  background: #ffffff;
+  --td-input-bg-color: transparent;
+  --td-input-vertical-padding: 16rpx 24rpx;
+  --td-input-suffix-text-color: #0052d9;
+}
+.page {
+  padding-bottom: 220rpx;
+}

@@ -1,0 +1,9 @@
+.qr-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 24rpx 0;
+}
+
+.qr-canvas {
+  background: #ffffff;
+}

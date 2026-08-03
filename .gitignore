@@ -1,0 +1,28 @@
+# Dependencies
+**/node_modules/
+
+# Build output and local tooling
+**/dist/
+**/.vite/
+**/coverage/
+*.tsbuildinfo
+
+# Local environment configuration
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Runtime data and logs
+**/logs/
+**/uploads/
+*.log
+*.pid
+
+# Downloaded IP geolocation database
+backend/data/*.ipdb
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

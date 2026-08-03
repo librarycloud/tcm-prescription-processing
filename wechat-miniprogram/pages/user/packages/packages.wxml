@@ -1,0 +1,21 @@
+<view class="page">
+  <view class="app-card" wx:for="{{list}}" wx:key="id" bind:tap="goDetail" data-id="{{item.id}}">
+    <view class="status-row">
+      <view>
+        <view class="item-title">{{item.itemName}}</view>
+        <view class="muted">录入：{{item.createdAtText}}</view>
+        <view class="muted">取货：{{item.pickedAtText}}</view>
+      </view>
+      <view class="package-tags">
+        <t-tag theme="primary">{{item.pickupMethodText}}</t-tag>
+        <t-tag theme="{{item.statusTheme}}">{{item.statusText}}</t-tag>
+      </view>
+    </view>
+  </view>
+
+  <t-empty wx:if="{{!list.length}}" description="暂无包裹" />
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

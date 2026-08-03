@@ -1,0 +1,13 @@
+<view class="page agreement-page">
+  <view class="title">用户服务协议</view>
+  <view class="paragraph">欢迎您使用本小程序，请您在使用前仔细阅读并同意本协议。</view>
+
+  <view class="section-title">一、服务内容</view>
+  <view class="paragraph">本小程序提供物品领取、取货码验证等相关服务。</view>
+
+  <view class="section-title">二、用户义务</view>
+  <view class="paragraph">您应保证提交信息真实、准确，不得利用本小程序从事违法活动。</view>
+
+  <view class="section-title">三、协议更新</view>
+  <view class="paragraph">本协议可能根据业务需要进行更新，更新后将在本页面公布。</view>
+</view>
