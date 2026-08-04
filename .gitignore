@@ -19,7 +19,7 @@
 *.pid
 
 # Downloaded IP geolocation database
-backend/data/*.ipdb
+# backend/data/*.ipdb
 
 # OS and editor files
 .DS_Store
