@@ -57,12 +57,26 @@ import {
   restoreQueueController,
   transitionController as transitionPlanController,
   updateController as updatePlanController,
+  workflowController as processingWorkflowController,
+  scanController as scanProcessingPlanController,
+  completeDispensingController,
+  photoController as processingPhotoController,
+  startEquipmentUsageController,
+  finishEquipmentUsageController,
 } from "../controllers/processingPlanController.js";
+import {
+  createController as createEquipmentController,
+  deleteController as deleteEquipmentController,
+  listController as listEquipmentController,
+  updateController as updateEquipmentController,
+} from "../controllers/processingEquipmentController.js";
 import {
   createController as createPrescriptionController,
   deleteController as deletePrescriptionController,
   detailController as prescriptionDetailController,
   listController as listPrescriptionController,
+  attachmentController as prescriptionAttachmentController,
+  uploadAttachmentController as uploadPrescriptionAttachmentController,
   updateController as updatePrescriptionController,
 } from "../controllers/prescriptionController.js";
 import {
@@ -219,6 +233,8 @@ export default async function adminRoutes(fastify) {
     verifyController,
   );
   fastify.get("/prescriptions", listPrescriptionController);
+  fastify.get("/prescriptions/:id/attachment", prescriptionAttachmentController);
+  fastify.post("/prescriptions/:id/attachment", uploadPrescriptionAttachmentController);
   fastify.get("/prescriptions/:id", prescriptionDetailController);
   fastify.post("/prescriptions", createPrescriptionController);
   fastify.put("/prescriptions/:id", updatePrescriptionController);
@@ -229,11 +245,20 @@ export default async function adminRoutes(fastify) {
   );
   fastify.get("/processing-plans", listPlanController);
   fastify.get("/processing-plans/calendar", processingCalendarController);
+  fastify.get("/processing-plans/by-scan", scanProcessingPlanController);
   fastify.post("/processing-plans", createPlanController);
   fastify.post("/processing-plans/batch", createPlanBatchController);
   fastify.put("/processing-plans/queue", reorderQueueController);
   fastify.post("/processing-plans/queue/restore", restoreQueueController);
   fastify.put("/processing-plans/:id", updatePlanController);
+  fastify.get("/processing-plans/:id/workflow", processingWorkflowController);
+  fastify.post("/processing-plans/:id/dispensing-complete", completeDispensingController);
+  fastify.get("/processing-plans/:id/photos/:photoId", processingPhotoController);
+  fastify.post("/processing-plans/:id/equipment-usages", startEquipmentUsageController);
+  fastify.post(
+    "/processing-plans/:id/equipment-usages/:usageId/finish",
+    finishEquipmentUsageController,
+  );
   fastify.post("/processing-plans/:id/transition", transitionPlanController);
   fastify.post(
     "/processing-plans/:id/generate-package",
@@ -243,6 +268,10 @@ export default async function adminRoutes(fastify) {
   fastify.post("/processing-plans/:id/receive-notice", receiveNoticeController);
   fastify.post("/processing-plans/:id/package", linkPackageController);
   fastify.delete("/processing-plans/:id", deletePlanController);
+  fastify.get("/processing-equipment", listEquipmentController);
+  fastify.post("/processing-equipment", createEquipmentController);
+  fastify.put("/processing-equipment/:id", updateEquipmentController);
+  fastify.delete("/processing-equipment/:id", deleteEquipmentController);
   fastify.get("/dictionaries", listDictionariesController);
   fastify.post(
     "/dictionaries",

@@ -1,4 +1,4 @@
-import { request } from '../utils/request';
+import { request, uploadFile } from '../utils/request';
 
 export function getStats(params = {}) {
   return request({ url: '/admin/stats', data: params });
@@ -86,6 +86,40 @@ export function delayProcessingPlan(id, data) {
 export function receiveProcessingNotice(id, data) {
   return request({
     url: `/admin/processing-plans/${id}/receive-notice`,
+    method: 'POST',
+    data
+  });
+}
+
+export function findProcessingPlanByScan(code) {
+  return request({
+    url: '/admin/processing-plans/by-scan',
+    data: { code }
+  });
+}
+
+export function getProcessingWorkflow(id) {
+  return request({ url: `/admin/processing-plans/${id}/workflow` });
+}
+
+export function uploadDispensingPhoto(id, filePath) {
+  return uploadFile({
+    url: `/admin/processing-plans/${id}/dispensing-complete`,
+    filePath
+  });
+}
+
+export function startProcessingEquipmentUsage(id, data) {
+  return request({
+    url: `/admin/processing-plans/${id}/equipment-usages`,
+    method: 'POST',
+    data
+  });
+}
+
+export function finishProcessingEquipmentUsage(id, usageId, data) {
+  return request({
+    url: `/admin/processing-plans/${id}/equipment-usages/${usageId}/finish`,
     method: 'POST',
     data
   });

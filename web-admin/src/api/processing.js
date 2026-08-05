@@ -2,8 +2,12 @@ import request from './request';
 export const getProcessingPlans = (params) => request.get('/admin/processing-plans', { params });
 export const getProcessingCalendar = (params) =>
   request.get('/admin/processing-plans/calendar', { params });
+export const getProcessingWorkflow = (id) => request.get(`/admin/processing-plans/${id}/workflow`);
+export const getProcessingPhoto = (planId, photoId) =>
+  request.get(`/admin/processing-plans/${planId}/photos/${photoId}`, { responseType: 'blob' });
 export const createProcessingPlan = (data) => request.post('/admin/processing-plans', data);
-export const createProcessingPlanBatch = (data) => request.post('/admin/processing-plans/batch', data);
+export const createProcessingPlanBatch = (data) =>
+  request.post('/admin/processing-plans/batch', data);
 export const updateProcessingPlan = (id, data) =>
   request.put(`/admin/processing-plans/${id}`, data);
 export const transitionProcessingPlan = (id, status, data = {}) =>

@@ -179,7 +179,8 @@
               <div ref="previewCanvasRef" class="layout-preview-canvas" :style="previewCanvasStyle">
                 <PrintLabel
                   :package-info="isPackageTemplate ? previewPackage : null"
-                  :plan-info="isPackageTemplate ? null : previewPlan"
+                  :plan-info="!isPackageTemplate && !isEquipmentTemplate ? previewPlan : null"
+                  :equipment-info="isEquipmentTemplate ? previewEquipment : null"
                   :qr-data-url="qrDataUrl"
                   :template="form"
                 />
@@ -211,7 +212,9 @@
               :title="
                 isPackageTemplate
                   ? '预览使用示例包裹数据，实际打印内容以包裹详情为准。'
-                  : '预览使用示例加工计划数据，实际打印内容以加工计划详情为准。'
+                  : isEquipmentTemplate
+                    ? '预览使用示例设备数据，实际打印内容以设备档案为准。'
+                    : '预览使用示例加工计划数据，实际打印内容以加工计划详情为准。'
               "
               type="info"
               :closable="false"
@@ -371,11 +374,13 @@ import { createQRCodeDataUrl } from '@/utils/qrcode';
 import {
   cloneTemplate,
   DEFAULT_PACKAGING_TEMPLATE,
+  DEFAULT_EQUIPMENT_TEMPLATE,
   DEFAULT_PICKUP_TEMPLATE,
   DEFAULT_PROCESSING_TEMPLATE,
   PORTRAIT_PACKAGING_TEMPLATE,
   PORTRAIT_PROCESSING_TEMPLATE,
-  PRINT_FONT_OPTIONS
+  PRINT_FONT_OPTIONS,
+  THERMAL_PROCESSING_TEMPLATE
 } from '@/utils/printTemplate';
 import { formatDate } from '@/utils/date';
 import { getStores } from '@/api/store';
@@ -410,7 +415,12 @@ const previewPackage = reactive({
   store: { name: '总部' }
 });
 const previewPlan = reactive({
-  prescription: { prescriptionNo: 'RX202607210001', customerName: '张三' },
+  planCode: 'JG260805-0123',
+  prescription: {
+    prescriptionNo: 'CF202608050123',
+    customerName: '张三',
+    doctor: { name: '王医生' }
+  },
   batchNo: 1,
   processType: { name: '代煎' },
   totalDose: 7,
@@ -418,10 +428,18 @@ const previewPlan = reactive({
   volumeMl: 200,
   processDate: new Date().toISOString(),
   usageMethod: DEFAULT_USAGE_METHOD,
+  processRemark: '附子先煎30分钟，其余药味后下同煎',
+  store: { name: '总部' }
+});
+const previewEquipment = reactive({
+  equipmentNo: 'P01',
+  name: '1号煎药锅',
+  typeName: '煎药锅',
   store: { name: '总部' }
 });
 const userStore = useUserStore();
 const isPackageTemplate = computed(() => form.value?.templateType === 'PACKAGE_PICKUP');
+const isEquipmentTemplate = computed(() => form.value?.templateType === 'EQUIPMENT');
 const editableFields = computed(() =>
   (form.value?.fields || []).filter((field) => field.visible !== false)
 );
@@ -606,6 +624,8 @@ function defaultFields(type, widthMm, heightMm) {
   const localDefaults = [
     DEFAULT_PICKUP_TEMPLATE,
     DEFAULT_PROCESSING_TEMPLATE,
+    THERMAL_PROCESSING_TEMPLATE,
+    DEFAULT_EQUIPMENT_TEMPLATE,
     PORTRAIT_PROCESSING_TEMPLATE,
     DEFAULT_PACKAGING_TEMPLATE,
     PORTRAIT_PACKAGING_TEMPLATE
@@ -684,9 +704,12 @@ async function loadTemplates() {
 function openCreate() {
   const type = templateTypes.value[0]?.value || DEFAULT_PICKUP_TEMPLATE.templateType;
   const localDefault =
-    [DEFAULT_PICKUP_TEMPLATE, DEFAULT_PROCESSING_TEMPLATE, DEFAULT_PACKAGING_TEMPLATE].find(
-      (template) => template.templateType === type
-    ) || DEFAULT_PICKUP_TEMPLATE;
+    [
+      DEFAULT_PICKUP_TEMPLATE,
+      DEFAULT_PROCESSING_TEMPLATE,
+      DEFAULT_PACKAGING_TEMPLATE,
+      DEFAULT_EQUIPMENT_TEMPLATE
+    ].find((template) => template.templateType === type) || DEFAULT_PICKUP_TEMPLATE;
   const width = localDefault.widthMm;
   const height = localDefault.heightMm;
   form.value = {
@@ -716,7 +739,8 @@ function changeTemplateType(type) {
   const localDefault = [
     DEFAULT_PICKUP_TEMPLATE,
     DEFAULT_PROCESSING_TEMPLATE,
-    DEFAULT_PACKAGING_TEMPLATE
+    DEFAULT_PACKAGING_TEMPLATE,
+    DEFAULT_EQUIPMENT_TEMPLATE
   ].find((template) => template.templateType === type);
   if (localDefault) {
     form.value.widthMm = localDefault.widthMm;

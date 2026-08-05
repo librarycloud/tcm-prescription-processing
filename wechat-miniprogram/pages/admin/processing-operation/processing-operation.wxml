@@ -1,0 +1,109 @@
+<view class="page operation-page">
+  <t-loading wx:if="{{loading && !detail}}" text="加载中" />
+
+  <block wx:if="{{detail}}">
+    <view class="app-card plan-summary">
+      <view class="summary-head">
+        <view>
+          <view class="customer">{{detail.prescription.customerName}}</view>
+          <view class="muted">{{detail.planCode}} · 第 {{detail.batchNo}} 批</view>
+        </view>
+        <t-tag theme="primary">{{stageName}}</t-tag>
+      </view>
+      <view class="summary-grid">
+        <view>{{detail.processType.name}}</view>
+        <view>{{detail.totalDose}} 剂</view>
+        <view wx:if="{{detail.isDecoction}}">{{detail.bagCount}} 袋 / {{detail.volumeMl}} ml</view>
+      </view>
+    </view>
+
+    <view wx:if="{{detail.status === 0}}" class="primary-action">
+      <t-button theme="primary" block bind:tap="startPlan">开始调配</t-button>
+    </view>
+
+    <view wx:if="{{detail.status === 1}}" class="app-card step-card">
+      <view class="step-head">
+        <view class="step-index">1</view>
+        <view><view class="step-title">调配</view><view class="muted">完成后上传现场照片</view></view>
+      </view>
+      <view wx:if="{{detail.dispensingCompletedAt}}" class="step-result">
+        已完成：{{detail.dispensingCompletedAtText}}
+      </view>
+      <view class="photo-list" wx:if="{{detail.photos.length}}">
+        <t-button
+          wx:for="{{detail.photos}}"
+          wx:key="id"
+          size="small"
+          variant="outline"
+          data-id="{{item.id}}"
+          bind:tap="viewPhoto"
+        >查看照片 {{index + 1}}</t-button>
+      </view>
+      <t-button wx:if="{{canUploadPhoto}}" theme="primary" block bind:tap="takeDispensingPhoto">
+        {{detail.photos.length ? '补充调配照片' : '拍照并完成调配'}}
+      </t-button>
+    </view>
+
+    <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
+      <view class="step-head">
+        <view class="step-index">2</view>
+        <view><view class="step-title">浸泡</view><view class="muted">可连续扫描多个浸泡桶</view></view>
+      </view>
+      <view class="usage-row" wx:for="{{activeSoakings}}" wx:key="id">
+        <view>
+          <view class="usage-title">第 {{item.portionNo}} 份 · {{item.equipment.name}}</view>
+          <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
+        </view>
+        <t-button size="small" theme="primary" data-portion="{{item.portionNo}}" bind:tap="startDecoction">
+          扫锅转煎煮
+        </t-button>
+      </view>
+      <t-button wx:if="{{canStartSoaking}}" variant="outline" block bind:tap="startSoaking">
+        扫码添加浸泡桶
+      </t-button>
+    </view>
+
+    <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
+      <view class="step-head">
+        <view class="step-index">3</view>
+        <view><view class="step-title">煎煮</view><view class="muted">完成后直接扫描打包机，无需再次扫锅</view></view>
+      </view>
+      <view class="usage-row" wx:for="{{activeDecoctions}}" wx:key="id">
+        <view>
+          <view class="usage-title">第 {{item.portionNo}} 份 · {{item.equipment.name}}</view>
+          <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
+        </view>
+        <t-button size="small" theme="success" data-usage="{{item.id}}" bind:tap="finishWithPackaging">
+          扫打包机
+        </t-button>
+      </view>
+      <view wx:if="{{!activeDecoctions.length}}" class="empty-step">暂无进行中的煎煮</view>
+    </view>
+
+    <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
+      <view class="step-head">
+        <view class="step-index">4</view>
+        <view><view class="step-title">打包</view><view class="muted">每份药扫描打包机后即完成该份加工</view></view>
+      </view>
+      <view wx:if="{{detail.currentStage === 'PACKAGING_DONE'}}" class="step-result">
+        全部份组已完成打包
+      </view>
+      <view wx:else class="empty-step">等待煎煮完成后扫描打包机</view>
+    </view>
+
+    <view wx:if="{{usageHistory.length}}" class="app-card history-card">
+      <view class="step-title">设备使用记录</view>
+      <view class="history-item" wx:for="{{usageHistory}}" wx:key="id">
+        <view class="history-main">
+          <view>{{item.stageName}} · 第 {{item.portionNo}} 份 · {{item.equipment.name}}</view>
+          <view class="muted">{{item.startedAtText}} → {{item.endedAtText}}</view>
+        </view>
+        <view class="duration">{{item.durationText}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{canFinish}}" class="finish-bar">
+      <t-button theme="success" block bind:tap="finishPlan">加工完成</t-button>
+    </view>
+  </block>
+</view>

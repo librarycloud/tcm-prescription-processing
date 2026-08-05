@@ -15,6 +15,15 @@ import {
   transitionProcessingPlan,
   updateProcessingPlan,
 } from "../services/processingPlanService.js";
+import { AppError } from "../utils/appError.js";
+import {
+  completeDispensing,
+  findProcessingPlanByScan,
+  finishEquipmentUsage,
+  getProcessingPhoto,
+  getProcessingWorkflow,
+  startEquipmentUsage,
+} from "../services/processingWorkflowService.js";
 
 export async function listController(request, reply) {
   return ok(
@@ -172,5 +181,70 @@ export async function calendarController(request, reply) {
       request.user,
       request.query || {},
     ),
+  );
+}
+
+export async function workflowController(request, reply) {
+  return ok(reply, await getProcessingWorkflow(request.server.prisma, request.user, request.params.id));
+}
+
+export async function scanController(request, reply) {
+  return ok(reply, await findProcessingPlanByScan(request.server.prisma, request.user, request.query?.code));
+}
+
+export async function completeDispensingController(request, reply) {
+  const file = await request.file();
+  if (!file) throw new AppError("请选择调配完成照片", 400);
+  let buffer;
+  try {
+    buffer = await file.toBuffer();
+  } catch (error) {
+    if (error?.code === "FST_REQ_FILE_TOO_LARGE") throw new AppError("照片不能超过 5MB", 400);
+    throw error;
+  }
+  return ok(
+    reply,
+    await completeDispensing(request.server.prisma, request.user, request.params.id, {
+      buffer,
+      filename: file.filename,
+      mimetype: file.mimetype,
+    }),
+    "调配已完成",
+  );
+}
+
+export async function photoController(request, reply) {
+  const photo = await getProcessingPhoto(
+    request.server.prisma,
+    request.user,
+    request.params.id,
+    request.params.photoId,
+  );
+  return reply
+    .header("Content-Type", photo.mimeType)
+    .header("Content-Length", photo.fileSize)
+    .header("Cache-Control", "private, no-store")
+    .send(photo.data);
+}
+
+export async function startEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await startEquipmentUsage(request.server.prisma, request.user, request.params.id, request.body || {}),
+    "设备工序已记录",
+  );
+}
+
+export async function finishEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await finishEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+      request.body || {},
+    ),
+    "已完成煎煮并记录打包机",
   );
 }

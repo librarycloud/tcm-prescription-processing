@@ -35,3 +35,38 @@ export function request(options) {
     });
   });
 }
+
+export function uploadFile(options) {
+  const token = getToken();
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${getBaseUrl()}${options.url}`,
+      filePath: options.filePath,
+      name: options.name || 'file',
+      header: token ? { Authorization: `Bearer ${token}` } : {},
+      formData: options.formData || {},
+      success(res) {
+        let body = {};
+        try {
+          body = JSON.parse(res.data || '{}');
+        } catch {
+          body = {};
+        }
+        if (body.code === 0) {
+          resolve(body.data);
+          return;
+        }
+        if (res.statusCode === 401) {
+          clearSession();
+          wx.reLaunch({ url: '/pages/login/login' });
+        }
+        wx.showToast({ title: body.message || '上传失败', icon: 'none' });
+        reject(new Error(body.message || '上传失败'));
+      },
+      fail(error) {
+        wx.showToast({ title: '网络异常', icon: 'none' });
+        reject(error);
+      }
+    });
+  });
+}

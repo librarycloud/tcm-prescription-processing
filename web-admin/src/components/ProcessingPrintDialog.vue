@@ -160,7 +160,12 @@ watch(
     if (!visible) return;
     resetUsageMethod();
     loadTemplates();
-    createQRCodeDataUrl(props.planInfo?.pickupCode || props.planInfo?.package?.pickupCode || '', {
+    const qrContent =
+      props.templateType === PROCESSING_TEMPLATE_TYPE
+        ? props.planInfo?.qrContent ||
+          (props.planInfo?.scanToken ? `TCM:PLAN:1:${props.planInfo.scanToken}` : '')
+        : props.planInfo?.pickupCode || props.planInfo?.package?.pickupCode || '';
+    createQRCodeDataUrl(qrContent, {
       width: 360
     }).then((value) => {
       qrDataUrl.value = value;
@@ -189,7 +194,7 @@ async function saveUsageMethod() {
 function appendPrintStyles(targetDocument) {
   const template = activeTemplate.value;
   const style = targetDocument.createElement('style');
-  style.textContent = `${printLabelCss}\n@page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0; }\nhtml, body { margin: 0; padding: 0; background: #fff; }\n.print-area { display: block; margin: 0; padding: 0; }\n.label-copy { break-after: page; page-break-after: always; }\n.label-copy:last-child { break-after: auto; page-break-after: auto; }\n.print-label { border: 0 !important; }`;
+  style.textContent = `${printLabelCss}\n@page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0 !important; }\nhtml, body { width: ${template.widthMm}mm; margin: 0 !important; padding: 0 !important; background: #fff; }\n.print-area { display: block; width: ${template.widthMm}mm; margin: 0 !important; padding: 0 !important; }\n.label-copy { width: ${template.widthMm}mm; height: ${template.heightMm}mm; margin: 0 !important; padding: 0 !important; overflow: hidden; break-after: page; page-break-after: always; }\n.label-copy:last-child { break-after: auto; page-break-after: auto; }\n.print-label { margin: 0 !important; border: 0 !important; }`;
   targetDocument.head.appendChild(style);
 }
 

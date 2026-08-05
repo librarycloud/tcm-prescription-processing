@@ -68,6 +68,76 @@
       </el-descriptions>
     </el-card>
 
+    <el-card shadow="never" class="attachment-card">
+      <template #header>
+        <div class="card-header">
+          <div>
+            <span>处方原件</span>
+            <span class="header-note">支持 JPG、PNG、GIF、WEBP、BMP 或 PDF，单个文件不超过 5MB</span>
+          </div>
+          <el-upload
+            ref="attachmentUploader"
+            :auto-upload="false"
+            :show-file-list="false"
+            :disabled="attachmentUploading || loading"
+            accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf"
+            @change="handleAttachmentChange"
+          >
+            <el-button
+              type="primary"
+              :icon="Upload"
+              :loading="attachmentUploading"
+              :disabled="attachmentUploading || loading"
+            >
+              {{ prescription?.attachment ? '重新上传' : '上传处方' }}
+            </el-button>
+          </el-upload>
+        </div>
+      </template>
+      <div v-if="prescription?.attachment" class="attachment-summary">
+        <el-icon class="attachment-icon">
+          <Picture v-if="isImageAttachment(prescription.attachment)" />
+          <Document v-else />
+        </el-icon>
+        <div class="attachment-info">
+          <div class="attachment-name" :title="prescription.attachment.originalName">
+            {{ prescription.attachment.originalName }}
+          </div>
+          <div class="attachment-meta">
+            {{ formatFileSize(prescription.attachment.fileSize) }} ·
+            {{ formatDate(prescription.attachment.updatedAt || prescription.attachment.createdAt) }}
+          </div>
+        </div>
+        <div class="attachment-actions">
+          <el-button link type="primary" :icon="View" @click="openAttachmentPreview">预览</el-button>
+          <el-button link :icon="Download" @click="downloadAttachment">下载</el-button>
+        </div>
+      </div>
+      <el-empty v-else description="暂无处方原件" :image-size="72" />
+    </el-card>
+
+    <el-dialog
+      v-model="attachmentPreviewVisible"
+      :title="attachmentPreviewName || '处方原件预览'"
+      width="min(900px, calc(100vw - 32px))"
+      destroy-on-close
+      @closed="handlePreviewClosed"
+    >
+      <div v-loading="attachmentPreviewLoading" class="attachment-preview">
+        <img
+          v-if="attachmentPreviewUrl && isImageMime(attachmentPreviewMime)"
+          :src="attachmentPreviewUrl"
+          :alt="attachmentPreviewName"
+        />
+        <iframe
+          v-else-if="attachmentPreviewUrl"
+          :src="attachmentPreviewUrl"
+          :title="attachmentPreviewName"
+        />
+        <el-empty v-else description="无法预览该文件" :image-size="72" />
+      </div>
+    </el-dialog>
+
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
@@ -370,14 +440,29 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
-import { ArrowDown, ArrowUp, Back, Plus, Refresh } from '@element-plus/icons-vue';
+import {
+  ArrowDown,
+  ArrowUp,
+  Back,
+  Document,
+  Download,
+  Picture,
+  Plus,
+  Refresh,
+  Upload,
+  View
+} from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
-import { getPrescription } from '@/api/prescription';
+import {
+  getPrescription,
+  getPrescriptionAttachment,
+  uploadPrescriptionAttachment
+} from '@/api/prescription';
 import {
   createProcessingPlan,
   deleteProcessingPlan,
@@ -416,6 +501,14 @@ const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const reordering = ref(false);
+const attachmentUploading = ref(false);
+const attachmentUploader = ref(null);
+const attachmentPreviewVisible = ref(false);
+const attachmentPreviewLoading = ref(false);
+const attachmentPreviewUrl = ref('');
+const attachmentPreviewMime = ref('');
+const attachmentPreviewName = ref('');
+const attachmentPreviewRequestId = ref(0);
 const planVisible = ref(false);
 const editingPlanId = ref(null);
 const prescription = ref(null);
@@ -428,6 +521,16 @@ const planFormIsDecoction = computed(() => isDecoctionProcessType(planForm.proce
 const planMetadataOnlyEdit = computed(() =>
   [PROCESSING_STATUS.FINISHED, PROCESSING_STATUS.READY_PICKUP].includes(planForm.status)
 );
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+  'application/pdf'
+]);
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf']);
 
 function todayText() {
   const date = new Date();
@@ -453,6 +556,103 @@ function planStatusText(status) {
 
 function planStatusType(status) {
   return PROCESSING_STATUS_TAG[status] || 'info';
+}
+
+function isImageMime(mimeType) {
+  return String(mimeType || '').startsWith('image/');
+}
+
+function isImageAttachment(attachment) {
+  return isImageMime(attachment?.mimeType);
+}
+
+function formatFileSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return '0 B';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function hasAllowedAttachmentType(file) {
+  const mimeType = String(file?.type || '').toLowerCase();
+  const extension = String(file?.name || '')
+    .split('.')
+    .pop()
+    .toLowerCase();
+  return ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType) || ALLOWED_ATTACHMENT_EXTENSIONS.has(extension);
+}
+
+async function handleAttachmentChange(uploadFile) {
+  const file = uploadFile?.raw;
+  if (!file) return;
+  if (Number(file.size) > MAX_ATTACHMENT_SIZE) {
+    ElMessage.warning('处方文件不能超过 5MB');
+    attachmentUploader.value?.clearFiles();
+    return;
+  }
+  if (!hasAllowedAttachmentType(file)) {
+    ElMessage.warning('仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件');
+    attachmentUploader.value?.clearFiles();
+    return;
+  }
+
+  attachmentUploading.value = true;
+  try {
+    await uploadPrescriptionAttachment(props.id ?? route.params.id, file);
+    await loadData();
+    ElMessage.success('处方原件已上传');
+  } finally {
+    attachmentUploading.value = false;
+    attachmentUploader.value?.clearFiles();
+  }
+}
+
+function releaseAttachmentPreviewUrl() {
+  if (attachmentPreviewUrl.value) URL.revokeObjectURL(attachmentPreviewUrl.value);
+  attachmentPreviewUrl.value = '';
+}
+
+async function openAttachmentPreview() {
+  const attachment = prescription.value?.attachment;
+  if (!attachment) return;
+  const requestId = attachmentPreviewRequestId.value + 1;
+  attachmentPreviewRequestId.value = requestId;
+  releaseAttachmentPreviewUrl();
+  attachmentPreviewName.value = attachment.originalName || '处方原件';
+  attachmentPreviewMime.value = attachment.mimeType || '';
+  attachmentPreviewVisible.value = true;
+  attachmentPreviewLoading.value = true;
+  try {
+    const blob = await getPrescriptionAttachment(props.id ?? route.params.id);
+    if (requestId === attachmentPreviewRequestId.value && attachmentPreviewVisible.value) {
+      attachmentPreviewUrl.value = URL.createObjectURL(blob);
+    }
+  } finally {
+    if (requestId === attachmentPreviewRequestId.value) attachmentPreviewLoading.value = false;
+  }
+}
+
+async function downloadAttachment() {
+  const attachment = prescription.value?.attachment;
+  if (!attachment) return;
+  const blob = await getPrescriptionAttachment(props.id ?? route.params.id);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = attachment.originalName || '处方原件';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function handlePreviewClosed() {
+  attachmentPreviewRequestId.value += 1;
+  attachmentPreviewLoading.value = false;
+  releaseAttachmentPreviewUrl();
+  attachmentPreviewMime.value = '';
+  attachmentPreviewName.value = '';
 }
 
 function isDecoctionProcessType(processTypeId) {
@@ -620,6 +820,10 @@ onMounted(async () => {
   }
   await loadData();
 });
+
+onBeforeUnmount(() => {
+  releaseAttachmentPreviewUrl();
+});
 </script>
 
 <style scoped>
@@ -643,6 +847,71 @@ onMounted(async () => {
   margin-left: 12px;
   color: var(--app-muted);
   font-size: 13px;
+}
+
+.attachment-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.attachment-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  font-size: 24px;
+}
+
+.attachment-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.attachment-name {
+  overflow: hidden;
+  color: var(--app-text);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-meta {
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.attachment-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.attachment-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: min(70vh, 720px);
+  overflow: hidden;
+  background: var(--el-fill-color-light);
+}
+
+.attachment-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.attachment-preview iframe {
+  width: 100%;
+  height: 70vh;
+  border: 0;
+  background: #fff;
 }
 
 .form-grid {
@@ -684,6 +953,20 @@ onMounted(async () => {
   .card-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .attachment-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .attachment-info {
+    min-width: calc(100% - 58px);
+  }
+
+  .attachment-actions {
+    width: 100%;
+    margin-left: 54px;
   }
 }
 </style>

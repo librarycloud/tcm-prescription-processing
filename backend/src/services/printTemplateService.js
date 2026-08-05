@@ -6,6 +6,7 @@ import {
   defaultPackagingFields,
   defaultPickupFields,
   defaultProcessingFields,
+  defaultEquipmentFields,
 } from "../constants/printTemplate.js";
 import { AppError } from "../utils/appError.js";
 import { isSuperAdmin } from "../constants/roles.js";
@@ -41,10 +42,27 @@ const DEFAULT_TEMPLATES = [
   },
   {
     templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
-    name: "加工标签（标准）",
+    name: "加工标签（70×50扫码版）",
     widthMm: 70,
-    heightMm: 35,
+    heightMm: 50,
     fields: defaultProcessingFields(),
+    isDefault: 1,
+  },
+  {
+    templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
+    name: "加工标签（75×50热敏裁切顶端补偿版）",
+    widthMm: 75,
+    heightMm: 50,
+    fields: defaultProcessingFields("thermal-75"),
+    isDefault: 0,
+    seedWhenTypeExists: true,
+  },
+  {
+    templateType: PRINT_TEMPLATE_TYPES.EQUIPMENT,
+    name: "设备标签（70×50扫码版）",
+    widthMm: 70,
+    heightMm: 50,
+    fields: defaultEquipmentFields(),
     isDefault: 1,
   },
   {
@@ -210,12 +228,18 @@ async function ensureDefaults(prisma, storeId) {
   if (!storeId) return;
   const existing = await prisma.printTemplate.findMany({
     where: { storeId, templateType: { in: TEMPLATE_TYPE_VALUES } },
-    select: { templateType: true },
+    select: { templateType: true, widthMm: true, heightMm: true },
   });
-  const existingTypes = new Set(existing.map((item) => item.templateType));
-  const missing = DEFAULT_TEMPLATES.filter(
-    (template) => !existingTypes.has(template.templateType),
-  );
+  const missing = DEFAULT_TEMPLATES.filter((template) => {
+    const sameType = existing.filter((item) => item.templateType === template.templateType);
+    if (!sameType.length) return true;
+    if (!template.seedWhenTypeExists) return false;
+    return !sameType.some(
+      (item) =>
+        Number(item.widthMm) === template.widthMm &&
+        Number(item.heightMm) === template.heightMm,
+    );
+  });
   if (!missing.length) return;
   await prisma.printTemplate.createMany({
     data: missing.map((template) => ({

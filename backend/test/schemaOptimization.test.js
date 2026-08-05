@@ -105,6 +105,40 @@ test("default print template seeding populates default scope", async () => {
   }
 });
 
+test("existing stores receive the 75mm thermal processing template", async () => {
+  let seeded = [];
+  let findManyCall = 0;
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 3, status: 1, deletedAt: null }),
+    },
+    printTemplate: {
+      findMany: async () => {
+        findManyCall += 1;
+        if (findManyCall === 1) {
+          return [{ templateType: PRINT_TEMPLATE_TYPES.PROCESSING, widthMm: 70, heightMm: 50 }];
+        }
+        return [];
+      },
+      createMany: async ({ data }) => {
+        seeded = data;
+        return { count: data.length };
+      },
+    },
+  };
+
+  await getPrintTemplateSettings(prisma, { id: 1, role: 0 }, { storeId: 3 });
+
+  const thermal = seeded.filter(
+    (item) =>
+      item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
+      Number(item.widthMm) === 75 &&
+      Number(item.heightMm) === 50,
+  );
+  assert.equal(thermal.length, 1);
+  assert.equal(thermal[0].isDefault, 0);
+});
+
 test("print template writes populate and clear default scope transactionally", async () => {
   const fields = defaultPickupFields();
   let cleared;

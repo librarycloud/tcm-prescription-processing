@@ -112,6 +112,7 @@ import {
   Message,
   MessageBox,
   Menu,
+  Monitor,
   OfficeBuilding,
   Notebook,
   Printer,
@@ -147,6 +148,7 @@ const menuIcons = {
   Goods,
   Message,
   MessageBox,
+  Monitor,
   OfficeBuilding,
   Notebook,
   Printer,
@@ -204,6 +206,7 @@ const systemMenuItems = computed(() => {
     'sms-settings',
     'email-settings',
     'robot-notifications',
+    'processing-equipment',
     'print-templates'
   ];
   return menuItems.value

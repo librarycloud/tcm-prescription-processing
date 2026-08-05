@@ -28,24 +28,26 @@ model User {
   createdBy       Int?      @map("created_by")
   updatedBy       Int?      @map("updated_by")
 
-  createdPackages            Package[]                @relation("PackageCreatedBy")
-  verifiedPackages           Package[]                @relation("PackageVerifiedBy")
-  modifiedPackages           Package[]                @relation("PackageModifiedBy")
-  store                      Store?                   @relation(fields: [storeId], references: [id])
-  emailVerificationCodes     EmailVerificationCode[]
-  prescriptionsCreated       Prescription[]           @relation("PrescriptionCreatedBy")
-  processingPlansCreated     ProcessingPlan[]         @relation("ProcessingPlanCreatedBy")
-  printTemplatesCreated      PrintTemplate[]          @relation("PrintTemplateCreatedBy")
-  storeTransfersCreated      StoreTransfer[]          @relation("StoreTransferCreatedBy")
-  transferReturns            StoreTransferReturn[]    @relation("StoreTransferReturnOperator")
-  confirmedTransferReturns   StoreTransferReturn[]    @relation("StoreTransferReturnConfirmedBy")
-  confirmedTransferOutbounds StoreTransfer[]          @relation("StoreTransferOutboundConfirmedBy")
-  robotConfigsCreated        RobotConfig[]            @relation("RobotConfigCreatedBy")
-  robotConfigsUpdated        RobotConfig[]            @relation("RobotConfigUpdatedBy")
-  robotEventConfigsCreated   RobotEventConfig[]       @relation("RobotEventConfigCreatedBy")
-  robotEventConfigsUpdated   RobotEventConfig[]       @relation("RobotEventConfigUpdatedBy")
-  robotNotificationEvents    RobotNotificationEvent[] @relation("RobotNotificationEventOperator")
-  productDiffLogsCreated     ProductsDiffLog[]        @relation("ProductsDiffLogCreatedBy")
+  createdPackages                Package[]                @relation("PackageCreatedBy")
+  verifiedPackages               Package[]                @relation("PackageVerifiedBy")
+  modifiedPackages               Package[]                @relation("PackageModifiedBy")
+  store                          Store?                   @relation(fields: [storeId], references: [id])
+  emailVerificationCodes         EmailVerificationCode[]
+  prescriptionsCreated           Prescription[]           @relation("PrescriptionCreatedBy")
+  prescriptionAttachmentsCreated PrescriptionAttachment[] @relation("PrescriptionAttachmentCreatedBy")
+  processingPlansCreated         ProcessingPlan[]         @relation("ProcessingPlanCreatedBy")
+  processingPhotosCreated        ProcessingPhoto[]        @relation("ProcessingPhotoCreatedBy")
+  printTemplatesCreated          PrintTemplate[]          @relation("PrintTemplateCreatedBy")
+  storeTransfersCreated          StoreTransfer[]          @relation("StoreTransferCreatedBy")
+  transferReturns                StoreTransferReturn[]    @relation("StoreTransferReturnOperator")
+  confirmedTransferReturns       StoreTransferReturn[]    @relation("StoreTransferReturnConfirmedBy")
+  confirmedTransferOutbounds     StoreTransfer[]          @relation("StoreTransferOutboundConfirmedBy")
+  robotConfigsCreated            RobotConfig[]            @relation("RobotConfigCreatedBy")
+  robotConfigsUpdated            RobotConfig[]            @relation("RobotConfigUpdatedBy")
+  robotEventConfigsCreated       RobotEventConfig[]       @relation("RobotEventConfigCreatedBy")
+  robotEventConfigsUpdated       RobotEventConfig[]       @relation("RobotEventConfigUpdatedBy")
+  robotNotificationEvents        RobotNotificationEvent[] @relation("RobotNotificationEventOperator")
+  productDiffLogsCreated         ProductsDiffLog[]        @relation("ProductsDiffLogCreatedBy")
 
   @@index([role])
   @@index([status])
@@ -78,22 +80,23 @@ model Store {
   e6LastUsedAt         DateTime? @map("e6_last_used_at")
   e6RotatedAt          DateTime? @map("e6_rotated_at")
 
-  users            User[]
-  packages         Package[]
-  prescriptions    Prescription[]
-  processingPlans  ProcessingPlan[]
-  printTemplates   PrintTemplate[]
-  loginLogs        LoginLog[]
-  operationLogs    OperationLog[]
-  transfersOut     StoreTransfer[]   @relation("StoreTransferFromStore")
-  transfersIn      StoreTransfer[]   @relation("StoreTransferToStore")
-  herbs            Herb[]
-  herbLocations    HerbLocation[]
-  robotConfigs     RobotConfig[]
-  products         Product[]
-  productDiffLogs  ProductsDiffLog[]
-  e6DoctorMappings E6DoctorMapping[]
-  e6Imports        E6Import[]
+  users               User[]
+  packages            Package[]
+  prescriptions       Prescription[]
+  processingPlans     ProcessingPlan[]
+  printTemplates      PrintTemplate[]
+  loginLogs           LoginLog[]
+  operationLogs       OperationLog[]
+  transfersOut        StoreTransfer[]       @relation("StoreTransferFromStore")
+  transfersIn         StoreTransfer[]       @relation("StoreTransferToStore")
+  herbs               Herb[]
+  herbLocations       HerbLocation[]
+  robotConfigs        RobotConfig[]
+  products            Product[]
+  productDiffLogs     ProductsDiffLog[]
+  e6DoctorMappings    E6DoctorMapping[]
+  e6Imports           E6Import[]
+  processingEquipment ProcessingEquipment[]
 
   @@index([status])
   @@index([e6Enabled])
@@ -327,12 +330,13 @@ model Prescription {
   deletedAt        DateTime? @map("deleted_at")
   deletedBy        Int?      @map("deleted_by")
 
-  doctor   Doctor           @relation(fields: [doctorId], references: [id])
-  source   Dictionary       @relation("PrescriptionSource", fields: [sourceId], references: [id])
-  store    Store            @relation(fields: [storeId], references: [id])
-  creator  User             @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
-  plans    ProcessingPlan[]
-  e6Import E6Import?
+  doctor     Doctor                  @relation(fields: [doctorId], references: [id])
+  source     Dictionary              @relation("PrescriptionSource", fields: [sourceId], references: [id])
+  store      Store                   @relation(fields: [storeId], references: [id])
+  creator    User                    @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
+  plans      ProcessingPlan[]
+  e6Import   E6Import?
+  attachment PrescriptionAttachment?
 
   @@index([phone])
   @@index([doctorId])
@@ -341,54 +345,150 @@ model Prescription {
   @@map("prescriptions")
 }
 
-model ProcessingPlan {
-  id             Int       @id @default(autoincrement())
-  prescriptionId Int       @map("prescription_id")
-  batchNo        Int       @map("batch_no")
-  processTypeId  Int       @map("process_type_id")
-  totalDose      Int       @map("total_dose")
-  bagCount       Int?      @map("bag_count")
-  volumeMl       Int?      @map("volume_ml")
-  usageMethod    String?   @map("usage_method") @db.VarChar(200)
-  takenDose      Int       @default(0) @map("taken_dose")
-  remainingDose  Int       @map("remaining_dose")
-  scheduleType   Int       @map("schedule_type") @db.TinyInt
-  processDate    DateTime? @map("process_date")
-  startDate      DateTime? @map("start_date")
-  finishDate     DateTime? @map("finish_date")
-  status         Int       @default(0) @db.TinyInt
-  priority       Int       @default(0) @db.TinyInt
-  notifyType     Int       @map("notify_type")
-  notifyStatus   Int       @default(0) @map("notify_status") @db.TinyInt
-  notifyTime     DateTime? @map("notify_time")
-  processRemark  String?   @map("process_remark") @db.VarChar(500)
-  paymentStatus  Int       @default(1) @map("payment_status") @db.TinyInt
-  pickupMethod   Int       @default(0) @map("pickup_method") @db.TinyInt
-  pickupCode     String?   @unique @map("pickup_code") @db.VarChar(6)
-  expressAddress String?   @map("express_address") @db.VarChar(500)
-  queueOrder     Int?      @map("queue_order")
-  remark         String?   @db.VarChar(500)
-  createdBy      Int       @map("created_by")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  updatedBy      Int?      @map("updated_by")
-  deletedAt      DateTime? @map("deleted_at")
-  deletedBy      Int?      @map("deleted_by")
-  storeId        Int       @map("store_id")
+model PrescriptionAttachment {
+  id             Int      @id @default(autoincrement())
+  prescriptionId Int      @unique @map("prescription_id")
+  originalName   String   @map("original_name") @db.VarChar(255)
+  mimeType       String   @map("mime_type") @db.VarChar(100)
+  fileSize       Int      @map("file_size")
+  data           Bytes    @db.LongBlob
+  createdBy      Int      @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  prescription         Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  processType          Dictionary   @relation("ProcessingType", fields: [processTypeId], references: [id])
-  notifyTypeDictionary Dictionary   @relation("ProcessingPlanNotifyType", fields: [notifyType], references: [id], onDelete: Restrict)
-  creator              User         @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
-  store                Store        @relation(fields: [storeId], references: [id])
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  creator      User         @relation("PrescriptionAttachmentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([createdBy])
+  @@map("prescription_attachments")
+}
+
+model ProcessingPlan {
+  id                    Int       @id @default(autoincrement())
+  prescriptionId        Int       @map("prescription_id")
+  batchNo               Int       @map("batch_no")
+  processTypeId         Int       @map("process_type_id")
+  totalDose             Int       @map("total_dose")
+  bagCount              Int?      @map("bag_count")
+  volumeMl              Int?      @map("volume_ml")
+  usageMethod           String?   @map("usage_method") @db.VarChar(200)
+  takenDose             Int       @default(0) @map("taken_dose")
+  remainingDose         Int       @map("remaining_dose")
+  scheduleType          Int       @map("schedule_type") @db.TinyInt
+  processDate           DateTime? @map("process_date")
+  startDate             DateTime? @map("start_date")
+  finishDate            DateTime? @map("finish_date")
+  status                Int       @default(0) @db.TinyInt
+  priority              Int       @default(0) @db.TinyInt
+  notifyType            Int       @map("notify_type")
+  notifyStatus          Int       @default(0) @map("notify_status") @db.TinyInt
+  notifyTime            DateTime? @map("notify_time")
+  processRemark         String?   @map("process_remark") @db.VarChar(500)
+  paymentStatus         Int       @default(1) @map("payment_status") @db.TinyInt
+  pickupMethod          Int       @default(0) @map("pickup_method") @db.TinyInt
+  pickupCode            String?   @unique @map("pickup_code") @db.VarChar(6)
+  expressAddress        String?   @map("express_address") @db.VarChar(500)
+  queueOrder            Int?      @map("queue_order")
+  remark                String?   @db.VarChar(500)
+  createdBy             Int       @map("created_by")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             Int?      @map("updated_by")
+  deletedAt             DateTime? @map("deleted_at")
+  deletedBy             Int?      @map("deleted_by")
+  storeId               Int       @map("store_id")
+  planCode              String?   @unique @map("plan_code") @db.VarChar(24)
+  scanToken             String?   @unique @map("scan_token") @db.VarChar(64)
+  workflowVersion       Int       @default(1) @map("workflow_version") @db.TinyInt
+  currentStage          String?   @map("current_stage") @db.VarChar(32)
+  dispensingCompletedAt DateTime? @map("dispensing_completed_at")
+  dispensingCompletedBy Int?      @map("dispensing_completed_by")
+
+  prescription         Prescription               @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  processType          Dictionary                 @relation("ProcessingType", fields: [processTypeId], references: [id])
+  notifyTypeDictionary Dictionary                 @relation("ProcessingPlanNotifyType", fields: [notifyType], references: [id], onDelete: Restrict)
+  creator              User                       @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
+  store                Store                      @relation(fields: [storeId], references: [id])
   package              Package?
   e6Import             E6Import?
+  photos               ProcessingPhoto[]
+  equipmentUsages      ProcessingEquipmentUsage[]
 
   @@unique([prescriptionId, batchNo])
   @@index([storeId, status, scheduleType, processDate])
   @@index([priority, processDate, queueOrder])
   @@index([processTypeId])
+  @@index([storeId, currentStage])
   @@map("processing_plans")
+}
+
+model ProcessingPhoto {
+  id               Int       @id @default(autoincrement())
+  processingPlanId Int       @map("processing_plan_id")
+  kind             String    @db.VarChar(32)
+  originalName     String    @map("original_name") @db.VarChar(255)
+  mimeType         String    @map("mime_type") @db.VarChar(100)
+  fileSize         Int       @map("file_size")
+  data             Bytes     @db.LongBlob
+  createdBy        Int       @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  processingPlan ProcessingPlan @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
+  creator        User           @relation("ProcessingPhotoCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([processingPlanId, kind, deletedAt])
+  @@index([createdBy])
+  @@map("processing_photos")
+}
+
+model ProcessingEquipment {
+  id             Int       @id @default(autoincrement())
+  storeId        Int       @map("store_id")
+  equipmentNo    String    @map("equipment_no") @db.VarChar(32)
+  name           String    @db.VarChar(100)
+  type           String    @db.VarChar(32)
+  status         Int       @default(1) @db.TinyInt
+  scanToken      String    @unique @map("scan_token") @db.VarChar(64)
+  currentUsageId Int?      @unique @map("current_usage_id")
+  remark         String?   @db.VarChar(500)
+  createdBy      Int       @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedBy      Int?      @map("updated_by")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      Int?      @map("deleted_by")
+
+  store        Store                      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  usages       ProcessingEquipmentUsage[] @relation("EquipmentUsages")
+  currentUsage ProcessingEquipmentUsage?  @relation("EquipmentCurrentUsage", fields: [currentUsageId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, equipmentNo])
+  @@index([storeId, type, status, deletedAt])
+  @@map("processing_equipment")
+}
+
+model ProcessingEquipmentUsage {
+  id               Int       @id @default(autoincrement())
+  processingPlanId Int       @map("processing_plan_id")
+  equipmentId      Int       @map("equipment_id")
+  stage            String    @db.VarChar(32)
+  portionNo        Int       @map("portion_no")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  startedBy        Int       @map("started_by")
+  endedBy          Int?      @map("ended_by")
+  endReason        String?   @map("end_reason") @db.VarChar(255)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  processingPlan ProcessingPlan       @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
+  equipment      ProcessingEquipment  @relation("EquipmentUsages", fields: [equipmentId], references: [id], onDelete: Restrict)
+  currentFor     ProcessingEquipment? @relation("EquipmentCurrentUsage")
+
+  @@index([processingPlanId, stage, portionNo])
+  @@index([equipmentId, endedAt])
+  @@map("processing_equipment_usages")
 }
 
 model E6DoctorMapping {

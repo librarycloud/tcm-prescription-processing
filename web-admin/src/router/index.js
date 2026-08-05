@@ -154,6 +154,12 @@ const routes = [
         meta: { title: '群机器人通知', icon: 'Bell', group: 'system', allowedRoles: [0, 2] }
       },
       {
+        path: 'processing-equipment',
+        name: 'ProcessingEquipment',
+        component: () => import('@/views/admin/ProcessingEquipment.vue'),
+        meta: { title: '加工设备', icon: 'Monitor', group: 'system', allowedRoles: [0, 2] }
+      },
+      {
         path: 'print-templates',
         name: 'PrintTemplates',
         component: () => import('@/views/admin/PrintTemplates.vue'),

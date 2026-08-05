@@ -7,6 +7,7 @@ import {
   getStats,
   getStores,
   receiveProcessingNotice,
+  findProcessingPlanByScan,
   transitionProcessingPlan
 } from '../../../api/admin';
 import { formatDate, formatPickupCode, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
@@ -208,7 +209,9 @@ Page({
       list: (data.list || []).map((item) => {
         const stage = planStage(item, this.data.activeView);
         const canStart = Number(item.status) === 0 && Number(item.scheduleType) === 1;
-        const canFinish = Number(item.status) === 1;
+        const workflowEnabled = Number(item.workflowVersion) >= 2;
+        const canFinish = Number(item.status) === 1 && !workflowEnabled;
+        const canOperate = Number(item.status) === 1 && workflowEnabled;
         const canGeneratePackage = Number(item.status) === 2;
         const canReceiveNotice = Number(item.status) === 0 && Number(item.scheduleType) === 2;
         const canDelay = Number(item.status) === 0;
@@ -216,7 +219,7 @@ Page({
         const canDelete = Number(item.status) === 0;
         const actionCount =
           2 +
-          [canStart, canFinish, canGeneratePackage, canReceiveNotice, canDelay, canEdit, canDelete].filter(Boolean)
+          [canStart, canFinish, canOperate, canGeneratePackage, canReceiveNotice, canDelay, canEdit, canDelete].filter(Boolean)
             .length;
         return {
           ...item,
@@ -246,6 +249,8 @@ Page({
           isUrgent: Number(item.priority) === 1,
           canStart,
           canFinish,
+          canOperate,
+          workflowEnabled,
           canGeneratePackage,
           canReceiveNotice,
           canDelay,
@@ -351,6 +356,24 @@ Page({
     });
   },
 
+  scanPlan() {
+    wx.scanCode({
+      scanType: ['qrCode', 'barCode'],
+      success: async (res) => {
+        const plan = await findProcessingPlanByScan(res.result);
+        wx.navigateTo({
+          url: `/pages/admin/processing-operation/processing-operation?id=${plan.id}`
+        });
+      }
+    });
+  },
+
+  openOperation(e) {
+    wx.navigateTo({
+      url: `/pages/admin/processing-operation/processing-operation?id=${e.currentTarget.dataset.id}`
+    });
+  },
+
   showPlanDetail(e) {
     const plan = this.findPlan(e.currentTarget.dataset.id);
     if (!plan) return;
@@ -416,7 +439,13 @@ Page({
     if (!confirmed) return;
     await transitionProcessingPlan(plan.id, 1);
     wx.showToast({ title: '已开始加工', icon: 'success' });
-    await this.reloadAll();
+    if (Number(plan.workflowVersion) >= 2) {
+      wx.navigateTo({
+        url: `/pages/admin/processing-operation/processing-operation?id=${plan.id}`
+      });
+    } else {
+      await this.reloadAll();
+    }
   },
 
   async finishPlan(e) {

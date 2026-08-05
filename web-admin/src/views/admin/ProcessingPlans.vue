@@ -267,89 +267,162 @@
           </el-dropdown>
         </div>
       </template>
-      <el-descriptions v-if="detailPlan" :column="2" border>
-        <el-descriptions-item label="处方编号">
-          {{ detailPlan.prescription?.prescriptionNo || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="顾客">
-          {{ detailPlan.prescription?.customerName || '-' }}
-          {{ detailPlan.prescription?.phone || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="医生">
-          {{ detailPlan.prescription?.doctor?.name || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="门店">{{
-          detailPlan.store?.name || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="批次">第 {{ detailPlan.batchNo }} 批</el-descriptions-item>
-        <el-descriptions-item label="加工方式">
-          {{ detailPlan.processType?.name || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="取货方式">
-          {{ pickupMethodText(detailPlan.pickupMethod) }}
-        </el-descriptions-item>
-        <el-descriptions-item v-if="[1, 2].includes(Number(detailPlan.pickupMethod))" label="地址">
-          {{ detailPlan.expressAddress || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="剂数">{{ detailPlan.totalDose }} 剂</el-descriptions-item>
-        <el-descriptions-item v-if="isDecoctionPlan(detailPlan)" label="袋数">
-          {{ detailPlan.bagCount }} 袋
-        </el-descriptions-item>
-        <el-descriptions-item v-if="isDecoctionPlan(detailPlan)" label="毫升数">
-          {{ detailPlan.volumeMl }} ml
-        </el-descriptions-item>
-        <el-descriptions-item label="服用方法" :span="2">
-          {{ detailPlan.usageMethod || '遵医嘱' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="状态">
-          <el-tag :type="statusType[detailPlan.status] || 'info'">
-            {{ statusMap[detailPlan.status] || detailPlan.status }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="优先级">
-          <el-tag v-if="detailPlan.priority === PRIORITY.URGENT" type="danger" effect="dark">
-            【加急】
-          </el-tag>
-          <span v-else>普通</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="加工顺序">
-          {{ detailPlan.queueOrder == null ? '-' : String(detailPlan.queueOrder).padStart(3, '0') }}
-        </el-descriptions-item>
-        <el-descriptions-item label="调度方式">
-          {{ detailPlan.scheduleType === SCHEDULE_TYPES.NOTICE ? '等待顾客通知' : '指定日期' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="计划开工日期">
-          {{ detailPlan.processDate ? String(detailPlan.processDate).slice(0, 10) : '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="开始加工时间">
-          {{ formatDate(detailPlan.startDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="完成加工时间">
-          {{ formatDate(detailPlan.finishDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="提醒方式">
-          {{ notifyTypeText(detailPlan.notifyType) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="通知状态">
-          {{ detailPlan.notifyStatus === NOTIFY_STATUS.NOTIFIED ? '已通知' : '未通知' }}
-          <span v-if="detailPlan.notifyTime">（{{ formatDate(detailPlan.notifyTime) }}）</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="收费状态">
-          {{ detailPlan.paymentStatus === PAYMENT_STATUS.PAID ? '已收费' : '未收费' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="取货码">
-          {{ formatPickupCode(detailPlan.pickupCode || detailPlan.package?.pickupCode) || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="加工备注" :span="2">
-          {{ detailPlan.processRemark || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="其它备注" :span="2">
-          {{ detailPlan.remark || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="创建时间" :span="2">
-          {{ formatDate(detailPlan.createdAt) }}
-        </el-descriptions-item>
-      </el-descriptions>
+      <div v-loading="detailLoading">
+        <el-descriptions v-if="detailPlan" :column="2" border>
+          <el-descriptions-item label="加工码">
+            {{ detailPlan.planCode || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="当前工序">
+            {{ workflowStageText(detailPlan.currentStage) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="处方编号">
+            {{ detailPlan.prescription?.prescriptionNo || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="顾客">
+            {{ detailPlan.prescription?.customerName || '-' }}
+            {{ detailPlan.prescription?.phone || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="医生">
+            {{ detailPlan.prescription?.doctor?.name || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="门店">{{
+            detailPlan.store?.name || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="批次">第 {{ detailPlan.batchNo }} 批</el-descriptions-item>
+          <el-descriptions-item label="加工方式">
+            {{ detailPlan.processType?.name || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="取货方式">
+            {{ pickupMethodText(detailPlan.pickupMethod) }}
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-if="[1, 2].includes(Number(detailPlan.pickupMethod))"
+            label="地址"
+          >
+            {{ detailPlan.expressAddress || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="剂数">{{ detailPlan.totalDose }} 剂</el-descriptions-item>
+          <el-descriptions-item v-if="isDecoctionPlan(detailPlan)" label="袋数">
+            {{ detailPlan.bagCount }} 袋
+          </el-descriptions-item>
+          <el-descriptions-item v-if="isDecoctionPlan(detailPlan)" label="毫升数">
+            {{ detailPlan.volumeMl }} ml
+          </el-descriptions-item>
+          <el-descriptions-item label="服用方法" :span="2">
+            {{ detailPlan.usageMethod || '遵医嘱' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="statusType[detailPlan.status] || 'info'">
+              {{ statusMap[detailPlan.status] || detailPlan.status }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="优先级">
+            <el-tag v-if="detailPlan.priority === PRIORITY.URGENT" type="danger" effect="dark">
+              【加急】
+            </el-tag>
+            <span v-else>普通</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="加工顺序">
+            {{
+              detailPlan.queueOrder == null ? '-' : String(detailPlan.queueOrder).padStart(3, '0')
+            }}
+          </el-descriptions-item>
+          <el-descriptions-item label="调度方式">
+            {{ detailPlan.scheduleType === SCHEDULE_TYPES.NOTICE ? '等待顾客通知' : '指定日期' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="计划开工日期">
+            {{ detailPlan.processDate ? String(detailPlan.processDate).slice(0, 10) : '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="开始加工时间">
+            {{ formatDate(detailPlan.startDate) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="完成加工时间">
+            {{ formatDate(detailPlan.finishDate) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="提醒方式">
+            {{ notifyTypeText(detailPlan.notifyType) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="通知状态">
+            {{ detailPlan.notifyStatus === NOTIFY_STATUS.NOTIFIED ? '已通知' : '未通知' }}
+            <span v-if="detailPlan.notifyTime">（{{ formatDate(detailPlan.notifyTime) }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="收费状态">
+            {{ detailPlan.paymentStatus === PAYMENT_STATUS.PAID ? '已收费' : '未收费' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="取货码">
+            {{ formatPickupCode(detailPlan.pickupCode || detailPlan.package?.pickupCode) || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="加工备注" :span="2">
+            {{ detailPlan.processRemark || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="其它备注" :span="2">
+            {{ detailPlan.remark || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间" :span="2">
+            {{ formatDate(detailPlan.createdAt) }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <section v-if="detailPlan?.workflowEnabled" class="workflow-detail-section">
+          <div class="workflow-detail-heading">
+            <h3>调配核对照片</h3>
+            <span>{{ detailPlan.photos?.length || 0 }} 张</span>
+          </div>
+          <div v-if="detailPhotoUrls.length" class="workflow-photo-grid">
+            <el-image
+              v-for="(photo, index) in detailPhotoUrls"
+              :key="photo.id"
+              :src="photo.url"
+              :preview-src-list="detailPhotoUrls.map((item) => item.url)"
+              :initial-index="index"
+              fit="cover"
+              preview-teleported
+            />
+          </div>
+          <el-empty v-else :image-size="64" description="尚未上传调配照片" />
+        </section>
+
+        <section
+          v-if="detailPlan?.workflowEnabled && detailPlan.isDecoction"
+          class="workflow-detail-section"
+        >
+          <div class="workflow-detail-heading">
+            <h3>设备工序记录</h3>
+            <span>浸泡、煎煮及打包扫码记录</span>
+          </div>
+          <el-table
+            v-if="detailPlan.equipmentUsages?.length"
+            :data="detailPlan.equipmentUsages"
+            border
+          >
+            <el-table-column label="工序" min-width="80">
+              <template #default="{ row }">{{ usageStageText(row.stage) }}</template>
+            </el-table-column>
+            <el-table-column prop="portionNo" label="份组" width="82">
+              <template #default="{ row }">第 {{ row.portionNo }} 份</template>
+            </el-table-column>
+            <el-table-column label="设备" min-width="160">
+              <template #default="{ row }">
+                {{ row.equipment?.equipmentNo }} · {{ row.equipment?.name }}
+              </template>
+            </el-table-column>
+            <el-table-column label="开始时间" min-width="155">
+              <template #default="{ row }">{{ formatDate(row.startedAt) }}</template>
+            </el-table-column>
+            <el-table-column label="结束时间" min-width="155">
+              <template #default="{ row }">{{
+                row.endedAt ? formatDate(row.endedAt) : '进行中'
+              }}</template>
+            </el-table-column>
+            <el-table-column label="用时" min-width="100">
+              <template #default="{ row }">{{
+                workflowDuration(row.startedAt, row.endedAt)
+              }}</template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else :image-size="64" description="尚无设备工序记录" />
+        </section>
+      </div>
     </el-drawer>
 
     <ProcessingPrintDialog
@@ -993,7 +1066,9 @@ import {
   getDictionaries,
   getDoctors,
   getProcessingCalendar,
+  getProcessingPhoto,
   getProcessingPlans,
+  getProcessingWorkflow,
   generateProcessingPlanPackage,
   receiveProcessingNotice,
   reorderProcessingQueue,
@@ -1014,11 +1089,43 @@ import {
   SCHEDULE_TYPES
 } from '@/constants/processing';
 import { isValidPhone } from '@/utils/phone';
-import { formatPickupCode, PICKUP_METHOD_OPTIONS, pickupMethodTagType, pickupMethodText } from '@/utils/status';
+import {
+  formatPickupCode,
+  PICKUP_METHOD_OPTIONS,
+  pickupMethodTagType,
+  pickupMethodText
+} from '@/utils/status';
 
 const statuses = PROCESSING_STATUS_OPTIONS;
 const statusMap = Object.fromEntries(statuses.map((item) => [item.value, item.label]));
 const statusType = PROCESSING_STATUS_TAG;
+
+const workflowStageNames = {
+  DISPENSING: '调配中',
+  DISPENSING_DONE: '调配完成',
+  SOAKING: '浸泡中',
+  DECOCTING: '煎煮中',
+  PACKAGING: '打包中',
+  PACKAGING_DONE: '打包完成',
+  COMPLETED: '加工完成'
+};
+const usageStageNames = { SOAKING: '浸泡', DECOCTING: '煎煮', PACKAGING: '打包' };
+
+function workflowStageText(stage) {
+  return workflowStageNames[stage] || '-';
+}
+function usageStageText(stage) {
+  return usageStageNames[stage] || stage || '-';
+}
+function workflowDuration(start, end) {
+  if (!start) return '-';
+  const minutes = Math.max(
+    0,
+    Math.floor(((end ? new Date(end) : new Date()).getTime() - new Date(start).getTime()) / 60000)
+  );
+  if (minutes < 60) return `${minutes} 分钟`;
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+}
 
 function planStage(row, view) {
   if (
@@ -1408,6 +1515,8 @@ const stores = ref([]);
 const formVisible = ref(false);
 const detailVisible = ref(false);
 const detailPlan = ref(null);
+const detailLoading = ref(false);
+const detailPhotoUrls = ref([]);
 const planPrintVisible = ref(false);
 const planPrintType = ref('PROCESSING');
 const pickupDrawerVisible = ref(false);
@@ -1430,6 +1539,15 @@ const calendarCounts = ref({});
 const noticePreset = ref('today');
 const noticeDate = ref('');
 const query = reactive({ keyword: '', status: '', processTypeId: '', doctorId: '', storeId: '' });
+
+function releaseDetailPhotos() {
+  detailPhotoUrls.value.forEach((item) => URL.revokeObjectURL(item.url));
+  detailPhotoUrls.value = [];
+}
+
+watch(detailVisible, (visible) => {
+  if (!visible) releaseDetailPhotos();
+});
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const stats = reactive({
   waitingCount: 0,
@@ -2101,6 +2219,22 @@ async function handleAction(name, row) {
   if (name === 'detail') {
     detailPlan.value = row;
     detailVisible.value = true;
+    detailLoading.value = true;
+    releaseDetailPhotos();
+    try {
+      const workflow = await getProcessingWorkflow(row.id);
+      detailPlan.value = workflow;
+      const photos = await Promise.all(
+        (workflow.photos || []).map(async (photo) => ({
+          id: photo.id,
+          url: URL.createObjectURL(await getProcessingPhoto(workflow.id, photo.id))
+        }))
+      );
+      if (detailVisible.value && detailPlan.value?.id === row.id) detailPhotoUrls.value = photos;
+      else photos.forEach((item) => URL.revokeObjectURL(item.url));
+    } finally {
+      detailLoading.value = false;
+    }
     return;
   }
   if (name === 'quick-notification') return openQuickEdit('notification', row);
@@ -2246,6 +2380,36 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.workflow-detail-section {
+  margin-top: 24px;
+}
+.workflow-detail-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.workflow-detail-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.workflow-detail-heading span {
+  color: var(--app-muted);
+  font-size: 13px;
+}
+.workflow-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.workflow-photo-grid :deep(.el-image) {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  cursor: zoom-in;
+}
 .drawer-header {
   display: flex;
   align-items: center;

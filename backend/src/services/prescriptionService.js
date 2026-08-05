@@ -12,6 +12,17 @@ import { describeChanges, recordOperation } from "./operationLogService.js";
 import { prescriptionRepository } from "../repositories/prescriptionRepository.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
 
+export const PRESCRIPTION_ATTACHMENT_MAX_SIZE = 5 * 1024 * 1024;
+
+const PRESCRIPTION_ATTACHMENT_METADATA = {
+  id: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 function scope(actor) {
   return { ...businessScope(actor), deletedAt: null };
 }
@@ -53,12 +64,40 @@ function include() {
     source: true,
     store: { select: { id: true, name: true, code: true } },
     creator: { select: { id: true, nickname: true, phone: true } },
+    attachment: { select: PRESCRIPTION_ATTACHMENT_METADATA },
     plans: {
       where: { deletedAt: null },
       include: { processType: true, package: true },
       orderBy: [{ batchNo: "asc" }, { createdAt: "asc" }],
     },
   };
+}
+
+function detectPrescriptionMimeType(buffer) {
+  if (!buffer?.length) return null;
+  const bytes = Buffer.from(buffer);
+  if (bytes.subarray(0, 5).toString("ascii") === "%PDF-") return "application/pdf";
+  if (bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return "image/jpeg";
+  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    return "image/png";
+  const header = bytes.subarray(0, 6).toString("ascii");
+  if (header === "GIF87a" || header === "GIF89a") return "image/gif";
+  if (bytes.subarray(0, 2).toString("ascii") === "BM") return "image/bmp";
+  if (
+    bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
+    bytes.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+function normalizeAttachmentName(value) {
+  const name = String(value || "处方文件")
+    .replace(/[\\/\0]/g, "_")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim();
+  return (name || "处方文件").slice(0, 255);
 }
 
 function withTotals(item) {
@@ -158,6 +197,60 @@ export async function getPrescription(prisma, actor, idValue) {
   });
   if (!item) throw new AppError("处方不存在", 404);
   return withTotals(item);
+}
+
+export async function uploadPrescriptionAttachment(
+  prisma,
+  actor,
+  idValue,
+  file,
+) {
+  const current = await getPrescription(prisma, actor, idValue);
+  const buffer = Buffer.from(file?.buffer || []);
+  if (!buffer.length) throw new AppError("请选择处方文件", 400);
+  if (buffer.length > PRESCRIPTION_ATTACHMENT_MAX_SIZE)
+    throw new AppError("处方文件不能超过 5MB", 400);
+
+  const mimeType = detectPrescriptionMimeType(buffer);
+  if (!mimeType) throw new AppError("仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件", 400);
+
+  const attachment = await prisma.prescriptionAttachment.upsert({
+    where: { prescriptionId: current.id },
+    update: {
+      originalName: normalizeAttachmentName(file.filename),
+      mimeType,
+      fileSize: buffer.length,
+      data: buffer,
+      createdBy: Number(actor.id),
+    },
+    create: {
+      prescriptionId: current.id,
+      originalName: normalizeAttachmentName(file.filename),
+      mimeType,
+      fileSize: buffer.length,
+      data: buffer,
+      createdBy: Number(actor.id),
+    },
+    select: PRESCRIPTION_ATTACHMENT_METADATA,
+  });
+  await recordOperation(prisma, actor, {
+    module: "prescription",
+    action: "upload_attachment",
+    targetId: current.id,
+    storeId: current.storeId,
+    description: "上传处方原件",
+  });
+  return attachment;
+}
+
+export async function getPrescriptionAttachment(prisma, actor, idValue) {
+  const current = await getPrescription(prisma, actor, idValue);
+  const attachment = await prisma.prescriptionAttachment.findUnique({
+    where: { prescriptionId: current.id },
+    select: { ...PRESCRIPTION_ATTACHMENT_METADATA, data: true },
+  });
+  if (!attachment) throw new AppError("该处方暂无原件", 404);
+  return attachment;
 }
 
 export async function createPrescriptionRecord(prisma, actor, payload, options = {}) {

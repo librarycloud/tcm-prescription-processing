@@ -6,6 +6,7 @@
     "pages/admin/prescription-form/prescription-form",
     "pages/admin/prescription-detail/prescription-detail",
     "pages/admin/processing-workbench/processing-workbench",
+    "pages/admin/processing-operation/processing-operation",
     "pages/admin/processing-plan-form/processing-plan-form",
     "pages/admin/processing-plan-batch/processing-plan-batch",
     "pages/admin/packages/packages",
