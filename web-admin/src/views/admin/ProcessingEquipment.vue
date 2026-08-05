@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>加工设备</h2>
-        <p>维护浸泡桶、煎药锅和打包机，打印固定设备码。</p>
+        <p>维护浸泡桶、煎药锅和打包机，打印设备标签。</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="openForm()">新增设备</el-button>
     </div>

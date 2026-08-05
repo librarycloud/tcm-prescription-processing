@@ -16,6 +16,7 @@ import {
 } from "../src/services/printTemplateService.js";
 import {
   PRINT_TEMPLATE_TYPES,
+  defaultEquipmentFields,
   defaultPickupFields,
 } from "../src/constants/printTemplate.js";
 
@@ -137,6 +138,13 @@ test("existing stores receive the 75mm thermal processing template", async () =>
   );
   assert.equal(thermal.length, 1);
   assert.equal(thermal[0].isDefault, 0);
+});
+
+test("equipment labels use an action-oriented scan notice", () => {
+  const notice = defaultEquipmentFields().find(
+    (field) => field.id === "custom_equipment_notice",
+  );
+  assert.equal(notice?.text, "扫码记录设备");
 });
 
 test("print template writes populate and clear default scope transactionally", async () => {

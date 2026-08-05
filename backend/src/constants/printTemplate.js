@@ -179,7 +179,7 @@ const equipmentFields = [
   { id: 'equipmentType', x: 32, y: 3, width: 35, height: 5, fontSize: 3.8, align: 'left', bold: true, wrap: false, visible: true },
   { id: 'equipmentName', x: 32, y: 10, width: 35, height: 13, fontSize: 6.5, align: 'left', bold: true, wrap: true, visible: true },
   { id: 'storeName', x: 32, y: 26, width: 35, height: 5, fontSize: 3.2, align: 'left', bold: false, wrap: false, visible: true },
-  { id: 'custom_equipment_notice', text: '固定设备码', x: 3, y: 41, width: 64, height: 5, fontSize: 3.6, align: 'center', bold: true, wrap: false, visible: true }
+  { id: 'custom_equipment_notice', text: '扫码记录设备', x: 3, y: 41, width: 64, height: 5, fontSize: 3.6, align: 'center', bold: true, wrap: false, visible: true }
 ];
 
 export function defaultEquipmentFields() {
