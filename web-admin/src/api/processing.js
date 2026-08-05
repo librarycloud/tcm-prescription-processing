@@ -5,6 +5,13 @@ export const getProcessingCalendar = (params) =>
 export const getProcessingWorkflow = (id) => request.get(`/admin/processing-plans/${id}/workflow`);
 export const getProcessingPhoto = (planId, photoId) =>
   request.get(`/admin/processing-plans/${planId}/photos/${photoId}`, { responseType: 'blob' });
+export const uploadProcessingPhoto = (planId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request.post(`/admin/processing-plans/${planId}/dispensing-complete`, formData);
+};
+export const deleteProcessingPhoto = (planId, photoId) =>
+  request.delete(`/admin/processing-plans/${planId}/photos/${photoId}`);
 export const createProcessingPlan = (data) => request.post('/admin/processing-plans', data);
 export const createProcessingPlanBatch = (data) =>
   request.post('/admin/processing-plans/batch', data);

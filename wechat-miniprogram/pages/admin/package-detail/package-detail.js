@@ -37,5 +37,11 @@ Page({
     wx.navigateTo({
       url: `/pages/admin/verify/verify?pickupCode=${encodeURIComponent(this.data.detail.pickupCode)}`
     });
+  },
+
+  goWorkflow() {
+    wx.navigateTo({
+      url: `/pages/admin/processing-operation/processing-operation?id=${this.data.detail.processingPlan.id}`
+    });
   }
 });

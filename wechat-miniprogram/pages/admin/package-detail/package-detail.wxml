@@ -23,7 +23,8 @@
     <t-cell wx:if="{{detail.verifier}}" title="核销人" note="{{detail.verifier.nickname || detail.verifier.phone}}" />
   </t-cell-group>
 
-  <view class="actions" wx:if="{{detail.isPending}}">
-    <t-button theme="primary" block bind:tap="verify">确认核销</t-button>
+  <view class="actions" wx:if="{{detail.processingPlan || detail.isPending}}">
+    <t-button wx:if="{{detail.processingPlan}}" theme="primary" variant="outline" block bind:tap="goWorkflow">查看工序详情</t-button>
+    <t-button wx:if="{{detail.isPending}}" theme="primary" block bind:tap="verify">确认核销</t-button>
   </view>
 </view>

@@ -210,7 +210,7 @@ Page({
         const stage = planStage(item, this.data.activeView);
         const canStart = Number(item.status) === 0 && Number(item.scheduleType) === 1;
         const canFinish = false;
-        const canOperate = Number(item.status) === 1;
+        const canOperate = [1, 2, 3, 4].includes(Number(item.status));
         const canGeneratePackage = Number(item.status) === 2;
         const canReceiveNotice = Number(item.status) === 0 && Number(item.scheduleType) === 2;
         const canDelay = Number(item.status) === 0;
@@ -249,6 +249,7 @@ Page({
           canStart,
           canFinish,
           canOperate,
+          operationLabel: Number(item.status) === 1 ? '工序操作' : '工序详情',
           canGeneratePackage,
           canReceiveNotice,
           canDelay,
@@ -280,6 +281,7 @@ Page({
           ...item,
           pickupCode: formatPickupCode(item.pickupCode),
           processTypeName: item.processingPlan?.processType?.name || '-',
+          processingPlanId: item.processingPlan?.id || null,
           totalDose: item.processingPlan?.totalDose || '-',
           storeName: item.store ? item.store.name : '',
           finishDateText: formatDate(item.processingPlan?.finishDate),
@@ -290,7 +292,7 @@ Page({
           statusTheme: statusTheme(item.status),
           canVerify: Number(item.status) === 0,
           fewActions: true,
-          singleAction: Number(item.status) !== 0
+          singleAction: Number(item.status) !== 0 && !item.processingPlan?.id
         };
       }),
       pages: data.pagination?.pages || 1

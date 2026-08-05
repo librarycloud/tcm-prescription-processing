@@ -98,8 +98,28 @@ function decoratePlan(plan) {
   };
 }
 
+async function decoratePlanWithOperators(prisma, plan) {
+  const operatorIds = [
+    ...new Set((plan.equipmentUsages || []).map((item) => item.startedBy).filter(Boolean)),
+  ];
+  if (!operatorIds.length || !prisma.user?.findMany) return decoratePlan(plan);
+
+  const operators = await prisma.user.findMany({
+    where: { id: { in: operatorIds } },
+    select: { id: true, nickname: true, name: true, phone: true },
+  });
+  const operatorMap = new Map(operators.map((item) => [item.id, item]));
+  return decoratePlan({
+    ...plan,
+    equipmentUsages: (plan.equipmentUsages || []).map((item) => ({
+      ...item,
+      operator: operatorMap.get(item.startedBy) || null,
+    })),
+  });
+}
+
 export async function getProcessingWorkflow(prisma, actor, id) {
-  return decoratePlan(await getWorkflowPlan(prisma, actor, id));
+  return decoratePlanWithOperators(prisma, await getWorkflowPlan(prisma, actor, id));
 }
 
 export async function findProcessingPlanByScan(prisma, actor, rawCode) {
@@ -113,7 +133,7 @@ export async function findProcessingPlanByScan(prisma, actor, rawCode) {
     include: workflowInclude(),
   });
   if (!plan) throw new AppError("未找到对应加工计划", 404);
-  return decoratePlan(plan);
+  return decoratePlanWithOperators(prisma, plan);
 }
 
 function detectImageMimeType(buffer) {
@@ -220,6 +240,60 @@ export async function getProcessingPhoto(prisma, actor, planId, photoId) {
   } catch (error) {
     if (error?.code === "ENOENT") throw new AppError("照片文件不存在", 404);
     throw error;
+  }
+}
+
+export async function deleteProcessingPhoto(prisma, actor, planId, photoId) {
+  const current = await getWorkflowPlan(prisma, actor, planId);
+  if (current.status !== PLAN_STATUS.PROCESSING)
+    throw new AppError("只有加工中的计划可以删除照片", 409);
+  if (![PROCESSING_STAGE.DISPENSING, PROCESSING_STAGE.DISPENSING_DONE].includes(current.currentStage))
+    throw new AppError("后续工序已开始，不能删除调配照片", 409);
+
+  const photo = await prisma.processingPhoto.findFirst({
+    where: {
+      id: Number(photoId),
+      processingPlanId: current.id,
+      deletedAt: null,
+    },
+    select: { id: true, storagePath: true },
+  });
+  if (!photo) throw new AppError("照片不存在", 404);
+
+  await prisma.$transaction(async (tx) => {
+    const deleted = await tx.processingPhoto.updateMany({
+      where: { id: photo.id, processingPlanId: current.id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    if (deleted.count !== 1) throw new AppError("照片状态已变化，请刷新后重试", 409);
+
+    const remainingCount = await tx.processingPhoto.count({
+      where: { processingPlanId: current.id, deletedAt: null },
+    });
+    if (remainingCount === 0 && current.currentStage === PROCESSING_STAGE.DISPENSING_DONE) {
+      await tx.processingPlan.update({
+        where: { id: current.id },
+        data: {
+          currentStage: PROCESSING_STAGE.DISPENSING,
+          dispensingCompletedAt: null,
+          dispensingCompletedBy: null,
+          updatedBy: Number(actor.id),
+        },
+      });
+    }
+    await recordOperation(tx, actor, {
+      module: "processing",
+      action: "dispensing_photo_delete",
+      targetId: current.id,
+      storeId: current.storeId,
+      description: `删除调配照片：${photo.id}`,
+    });
+  });
+
+  try {
+    await removeUploadFile(photo.storagePath);
+  } catch {
+    // The database deletion is authoritative; orphan cleanup can run separately.
   }
 }
 

@@ -251,7 +251,7 @@
       />
     </el-drawer>
 
-    <el-drawer v-model="detailVisible" size="min(760px, 96vw)" destroy-on-close>
+    <el-drawer v-model="detailVisible" size="min(1000px, 96vw)" destroy-on-close>
       <template #header>
         <div class="drawer-header">
           <span>加工计划详情</span>
@@ -366,26 +366,52 @@
         <section v-if="detailPlan" class="workflow-detail-section">
           <div class="workflow-detail-heading">
             <h3>调配核对照片</h3>
-            <span>{{ detailPlan.photos?.length || 0 }} 张</span>
+            <div class="workflow-photo-tools">
+              <span>{{ detailPlan.photos?.length || 0 }} 张</span>
+              <el-upload
+                v-if="canUploadDetailPhoto"
+                ref="detailPhotoUploadRef"
+                accept="image/jpeg,image/png,image/webp"
+                :auto-upload="false"
+                :show-file-list="false"
+                :on-change="handleDetailPhotoUpload"
+              >
+                <el-button size="small" :icon="Upload" :loading="detailPhotoUploading">
+                  上传照片
+                </el-button>
+              </el-upload>
+            </div>
           </div>
           <div v-if="detailPhotoUrls.length" class="workflow-photo-grid">
-            <el-image
+            <div
               v-for="(photo, index) in detailPhotoUrls"
               :key="photo.id"
-              :src="photo.url"
-              :preview-src-list="detailPhotoUrls.map((item) => item.url)"
-              :initial-index="index"
-              fit="cover"
-              preview-teleported
-            />
+              class="workflow-photo-item"
+            >
+              <el-image
+                :src="photo.url"
+                :preview-src-list="detailPhotoUrls.map((item) => item.url)"
+                :initial-index="index"
+                fit="cover"
+                preview-teleported
+              />
+              <el-tooltip v-if="canManageDetailPhotos" content="删除照片" placement="top">
+                <el-button
+                  class="workflow-photo-delete"
+                  type="danger"
+                  circle
+                  size="small"
+                  :icon="Delete"
+                  :disabled="detailPhotoUploading"
+                  @click="removeDetailPhoto(photo.id)"
+                />
+              </el-tooltip>
+            </div>
           </div>
           <el-empty v-else :image-size="64" description="尚未上传调配照片" />
         </section>
 
-        <section
-          v-if="detailPlan?.isDecoction"
-          class="workflow-detail-section"
-        >
+        <section v-if="detailPlan?.isDecoction" class="workflow-detail-section">
           <div class="workflow-detail-heading">
             <h3>设备工序记录</h3>
             <span>浸泡、煎煮及打包扫码记录</span>
@@ -398,12 +424,17 @@
             <el-table-column label="工序" min-width="80">
               <template #default="{ row }">{{ usageStageText(row.stage) }}</template>
             </el-table-column>
-            <el-table-column prop="portionNo" label="份组" width="82">
-              <template #default="{ row }">第 {{ row.portionNo }} 份</template>
+            <el-table-column prop="portionNo" label="批次" width="82">
+              <template #default="{ row }">第 {{ row.portionNo }} 批</template>
             </el-table-column>
             <el-table-column label="设备" min-width="160">
               <template #default="{ row }">
                 {{ row.equipment?.equipmentNo }} · {{ row.equipment?.name }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作人" min-width="100">
+              <template #default="{ row }">
+                {{ row.operator?.nickname || row.operator?.name || row.operator?.phone || '-' }}
               </template>
             </el-table-column>
             <el-table-column label="开始时间" min-width="155">
@@ -1046,7 +1077,15 @@ import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index.mjs';
 import { ElTag } from 'element-plus/es/components/tag/index.mjs';
 import { ElTooltip } from 'element-plus/es/components/tooltip/index.mjs';
-import { Delete, Plus, Printer, Refresh, RefreshRight, Search } from '@element-plus/icons-vue';
+import {
+  Delete,
+  Plus,
+  Printer,
+  Refresh,
+  RefreshRight,
+  Search,
+  Upload
+} from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import ProcessingPrintDialog from '@/components/ProcessingPrintDialog.vue';
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
@@ -1062,6 +1101,7 @@ import { getStores } from '@/api/store';
 import {
   createProcessingPlan,
   createProcessingPlanBatch,
+  deleteProcessingPhoto,
   deleteProcessingPlan,
   getDictionaries,
   getDoctors,
@@ -1074,6 +1114,7 @@ import {
   reorderProcessingQueue,
   restoreProcessingQueue,
   transitionProcessingPlan,
+  uploadProcessingPhoto,
   updateProcessingPlan
 } from '@/api/processing';
 import { useUserStore } from '@/stores/user';
@@ -1110,6 +1151,53 @@ const workflowStageNames = {
   7: '加工完成'
 };
 const usageStageNames = { 3: '浸泡', 4: '煎煮', 5: '打包' };
+const DETAIL_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
+
+function canvasToBlob(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('图片压缩失败'))),
+      'image/jpeg',
+      quality
+    );
+  });
+}
+
+async function prepareDetailPhoto(file) {
+  if (file.size <= DETAIL_PHOTO_MAX_SIZE) return file;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+    const strategies = [
+      { quality: 0.9, width: 3000 },
+      { quality: 0.82, width: 2400 },
+      { quality: 0.75, width: 1920 }
+    ];
+    for (const strategy of strategies) {
+      const scale = Math.min(1, strategy.width / bitmap.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await canvasToBlob(canvas, strategy.quality);
+      if (blob.size <= DETAIL_PHOTO_MAX_SIZE) {
+        const name = `${file.name.replace(/\.[^.]+$/, '') || '调配照片'}.jpg`;
+        return new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() });
+      }
+    }
+  } catch (error) {
+    error.photoPreparationFailed = true;
+    throw error;
+  } finally {
+    bitmap?.close();
+  }
+  const error = new Error('图片压缩后仍超过 5MB');
+  error.photoPreparationFailed = true;
+  throw error;
+}
 
 function workflowStageText(stage) {
   return workflowStageNames[Number(stage)] || '-';
@@ -1169,54 +1257,49 @@ function workflowProgress(row) {
 }
 
 function workflowTooltip(progress) {
-  return h(
-    'div',
-    { style: { minWidth: '210px' } },
-    [
-      h(
-        'div',
-        { style: { marginBottom: '8px', fontWeight: '600' } },
-        `当前工序：${progress.currentLabel}`
-      ),
-      h(
-        'div',
-        { style: { display: 'flex', gap: '4px', width: '100%' } },
-        progress.steps.map((label, index) =>
-          h('span', {
-            key: label,
-            title: label,
-            style: {
-              flex: '1',
-              height: '5px',
-              borderRadius: '999px',
-              backgroundColor:
-                index < progress.activeIndex ||
-                (index === progress.activeIndex &&
-                  progress.activeIndex === progress.steps.length - 1)
-                  ? 'var(--el-color-success)'
-                  : index === progress.activeIndex
-                    ? 'var(--el-color-primary)'
-                    : 'var(--el-border-color-lighter)'
-            }
-          })
-        )
-      ),
-      h(
-        'div',
-        {
+  return h('div', { style: { minWidth: '210px' } }, [
+    h(
+      'div',
+      { style: { marginBottom: '8px', fontWeight: '600' } },
+      `当前工序：${progress.currentLabel}`
+    ),
+    h(
+      'div',
+      { style: { display: 'flex', gap: '4px', width: '100%' } },
+      progress.steps.map((label, index) =>
+        h('span', {
+          key: label,
+          title: label,
           style: {
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: '4px',
-            marginTop: '4px',
-            color: 'var(--el-text-color-secondary)',
-            fontSize: '11px'
+            flex: '1',
+            height: '5px',
+            borderRadius: '999px',
+            backgroundColor:
+              index < progress.activeIndex ||
+              (index === progress.activeIndex && progress.activeIndex === progress.steps.length - 1)
+                ? 'var(--el-color-success)'
+                : index === progress.activeIndex
+                  ? 'var(--el-color-primary)'
+                  : 'var(--el-border-color-lighter)'
           }
-        },
-        progress.steps.map((label) => h('span', { key: label }, label))
+        })
       )
-    ]
-  );
+    ),
+    h(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '4px',
+          marginTop: '4px',
+          color: 'var(--el-text-color-secondary)',
+          fontSize: '11px'
+        }
+      },
+      progress.steps.map((label) => h('span', { key: label }, label))
+    )
+  ]);
 }
 
 function planStage(row, view) {
@@ -1624,6 +1707,16 @@ const detailVisible = ref(false);
 const detailPlan = ref(null);
 const detailLoading = ref(false);
 const detailPhotoUrls = ref([]);
+const detailPhotoUploading = ref(false);
+const detailPhotoUploadRef = ref(null);
+const canManageDetailPhotos = computed(
+  () =>
+    Number(detailPlan.value?.status) === PROCESSING_STATUS.PROCESSING &&
+    [1, 2].includes(Number(detailPlan.value?.currentStage))
+);
+const canUploadDetailPhoto = computed(
+  () => canManageDetailPhotos.value && (detailPlan.value?.photos?.length || 0) < 3
+);
 const planPrintVisible = ref(false);
 const planPrintType = ref('PROCESSING');
 const pickupDrawerVisible = ref(false);
@@ -1650,6 +1743,64 @@ const query = reactive({ keyword: '', status: '', processTypeId: '', doctorId: '
 function releaseDetailPhotos() {
   detailPhotoUrls.value.forEach((item) => URL.revokeObjectURL(item.url));
   detailPhotoUrls.value = [];
+}
+
+async function loadDetailWorkflow(planId) {
+  detailLoading.value = true;
+  releaseDetailPhotos();
+  try {
+    const workflow = await getProcessingWorkflow(planId);
+    detailPlan.value = workflow;
+    const photos = await Promise.all(
+      (workflow.photos || []).map(async (photo) => ({
+        id: photo.id,
+        url: URL.createObjectURL(await getProcessingPhoto(workflow.id, photo.id))
+      }))
+    );
+    if (detailVisible.value && detailPlan.value?.id === planId) detailPhotoUrls.value = photos;
+    else photos.forEach((item) => URL.revokeObjectURL(item.url));
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+async function handleDetailPhotoUpload(uploadFile) {
+  const file = uploadFile?.raw;
+  if (!file || detailPhotoUploading.value || !detailPlan.value?.id) return;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    ElMessage.warning('仅支持 JPG、PNG 或 WEBP 图片');
+    detailPhotoUploadRef.value?.clearFiles();
+    return;
+  }
+  detailPhotoUploading.value = true;
+  try {
+    const preparedFile = await prepareDetailPhoto(file);
+    await uploadProcessingPhoto(detailPlan.value.id, preparedFile);
+    ElMessage.success('照片已上传');
+    await loadDetailWorkflow(detailPlan.value.id);
+  } catch (error) {
+    if (error.photoPreparationFailed) ElMessage.error(error.message || '图片压缩失败');
+  } finally {
+    detailPhotoUploading.value = false;
+    detailPhotoUploadRef.value?.clearFiles();
+  }
+}
+
+async function removeDetailPhoto(photoId) {
+  if (!detailPlan.value?.id || detailPhotoUploading.value) return;
+  try {
+    await ElMessageBox.confirm('确认删除这张调配照片？', '删除照片', { type: 'warning' });
+  } catch {
+    return;
+  }
+  detailPhotoUploading.value = true;
+  try {
+    await deleteProcessingPhoto(detailPlan.value.id, photoId);
+    ElMessage.success('照片已删除');
+    await loadDetailWorkflow(detailPlan.value.id);
+  } finally {
+    detailPhotoUploading.value = false;
+  }
 }
 
 watch(detailVisible, (visible) => {
@@ -2326,22 +2477,7 @@ async function handleAction(name, row) {
   if (name === 'detail') {
     detailPlan.value = row;
     detailVisible.value = true;
-    detailLoading.value = true;
-    releaseDetailPhotos();
-    try {
-      const workflow = await getProcessingWorkflow(row.id);
-      detailPlan.value = workflow;
-      const photos = await Promise.all(
-        (workflow.photos || []).map(async (photo) => ({
-          id: photo.id,
-          url: URL.createObjectURL(await getProcessingPhoto(workflow.id, photo.id))
-        }))
-      );
-      if (detailVisible.value && detailPlan.value?.id === row.id) detailPhotoUrls.value = photos;
-      else photos.forEach((item) => URL.revokeObjectURL(item.url));
-    } finally {
-      detailLoading.value = false;
-    }
+    await loadDetailWorkflow(row.id);
     return;
   }
   if (name === 'quick-notification') return openQuickEdit('notification', row);
@@ -2505,10 +2641,19 @@ onMounted(async () => {
   color: var(--app-muted);
   font-size: 13px;
 }
+.workflow-photo-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .workflow-photo-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+.workflow-photo-item {
+  position: relative;
+  min-width: 0;
 }
 .workflow-photo-grid :deep(.el-image) {
   width: 100%;
@@ -2516,6 +2661,12 @@ onMounted(async () => {
   border: 1px solid var(--app-border);
   border-radius: 6px;
   cursor: zoom-in;
+}
+.workflow-photo-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
 }
 .drawer-header {
   display: flex;

@@ -1,4 +1,5 @@
 import {
+  deletePrescriptionAttachment,
   deleteProcessingPlan,
   getPrescriptionDetail
 } from '../../../api/admin';
@@ -19,11 +20,20 @@ const PLAN_STATUS = {
   5: { text: '已取消', theme: 'default' }
 };
 
+function formatFileSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return '0 B';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 Page({
   data: {
     id: null,
     detail: null,
-    plans: []
+    plans: [],
+    attachmentDeleting: false
   },
 
   onLoad(options) {
@@ -50,6 +60,12 @@ Page({
         creatorName: item.creator
           ? item.creator.nickname || item.creator.phone
           : '-',
+        attachment: item.attachment
+          ? {
+              ...item.attachment,
+              fileSizeText: formatFileSize(item.attachment.fileSize)
+            }
+          : null,
         canEdit: Number(item.status) !== 1,
         canAddPlan: Number(item.status) === 0
       },
@@ -73,6 +89,8 @@ Page({
               ? '等待顾客通知'
               : String(plan.processDate || '').slice(0, 10),
           finishDateText: formatDate(plan.finishDate),
+          canViewWorkflow: [1, 2, 3, 4].includes(Number(plan.status)),
+          workflowLabel: Number(plan.status) === 1 ? '工序操作' : '工序详情',
           canEdit: [0, 1].includes(Number(plan.status)),
           canDelete: Number(plan.status) === 0
         };
@@ -116,6 +134,12 @@ Page({
     });
   },
 
+  goWorkflow(e) {
+    wx.navigateTo({
+      url: `/pages/admin/processing-operation/processing-operation?id=${e.currentTarget.dataset.id}`
+    });
+  },
+
   removePlan(e) {
     const id = e.currentTarget.dataset.id;
     wx.showModal({
@@ -127,6 +151,26 @@ Page({
         await deleteProcessingPlan(id);
         wx.showToast({ title: '已删除', icon: 'success' });
         await this.load();
+      }
+    });
+  },
+
+  removeAttachment() {
+    if (!this.data.detail?.attachment || this.data.attachmentDeleting) return;
+    wx.showModal({
+      title: '删除处方原件',
+      content: '确认删除该处方原件？删除后无法恢复。',
+      confirmColor: '#d54941',
+      success: async (result) => {
+        if (!result.confirm) return;
+        this.setData({ attachmentDeleting: true });
+        try {
+          await deletePrescriptionAttachment(this.data.id);
+          wx.showToast({ title: '已删除', icon: 'success' });
+          await this.load();
+        } finally {
+          this.setData({ attachmentDeleting: false });
+        }
       }
     });
   },

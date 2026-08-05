@@ -32,6 +32,13 @@ export function deletePrescription(id) {
   return request({ url: `/admin/prescriptions/${id}`, method: 'DELETE' });
 }
 
+export function deletePrescriptionAttachment(id) {
+  return request({
+    url: `/admin/prescriptions/${id}/attachment`,
+    method: 'DELETE'
+  });
+}
+
 export function getProcessingPlans(params) {
   return request({ url: '/admin/processing-plans', data: params });
 }
@@ -106,6 +113,13 @@ export function uploadDispensingPhoto(id, filePath) {
   return uploadFile({
     url: `/admin/processing-plans/${id}/dispensing-complete`,
     filePath
+  });
+}
+
+export function deleteDispensingPhoto(id, photoId) {
+  return request({
+    url: `/admin/processing-plans/${id}/photos/${photoId}`,
+    method: 'DELETE'
   });
 }
 

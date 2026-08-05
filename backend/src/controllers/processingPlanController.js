@@ -18,6 +18,7 @@ import {
 import { AppError } from "../utils/appError.js";
 import {
   completeDispensing,
+  deleteProcessingPhoto,
   findProcessingPlanByScan,
   finishEquipmentUsage,
   getProcessingPhoto,
@@ -225,6 +226,16 @@ export async function photoController(request, reply) {
     .header("Content-Length", photo.fileSize)
     .header("Cache-Control", "private, no-store")
     .send(photo.data);
+}
+
+export async function deletePhotoController(request, reply) {
+  await deleteProcessingPhoto(
+    request.server.prisma,
+    request.user,
+    request.params.id,
+    request.params.photoId,
+  );
+  return ok(reply, {}, "照片已删除");
 }
 
 export async function startEquipmentUsageController(request, reply) {

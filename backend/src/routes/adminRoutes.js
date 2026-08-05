@@ -60,6 +60,7 @@ import {
   workflowController as processingWorkflowController,
   scanController as scanProcessingPlanController,
   completeDispensingController,
+  deletePhotoController as deleteProcessingPhotoController,
   photoController as processingPhotoController,
   startEquipmentUsageController,
   finishEquipmentUsageController,
@@ -72,6 +73,7 @@ import {
 } from "../controllers/processingEquipmentController.js";
 import {
   createController as createPrescriptionController,
+  deleteAttachmentController as deletePrescriptionAttachmentController,
   deleteController as deletePrescriptionController,
   detailController as prescriptionDetailController,
   listController as listPrescriptionController,
@@ -235,6 +237,7 @@ export default async function adminRoutes(fastify) {
   fastify.get("/prescriptions", listPrescriptionController);
   fastify.get("/prescriptions/:id/attachment", prescriptionAttachmentController);
   fastify.post("/prescriptions/:id/attachment", uploadPrescriptionAttachmentController);
+  fastify.delete("/prescriptions/:id/attachment", deletePrescriptionAttachmentController);
   fastify.get("/prescriptions/:id", prescriptionDetailController);
   fastify.post("/prescriptions", createPrescriptionController);
   fastify.put("/prescriptions/:id", updatePrescriptionController);
@@ -254,6 +257,7 @@ export default async function adminRoutes(fastify) {
   fastify.get("/processing-plans/:id/workflow", processingWorkflowController);
   fastify.post("/processing-plans/:id/dispensing-complete", completeDispensingController);
   fastify.get("/processing-plans/:id/photos/:photoId", processingPhotoController);
+  fastify.delete("/processing-plans/:id/photos/:photoId", deleteProcessingPhotoController);
   fastify.post("/processing-plans/:id/equipment-usages", startEquipmentUsageController);
   fastify.post(
     "/processing-plans/:id/equipment-usages/:usageId/finish",

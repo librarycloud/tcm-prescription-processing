@@ -13,6 +13,7 @@ import path from "node:path";
 import test from "node:test";
 import { config } from "../src/config.js";
 import {
+  deletePrescriptionAttachment,
   getPrescriptionAttachment,
   uploadPrescriptionAttachment,
 } from "../src/services/prescriptionService.js";
@@ -103,6 +104,47 @@ test("legacy prescription attachment data remains readable before backfill", asy
 
   const attachment = await getPrescriptionAttachment(prisma, actor, 21);
   assert.deepEqual(attachment.data, legacyData);
+});
+
+test("deleting a prescription attachment removes its record and local file", async (t) => {
+  const previousUploadDir = config.uploadDir;
+  const uploadDir = await mkdtemp(path.join(tmpdir(), "tcm-prescription-delete-"));
+  config.uploadDir = uploadDir;
+  t.after(async () => {
+    config.uploadDir = previousUploadDir;
+    await rm(uploadDir, { recursive: true, force: true });
+  });
+
+  const storagePath = "prescriptions/2026/08/delete.jpg";
+  const filePath = path.join(uploadDir, ...storagePath.split("/"));
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, Buffer.from("delete me"));
+  let deletedId = null;
+  let operation = null;
+  const prisma = {
+    prescription: { findFirst: async () => prescription() },
+    prescriptionAttachment: {
+      findUnique: async () => ({ id: 5, storagePath }),
+      delete: async ({ where }) => {
+        deletedId = where.id;
+        return { id: where.id };
+      },
+    },
+    operationLog: {
+      create: async ({ data }) => {
+        operation = data;
+        return { id: 1 };
+      },
+    },
+    $transaction: async (work) => work(prisma),
+  };
+
+  const result = await deletePrescriptionAttachment(prisma, actor, 21);
+
+  assert.deepEqual(result, { id: 5 });
+  assert.equal(deletedId, 5);
+  assert.equal(operation.action, "delete_attachment");
+  await assert.rejects(access(filePath), { code: "ENOENT" });
 });
 
 test("a failed prescription attachment transaction removes the new local file", async (t) => {

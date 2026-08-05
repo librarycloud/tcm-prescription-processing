@@ -1,4 +1,5 @@
 import {
+  deleteDispensingPhoto,
   finishProcessingEquipmentUsage,
   getProcessingWorkflow,
   startProcessingEquipmentUsage,
@@ -24,6 +25,56 @@ const USAGE_STAGE_NAMES = {
   4: '煎煮',
   5: '打包'
 };
+
+const PHOTO_MAX_SIZE = 5 * 1024 * 1024;
+
+function localFileSize(filePath) {
+  return new Promise((resolve, reject) => {
+    wx.getFileInfo({
+      filePath,
+      success: (res) => resolve(Number(res.size) || 0),
+      fail: reject
+    });
+  });
+}
+
+function compressPhoto(filePath, options) {
+  return new Promise((resolve, reject) => {
+    wx.compressImage({
+      src: filePath,
+      quality: options.quality,
+      compressedWidth: options.width,
+      success: (res) => resolve(res.tempFilePath),
+      fail: reject
+    });
+  });
+}
+
+async function preparePhotoForUpload(file) {
+  const originalPath = file?.tempFilePath;
+  if (!originalPath) return '';
+  const originalSize = Number(file.size) || (await localFileSize(originalPath));
+  if (originalSize <= PHOTO_MAX_SIZE) return originalPath;
+
+  const strategies = [
+    { quality: 90, width: 3000 },
+    { quality: 82, width: 2400 },
+    { quality: 75, width: 1920 }
+  ];
+  try {
+    for (const strategy of strategies) {
+      const compressedPath = await compressPhoto(originalPath, strategy);
+      if ((await localFileSize(compressedPath)) <= PHOTO_MAX_SIZE) return compressedPath;
+    }
+  } catch (error) {
+    error.photoPreparationFailed = true;
+    throw error;
+  }
+
+  const error = new Error('图片压缩后仍超过 5MB');
+  error.photoPreparationFailed = true;
+  throw error;
+}
 
 function durationText(start, end) {
   if (!start) return '-';
@@ -62,6 +113,10 @@ Page({
     activeSoakings: [],
     activeDecoctions: [],
     usageHistory: [],
+    showProcessingSteps: false,
+    processingFinished: false,
+    packagingCompleted: false,
+    canDeletePhotos: false,
     canUploadPhoto: false,
     canStartSoaking: false,
     canFinish: false
@@ -83,6 +138,8 @@ Page({
       const usages = (detail.equipmentUsages || []).map((item) => ({
         ...item,
         stageName: USAGE_STAGE_NAMES[Number(item.stage)] || '-',
+        operatorName:
+          item.operator?.nickname || item.operator?.name || item.operator?.phone || '-',
         startedAtText: formatDate(item.startedAt),
         endedAtText: item.endedAt ? formatDate(item.endedAt) : '进行中',
         durationText: durationText(item.startedAt, item.endedAt)
@@ -92,6 +149,7 @@ Page({
         (item) => Number(item.stage) === 4 && !item.endedAt
       );
       const inProgress = Number(detail.status) === 1;
+      const processingFinished = [2, 3, 4].includes(Number(detail.status));
       const viewDetail = {
         ...detail,
         dispensingCompletedAtText: detail.dispensingCompletedAt
@@ -104,6 +162,11 @@ Page({
         activeSoakings,
         activeDecoctions,
         usageHistory: usages,
+        showProcessingSteps: [1, 2, 3, 4].includes(Number(detail.status)),
+        processingFinished,
+        packagingCompleted:
+          processingFinished || [6, 7].includes(Number(detail.currentStage)),
+        canDeletePhotos: inProgress && [1, 2].includes(Number(detail.currentStage)),
         canUploadPhoto: inProgress && [1, 2].includes(Number(detail.currentStage)),
         canStartSoaking:
           inProgress && detail.isDecoction && [2, 3].includes(Number(detail.currentStage)),
@@ -125,15 +188,22 @@ Page({
       count: 1,
       mediaType: ['image'],
       sourceType: ['camera', 'album'],
-      sizeType: ['compressed'],
+      sizeType: ['original'],
+      camera: 'back',
       success: async (res) => {
-        const filePath = res.tempFiles?.[0]?.tempFilePath;
+        const selectedFile = res.tempFiles?.[0];
+        const filePath = selectedFile?.tempFilePath;
         if (!filePath) return;
         this.setData({ loading: true });
         try {
-          await uploadDispensingPhoto(this.data.id, filePath);
+          const uploadPath = await preparePhotoForUpload(selectedFile);
+          await uploadDispensingPhoto(this.data.id, uploadPath);
           wx.showToast({ title: '调配已完成', icon: 'success' });
           await this.load();
+        } catch (error) {
+          if (error.photoPreparationFailed) {
+            wx.showToast({ title: error.message || '图片压缩失败', icon: 'none' });
+          }
         } finally {
           this.setData({ loading: false });
         }
@@ -153,7 +223,7 @@ Page({
       portionNo,
       equipmentCode: code
     });
-    wx.showToast({ title: `第${portionNo}份开始浸泡`, icon: 'success' });
+    wx.showToast({ title: `第${portionNo}批开始浸泡`, icon: 'success' });
     await this.load();
   },
 
@@ -166,7 +236,7 @@ Page({
       portionNo,
       equipmentCode: code
     });
-    wx.showToast({ title: `第${portionNo}份开始煎煮`, icon: 'success' });
+    wx.showToast({ title: `第${portionNo}批开始煎煮`, icon: 'success' });
     await this.load();
   },
 
@@ -193,6 +263,22 @@ Page({
     });
   },
 
+  deletePhoto(e) {
+    const photoId = Number(e.currentTarget.dataset.id);
+    if (!photoId) return;
+    wx.showModal({
+      title: '删除照片',
+      content: '确认删除这张调配照片？',
+      confirmColor: '#d54941',
+      success: async (result) => {
+        if (!result.confirm) return;
+        await deleteDispensingPhoto(this.data.id, photoId);
+        wx.showToast({ title: '照片已删除', icon: 'success' });
+        await this.load();
+      }
+    });
+  },
+
   async finishPlan() {
     const createPackage = await chooseCompletionMode();
     if (createPackage === null) return;
@@ -201,6 +287,6 @@ Page({
       title: createPackage ? '已完成并生成包裹' : '加工已完成',
       icon: 'success'
     });
-    setTimeout(() => wx.navigateBack(), 500);
+    await this.load();
   }
 });

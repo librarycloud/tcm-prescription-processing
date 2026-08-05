@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   assertProcessingWorkflowComplete,
   completeDispensing,
+  deleteProcessingPhoto,
   finishEquipmentUsage,
   getProcessingPhoto,
 } from "../src/services/processingWorkflowService.js";
@@ -325,6 +326,51 @@ test("a failed dispensing transaction removes the newly stored photo", async (t)
   );
   const entries = await readdir(uploadDir, { recursive: true });
   assert.equal(entries.some((entry) => entry.endsWith(".jpg")), false);
+});
+
+test("deleting the final dispensing photo returns the plan to dispensing", async () => {
+  const state = {
+    plan: {
+      id: 21,
+      storeId: 3,
+      status: 1,
+      currentStage: PROCESSING_STAGE.DISPENSING_DONE,
+      dispensingCompletedAt: new Date(),
+      dispensingCompletedBy: actor.id,
+      photos: [{ id: 1 }],
+      equipmentUsages: [],
+      processType: { code: "OTHER", name: "打粉" },
+      prescription: { doctor: {}, source: {} },
+      store: { id: 3, name: "测试门店" },
+    },
+    photo: { id: 1, processingPlanId: 21, storagePath: null, deletedAt: null },
+  };
+  const prisma = {
+    processingPlan: {
+      findFirst: async () => ({ ...state.plan }),
+      update: async ({ data }) => {
+        Object.assign(state.plan, data);
+        return state.plan;
+      },
+    },
+    processingPhoto: {
+      findFirst: async () => ({ ...state.photo }),
+      updateMany: async () => {
+        state.photo.deletedAt = new Date();
+        return { count: 1 };
+      },
+      count: async () => (state.photo.deletedAt ? 0 : 1),
+    },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (work) => work(prisma),
+  };
+
+  await deleteProcessingPhoto(prisma, actor, 21, 1);
+
+  assert.ok(state.photo.deletedAt instanceof Date);
+  assert.equal(state.plan.currentStage, PROCESSING_STAGE.DISPENSING);
+  assert.equal(state.plan.dispensingCompletedAt, null);
+  assert.equal(state.plan.dispensingCompletedBy, null);
 });
 
 test("processing photos stored in the database remain readable during migration", async () => {

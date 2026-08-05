@@ -111,6 +111,15 @@
         <div class="attachment-actions">
           <el-button link type="primary" :icon="View" @click="openAttachmentPreview">预览</el-button>
           <el-button link :icon="Download" @click="downloadAttachment">下载</el-button>
+          <el-button
+            link
+            type="danger"
+            :icon="Delete"
+            :loading="attachmentDeleting"
+            @click="removeAttachment"
+          >
+            删除
+          </el-button>
         </div>
       </div>
       <el-empty v-else description="暂无处方原件" :image-size="72" />
@@ -448,6 +457,7 @@ import {
   ArrowDown,
   ArrowUp,
   Back,
+  Delete,
   Document,
   Download,
   Picture,
@@ -459,6 +469,7 @@ import {
 import EmptyView from '@/components/EmptyView.vue';
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
 import {
+  deletePrescriptionAttachment,
   getPrescription,
   getPrescriptionAttachment,
   uploadPrescriptionAttachment
@@ -502,6 +513,7 @@ const loading = ref(false);
 const saving = ref(false);
 const reordering = ref(false);
 const attachmentUploading = ref(false);
+const attachmentDeleting = ref(false);
 const attachmentUploader = ref(null);
 const attachmentPreviewVisible = ref(false);
 const attachmentPreviewLoading = ref(false);
@@ -645,6 +657,24 @@ async function downloadAttachment() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+async function removeAttachment() {
+  await ElMessageBox.confirm('确认删除该处方原件？删除后无法恢复。', '删除处方原件', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    confirmButtonClass: 'el-button--danger'
+  });
+  attachmentDeleting.value = true;
+  try {
+    await deletePrescriptionAttachment(props.id ?? route.params.id);
+    attachmentPreviewVisible.value = false;
+    handlePreviewClosed();
+    await loadData();
+    ElMessage.success('处方原件已删除');
+  } finally {
+    attachmentDeleting.value = false;
+  }
 }
 
 function handlePreviewClosed() {

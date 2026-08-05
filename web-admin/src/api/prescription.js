@@ -13,3 +13,6 @@ export const uploadPrescriptionAttachment = (id, file) => {
 
 export const getPrescriptionAttachment = (id) =>
   request.get(`/admin/prescriptions/${id}/attachment`, { responseType: 'blob' });
+
+export const deletePrescriptionAttachment = (id) =>
+  request.delete(`/admin/prescriptions/${id}/attachment`);

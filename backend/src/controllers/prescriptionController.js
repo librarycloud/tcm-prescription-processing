@@ -2,6 +2,7 @@ import { ok } from '../utils/response.js';
 import { AppError } from '../utils/appError.js';
 import {
   createPrescription,
+  deletePrescriptionAttachment,
   deletePrescription,
   getPrescription,
   getPrescriptionAttachment,
@@ -55,4 +56,16 @@ export async function attachmentController(request, reply) {
     .header('Content-Length', attachment.fileSize)
     .header('Cache-Control', 'private, no-store')
     .send(attachment.data);
+}
+
+export async function deleteAttachmentController(request, reply) {
+  return ok(
+    reply,
+    await deletePrescriptionAttachment(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+    ),
+    '处方原件已删除',
+  );
 }

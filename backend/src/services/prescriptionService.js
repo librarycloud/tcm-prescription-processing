@@ -298,6 +298,35 @@ export async function getPrescriptionAttachment(prisma, actor, idValue) {
   }
 }
 
+export async function deletePrescriptionAttachment(prisma, actor, idValue) {
+  const current = await getPrescription(prisma, actor, idValue);
+  const attachment = await prisma.prescriptionAttachment.findUnique({
+    where: { prescriptionId: current.id },
+    select: { id: true, storagePath: true },
+  });
+  if (!attachment) throw new AppError("该处方暂无原件", 404);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.prescriptionAttachment.delete({ where: { id: attachment.id } });
+    await recordOperation(tx, actor, {
+      module: "prescription",
+      action: "delete_attachment",
+      targetId: current.id,
+      storeId: current.storeId,
+      description: "删除处方原件",
+    });
+  });
+
+  if (attachment.storagePath) {
+    try {
+      await removeUploadFile(attachment.storagePath);
+    } catch {
+      // The database is authoritative; orphaned files can be cleaned separately.
+    }
+  }
+  return { id: attachment.id };
+}
+
 export async function createPrescriptionRecord(prisma, actor, payload, options = {}) {
   const data = normalizeData(payload);
   await validateReferences(prisma, data.doctorId, data.sourceId);

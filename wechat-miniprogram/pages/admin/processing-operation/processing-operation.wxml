@@ -21,7 +21,7 @@
       <t-button theme="primary" block bind:tap="startPlan">开始调配</t-button>
     </view>
 
-    <view wx:if="{{detail.status === 1}}" class="app-card step-card">
+    <view wx:if="{{showProcessingSteps}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">1</view>
         <view><view class="step-title">调配</view><view class="muted">完成后上传现场照片</view></view>
@@ -30,73 +30,86 @@
         已完成：{{detail.dispensingCompletedAtText}}
       </view>
       <view class="photo-list" wx:if="{{detail.photos.length}}">
-        <t-button
-          wx:for="{{detail.photos}}"
-          wx:key="id"
-          size="small"
-          variant="outline"
-          data-id="{{item.id}}"
-          bind:tap="viewPhoto"
-        >查看照片 {{index + 1}}</t-button>
+        <view class="photo-item" wx:for="{{detail.photos}}" wx:key="id">
+          <t-button
+            size="small"
+            variant="outline"
+            data-id="{{item.id}}"
+            bind:tap="viewPhoto"
+          >查看照片 {{index + 1}}</t-button>
+          <t-button
+            wx:if="{{canDeletePhotos}}"
+            size="small"
+            theme="danger"
+            variant="outline"
+            data-id="{{item.id}}"
+            bind:tap="deletePhoto"
+          >删除</t-button>
+        </view>
       </view>
       <t-button wx:if="{{canUploadPhoto}}" theme="primary" block bind:tap="takeDispensingPhoto">
         {{detail.photos.length ? '补充调配照片' : '拍照并完成调配'}}
       </t-button>
     </view>
 
-    <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
+    <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">2</view>
         <view><view class="step-title">浸泡</view><view class="muted">可连续扫描多个浸泡桶</view></view>
       </view>
       <view class="usage-row" wx:for="{{activeSoakings}}" wx:key="id">
         <view>
-          <view class="usage-title">第 {{item.portionNo}} 份 · {{item.equipment.name}}</view>
+          <view class="usage-title">第 {{item.portionNo}} 批 · {{item.equipment.name}}</view>
           <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
+          <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
         <t-button size="small" theme="primary" data-portion="{{item.portionNo}}" bind:tap="startDecoction">
           扫锅转煎煮
         </t-button>
       </view>
+      <view wx:if="{{processingFinished}}" class="step-result">浸泡已完成</view>
       <t-button wx:if="{{canStartSoaking}}" variant="outline" block bind:tap="startSoaking">
         扫码添加浸泡桶
       </t-button>
     </view>
 
-    <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
+    <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">3</view>
         <view><view class="step-title">煎煮</view><view class="muted">完成后直接扫描包装机，无需再次扫描煎药机</view></view>
       </view>
       <view class="usage-row" wx:for="{{activeDecoctions}}" wx:key="id">
         <view>
-          <view class="usage-title">第 {{item.portionNo}} 份 · {{item.equipment.name}}</view>
+          <view class="usage-title">第 {{item.portionNo}} 批 · {{item.equipment.name}}</view>
           <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
+          <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
         <t-button size="small" theme="success" data-usage="{{item.id}}" bind:tap="finishWithPackaging">
           扫包装机
         </t-button>
       </view>
-      <view wx:if="{{!activeDecoctions.length}}" class="empty-step">暂无进行中的煎煮</view>
+      <view wx:if="{{processingFinished}}" class="step-result">煎煮已完成</view>
+      <view wx:elif="{{!activeDecoctions.length}}" class="empty-step">暂无进行中的煎煮</view>
     </view>
 
-    <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
+    <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">4</view>
-        <view><view class="step-title">打包</view><view class="muted">每份药扫描包装机后即完成该份加工</view></view>
+        <view><view class="step-title">打包</view><view class="muted">每批药扫描包装机后即完成该批加工</view></view>
       </view>
-      <view wx:if="{{detail.currentStage === 6}}" class="step-result">
-        全部份组已完成打包
+      <view wx:if="{{packagingCompleted}}" class="step-result">
+        全部批次已完成打包
       </view>
       <view wx:else class="empty-step">等待煎煮完成后扫描包装机</view>
     </view>
 
     <view wx:if="{{usageHistory.length}}" class="app-card history-card">
-      <view class="step-title">设备使用记录</view>
+      <view class="step-title">设备工序记录</view>
       <view class="history-item" wx:for="{{usageHistory}}" wx:key="id">
         <view class="history-main">
-          <view>{{item.stageName}} · 第 {{item.portionNo}} 份 · {{item.equipment.name}}</view>
+          <view>{{item.stageName}} · 第 {{item.portionNo}} 批 · {{item.equipment.name}}</view>
           <view class="muted">{{item.startedAtText}} → {{item.endedAtText}}</view>
+          <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
         <view class="duration">{{item.durationText}}</view>
       </view>
