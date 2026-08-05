@@ -486,7 +486,7 @@ model ProcessingEquipmentUsage {
   equipment      ProcessingEquipment  @relation("EquipmentUsages", fields: [equipmentId], references: [id], onDelete: Restrict)
   currentFor     ProcessingEquipment? @relation("EquipmentCurrentUsage")
 
-  @@index([processingPlanId, stage, portionNo])
+  @@index([processingPlanId, stage, portionNo], map: "proc_equip_usage_plan_stage_portion_idx")
   @@index([equipmentId, endedAt])
   @@map("processing_equipment_usages")
 }

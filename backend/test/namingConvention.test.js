@@ -54,6 +54,33 @@ test("snake_case migration covers every mapped scalar column", async () => {
   }
 });
 
+test("migration identifiers fit the MySQL 64-character limit", async () => {
+  const migrationEntries = await readdir(migrationsPath, { withFileTypes: true });
+  const migrations = await Promise.all(
+    migrationEntries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => ({
+        name: entry.name,
+        sql: await readFile(
+          new URL(`${entry.name}/migration.sql`, migrationsPath),
+          "utf8",
+        ),
+      })),
+  );
+
+  for (const migration of migrations) {
+    const identifiers = [...migration.sql.matchAll(/`([^`]+)`/g)].map(
+      (match) => match[1],
+    );
+    for (const identifier of identifiers) {
+      assert.ok(
+        identifier.length <= 64,
+        `${migration.name}: MySQL identifier exceeds 64 characters: ${identifier}`,
+      );
+    }
+  }
+});
+
 test("processing cancellation uses the documented numeric value", async () => {
   const constants = await readFile(
     new URL("../src/constants/processing.js", import.meta.url),

@@ -62,7 +62,7 @@ CREATE TABLE `processing_equipment_usages` (
   `end_reason` VARCHAR(255) NULL,
   `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at` DATETIME(3) NOT NULL,
-  INDEX `processing_equipment_usages_processing_plan_id_stage_portion_no_idx`(`processing_plan_id`, `stage`, `portion_no`),
+  INDEX `proc_equip_usage_plan_stage_portion_idx`(`processing_plan_id`, `stage`, `portion_no`),
   INDEX `processing_equipment_usages_equipment_id_ended_at_idx`(`equipment_id`, `ended_at`),
   PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
