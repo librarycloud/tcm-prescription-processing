@@ -14,7 +14,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "storage:migrate-local": "node scripts/migrateUploadsToLocal.js"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.6.0",

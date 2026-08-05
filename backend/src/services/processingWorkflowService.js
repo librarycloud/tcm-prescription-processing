@@ -14,6 +14,11 @@ import {
 import { businessScope } from "./permissionService.js";
 import { recordOperation } from "./operationLogService.js";
 import { processingPlanQrContent, scanValue } from "../utils/processingCode.js";
+import {
+  readUploadFile,
+  removeUploadFile,
+  saveUploadFile,
+} from "./localUploadStorage.js";
 
 const PHOTO_METADATA = {
   id: true,
@@ -152,39 +157,52 @@ export async function completeDispensing(prisma, actor, id, file) {
   const mimeType = detectImageMimeType(buffer);
   if (!mimeType) throw new AppError("仅支持 JPG、PNG 或 WEBP 图片", 400);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const photo = await tx.processingPhoto.create({
-      data: {
-        processingPlanId: current.id,
-        kind: PROCESSING_PHOTO_KIND.DISPENSING_COMPLETED,
-        originalName: attachmentName(file.filename),
-        mimeType,
-        fileSize: buffer.length,
-        data: buffer,
-        createdBy: Number(actor.id),
-      },
-      select: PHOTO_METADATA,
-    });
-    const completedAt = current.dispensingCompletedAt || new Date();
-    await tx.processingPlan.update({
-      where: { id: current.id },
-      data: {
-        currentStage: PROCESSING_STAGE.DISPENSING_DONE,
-        dispensingCompletedAt: completedAt,
-        dispensingCompletedBy: current.dispensingCompletedBy || Number(actor.id),
-        updatedBy: Number(actor.id),
-      },
-    });
-    await recordOperation(tx, actor, {
-      module: "processing",
-      action: "dispensing_complete",
-      targetId: current.id,
-      storeId: current.storeId,
-      description: current.dispensingCompletedAt ? "补充调配完成照片" : "上传照片并完成调配",
-    });
-    return photo;
+  const storagePath = await saveUploadFile(buffer, {
+    category: "processing-photos",
+    mimeType,
   });
-  return result;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const photo = await tx.processingPhoto.create({
+        data: {
+          processingPlanId: current.id,
+          kind: PROCESSING_PHOTO_KIND.DISPENSING_COMPLETED,
+          originalName: attachmentName(file.filename),
+          mimeType,
+          fileSize: buffer.length,
+          storagePath,
+          data: null,
+          createdBy: Number(actor.id),
+        },
+        select: PHOTO_METADATA,
+      });
+      const completedAt = current.dispensingCompletedAt || new Date();
+      await tx.processingPlan.update({
+        where: { id: current.id },
+        data: {
+          currentStage: PROCESSING_STAGE.DISPENSING_DONE,
+          dispensingCompletedAt: completedAt,
+          dispensingCompletedBy: current.dispensingCompletedBy || Number(actor.id),
+          updatedBy: Number(actor.id),
+        },
+      });
+      await recordOperation(tx, actor, {
+        module: "processing",
+        action: "dispensing_complete",
+        targetId: current.id,
+        storeId: current.storeId,
+        description: current.dispensingCompletedAt ? "补充调配完成照片" : "上传照片并完成调配",
+      });
+      return photo;
+    });
+  } catch (error) {
+    try {
+      await removeUploadFile(storagePath);
+    } catch {
+      // Preserve the database error; an orphaned file can be removed separately.
+    }
+    throw error;
+  }
 }
 
 export async function getProcessingPhoto(prisma, actor, planId, photoId) {
@@ -195,10 +213,20 @@ export async function getProcessingPhoto(prisma, actor, planId, photoId) {
       processingPlanId: Number(planId),
       deletedAt: null,
     },
-    select: { ...PHOTO_METADATA, data: true },
+    select: { ...PHOTO_METADATA, storagePath: true, data: true },
   });
   if (!photo) throw new AppError("照片不存在", 404);
-  return photo;
+  const { storagePath, data, ...metadata } = photo;
+  if (!storagePath) {
+    if (!data) throw new AppError("照片文件不存在", 404);
+    return { ...metadata, data };
+  }
+  try {
+    return { ...metadata, data: await readUploadFile(storagePath) };
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new AppError("照片文件不存在", 404);
+    throw error;
+  }
 }
 
 async function findScannedEquipment(tx, plan, rawCode, expectedType) {

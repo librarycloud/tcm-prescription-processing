@@ -351,7 +351,8 @@ model PrescriptionAttachment {
   originalName   String   @map("original_name") @db.VarChar(255)
   mimeType       String   @map("mime_type") @db.VarChar(100)
   fileSize       Int      @map("file_size")
-  data           Bytes    @db.LongBlob
+  storagePath    String?  @map("storage_path") @db.VarChar(500)
+  data           Bytes?   @db.LongBlob
   createdBy      Int      @map("created_by")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -429,7 +430,8 @@ model ProcessingPhoto {
   originalName     String    @map("original_name") @db.VarChar(255)
   mimeType         String    @map("mime_type") @db.VarChar(100)
   fileSize         Int       @map("file_size")
-  data             Bytes     @db.LongBlob
+  storagePath      String?   @map("storage_path") @db.VarChar(500)
+  data             Bytes?    @db.LongBlob
   createdBy        Int       @map("created_by")
   createdAt        DateTime  @default(now()) @map("created_at")
   deletedAt        DateTime? @map("deleted_at")

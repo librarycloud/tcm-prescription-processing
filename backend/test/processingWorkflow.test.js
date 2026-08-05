@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   assertProcessingWorkflowComplete,
   completeDispensing,
   finishEquipmentUsage,
+  getProcessingPhoto,
 } from "../src/services/processingWorkflowService.js";
+import { config } from "../src/config.js";
 import {
   EQUIPMENT_STATUS,
   EQUIPMENT_TYPE,
@@ -204,7 +209,14 @@ test("scanning a packaging machine releases the decoction pot and records packag
   assert.equal(result.canCompleteWorkflow, true);
 });
 
-test("uploading a valid image completes dispensing on the server", async () => {
+test("uploading a valid image stores it locally and completes dispensing", async (t) => {
+  const previousUploadDir = config.uploadDir;
+  const uploadDir = await mkdtemp(path.join(tmpdir(), "tcm-processing-photo-"));
+  config.uploadDir = uploadDir;
+  t.after(async () => {
+    config.uploadDir = previousUploadDir;
+    await rm(uploadDir, { recursive: true, force: true });
+  });
   const state = {
     plan: {
       id: 21,
@@ -221,6 +233,7 @@ test("uploading a valid image completes dispensing on the server", async () => {
       store: { id: 3, name: "测试门店" },
     },
     updated: null,
+    photoData: null,
   };
   const prisma = {
     processingPlan: {
@@ -232,14 +245,22 @@ test("uploading a valid image completes dispensing on the server", async () => {
       },
     },
     processingPhoto: {
-      create: async ({ data }) => ({
+      create: async ({ data }) => {
+        state.photoData = data;
+        return {
+          id: 1,
+          kind: data.kind,
+          originalName: data.originalName,
+          mimeType: data.mimeType,
+          fileSize: data.fileSize,
+          createdAt: new Date(),
+          createdBy: data.createdBy,
+        };
+      },
+      findFirst: async () => ({
         id: 1,
-        kind: data.kind,
-        originalName: data.originalName,
-        mimeType: data.mimeType,
-        fileSize: data.fileSize,
+        ...state.photoData,
         createdAt: new Date(),
-        createdBy: data.createdBy,
       }),
     },
     operationLog: { create: async () => ({ id: 1 }) },
@@ -255,4 +276,72 @@ test("uploading a valid image completes dispensing on the server", async () => {
   assert.equal(state.updated.currentStage, PROCESSING_STAGE.DISPENSING_DONE);
   assert.equal(state.updated.dispensingCompletedBy, actor.id);
   assert.ok(state.updated.dispensingCompletedAt instanceof Date);
+  assert.match(state.photoData.storagePath, /^processing-photos\/\d{4}\/\d{2}\//);
+  assert.equal(state.photoData.data, null);
+  const stored = await readFile(
+    path.join(uploadDir, ...state.photoData.storagePath.split("/")),
+  );
+  assert.deepEqual(stored, Buffer.from([0xff, 0xd8, 0xff, 0x00]));
+  const downloaded = await getProcessingPhoto(prisma, actor, 21, 1);
+  assert.deepEqual(downloaded.data, stored);
+});
+
+test("a failed dispensing transaction removes the newly stored photo", async (t) => {
+  const previousUploadDir = config.uploadDir;
+  const uploadDir = await mkdtemp(path.join(tmpdir(), "tcm-processing-failed-"));
+  config.uploadDir = uploadDir;
+  t.after(async () => {
+    config.uploadDir = previousUploadDir;
+    await rm(uploadDir, { recursive: true, force: true });
+  });
+  const prisma = {
+    processingPlan: {
+      findFirst: async () => ({
+        id: 21,
+        storeId: 3,
+        status: 1,
+        workflowVersion: PROCESSING_WORKFLOW_VERSION,
+        currentStage: PROCESSING_STAGE.DISPENSING,
+        dispensingCompletedAt: null,
+        photos: [],
+      }),
+    },
+    $transaction: async () => {
+      throw new Error("database write failed");
+    },
+  };
+
+  await assert.rejects(
+    completeDispensing(prisma, actor, 21, {
+      filename: "调配.jpg",
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0x00]),
+    }),
+    /database write failed/,
+  );
+  const entries = await readdir(uploadDir, { recursive: true });
+  assert.equal(entries.some((entry) => entry.endsWith(".jpg")), false);
+});
+
+test("processing photos stored in the database remain readable during migration", async () => {
+  const legacyData = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
+  const prisma = {
+    processingPlan: { findFirst: async () => ({ id: 21 }) },
+    processingPhoto: {
+      findFirst: async () => ({
+        id: 1,
+        kind: "DISPENSING_COMPLETED",
+        originalName: "调配.jpg",
+        mimeType: "image/jpeg",
+        fileSize: legacyData.length,
+        createdAt: new Date(),
+        createdBy: actor.id,
+        storagePath: null,
+        data: legacyData,
+      }),
+    },
+  };
+
+  const photo = await getProcessingPhoto(prisma, actor, 21, 1);
+  assert.deepEqual(photo.data, legacyData);
+  assert.equal(photo.storagePath, undefined);
 });

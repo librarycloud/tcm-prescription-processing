@@ -11,6 +11,11 @@ import { nextPrescriptionNo } from "./prescriptionNoService.js";
 import { describeChanges, recordOperation } from "./operationLogService.js";
 import { prescriptionRepository } from "../repositories/prescriptionRepository.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
+import {
+  readUploadFile,
+  removeUploadFile,
+  saveUploadFile,
+} from "./localUploadStorage.js";
 
 export const PRESCRIPTION_ATTACHMENT_MAX_SIZE = 5 * 1024 * 1024;
 
@@ -214,32 +219,62 @@ export async function uploadPrescriptionAttachment(
   const mimeType = detectPrescriptionMimeType(buffer);
   if (!mimeType) throw new AppError("仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件", 400);
 
-  const attachment = await prisma.prescriptionAttachment.upsert({
+  const previous = await prisma.prescriptionAttachment.findUnique({
     where: { prescriptionId: current.id },
-    update: {
-      originalName: normalizeAttachmentName(file.filename),
-      mimeType,
-      fileSize: buffer.length,
-      data: buffer,
-      createdBy: Number(actor.id),
-    },
-    create: {
-      prescriptionId: current.id,
-      originalName: normalizeAttachmentName(file.filename),
-      mimeType,
-      fileSize: buffer.length,
-      data: buffer,
-      createdBy: Number(actor.id),
-    },
-    select: PRESCRIPTION_ATTACHMENT_METADATA,
+    select: { storagePath: true },
   });
-  await recordOperation(prisma, actor, {
-    module: "prescription",
-    action: "upload_attachment",
-    targetId: current.id,
-    storeId: current.storeId,
-    description: "上传处方原件",
+  const storagePath = await saveUploadFile(buffer, {
+    category: "prescriptions",
+    mimeType,
   });
+  let attachment;
+  try {
+    attachment = await prisma.$transaction(async (tx) => {
+      const saved = await tx.prescriptionAttachment.upsert({
+        where: { prescriptionId: current.id },
+        update: {
+          originalName: normalizeAttachmentName(file.filename),
+          mimeType,
+          fileSize: buffer.length,
+          storagePath,
+          data: null,
+          createdBy: Number(actor.id),
+        },
+        create: {
+          prescriptionId: current.id,
+          originalName: normalizeAttachmentName(file.filename),
+          mimeType,
+          fileSize: buffer.length,
+          storagePath,
+          data: null,
+          createdBy: Number(actor.id),
+        },
+        select: PRESCRIPTION_ATTACHMENT_METADATA,
+      });
+      await recordOperation(tx, actor, {
+        module: "prescription",
+        action: "upload_attachment",
+        targetId: current.id,
+        storeId: current.storeId,
+        description: "上传处方原件",
+      });
+      return saved;
+    });
+  } catch (error) {
+    try {
+      await removeUploadFile(storagePath);
+    } catch {
+      // Preserve the database error; an orphaned file can be removed separately.
+    }
+    throw error;
+  }
+  if (previous?.storagePath) {
+    try {
+      await removeUploadFile(previous.storagePath);
+    } catch {
+      // Keep the new attachment available even if removing its replaced file fails.
+    }
+  }
   return attachment;
 }
 
@@ -247,10 +282,20 @@ export async function getPrescriptionAttachment(prisma, actor, idValue) {
   const current = await getPrescription(prisma, actor, idValue);
   const attachment = await prisma.prescriptionAttachment.findUnique({
     where: { prescriptionId: current.id },
-    select: { ...PRESCRIPTION_ATTACHMENT_METADATA, data: true },
+    select: { ...PRESCRIPTION_ATTACHMENT_METADATA, storagePath: true, data: true },
   });
   if (!attachment) throw new AppError("该处方暂无原件", 404);
-  return attachment;
+  const { storagePath, data, ...metadata } = attachment;
+  if (!storagePath) {
+    if (!data) throw new AppError("处方原件文件不存在", 404);
+    return { ...metadata, data };
+  }
+  try {
+    return { ...metadata, data: await readUploadFile(storagePath) };
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new AppError("处方原件文件不存在", 404);
+    throw error;
+  }
 }
 
 export async function createPrescriptionRecord(prisma, actor, payload, options = {}) {

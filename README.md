@@ -101,6 +101,7 @@ JWT_SECRET="replace-with-a-long-random-secret"
 SETTINGS_ENCRYPTION_KEY="replace-with-a-32-byte-base64-key"
 PORT=3000
 HOST="0.0.0.0"
+UPLOAD_DIR="./uploads"
 NODE_ENV="development"
 ```
 
@@ -217,7 +218,15 @@ PORT=3000
 HOST="127.0.0.1"
 TRUST_PROXY="127.0.0.1,::1"
 IPDB_PATH=""
+UPLOAD_DIR="/srv/tcm-data/uploads"
 NODE_ENV="production"
+```
+
+上传目录需要长期保留并允许后端进程读写，建议放在项目目录之外：
+
+```bash
+sudo mkdir -p /srv/tcm-data/uploads
+sudo chown -R "$(id -un)":"$(id -gn)" /srv/tcm-data/uploads
 ```
 
 生成高强度随机值的示例：
@@ -232,6 +241,12 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 cd /srv/tcm/backend
 npm run prisma:generate
 npm run prisma:deploy
+```
+
+从数据库二进制字段切换到本地存储的首次发布，在迁移成功后执行一次兼容搬迁命令。该命令可重复执行，只处理尚未搬迁的附件和加工照片：
+
+```bash
+npm run storage:migrate-local
 ```
 
 首次部署需要演示账号或基础数据时，再执行一次：
@@ -408,6 +423,12 @@ mysqldump -u tcm_user -p --single-transaction --routines --triggers tcm > tcm-$(
 
 ```bash
 mariadb -u tcm_user -p tcm < tcm-YYYY-MM-DD.sql
+```
+
+处方附件和加工照片存放在 `UPLOAD_DIR`，数据库备份不再包含已搬迁的文件，还需要同步备份上传目录：
+
+```bash
+tar -czf tcm-uploads-$(date +%F).tar.gz -C /srv/tcm-data uploads
 ```
 
 ### 常见检查项

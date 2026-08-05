@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'node:path';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ export const config = {
   wxSecret: process.env.WX_SECRET || '',
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   ipDatabasePath: process.env.IPDB_PATH || '',
+  uploadDir: path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads'),
   settingsEncryptionKey: process.env.SETTINGS_ENCRYPTION_KEY || '',
   nodeEnv
 };
