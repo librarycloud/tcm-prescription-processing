@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>加工设备</h2>
-        <p>维护浸泡桶、煎药锅和打包机，打印设备标签。</p>
+        <p>维护浸泡桶、煎药机和包装机，打印固定设备码。</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="openForm()">新增设备</el-button>
     </div>
@@ -127,7 +127,7 @@
           </el-form-item>
         </div>
         <el-form-item label="设备名称" prop="name">
-          <el-input v-model.trim="form.name" maxlength="100" placeholder="例如 1号煎药锅" />
+          <el-input v-model.trim="form.name" maxlength="100" placeholder="例如 1号煎药机" />
         </el-form-item>
         <el-form-item label="设备状态">
           <el-segmented
@@ -180,8 +180,8 @@ const total = ref(0);
 const stores = ref([]);
 const typeOptions = ref([
   { value: 'SOAK_BUCKET', label: '浸泡桶' },
-  { value: 'DECOCTION_POT', label: '煎药锅' },
-  { value: 'PACKAGING_MACHINE', label: '打包机' }
+  { value: 'DECOCTION_POT', label: '煎药机' },
+  { value: 'PACKAGING_MACHINE', label: '包装机' }
 ]);
 const query = reactive({ page: 1, pageSize: 20, keyword: '', type: '', status: '', storeId: '' });
 const formVisible = ref(false);

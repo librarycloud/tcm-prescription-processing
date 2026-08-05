@@ -393,7 +393,7 @@ export async function finishEquipmentUsage(prisma, actor, id, usageId, payload =
       },
       data: { currentUsageId: packagingUsage.id, updatedBy: Number(actor.id) },
     });
-    if (occupied.count !== 1) throw new AppError("打包机正在被其他加工计划使用", 409);
+    if (occupied.count !== 1) throw new AppError("包装机正在被其他加工计划使用", 409);
     await tx.processingEquipmentUsage.update({
       where: { id: packagingUsage.id },
       data: { endedAt: now, endedBy: Number(actor.id), endReason: "扫码完成打包" },
@@ -449,8 +449,8 @@ export async function assertProcessingWorkflowComplete(prisma, plan) {
       },
     }),
   ]);
-  if (activeCount > 0) throw new AppError("还有浸泡桶或煎药锅未结束", 409);
+  if (activeCount > 0) throw new AppError("还有浸泡桶或煎药机未结束", 409);
   if (completedDecoctionCount < 1) throw new AppError("请先完成浸泡和煎煮记录", 409);
   if (completedPackagingCount !== completedDecoctionCount)
-    throw new AppError("每份煎煮完成后都需要扫描打包机", 409);
+    throw new AppError("每份煎煮完成后都需要扫描包装机", 409);
 }

@@ -245,6 +245,6 @@ export async function finishEquipmentUsageController(request, reply) {
       request.params.usageId,
       request.body || {},
     ),
-    "已完成煎煮并记录打包机",
+    "已完成煎煮并记录包装机",
   );
 }

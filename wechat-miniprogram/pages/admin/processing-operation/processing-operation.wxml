@@ -66,7 +66,7 @@
     <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">3</view>
-        <view><view class="step-title">煎煮</view><view class="muted">完成后直接扫描打包机，无需再次扫锅</view></view>
+        <view><view class="step-title">煎煮</view><view class="muted">完成后直接扫描包装机，无需再次扫描煎药机</view></view>
       </view>
       <view class="usage-row" wx:for="{{activeDecoctions}}" wx:key="id">
         <view>
@@ -74,7 +74,7 @@
           <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
         </view>
         <t-button size="small" theme="success" data-usage="{{item.id}}" bind:tap="finishWithPackaging">
-          扫打包机
+          扫包装机
         </t-button>
       </view>
       <view wx:if="{{!activeDecoctions.length}}" class="empty-step">暂无进行中的煎煮</view>
@@ -83,12 +83,12 @@
     <view wx:if="{{detail.status === 1 && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">4</view>
-        <view><view class="step-title">打包</view><view class="muted">每份药扫描打包机后即完成该份加工</view></view>
+        <view><view class="step-title">打包</view><view class="muted">每份药扫描包装机后即完成该份加工</view></view>
       </view>
       <view wx:if="{{detail.currentStage === 'PACKAGING_DONE'}}" class="step-result">
         全部份组已完成打包
       </view>
-      <view wx:else class="empty-step">等待煎煮完成后扫描打包机</view>
+      <view wx:else class="empty-step">等待煎煮完成后扫描包装机</view>
     </view>
 
     <view wx:if="{{usageHistory.length}}" class="app-card history-card">

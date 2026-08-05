@@ -18,8 +18,8 @@ export const EQUIPMENT_TYPE = Object.freeze({
 
 export const EQUIPMENT_TYPE_NAMES = Object.freeze({
   [EQUIPMENT_TYPE.SOAK_BUCKET]: "浸泡桶",
-  [EQUIPMENT_TYPE.DECOCTION_POT]: "煎药锅",
-  [EQUIPMENT_TYPE.PACKAGING_MACHINE]: "打包机",
+  [EQUIPMENT_TYPE.DECOCTION_POT]: "煎药机",
+  [EQUIPMENT_TYPE.PACKAGING_MACHINE]: "包装机",
 });
 
 export const EQUIPMENT_STATUS = Object.freeze({

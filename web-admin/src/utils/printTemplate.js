@@ -557,7 +557,7 @@ export const DEFAULT_EQUIPMENT_TEMPLATE = Object.freeze({
     },
     {
       id: 'custom_equipment_notice',
-      text: '扫码记录设备',
+      text: '固定设备码',
       x: 3,
       y: 41,
       width: 64,

@@ -433,8 +433,8 @@ const previewPlan = reactive({
 });
 const previewEquipment = reactive({
   equipmentNo: 'P01',
-  name: '1号煎药锅',
-  typeName: '煎药锅',
+  name: '1号煎药机',
+  typeName: '煎药机',
   store: { name: '总部' }
 });
 const userStore = useUserStore();

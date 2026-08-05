@@ -64,7 +64,7 @@ test("decoction workflows require released equipment and a completed decoction",
   };
   await assert.rejects(
     () => assertProcessingWorkflowComplete(occupiedPrisma, plan),
-    { statusCode: 409, message: "还有浸泡桶或煎药锅未结束" },
+    { statusCode: 409, message: "还有浸泡桶或煎药机未结束" },
   );
 
   const completePrisma = {
@@ -94,7 +94,7 @@ test("decoction workflows require a packaging-machine scan for every completed p
   };
   await assert.rejects(
     () => assertProcessingWorkflowComplete(prisma, plan),
-    { statusCode: 409, message: "每份煎煮完成后都需要扫描打包机" },
+    { statusCode: 409, message: "每份煎煮完成后都需要扫描包装机" },
   );
 });
 
@@ -116,7 +116,7 @@ test("scanning a packaging machine releases the decoction pot and records packag
       id: 31,
       storeId: 3,
       equipmentNo: "P01",
-      name: "1号煎药锅",
+      name: "1号煎药机",
       type: EQUIPMENT_TYPE.DECOCTION_POT,
       status: EQUIPMENT_STATUS.ENABLED,
       scanToken: "pot-token",
@@ -127,7 +127,7 @@ test("scanning a packaging machine releases the decoction pot and records packag
       id: 32,
       storeId: 3,
       equipmentNo: "B01",
-      name: "1号打包机",
+      name: "1号包装机",
       type: EQUIPMENT_TYPE.PACKAGING_MACHINE,
       status: EQUIPMENT_STATUS.ENABLED,
       scanToken: "packer-token",

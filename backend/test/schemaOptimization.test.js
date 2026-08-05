@@ -140,11 +140,11 @@ test("existing stores receive the 75mm thermal processing template", async () =>
   assert.equal(thermal[0].isDefault, 0);
 });
 
-test("equipment labels use an action-oriented scan notice", () => {
+test("equipment labels identify the QR code as fixed to the equipment", () => {
   const notice = defaultEquipmentFields().find(
     (field) => field.id === "custom_equipment_notice",
   );
-  assert.equal(notice?.text, "扫码记录设备");
+  assert.equal(notice?.text, "固定设备码");
 });
 
 test("print template writes populate and clear default scope transactionally", async () => {
