@@ -27,10 +27,7 @@ import { packageRepository } from "../repositories/packageRepository.js";
 import { prescriptionRepository } from "../repositories/prescriptionRepository.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
 import { publishProcessingCompletedRobotEvent } from "./robotBusinessEventService.js";
-import {
-  PROCESSING_STAGE,
-  PROCESSING_WORKFLOW_VERSION,
-} from "../constants/processingWorkflow.js";
+import { PROCESSING_STAGE } from "../constants/processingWorkflow.js";
 import { generateProcessingPlanIdentity } from "../utils/processingCode.js";
 import { assertProcessingWorkflowComplete } from "./processingWorkflowService.js";
 
@@ -426,7 +423,6 @@ export async function createProcessingPlanRecord(prisma, actor, payload, options
     : await generateProcessingPlanIdentity(prisma);
   data.planCode = identity.planCode;
   data.scanToken = identity.scanToken;
-  data.workflowVersion = PROCESSING_WORKFLOW_VERSION;
   data.currentStage = null;
   data.dispensingCompletedAt = null;
   data.dispensingCompletedBy = null;
@@ -758,15 +754,11 @@ export async function updateProcessingPlan(prisma, actor, id, payload) {
     data.status = requestedStatus;
     if (data.status === PLAN_STATUS.PROCESSING && !current.startDate) {
       data.startDate = new Date();
-      if (Number(current.workflowVersion || 1) >= PROCESSING_WORKFLOW_VERSION) {
-        data.currentStage = PROCESSING_STAGE.DISPENSING;
-      }
+      data.currentStage = PROCESSING_STAGE.DISPENSING;
     }
     if (data.status === PLAN_STATUS.FINISHED) {
       await assertProcessingWorkflowComplete(prisma, current);
-      if (Number(current.workflowVersion || 1) >= PROCESSING_WORKFLOW_VERSION) {
-        data.currentStage = PROCESSING_STAGE.COMPLETED;
-      }
+      data.currentStage = PROCESSING_STAGE.COMPLETED;
       return finishProcessingPlan(
         prisma,
         actor,

@@ -85,7 +85,7 @@
         <view class="step-index">4</view>
         <view><view class="step-title">打包</view><view class="muted">每份药扫描包装机后即完成该份加工</view></view>
       </view>
-      <view wx:if="{{detail.currentStage === 'PACKAGING_DONE'}}" class="step-result">
+      <view wx:if="{{detail.currentStage === 6}}" class="step-result">
         全部份组已完成打包
       </view>
       <view wx:else class="empty-step">等待煎煮完成后扫描包装机</view>

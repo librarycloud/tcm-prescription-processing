@@ -9,7 +9,6 @@ import {
   PROCESSING_PHOTO_MAX_COUNT,
   PROCESSING_PHOTO_MAX_SIZE,
   PROCESSING_STAGE,
-  PROCESSING_WORKFLOW_VERSION,
 } from "../constants/processingWorkflow.js";
 import { businessScope } from "./permissionService.js";
 import { recordOperation } from "./operationLogService.js";
@@ -84,18 +83,15 @@ function decoratePlan(plan) {
   const completedPackagings = (plan.equipmentUsages || []).filter(
     (item) => item.stage === PROCESSING_STAGE.PACKAGING && item.endedAt,
   );
-  const workflowEnabled = Number(plan.workflowVersion || 1) >= PROCESSING_WORKFLOW_VERSION;
-  const canCompleteWorkflow = workflowEnabled
-    ? Boolean(plan.dispensingCompletedAt) &&
-      (!isDecoction(plan) ||
-        (completedDecoctions.length > 0 &&
-          completedPackagings.length === completedDecoctions.length &&
-          activeUsages.length === 0))
-    : true;
+  const canCompleteWorkflow =
+    Boolean(plan.dispensingCompletedAt) &&
+    (!isDecoction(plan) ||
+      (completedDecoctions.length > 0 &&
+        completedPackagings.length === completedDecoctions.length &&
+        activeUsages.length === 0));
   return {
     ...plan,
     qrContent: processingPlanQrContent(plan.scanToken),
-    workflowEnabled,
     isDecoction: isDecoction(plan),
     canCompleteWorkflow,
     activeUsages,
@@ -144,8 +140,6 @@ export async function completeDispensing(prisma, actor, id, file) {
   const current = await getWorkflowPlan(prisma, actor, id);
   if (current.status !== PLAN_STATUS.PROCESSING)
     throw new AppError("请先开始加工", 409);
-  if (Number(current.workflowVersion) < PROCESSING_WORKFLOW_VERSION)
-    throw new AppError("该计划使用旧版加工流程，无需上传调配照片", 409);
   if (![PROCESSING_STAGE.DISPENSING, PROCESSING_STAGE.DISPENSING_DONE].includes(current.currentStage))
     throw new AppError("当前工序不能上传调配照片", 409);
   if (current.photos.length >= PROCESSING_PHOTO_MAX_COUNT)
@@ -257,9 +251,7 @@ export async function startEquipmentUsage(prisma, actor, id, payload = {}) {
   if (current.status !== PLAN_STATUS.PROCESSING)
     throw new AppError("当前计划不在加工中", 409);
   if (!isDecoction(current)) throw new AppError("只有代煎计划需要扫码使用设备", 409);
-  if (Number(current.workflowVersion) < PROCESSING_WORKFLOW_VERSION)
-    throw new AppError("该计划使用旧版加工流程", 409);
-  const stage = String(payload.stage || "");
+  const stage = Number(payload.stage);
   if (![PROCESSING_STAGE.SOAKING, PROCESSING_STAGE.DECOCTING].includes(stage))
     throw new AppError("工序不正确", 400);
   const portionNo = Number(payload.portionNo);
@@ -426,7 +418,6 @@ export async function finishEquipmentUsage(prisma, actor, id, usageId, payload =
 }
 
 export async function assertProcessingWorkflowComplete(prisma, plan) {
-  if (Number(plan.workflowVersion || 1) < PROCESSING_WORKFLOW_VERSION) return;
   if (!plan.dispensingCompletedAt)
     throw new AppError("请先上传调配完成照片", 409);
   if (!isDecoction(plan)) return;

@@ -10,19 +10,19 @@ import { getToken } from '../../../utils/auth';
 import { formatDate } from '../../../utils/format';
 
 const STAGE_NAMES = {
-  DISPENSING: '调配中',
-  DISPENSING_DONE: '调配完成',
-  SOAKING: '浸泡中',
-  DECOCTING: '煎煮中',
-  PACKAGING: '打包中',
-  PACKAGING_DONE: '打包完成',
-  COMPLETED: '加工完成'
+  1: '调配中',
+  2: '调配完成',
+  3: '浸泡中',
+  4: '煎煮中',
+  5: '打包中',
+  6: '打包完成',
+  7: '加工完成'
 };
 
 const USAGE_STAGE_NAMES = {
-  SOAKING: '浸泡',
-  DECOCTING: '煎煮',
-  PACKAGING: '打包'
+  3: '浸泡',
+  4: '煎煮',
+  5: '打包'
 };
 
 function durationText(start, end) {
@@ -82,14 +82,14 @@ Page({
       const detail = await getProcessingWorkflow(this.data.id);
       const usages = (detail.equipmentUsages || []).map((item) => ({
         ...item,
-        stageName: USAGE_STAGE_NAMES[item.stage] || item.stage,
+        stageName: USAGE_STAGE_NAMES[Number(item.stage)] || '-',
         startedAtText: formatDate(item.startedAt),
         endedAtText: item.endedAt ? formatDate(item.endedAt) : '进行中',
         durationText: durationText(item.startedAt, item.endedAt)
       }));
-      const activeSoakings = usages.filter((item) => item.stage === 'SOAKING' && !item.endedAt);
+      const activeSoakings = usages.filter((item) => Number(item.stage) === 3 && !item.endedAt);
       const activeDecoctions = usages.filter(
-        (item) => item.stage === 'DECOCTING' && !item.endedAt
+        (item) => Number(item.stage) === 4 && !item.endedAt
       );
       const inProgress = Number(detail.status) === 1;
       const viewDetail = {
@@ -104,10 +104,9 @@ Page({
         activeSoakings,
         activeDecoctions,
         usageHistory: usages,
-        canUploadPhoto:
-          inProgress && ['DISPENSING', 'DISPENSING_DONE'].includes(detail.currentStage),
+        canUploadPhoto: inProgress && [1, 2].includes(Number(detail.currentStage)),
         canStartSoaking:
-          inProgress && detail.isDecoction && ['DISPENSING_DONE', 'SOAKING'].includes(detail.currentStage),
+          inProgress && detail.isDecoction && [2, 3].includes(Number(detail.currentStage)),
         canFinish: inProgress && detail.canCompleteWorkflow
       });
     } finally {
@@ -146,11 +145,11 @@ Page({
     const code = await scanEquipment().catch(() => '');
     if (!code) return;
     const usedPortions = (this.data.detail.equipmentUsages || [])
-      .filter((item) => item.stage === 'SOAKING')
+      .filter((item) => Number(item.stage) === 3)
       .map((item) => Number(item.portionNo));
     const portionNo = usedPortions.length ? Math.max(...usedPortions) + 1 : 1;
     await startProcessingEquipmentUsage(this.data.id, {
-      stage: 'SOAKING',
+      stage: 3,
       portionNo,
       equipmentCode: code
     });
@@ -163,7 +162,7 @@ Page({
     if (!code) return;
     const portionNo = Number(e.currentTarget.dataset.portion);
     await startProcessingEquipmentUsage(this.data.id, {
-      stage: 'DECOCTING',
+      stage: 4,
       portionNo,
       equipmentCode: code
     });

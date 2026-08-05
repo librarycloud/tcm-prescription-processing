@@ -14,7 +14,6 @@ import {
   EQUIPMENT_STATUS,
   EQUIPMENT_TYPE,
   PROCESSING_STAGE,
-  PROCESSING_WORKFLOW_VERSION,
 } from "../src/constants/processingWorkflow.js";
 import {
   processingEquipmentQrContent,
@@ -23,6 +22,18 @@ import {
 } from "../src/utils/processingCode.js";
 
 const actor = { id: 12, role: 2, storeId: 3, phone: "13800000000" };
+
+test("processing stage values are numeric and stable", () => {
+  assert.deepEqual(PROCESSING_STAGE, {
+    DISPENSING: 1,
+    DISPENSING_DONE: 2,
+    SOAKING: 3,
+    DECOCTING: 4,
+    PACKAGING: 5,
+    PACKAGING_DONE: 6,
+    COMPLETED: 7,
+  });
+});
 
 test("workflow QR contents identify plans and equipment without exposing database ids", () => {
   assert.equal(processingPlanQrContent("plan-token"), "TCM:PLAN:1:plan-token");
@@ -34,14 +45,13 @@ test("workflow QR contents identify plans and equipment without exposing databas
   assert.equal(scanValue("JG260805-ABC123", "PLAN"), "JG260805-ABC123");
 });
 
-test("new workflows require a dispensing photo before completion", async () => {
+test("processing workflows require a dispensing photo before completion", async () => {
   await assert.rejects(
     () =>
       assertProcessingWorkflowComplete(
         {},
         {
           id: 21,
-          workflowVersion: PROCESSING_WORKFLOW_VERSION,
           dispensingCompletedAt: null,
           processType: { code: "OTHER", name: "打粉" },
         },
@@ -53,7 +63,6 @@ test("new workflows require a dispensing photo before completion", async () => {
 test("decoction workflows require released equipment and a completed decoction", async () => {
   const plan = {
     id: 21,
-    workflowVersion: PROCESSING_WORKFLOW_VERSION,
     dispensingCompletedAt: new Date(),
     processType: { code: "DECOCTION", name: "代煎" },
   };
@@ -78,7 +87,6 @@ test("decoction workflows require released equipment and a completed decoction",
 test("decoction workflows require a packaging-machine scan for every completed portion", async () => {
   const plan = {
     id: 21,
-    workflowVersion: PROCESSING_WORKFLOW_VERSION,
     dispensingCompletedAt: new Date(),
     processType: { code: "DECOCTION", name: "代煎" },
   };
@@ -104,7 +112,6 @@ test("scanning a packaging machine releases the decoction pot and records packag
       id: 21,
       storeId: 3,
       status: 1,
-      workflowVersion: PROCESSING_WORKFLOW_VERSION,
       currentStage: PROCESSING_STAGE.DECOCTING,
       dispensingCompletedAt: new Date(),
       photos: [{ id: 1 }],
@@ -222,7 +229,6 @@ test("uploading a valid image stores it locally and completes dispensing", async
       id: 21,
       storeId: 3,
       status: 1,
-      workflowVersion: PROCESSING_WORKFLOW_VERSION,
       currentStage: PROCESSING_STAGE.DISPENSING,
       dispensingCompletedAt: null,
       dispensingCompletedBy: null,
@@ -300,7 +306,6 @@ test("a failed dispensing transaction removes the newly stored photo", async (t)
         id: 21,
         storeId: 3,
         status: 1,
-        workflowVersion: PROCESSING_WORKFLOW_VERSION,
         currentStage: PROCESSING_STAGE.DISPENSING,
         dispensingCompletedAt: null,
         photos: [],

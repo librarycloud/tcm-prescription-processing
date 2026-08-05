@@ -209,9 +209,8 @@ Page({
       list: (data.list || []).map((item) => {
         const stage = planStage(item, this.data.activeView);
         const canStart = Number(item.status) === 0 && Number(item.scheduleType) === 1;
-        const workflowEnabled = Number(item.workflowVersion) >= 2;
-        const canFinish = Number(item.status) === 1 && !workflowEnabled;
-        const canOperate = Number(item.status) === 1 && workflowEnabled;
+        const canFinish = false;
+        const canOperate = Number(item.status) === 1;
         const canGeneratePackage = Number(item.status) === 2;
         const canReceiveNotice = Number(item.status) === 0 && Number(item.scheduleType) === 2;
         const canDelay = Number(item.status) === 0;
@@ -250,7 +249,6 @@ Page({
           canStart,
           canFinish,
           canOperate,
-          workflowEnabled,
           canGeneratePackage,
           canReceiveNotice,
           canDelay,
@@ -439,13 +437,9 @@ Page({
     if (!confirmed) return;
     await transitionProcessingPlan(plan.id, 1);
     wx.showToast({ title: '已开始加工', icon: 'success' });
-    if (Number(plan.workflowVersion) >= 2) {
-      wx.navigateTo({
-        url: `/pages/admin/processing-operation/processing-operation?id=${plan.id}`
-      });
-    } else {
-      await this.reloadAll();
-    }
+    wx.navigateTo({
+      url: `/pages/admin/processing-operation/processing-operation?id=${plan.id}`
+    });
   },
 
   async finishPlan(e) {

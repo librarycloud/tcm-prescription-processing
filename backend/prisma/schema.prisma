@@ -400,8 +400,7 @@ model ProcessingPlan {
   storeId               Int       @map("store_id")
   planCode              String?   @unique @map("plan_code") @db.VarChar(24)
   scanToken             String?   @unique @map("scan_token") @db.VarChar(64)
-  workflowVersion       Int       @default(1) @map("workflow_version") @db.TinyInt
-  currentStage          String?   @map("current_stage") @db.VarChar(32)
+  currentStage          Int?      @map("current_stage") @db.TinyInt
   dispensingCompletedAt DateTime? @map("dispensing_completed_at")
   dispensingCompletedBy Int?      @map("dispensing_completed_by")
 
@@ -474,7 +473,7 @@ model ProcessingEquipmentUsage {
   id               Int       @id @default(autoincrement())
   processingPlanId Int       @map("processing_plan_id")
   equipmentId      Int       @map("equipment_id")
-  stage            String    @db.VarChar(32)
+  stage            Int       @db.TinyInt
   portionNo        Int       @map("portion_no")
   startedAt        DateTime  @default(now()) @map("started_at")
   endedAt          DateTime? @map("ended_at")

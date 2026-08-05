@@ -363,7 +363,7 @@
           </el-descriptions-item>
         </el-descriptions>
 
-        <section v-if="detailPlan?.workflowEnabled" class="workflow-detail-section">
+        <section v-if="detailPlan" class="workflow-detail-section">
           <div class="workflow-detail-heading">
             <h3>调配核对照片</h3>
             <span>{{ detailPlan.photos?.length || 0 }} 张</span>
@@ -383,7 +383,7 @@
         </section>
 
         <section
-          v-if="detailPlan?.workflowEnabled && detailPlan.isDecoction"
+          v-if="detailPlan?.isDecoction"
           class="workflow-detail-section"
         >
           <div class="workflow-detail-heading">
@@ -1101,21 +1101,21 @@ const statusMap = Object.fromEntries(statuses.map((item) => [item.value, item.la
 const statusType = PROCESSING_STATUS_TAG;
 
 const workflowStageNames = {
-  DISPENSING: '调配中',
-  DISPENSING_DONE: '调配完成',
-  SOAKING: '浸泡中',
-  DECOCTING: '煎煮中',
-  PACKAGING: '打包中',
-  PACKAGING_DONE: '打包完成',
-  COMPLETED: '加工完成'
+  1: '调配中',
+  2: '调配完成',
+  3: '浸泡中',
+  4: '煎煮中',
+  5: '打包中',
+  6: '打包完成',
+  7: '加工完成'
 };
-const usageStageNames = { SOAKING: '浸泡', DECOCTING: '煎煮', PACKAGING: '打包' };
+const usageStageNames = { 3: '浸泡', 4: '煎煮', 5: '打包' };
 
 function workflowStageText(stage) {
-  return workflowStageNames[stage] || '-';
+  return workflowStageNames[Number(stage)] || '-';
 }
 function usageStageText(stage) {
-  return usageStageNames[stage] || stage || '-';
+  return usageStageNames[Number(stage)] || '-';
 }
 function workflowDuration(start, end) {
   if (!start) return '-';
@@ -1125,6 +1125,98 @@ function workflowDuration(start, end) {
   );
   if (minutes < 60) return `${minutes} 分钟`;
   return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+}
+
+function workflowProgress(row) {
+  const decoction = isDecoctionPlan(row);
+  const steps = decoction ? ['调配', '浸泡', '煎煮', '打包', '完成'] : ['调配', '加工', '完成'];
+  const indexes = decoction
+    ? {
+        1: 0,
+        2: 1,
+        3: 1,
+        4: 2,
+        5: 3,
+        6: 3,
+        7: 4
+      }
+    : { 1: 0, 2: 1, 7: 2 };
+  const stage = Number(row.currentStage);
+  let activeIndex = indexes[stage];
+  let currentLabel = workflowStageText(stage);
+  if (activeIndex === undefined) {
+    if (Number(row.status) === PROCESSING_STATUS.WAITING) {
+      activeIndex = -1;
+      currentLabel = '待开始';
+    } else if (Number(row.status) === PROCESSING_STATUS.PROCESSING) {
+      activeIndex = 0;
+      currentLabel = '调配中';
+    } else if (
+      [
+        PROCESSING_STATUS.FINISHED,
+        PROCESSING_STATUS.READY_PICKUP,
+        PROCESSING_STATUS.PICKED
+      ].includes(Number(row.status))
+    ) {
+      activeIndex = steps.length - 1;
+      currentLabel = '加工完成';
+    } else {
+      activeIndex = -1;
+      currentLabel = '未开始';
+    }
+  }
+  return { steps, activeIndex, currentLabel };
+}
+
+function workflowTooltip(progress) {
+  return h(
+    'div',
+    { style: { minWidth: '210px' } },
+    [
+      h(
+        'div',
+        { style: { marginBottom: '8px', fontWeight: '600' } },
+        `当前工序：${progress.currentLabel}`
+      ),
+      h(
+        'div',
+        { style: { display: 'flex', gap: '4px', width: '100%' } },
+        progress.steps.map((label, index) =>
+          h('span', {
+            key: label,
+            title: label,
+            style: {
+              flex: '1',
+              height: '5px',
+              borderRadius: '999px',
+              backgroundColor:
+                index < progress.activeIndex ||
+                (index === progress.activeIndex &&
+                  progress.activeIndex === progress.steps.length - 1)
+                  ? 'var(--el-color-success)'
+                  : index === progress.activeIndex
+                    ? 'var(--el-color-primary)'
+                    : 'var(--el-border-color-lighter)'
+            }
+          })
+        )
+      ),
+      h(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '4px',
+            marginTop: '4px',
+            color: 'var(--el-text-color-secondary)',
+            fontSize: '11px'
+          }
+        },
+        progress.steps.map((label) => h('span', { key: label }, label))
+      )
+    ]
+  );
 }
 
 function planStage(row, view) {
@@ -1335,7 +1427,7 @@ const PlanTable = defineComponent({
                   {
                     default: ({ row }) => {
                       const stage = planStage(row, props.view);
-                      return h(
+                      const statusTag = h(
                         ElTag,
                         {
                           type: stage.type,
@@ -1348,6 +1440,21 @@ const PlanTable = defineComponent({
                           )
                         },
                         () => stage.label
+                      );
+                      const progress = workflowProgress(row);
+                      if (!progress) return statusTag;
+                      return h(
+                        ElTooltip,
+                        {
+                          placement: 'top',
+                          effect: 'light',
+                          showAfter: 120,
+                          popperClass: 'workflow-progress-tooltip'
+                        },
+                        {
+                          default: () => statusTag,
+                          content: () => workflowTooltip(progress)
+                        }
                       );
                     }
                   }

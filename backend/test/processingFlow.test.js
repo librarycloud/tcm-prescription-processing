@@ -15,6 +15,7 @@ import {
   transitionProcessingPlan,
   updateProcessingPlan,
 } from "../src/services/processingPlanService.js";
+import { PROCESSING_STAGE } from "../src/constants/processingWorkflow.js";
 
 const storeAdmin = { id: 12, role: 2, storeId: 3, phone: "13800000000" };
 
@@ -92,6 +93,7 @@ function processingFixture() {
       expressAddress: "苏州市测试路 1 号",
       storeId: 3,
       processType: { id: 5, code: "DECOCTION", name: "代煎" },
+      dispensingCompletedAt: new Date(),
       prescription: {
         id: 8,
         customerName: "张三",
@@ -114,6 +116,13 @@ function processingFixture() {
       update: async ({ data }) => {
         Object.assign(state.plan, data);
         return { ...state.plan, package: state.package };
+      },
+    },
+    processingEquipmentUsage: {
+      count: async ({ where }) => {
+        if (where.endedAt === null) return 0;
+        if ([PROCESSING_STAGE.DECOCTING, PROCESSING_STAGE.PACKAGING].includes(where.stage)) return 1;
+        return 0;
       },
     },
     prescription: {
