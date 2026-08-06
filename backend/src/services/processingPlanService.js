@@ -781,6 +781,9 @@ export async function updateProcessingPlan(prisma, actor, id, payload) {
     data,
     include: include(),
   });
+  if (requestedStatus === PLAN_STATUS.CANCELLED) {
+    await syncPrescriptionStatus(prisma, updated.prescriptionId, actor.id);
+  }
   const action =
     requestedStatus !== null && requestedStatus !== current.status
       ? String(requestedStatus)

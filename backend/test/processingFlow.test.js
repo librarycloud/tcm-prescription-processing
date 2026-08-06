@@ -19,6 +19,7 @@ import {
   EQUIPMENT_USAGE_STATUS,
   PROCESSING_STAGE,
 } from "../src/constants/processingWorkflow.js";
+import { syncPrescriptionStatus } from "../src/services/prescriptionService.js";
 
 const storeAdmin = { id: 12, role: 2, storeId: 3, phone: "13800000000" };
 
@@ -74,6 +75,40 @@ test("deleting the final unfinished plan completes a prescription with only comp
   assert.ok(state.plans[1].deletedAt instanceof Date);
   assert.equal(state.prescription.status, 1);
   assert.equal(state.prescription.updatedBy, storeAdmin.id);
+});
+
+test("cancelled plans do not block prescription completion", async () => {
+  const prescription = { id: 8, status: 0, updatedBy: null };
+  const plans = [{ status: 2 }, { status: 5 }];
+  const prisma = {
+    prescription: {
+      findUnique: async () => ({ ...prescription, plans }),
+      update: async ({ data }) => Object.assign(prescription, data),
+    },
+  };
+
+  await syncPrescriptionStatus(prisma, prescription.id, storeAdmin.id);
+
+  assert.equal(prescription.status, 1);
+  assert.equal(prescription.updatedBy, storeAdmin.id);
+});
+
+test("a prescription with only cancelled plans is not completed", async () => {
+  const prescription = { id: 8, status: 1, updatedBy: null };
+  const prisma = {
+    prescription: {
+      findUnique: async () => ({
+        ...prescription,
+        plans: [{ status: 5 }, { status: 5 }],
+      }),
+      update: async ({ data }) => Object.assign(prescription, data),
+    },
+  };
+
+  await syncPrescriptionStatus(prisma, prescription.id, storeAdmin.id);
+
+  assert.equal(prescription.status, 0);
+  assert.equal(prescription.updatedBy, storeAdmin.id);
 });
 
 function processingFixture() {
@@ -280,6 +315,13 @@ test("starting a processing plan records its actual start time", async () => {
 
 test("started plans can only be cancelled before dispensing is completed", async () => {
   const { prisma, state } = processingFixture();
+  const prescription = { id: 8, status: 0, updatedBy: null };
+  prisma.prescription.findUnique = async () => ({
+    ...prescription,
+    plans: [{ status: state.plan.status }, { status: 2 }],
+  });
+  prisma.prescription.update = async ({ data }) =>
+    Object.assign(prescription, data);
   Object.assign(state.plan, {
     currentStage: PROCESSING_STAGE.DISPENSING,
     dispensingCompletedAt: null,
@@ -290,6 +332,8 @@ test("started plans can only be cancelled before dispensing is completed", async
   });
 
   assert.equal(cancelled.status, 5);
+  assert.equal(prescription.status, 1);
+  assert.equal(prescription.updatedBy, storeAdmin.id);
 
   Object.assign(state.plan, {
     status: 1,

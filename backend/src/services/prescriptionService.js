@@ -441,9 +441,12 @@ export async function syncPrescriptionStatus(
   });
   if (!prescription || prescription.status === PRESCRIPTION_STATUS.CANCELLED)
     return;
+  const activePlans = prescription.plans.filter(
+    (plan) => plan.status !== PLAN_STATUS.CANCELLED,
+  );
   const completed =
-    prescription.plans.length > 0 &&
-    prescription.plans.every((plan) =>
+    activePlans.length > 0 &&
+    activePlans.every((plan) =>
       [PLAN_STATUS.FINISHED, PLAN_STATUS.PICKED].includes(plan.status),
     );
   await prescriptionRepository.update(prisma, {
