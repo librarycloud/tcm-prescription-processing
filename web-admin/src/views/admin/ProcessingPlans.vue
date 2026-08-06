@@ -1229,6 +1229,7 @@ import {
 import { getProcessingEquipment } from '@/api/processingEquipment';
 import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
+import { compressImageForUpload } from '@/utils/imageUpload';
 import {
   NOTIFY_STATUS,
   PAYMENT_STATUS,
@@ -1267,50 +1268,22 @@ const workflowExceptionTypeNames = { 1: '误扫撤销', 2: '设备故障换机',
 const equipmentTypeByStage = { 3: 'SOAK_BUCKET', 4: 'DECOCTION_POT', 5: 'PACKAGING_MACHINE' };
 const DETAIL_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
 
-function canvasToBlob(canvas, quality) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('图片压缩失败'))),
-      'image/jpeg',
-      quality
-    );
-  });
-}
-
 async function prepareDetailPhoto(file) {
-  if (file.size <= DETAIL_PHOTO_MAX_SIZE) return file;
-  let bitmap;
   try {
-    bitmap = await createImageBitmap(file);
-    const strategies = [
-      { quality: 0.9, width: 3000 },
-      { quality: 0.82, width: 2400 },
-      { quality: 0.75, width: 1920 }
-    ];
-    for (const strategy of strategies) {
-      const scale = Math.min(1, strategy.width / bitmap.width);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      const context = canvas.getContext('2d');
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      const blob = await canvasToBlob(canvas, strategy.quality);
-      if (blob.size <= DETAIL_PHOTO_MAX_SIZE) {
-        const name = `${file.name.replace(/\.[^.]+$/, '') || '调配照片'}.jpg`;
-        return new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() });
-      }
-    }
+    return await compressImageForUpload(file, {
+      maxBytes: DETAIL_PHOTO_MAX_SIZE,
+      compressionThresholdBytes: DETAIL_PHOTO_MAX_SIZE,
+      fallbackBaseName: '调配照片',
+      strategies: [
+        { quality: 0.9, maxEdge: 3000 },
+        { quality: 0.82, maxEdge: 2400 },
+        { quality: 0.75, maxEdge: 1920 }
+      ]
+    });
   } catch (error) {
     error.photoPreparationFailed = true;
     throw error;
-  } finally {
-    bitmap?.close();
   }
-  const error = new Error('图片压缩后仍超过 5MB');
-  error.photoPreparationFailed = true;
-  throw error;
 }
 
 function workflowStageText(stage) {

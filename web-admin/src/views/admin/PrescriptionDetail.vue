@@ -492,6 +492,7 @@ import {
   SCHEDULE_TYPES
 } from '@/constants/processing';
 import { formatDate } from '@/utils/date';
+import { compressImageForUpload } from '@/utils/imageUpload';
 import { formatPickupCode, PICKUP_METHOD_OPTIONS, pickupMethodText } from '@/utils/status';
 
 const props = defineProps({
@@ -534,6 +535,8 @@ const planMetadataOnlyEdit = computed(() =>
   [PROCESSING_STATUS.FINISHED, PROCESSING_STATUS.READY_PICKUP].includes(planForm.status)
 );
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+const MAX_ATTACHMENT_SOURCE_IMAGE_SIZE = 30 * 1024 * 1024;
+const ATTACHMENT_COMPRESSION_THRESHOLD = 1024 * 1024;
 const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -543,6 +546,13 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'application/pdf'
 ]);
 const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf']);
+const COMPRESSIBLE_ATTACHMENT_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/bmp'
+]);
+const COMPRESSIBLE_ATTACHMENT_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'bmp']);
 
 function todayText() {
   const date = new Date();
@@ -588,32 +598,63 @@ function formatFileSize(value) {
 
 function hasAllowedAttachmentType(file) {
   const mimeType = String(file?.type || '').toLowerCase();
-  const extension = String(file?.name || '')
+  const extension = attachmentExtension(file);
+  return ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType) || ALLOWED_ATTACHMENT_EXTENSIONS.has(extension);
+}
+
+function attachmentExtension(file) {
+  return String(file?.name || '')
     .split('.')
     .pop()
     .toLowerCase();
-  return ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType) || ALLOWED_ATTACHMENT_EXTENSIONS.has(extension);
+}
+
+function isCompressibleAttachment(file) {
+  const mimeType = String(file?.type || '').toLowerCase();
+  return (
+    COMPRESSIBLE_ATTACHMENT_MIME_TYPES.has(mimeType) ||
+    COMPRESSIBLE_ATTACHMENT_EXTENSIONS.has(attachmentExtension(file))
+  );
 }
 
 async function handleAttachmentChange(uploadFile) {
   const file = uploadFile?.raw;
   if (!file) return;
-  if (Number(file.size) > MAX_ATTACHMENT_SIZE) {
-    ElMessage.warning('处方文件不能超过 5MB');
+  if (!hasAllowedAttachmentType(file)) {
+    ElMessage.warning('仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件');
     attachmentUploader.value?.clearFiles();
     return;
   }
-  if (!hasAllowedAttachmentType(file)) {
-    ElMessage.warning('仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件');
+  const compressible = isCompressibleAttachment(file);
+  if (compressible && Number(file.size) > MAX_ATTACHMENT_SOURCE_IMAGE_SIZE) {
+    ElMessage.warning('待压缩图片不能超过 30MB');
+    attachmentUploader.value?.clearFiles();
+    return;
+  }
+  if (!compressible && Number(file.size) > MAX_ATTACHMENT_SIZE) {
+    ElMessage.warning('处方文件不能超过 5MB');
     attachmentUploader.value?.clearFiles();
     return;
   }
 
   attachmentUploading.value = true;
   try {
-    await uploadPrescriptionAttachment(props.id ?? route.params.id, file);
+    const preparedFile = compressible
+      ? await compressImageForUpload(file, {
+          maxBytes: MAX_ATTACHMENT_SIZE,
+          compressionThresholdBytes: ATTACHMENT_COMPRESSION_THRESHOLD,
+          fallbackBaseName: '处方原件'
+        })
+      : file;
+    await uploadPrescriptionAttachment(props.id ?? route.params.id, preparedFile);
     await loadData();
-    ElMessage.success('处方原件已上传');
+    ElMessage.success(
+      preparedFile === file
+        ? '处方原件已上传'
+        : `处方原件已压缩并上传（${formatFileSize(file.size)} → ${formatFileSize(preparedFile.size)}）`
+    );
+  } catch (error) {
+    if (error.imageCompressionFailed) ElMessage.error(error.message || '图片压缩失败');
   } finally {
     attachmentUploading.value = false;
     attachmentUploader.value?.clearFiles();
