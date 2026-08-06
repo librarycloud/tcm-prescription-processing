@@ -82,12 +82,55 @@ test("print template default scope uses an application-maintained nullable colum
 
 test("default print template seeding populates default scope", async () => {
   let seeded;
+  let skipDuplicates;
   const prisma = {
     store: {
       findUnique: async () => ({ id: 3, status: 1, deletedAt: null }),
     },
     printTemplate: {
       findMany: async ({ select }) => (select ? [] : []),
+      createMany: async ({ data, skipDuplicates: shouldSkipDuplicates }) => {
+        seeded = data;
+        skipDuplicates = shouldSkipDuplicates;
+        return { count: data.length };
+      },
+    },
+  };
+
+  await getPrintTemplateSettings(prisma, { id: 1, role: 0 }, { storeId: 3 });
+
+  assert.ok(seeded.length > 0);
+  assert.equal(skipDuplicates, true);
+  for (const template of seeded) {
+    assert.equal(
+      template.defaultScope,
+      template.isDefault ? `3:${template.templateType}` : null,
+    );
+  }
+});
+
+test("edited built-in print templates are not seeded again", async () => {
+  let findManyCall = 0;
+  let seeded = [];
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 3, status: 1, deletedAt: null }),
+    },
+    printTemplate: {
+      findMany: async () => {
+        findManyCall += 1;
+        if (findManyCall === 1) {
+          return [
+            {
+              templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
+              name: "加工标签（75×50热敏裁切顶端补偿版）",
+              widthMm: 80,
+              heightMm: 50,
+            },
+          ];
+        }
+        return [];
+      },
       createMany: async ({ data }) => {
         seeded = data;
         return { count: data.length };
@@ -97,16 +140,74 @@ test("default print template seeding populates default scope", async () => {
 
   await getPrintTemplateSettings(prisma, { id: 1, role: 0 }, { storeId: 3 });
 
-  assert.ok(seeded.length > 0);
-  for (const template of seeded) {
-    assert.equal(
-      template.defaultScope,
-      template.isDefault ? `3:${template.templateType}` : null,
-    );
-  }
+  assert.equal(
+    seeded.some(
+      (item) =>
+        item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
+        item.name === "加工标签（80×50热敏裁切顶端补偿版）",
+    ),
+    false,
+  );
 });
 
-test("existing stores receive the 75mm thermal processing template", async () => {
+test("legacy 75mm thermal processing templates upgrade in place", async () => {
+  let findManyCall = 0;
+  let updated;
+  let seeded = [];
+  const legacyTemplate = {
+    templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
+    name: "加工标签（75×50热敏裁切顶端补偿版）",
+    widthMm: 75,
+    heightMm: 50,
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 3, status: 1, deletedAt: null }),
+    },
+    printTemplate: {
+      findMany: async () => {
+        findManyCall += 1;
+        if (findManyCall === 1) return [legacyTemplate];
+        if (findManyCall === 2) {
+          return [
+            {
+              ...legacyTemplate,
+              name: "加工标签（80×50热敏裁切顶端补偿版）",
+              widthMm: 80,
+            },
+          ];
+        }
+        return [];
+      },
+      updateMany: async (args) => {
+        updated = args;
+        return { count: 1 };
+      },
+      createMany: async ({ data }) => {
+        seeded = data;
+        return { count: data.length };
+      },
+    },
+  };
+
+  await getPrintTemplateSettings(prisma, { id: 1, role: 0 }, { storeId: 3 });
+
+  assert.equal(updated.where.name, legacyTemplate.name);
+  assert.deepEqual(updated.data, {
+    name: "加工标签（80×50热敏裁切顶端补偿版）",
+    widthMm: 80,
+  });
+  assert.equal(
+    seeded.some(
+      (item) =>
+        item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
+        item.name === "加工标签（80×50热敏裁切顶端补偿版）",
+    ),
+    false,
+  );
+});
+
+test("existing stores receive the 80mm thermal processing template", async () => {
   let seeded = [];
   let findManyCall = 0;
   const prisma = {
@@ -133,7 +234,7 @@ test("existing stores receive the 75mm thermal processing template", async () =>
   const thermal = seeded.filter(
     (item) =>
       item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
-      Number(item.widthMm) === 75 &&
+      Number(item.widthMm) === 80 &&
       Number(item.heightMm) === 50,
   );
   assert.equal(thermal.length, 1);

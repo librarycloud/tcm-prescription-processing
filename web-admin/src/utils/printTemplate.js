@@ -329,11 +329,11 @@ export const DEFAULT_PROCESSING_TEMPLATE = Object.freeze({
 });
 
 export const THERMAL_PROCESSING_TEMPLATE = Object.freeze({
-  id: 'local-processing-thermal-75',
+  id: 'local-processing-thermal-80',
   templateType: PROCESSING_TEMPLATE_TYPE,
   templateTypeName: '加工标签',
-  name: '加工标签（75×50热敏裁切顶端补偿版）',
-  widthMm: 75,
+  name: '加工标签（80×50热敏裁切顶端补偿版）',
+  widthMm: 80,
   heightMm: 50,
   enabled: true,
   isDefault: false,

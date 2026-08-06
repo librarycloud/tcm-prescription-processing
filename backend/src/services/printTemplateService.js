@@ -22,6 +22,16 @@ const FONT_FAMILY_VALUES = new Set(
   PRINT_FONT_FAMILIES.map((item) => item.value),
 );
 const CUSTOM_FIELD_ID_PATTERN = /^custom_[a-zA-Z0-9_-]{1,64}$/;
+const LEGACY_THERMAL_PROCESSING_TEMPLATE = Object.freeze({
+  name: "加工标签（75×50热敏裁切顶端补偿版）",
+  widthMm: 75,
+  heightMm: 50,
+});
+const THERMAL_PROCESSING_TEMPLATE = Object.freeze({
+  name: "加工标签（80×50热敏裁切顶端补偿版）",
+  widthMm: 80,
+  heightMm: 50,
+});
 
 const DEFAULT_TEMPLATES = [
   {
@@ -50,10 +60,8 @@ const DEFAULT_TEMPLATES = [
   },
   {
     templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
-    name: "加工标签（75×50热敏裁切顶端补偿版）",
-    widthMm: 75,
-    heightMm: 50,
-    fields: defaultProcessingFields("thermal-75"),
+    ...THERMAL_PROCESSING_TEMPLATE,
+    fields: defaultProcessingFields("thermal-80"),
     isDefault: 0,
     seedWhenTypeExists: true,
   },
@@ -226,18 +234,54 @@ function defaultScope(storeId, templateType, isDefault) {
 
 async function ensureDefaults(prisma, storeId) {
   if (!storeId) return;
-  const existing = await prisma.printTemplate.findMany({
+  const findExisting = () => prisma.printTemplate.findMany({
     where: { storeId, templateType: { in: TEMPLATE_TYPE_VALUES } },
-    select: { templateType: true, widthMm: true, heightMm: true },
+    select: { templateType: true, name: true, widthMm: true, heightMm: true },
   });
+  let existing = await findExisting();
+  const hasLegacyThermalTemplate = existing.some(
+    (item) =>
+      item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
+      item.name === LEGACY_THERMAL_PROCESSING_TEMPLATE.name &&
+      Number(item.widthMm) === LEGACY_THERMAL_PROCESSING_TEMPLATE.widthMm &&
+      Number(item.heightMm) === LEGACY_THERMAL_PROCESSING_TEMPLATE.heightMm,
+  );
+  const hasCurrentThermalTemplate = existing.some(
+    (item) =>
+      item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
+      item.name === THERMAL_PROCESSING_TEMPLATE.name,
+  );
+  if (hasLegacyThermalTemplate && !hasCurrentThermalTemplate) {
+    try {
+      await prisma.printTemplate.updateMany({
+        where: {
+          storeId,
+          templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
+          name: LEGACY_THERMAL_PROCESSING_TEMPLATE.name,
+          widthMm: LEGACY_THERMAL_PROCESSING_TEMPLATE.widthMm,
+          heightMm: LEGACY_THERMAL_PROCESSING_TEMPLATE.heightMm,
+        },
+        data: {
+          name: THERMAL_PROCESSING_TEMPLATE.name,
+          widthMm: THERMAL_PROCESSING_TEMPLATE.widthMm,
+        },
+      });
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+    }
+    existing = await findExisting();
+  }
   const missing = DEFAULT_TEMPLATES.filter((template) => {
-    const sameType = existing.filter((item) => item.templateType === template.templateType);
+    const sameType = existing.filter(
+      (item) => item.templateType === template.templateType,
+    );
     if (!sameType.length) return true;
     if (!template.seedWhenTypeExists) return false;
     return !sameType.some(
       (item) =>
-        Number(item.widthMm) === template.widthMm &&
-        Number(item.heightMm) === template.heightMm,
+        item.name === template.name ||
+        (Number(item.widthMm) === template.widthMm &&
+          Number(item.heightMm) === template.heightMm),
     );
   });
   if (!missing.length) return;
@@ -257,6 +301,7 @@ async function ensureDefaults(prisma, storeId) {
         template.isDefault,
       ),
     })),
+    skipDuplicates: true,
   });
 }
 

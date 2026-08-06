@@ -165,7 +165,7 @@ const portraitPackagingFields = [
 
 export function defaultProcessingFields(variant = 'landscape') {
   if (variant === 'portrait') return portraitProcessingFields;
-  if (variant === 'thermal-75') return thermalProcessingFields;
+  if (variant === 'thermal-80') return thermalProcessingFields;
   return processingFields;
 }
 
