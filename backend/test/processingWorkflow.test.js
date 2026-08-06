@@ -14,7 +14,11 @@ import { config } from "../src/config.js";
 import {
   EQUIPMENT_STATUS,
   EQUIPMENT_TYPE,
+  EQUIPMENT_USAGE_SOURCE,
+  EQUIPMENT_USAGE_STATUS,
   PROCESSING_STAGE,
+  WORKFLOW_EXCEPTION_STATUS,
+  WORKFLOW_EXCEPTION_TYPE,
 } from "../src/constants/processingWorkflow.js";
 import {
   processingEquipmentQrContent,
@@ -34,6 +38,22 @@ test("processing stage values are numeric and stable", () => {
     PACKAGING_DONE: 6,
     COMPLETED: 7,
   });
+  assert.deepEqual(EQUIPMENT_USAGE_STATUS, {
+    ACTIVE: 1,
+    COMPLETED: 2,
+    VOIDED: 3,
+  });
+  assert.deepEqual(EQUIPMENT_USAGE_SOURCE, {
+    SCAN: 1,
+    MANUAL: 2,
+    FAULT_TRANSFER: 3,
+  });
+  assert.deepEqual(WORKFLOW_EXCEPTION_TYPE, {
+    WRONG_SCAN: 1,
+    DEVICE_FAULT: 2,
+    MANUAL_ENTRY: 3,
+  });
+  assert.deepEqual(WORKFLOW_EXCEPTION_STATUS, { OPEN: 1, RESOLVED: 2 });
 });
 
 test("workflow QR contents identify plans and equipment without exposing database ids", () => {
@@ -69,20 +89,44 @@ test("decoction workflows require released equipment and a completed decoction",
   };
   const occupiedPrisma = {
     processingEquipmentUsage: {
-      count: async ({ where }) => (where.endedAt === null ? 1 : 0),
+      findMany: async () => [
+        {
+          stage: PROCESSING_STAGE.SOAKING,
+          portionNo: 1,
+          status: EQUIPMENT_USAGE_STATUS.ACTIVE,
+          endedAt: null,
+          voidedAt: null,
+        },
+      ],
     },
   };
   await assert.rejects(
     () => assertProcessingWorkflowComplete(occupiedPrisma, plan),
-    { statusCode: 409, message: "还有浸泡桶或煎药机未结束" },
+    {
+      statusCode: 409,
+      message: "还有浸泡桶或煎药机未结束",
+    },
   );
 
   const completePrisma = {
     processingEquipmentUsage: {
-      count: async ({ where }) => (where.endedAt === null ? 0 : 1),
+      findMany: async () =>
+        [
+          PROCESSING_STAGE.SOAKING,
+          PROCESSING_STAGE.DECOCTING,
+          PROCESSING_STAGE.PACKAGING,
+        ].map((stage) => ({
+          stage,
+          portionNo: 1,
+          status: EQUIPMENT_USAGE_STATUS.COMPLETED,
+          endedAt: new Date(),
+          voidedAt: null,
+        })),
     },
   };
-  await assert.doesNotReject(() => assertProcessingWorkflowComplete(completePrisma, plan));
+  await assert.doesNotReject(() =>
+    assertProcessingWorkflowComplete(completePrisma, plan),
+  );
 });
 
 test("decoction workflows require a packaging-machine scan for every completed portion", async () => {
@@ -93,18 +137,20 @@ test("decoction workflows require a packaging-machine scan for every completed p
   };
   const prisma = {
     processingEquipmentUsage: {
-      count: async ({ where }) => {
-        if (where.endedAt === null) return 0;
-        if (where.stage === PROCESSING_STAGE.DECOCTING) return 1;
-        if (where.stage === PROCESSING_STAGE.PACKAGING) return 0;
-        return 0;
-      },
+      findMany: async () =>
+        [PROCESSING_STAGE.SOAKING, PROCESSING_STAGE.DECOCTING].map((stage) => ({
+          stage,
+          portionNo: 1,
+          status: EQUIPMENT_USAGE_STATUS.COMPLETED,
+          endedAt: new Date(),
+          voidedAt: null,
+        })),
     },
   };
-  await assert.rejects(
-    () => assertProcessingWorkflowComplete(prisma, plan),
-    { statusCode: 409, message: "每份煎煮完成后都需要扫描包装机" },
-  );
+  await assert.rejects(() => assertProcessingWorkflowComplete(prisma, plan), {
+    statusCode: 409,
+    message: "第 1 组尚未扫描包装机",
+  });
 });
 
 test("scanning a packaging machine releases the decoction pot and records packaging", async () => {
@@ -151,8 +197,22 @@ test("scanning a packaging machine releases the decoction pot and records packag
     equipment: state.pot,
     stage: PROCESSING_STAGE.DECOCTING,
     portionNo: 1,
+    status: EQUIPMENT_USAGE_STATUS.ACTIVE,
+    source: EQUIPMENT_USAGE_SOURCE.SCAN,
     startedAt: new Date(Date.now() - 20 * 60000),
     endedAt: null,
+  });
+  state.usages.unshift({
+    id: 40,
+    processingPlanId: 21,
+    equipmentId: 30,
+    equipment: { id: 30, equipmentNo: "T01", name: "1号浸泡桶" },
+    stage: PROCESSING_STAGE.SOAKING,
+    portionNo: 1,
+    status: EQUIPMENT_USAGE_STATUS.COMPLETED,
+    source: EQUIPMENT_USAGE_SOURCE.SCAN,
+    startedAt: new Date(Date.now() - 50 * 60000),
+    endedAt: new Date(Date.now() - 20 * 60000),
   });
   let nextUsageId = 42;
   const prisma = {
@@ -166,27 +226,41 @@ test("scanning a packaging machine releases the decoction pot and records packag
     processingEquipment: {
       findFirst: async ({ where }) => {
         const code = where.OR[0].scanToken || where.OR[1].equipmentNo;
-        return [state.pot, state.packer].find(
-          (item) => item.storeId === where.storeId &&
-            (item.scanToken === code || item.equipmentNo === code),
-        ) || null;
+        return (
+          [state.pot, state.packer].find(
+            (item) =>
+              item.storeId === where.storeId &&
+              (item.scanToken === code || item.equipmentNo === code),
+          ) || null
+        );
       },
       updateMany: async ({ where, data }) => {
-        const item = [state.pot, state.packer].find((candidate) => candidate.id === where.id);
+        const item = [state.pot, state.packer].find(
+          (candidate) => candidate.id === where.id,
+        );
         if (!item) return { count: 0 };
-        if (Object.hasOwn(where, "currentUsageId") && item.currentUsageId !== where.currentUsageId)
+        if (
+          Object.hasOwn(where, "currentUsageId") &&
+          item.currentUsageId !== where.currentUsageId
+        )
           return { count: 0 };
         Object.assign(item, data);
         return { count: 1 };
       },
     },
     processingEquipmentUsage: {
-      findFirst: async ({ where }) => state.usages.find(
-        (item) => item.id === where.id && item.processingPlanId === where.processingPlanId &&
-          item.stage === where.stage && item.endedAt === where.endedAt,
-      ) || null,
+      findFirst: async ({ where }) =>
+        state.usages.find(
+          (item) =>
+            item.id === where.id &&
+            item.processingPlanId === where.processingPlanId &&
+            item.stage === where.stage &&
+            item.status === where.status,
+        ) || null,
       create: async ({ data }) => {
-        const equipment = [state.pot, state.packer].find((item) => item.id === data.equipmentId);
+        const equipment = [state.pot, state.packer].find(
+          (item) => item.id === data.equipmentId,
+        );
         const usage = { id: nextUsageId++, endedAt: null, ...data, equipment };
         state.usages.push(usage);
         return usage;
@@ -196,9 +270,12 @@ test("scanning a packaging machine releases the decoction pot and records packag
         Object.assign(usage, data);
         return usage;
       },
-      count: async ({ where }) => state.usages.filter(
-        (item) => item.processingPlanId === where.processingPlanId && item.endedAt === null,
-      ).length,
+      count: async ({ where }) =>
+        state.usages.filter(
+          (item) =>
+            item.processingPlanId === where.processingPlanId &&
+            item.status === where.status,
+        ).length,
     },
     operationLog: { create: async () => ({ id: 1 }) },
     $transaction: async (work) => work(prisma),
@@ -210,9 +287,11 @@ test("scanning a packaging machine releases the decoction pot and records packag
 
   assert.equal(state.pot.currentUsageId, null);
   assert.equal(state.packer.currentUsageId, null);
-  assert.equal(state.usages[0].endReason, "煎煮完成");
-  assert.equal(state.usages[1].stage, PROCESSING_STAGE.PACKAGING);
-  assert.equal(state.usages[1].endReason, "扫码完成打包");
+  assert.equal(state.usages[1].endReason, "煎煮完成");
+  assert.equal(state.usages[1].status, EQUIPMENT_USAGE_STATUS.COMPLETED);
+  assert.equal(state.usages[2].stage, PROCESSING_STAGE.PACKAGING);
+  assert.equal(state.usages[2].status, EQUIPMENT_USAGE_STATUS.COMPLETED);
+  assert.equal(state.usages[2].endReason, "扫码完成打包");
   assert.equal(state.plan.currentStage, PROCESSING_STAGE.PACKAGING_DONE);
   assert.equal(result.canCompleteWorkflow, true);
 });
@@ -283,7 +362,10 @@ test("uploading a valid image stores it locally and completes dispensing", async
   assert.equal(state.updated.currentStage, PROCESSING_STAGE.DISPENSING_DONE);
   assert.equal(state.updated.dispensingCompletedBy, actor.id);
   assert.ok(state.updated.dispensingCompletedAt instanceof Date);
-  assert.match(state.photoData.storagePath, /^processing-photos\/\d{4}\/\d{2}\//);
+  assert.match(
+    state.photoData.storagePath,
+    /^processing-photos\/\d{4}\/\d{2}\//,
+  );
   assert.equal(state.photoData.data, null);
   const stored = await readFile(
     path.join(uploadDir, ...state.photoData.storagePath.split("/")),
@@ -295,7 +377,9 @@ test("uploading a valid image stores it locally and completes dispensing", async
 
 test("a failed dispensing transaction removes the newly stored photo", async (t) => {
   const previousUploadDir = config.uploadDir;
-  const uploadDir = await mkdtemp(path.join(tmpdir(), "tcm-processing-failed-"));
+  const uploadDir = await mkdtemp(
+    path.join(tmpdir(), "tcm-processing-failed-"),
+  );
   config.uploadDir = uploadDir;
   t.after(async () => {
     config.uploadDir = previousUploadDir;
@@ -325,7 +409,10 @@ test("a failed dispensing transaction removes the newly stored photo", async (t)
     /database write failed/,
   );
   const entries = await readdir(uploadDir, { recursive: true });
-  assert.equal(entries.some((entry) => entry.endsWith(".jpg")), false);
+  assert.equal(
+    entries.some((entry) => entry.endsWith(".jpg")),
+    false,
+  );
 });
 
 test("deleting the final dispensing photo returns the plan to dispensing", async () => {

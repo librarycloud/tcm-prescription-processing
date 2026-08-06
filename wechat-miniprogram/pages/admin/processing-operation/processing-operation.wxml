@@ -50,6 +50,9 @@
       <t-button wx:if="{{canUploadPhoto}}" theme="primary" block bind:tap="takeDispensingPhoto">
         {{detail.photos.length ? '补充调配照片' : '拍照并完成调配'}}
       </t-button>
+      <view wx:if="{{canCancel}}" class="cancel-action">
+        <t-button theme="danger" variant="outline" block bind:tap="cancelPlan">取消加工</t-button>
+      </view>
     </view>
 
     <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
@@ -59,13 +62,18 @@
       </view>
       <view class="usage-row" wx:for="{{activeSoakings}}" wx:key="id">
         <view>
-          <view class="usage-title">第 {{item.portionNo}} 批 · {{item.equipment.name}}</view>
+          <view class="usage-title">第 {{item.portionNo}} 组 · {{item.equipment.name}}</view>
           <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
           <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
-        <t-button size="small" theme="primary" data-portion="{{item.portionNo}}" bind:tap="startDecoction">
-          扫锅转煎煮
-        </t-button>
+        <view class="usage-actions">
+          <t-button size="small" theme="primary" data-portion="{{item.portionNo}}" bind:tap="startDecoction">
+            扫锅转煎煮
+          </t-button>
+          <t-button size="small" variant="outline" data-usage="{{item.id}}" bind:tap="handleUsageException">
+            异常处理
+          </t-button>
+        </view>
       </view>
       <view wx:if="{{processingFinished}}" class="step-result">浸泡已完成</view>
       <t-button wx:if="{{canStartSoaking}}" variant="outline" block bind:tap="startSoaking">
@@ -80,13 +88,18 @@
       </view>
       <view class="usage-row" wx:for="{{activeDecoctions}}" wx:key="id">
         <view>
-          <view class="usage-title">第 {{item.portionNo}} 批 · {{item.equipment.name}}</view>
+          <view class="usage-title">第 {{item.portionNo}} 组 · {{item.equipment.name}}</view>
           <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
           <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
-        <t-button size="small" theme="success" data-usage="{{item.id}}" bind:tap="finishWithPackaging">
-          扫包装机
-        </t-button>
+        <view class="usage-actions">
+          <t-button size="small" theme="success" data-usage="{{item.id}}" bind:tap="finishWithPackaging">
+            扫包装机
+          </t-button>
+          <t-button size="small" variant="outline" data-usage="{{item.id}}" bind:tap="handleUsageException">
+            异常处理
+          </t-button>
+        </view>
       </view>
       <view wx:if="{{processingFinished}}" class="step-result">煎煮已完成</view>
       <view wx:elif="{{!activeDecoctions.length}}" class="empty-step">暂无进行中的煎煮</view>
@@ -95,10 +108,10 @@
     <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">4</view>
-        <view><view class="step-title">打包</view><view class="muted">每批药扫描包装机后即完成该批加工</view></view>
+        <view><view class="step-title">打包</view><view class="muted">每组药扫描包装机后即完成该组加工</view></view>
       </view>
       <view wx:if="{{packagingCompleted}}" class="step-result">
-        全部批次已完成打包
+        全部分组已完成打包
       </view>
       <view wx:else class="empty-step">等待煎煮完成后扫描包装机</view>
     </view>
@@ -107,12 +120,27 @@
       <view class="step-title">设备工序记录</view>
       <view class="history-item" wx:for="{{usageHistory}}" wx:key="id">
         <view class="history-main">
-          <view>{{item.stageName}} · 第 {{item.portionNo}} 批 · {{item.equipment.name}}</view>
+          <view>{{item.stageName}} · 第 {{item.portionNo}} 组 · {{item.equipment.name}}</view>
+          <view class="usage-flags">{{item.statusName}} · {{item.sourceName}}</view>
           <view class="muted">{{item.startedAtText}} → {{item.endedAtText}}</view>
           <view class="muted">操作人：{{item.operatorName}}</view>
+          <view wx:if="{{item.voidReason}}" class="exception-text">撤销原因：{{item.voidReason}}</view>
         </view>
         <view class="duration">{{item.durationText}}</view>
       </view>
+    </view>
+
+    <view wx:if="{{detail.workflowExceptions.length}}" class="app-card history-card">
+      <view class="step-title">异常处理记录</view>
+      <view class="exception-item" wx:for="{{detail.workflowExceptions}}" wx:key="id">
+        <view>{{item.typeName}} · {{item.reason}}</view>
+        <view class="muted">{{item.createdAtText}} · {{item.operatorName}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{detail.status === 1 && !canFinish && detail.completionBlockers.length}}" class="app-card blocker-card">
+      <view class="step-title">暂不能完成加工</view>
+      <view class="blocker-item" wx:for="{{detail.completionBlockers}}" wx:key="*this">{{item}}</view>
     </view>
 
     <view wx:if="{{canFinish}}" class="finish-bar">

@@ -211,6 +211,10 @@ Page({
         const canStart = Number(item.status) === 0 && Number(item.scheduleType) === 1;
         const canFinish = false;
         const canOperate = [1, 2, 3, 4].includes(Number(item.status));
+        const canCancel =
+          Number(item.status) === 1 &&
+          Number(item.currentStage) === 1 &&
+          !item.dispensingCompletedAt;
         const canGeneratePackage = Number(item.status) === 2;
         const canReceiveNotice = Number(item.status) === 0 && Number(item.scheduleType) === 2;
         const canDelay = Number(item.status) === 0;
@@ -218,7 +222,7 @@ Page({
         const canDelete = Number(item.status) === 0;
         const actionCount =
           2 +
-          [canStart, canFinish, canOperate, canGeneratePackage, canReceiveNotice, canDelay, canEdit, canDelete].filter(Boolean)
+          [canStart, canFinish, canOperate, canCancel, canGeneratePackage, canReceiveNotice, canDelay, canEdit, canDelete].filter(Boolean)
             .length;
         return {
           ...item,
@@ -249,6 +253,7 @@ Page({
           canStart,
           canFinish,
           canOperate,
+          canCancel,
           operationLabel: Number(item.status) === 1 ? '工序操作' : '工序详情',
           canGeneratePackage,
           canReceiveNotice,
@@ -442,6 +447,19 @@ Page({
     wx.navigateTo({
       url: `/pages/admin/processing-operation/processing-operation?id=${plan.id}`
     });
+  },
+
+  async cancelProcessing(e) {
+    const plan = this.findPlan(e.currentTarget.dataset.id);
+    if (!plan) return;
+    const confirmed = await confirmAction(
+      '取消加工',
+      `确认取消${plan.customerName}的${plan.processTypeName}加工计划吗？`
+    );
+    if (!confirmed) return;
+    await transitionProcessingPlan(plan.id, 5);
+    wx.showToast({ title: '加工已取消', icon: 'success' });
+    await this.reloadAll();
   },
 
   async finishPlan(e) {

@@ -15,7 +15,10 @@ import {
   transitionProcessingPlan,
   updateProcessingPlan,
 } from "../src/services/processingPlanService.js";
-import { PROCESSING_STAGE } from "../src/constants/processingWorkflow.js";
+import {
+  EQUIPMENT_USAGE_STATUS,
+  PROCESSING_STAGE,
+} from "../src/constants/processingWorkflow.js";
 
 const storeAdmin = { id: 12, role: 2, storeId: 3, phone: "13800000000" };
 
@@ -23,7 +26,13 @@ test("deleting the final unfinished plan completes a prescription with only comp
   const state = {
     prescription: { id: 8, status: 0, updatedBy: null },
     plans: [
-      { id: 21, prescriptionId: 8, status: 4, remainingDose: 0, deletedAt: null },
+      {
+        id: 21,
+        prescriptionId: 8,
+        status: 4,
+        remainingDose: 0,
+        deletedAt: null,
+      },
       {
         id: 22,
         prescriptionId: 8,
@@ -119,11 +128,18 @@ function processingFixture() {
       },
     },
     processingEquipmentUsage: {
-      count: async ({ where }) => {
-        if (where.endedAt === null) return 0;
-        if ([PROCESSING_STAGE.DECOCTING, PROCESSING_STAGE.PACKAGING].includes(where.stage)) return 1;
-        return 0;
-      },
+      findMany: async () =>
+        [
+          PROCESSING_STAGE.SOAKING,
+          PROCESSING_STAGE.DECOCTING,
+          PROCESSING_STAGE.PACKAGING,
+        ].map((stage) => ({
+          stage,
+          portionNo: 1,
+          status: EQUIPMENT_USAGE_STATUS.COMPLETED,
+          endedAt: new Date(),
+          voidedAt: null,
+        })),
     },
     prescription: {
       findFirst: async () => ({ id: 8, storeId: 3, status: 0 }),
@@ -181,9 +197,10 @@ test("finishing a processing plan creates exactly one linked package", async () 
   assert.equal(state.package.pickupCode, "654321");
   assert.equal(state.package.expressAddress, "苏州市测试路 1 号");
   await assert.rejects(
-    () =>
-      transitionProcessingPlan(prisma, storeAdmin, 21, { status: 2 }),
-    { statusCode: 409 },
+    () => transitionProcessingPlan(prisma, storeAdmin, 21, { status: 2 }),
+    {
+      statusCode: 409,
+    },
   );
   assert.equal(state.packageCreates, 1);
 });
@@ -241,7 +258,9 @@ test("a finished plan can defer package creation and generate it later", async (
   assert.equal(state.userUpserts, 1);
   await assert.rejects(
     () => generateProcessingPlanPackage(prisma, storeAdmin, finished.id),
-    { statusCode: 409 },
+    {
+      statusCode: 409,
+    },
   );
   assert.equal(state.packageCreates, 1);
 });
@@ -257,6 +276,33 @@ test("starting a processing plan records its actual start time", async () => {
   assert.equal(result.status, 1);
   assert.ok(result.startDate instanceof Date);
   assert.equal(state.packageCreates, 0);
+});
+
+test("started plans can only be cancelled before dispensing is completed", async () => {
+  const { prisma, state } = processingFixture();
+  Object.assign(state.plan, {
+    currentStage: PROCESSING_STAGE.DISPENSING,
+    dispensingCompletedAt: null,
+  });
+
+  const cancelled = await transitionProcessingPlan(prisma, storeAdmin, 21, {
+    status: 5,
+  });
+
+  assert.equal(cancelled.status, 5);
+
+  Object.assign(state.plan, {
+    status: 1,
+    currentStage: PROCESSING_STAGE.DISPENSING_DONE,
+    dispensingCompletedAt: new Date(),
+  });
+  await assert.rejects(
+    () => transitionProcessingPlan(prisma, storeAdmin, 21, { status: 5 }),
+    {
+      statusCode: 409,
+      message: "只有尚未完成调配的加工计划可以取消",
+    },
+  );
 });
 
 test("receiving notice assigns the plan to the scheduled day's queue", async () => {
@@ -337,7 +383,9 @@ test("decoction plans require bag count and volume", async () => {
 
   await assert.rejects(
     () => updateProcessingPlan(prisma, storeAdmin, 21, { bagCount: 14 }),
-    { statusCode: 400 },
+    {
+      statusCode: 400,
+    },
   );
 });
 
@@ -417,7 +465,9 @@ test("finished processing plans allow metadata updates only", async () => {
   assert.ok(result.notifyTime instanceof Date);
   await assert.rejects(
     () => updateProcessingPlan(prisma, storeAdmin, 21, { bagCount: 14 }),
-    { statusCode: 409 },
+    {
+      statusCode: 409,
+    },
   );
 });
 
@@ -606,9 +656,7 @@ test("processing list, calendar and dashboard statistics enforce the actor store
   );
   const todayWaitingWhere = statsWheres.find(
     (where) =>
-      where.status === 0 &&
-      where.scheduleType === 1 &&
-      where.processDate?.gte,
+      where.status === 0 && where.scheduleType === 1 && where.processDate?.gte,
   );
   const overdueWhere = statsWheres.find(
     (where) =>
@@ -620,9 +668,7 @@ test("processing list, calendar and dashboard statistics enforce the actor store
   const urgentWhere = statsWheres.find((where) => where.priority?.gte === 1);
   const scheduledWaitingWheres = statsWheres.filter(
     (where) =>
-      where.status === 0 &&
-      where.scheduleType === 1 &&
-      where.processDate?.gte,
+      where.status === 0 && where.scheduleType === 1 && where.processDate?.gte,
   );
   assert.ok(todayWaitingWhere.processDate.lt instanceof Date);
   assert.ok(overdueWhere.processDate.lt instanceof Date);

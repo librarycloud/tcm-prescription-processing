@@ -751,6 +751,13 @@ export async function updateProcessingPlan(prisma, actor, id, payload) {
       throw new AppError("加工状态不正确", 400);
     if (!canTransition(current.status, requestedStatus))
       throw new AppError("当前状态不允许该操作", 409);
+    if (
+      requestedStatus === PLAN_STATUS.CANCELLED &&
+      current.status === PLAN_STATUS.PROCESSING &&
+      (current.currentStage !== PROCESSING_STAGE.DISPENSING || current.dispensingCompletedAt)
+    ) {
+      throw new AppError("只有尚未完成调配的加工计划可以取消", 409);
+    }
     data.status = requestedStatus;
     if (data.status === PLAN_STATUS.PROCESSING && !current.startDate) {
       data.startDate = new Date();

@@ -28,26 +28,27 @@ model User {
   createdBy       Int?      @map("created_by")
   updatedBy       Int?      @map("updated_by")
 
-  createdPackages                Package[]                @relation("PackageCreatedBy")
-  verifiedPackages               Package[]                @relation("PackageVerifiedBy")
-  modifiedPackages               Package[]                @relation("PackageModifiedBy")
-  store                          Store?                   @relation(fields: [storeId], references: [id])
+  createdPackages                Package[]                     @relation("PackageCreatedBy")
+  verifiedPackages               Package[]                     @relation("PackageVerifiedBy")
+  modifiedPackages               Package[]                     @relation("PackageModifiedBy")
+  store                          Store?                        @relation(fields: [storeId], references: [id])
   emailVerificationCodes         EmailVerificationCode[]
-  prescriptionsCreated           Prescription[]           @relation("PrescriptionCreatedBy")
-  prescriptionAttachmentsCreated PrescriptionAttachment[] @relation("PrescriptionAttachmentCreatedBy")
-  processingPlansCreated         ProcessingPlan[]         @relation("ProcessingPlanCreatedBy")
-  processingPhotosCreated        ProcessingPhoto[]        @relation("ProcessingPhotoCreatedBy")
-  printTemplatesCreated          PrintTemplate[]          @relation("PrintTemplateCreatedBy")
-  storeTransfersCreated          StoreTransfer[]          @relation("StoreTransferCreatedBy")
-  transferReturns                StoreTransferReturn[]    @relation("StoreTransferReturnOperator")
-  confirmedTransferReturns       StoreTransferReturn[]    @relation("StoreTransferReturnConfirmedBy")
-  confirmedTransferOutbounds     StoreTransfer[]          @relation("StoreTransferOutboundConfirmedBy")
-  robotConfigsCreated            RobotConfig[]            @relation("RobotConfigCreatedBy")
-  robotConfigsUpdated            RobotConfig[]            @relation("RobotConfigUpdatedBy")
-  robotEventConfigsCreated       RobotEventConfig[]       @relation("RobotEventConfigCreatedBy")
-  robotEventConfigsUpdated       RobotEventConfig[]       @relation("RobotEventConfigUpdatedBy")
-  robotNotificationEvents        RobotNotificationEvent[] @relation("RobotNotificationEventOperator")
-  productDiffLogsCreated         ProductsDiffLog[]        @relation("ProductsDiffLogCreatedBy")
+  prescriptionsCreated           Prescription[]                @relation("PrescriptionCreatedBy")
+  prescriptionAttachmentsCreated PrescriptionAttachment[]      @relation("PrescriptionAttachmentCreatedBy")
+  processingPlansCreated         ProcessingPlan[]              @relation("ProcessingPlanCreatedBy")
+  processingPhotosCreated        ProcessingPhoto[]             @relation("ProcessingPhotoCreatedBy")
+  processingExceptionsCreated    ProcessingWorkflowException[] @relation("ProcessingWorkflowExceptionCreatedBy")
+  printTemplatesCreated          PrintTemplate[]               @relation("PrintTemplateCreatedBy")
+  storeTransfersCreated          StoreTransfer[]               @relation("StoreTransferCreatedBy")
+  transferReturns                StoreTransferReturn[]         @relation("StoreTransferReturnOperator")
+  confirmedTransferReturns       StoreTransferReturn[]         @relation("StoreTransferReturnConfirmedBy")
+  confirmedTransferOutbounds     StoreTransfer[]               @relation("StoreTransferOutboundConfirmedBy")
+  robotConfigsCreated            RobotConfig[]                 @relation("RobotConfigCreatedBy")
+  robotConfigsUpdated            RobotConfig[]                 @relation("RobotConfigUpdatedBy")
+  robotEventConfigsCreated       RobotEventConfig[]            @relation("RobotEventConfigCreatedBy")
+  robotEventConfigsUpdated       RobotEventConfig[]            @relation("RobotEventConfigUpdatedBy")
+  robotNotificationEvents        RobotNotificationEvent[]      @relation("RobotNotificationEventOperator")
+  productDiffLogsCreated         ProductsDiffLog[]             @relation("ProductsDiffLogCreatedBy")
 
   @@index([role])
   @@index([status])
@@ -404,15 +405,16 @@ model ProcessingPlan {
   dispensingCompletedAt DateTime? @map("dispensing_completed_at")
   dispensingCompletedBy Int?      @map("dispensing_completed_by")
 
-  prescription         Prescription               @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  processType          Dictionary                 @relation("ProcessingType", fields: [processTypeId], references: [id])
-  notifyTypeDictionary Dictionary                 @relation("ProcessingPlanNotifyType", fields: [notifyType], references: [id], onDelete: Restrict)
-  creator              User                       @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
-  store                Store                      @relation(fields: [storeId], references: [id])
+  prescription         Prescription                  @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  processType          Dictionary                    @relation("ProcessingType", fields: [processTypeId], references: [id])
+  notifyTypeDictionary Dictionary                    @relation("ProcessingPlanNotifyType", fields: [notifyType], references: [id], onDelete: Restrict)
+  creator              User                          @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
+  store                Store                         @relation(fields: [storeId], references: [id])
   package              Package?
   e6Import             E6Import?
   photos               ProcessingPhoto[]
   equipmentUsages      ProcessingEquipmentUsage[]
+  workflowExceptions   ProcessingWorkflowException[]
 
   @@unique([prescriptionId, batchNo])
   @@index([storeId, status, scheduleType, processDate])
@@ -470,26 +472,57 @@ model ProcessingEquipment {
 }
 
 model ProcessingEquipmentUsage {
-  id               Int       @id @default(autoincrement())
-  processingPlanId Int       @map("processing_plan_id")
-  equipmentId      Int       @map("equipment_id")
-  stage            Int       @db.TinyInt
-  portionNo        Int       @map("portion_no")
-  startedAt        DateTime  @default(now()) @map("started_at")
-  endedAt          DateTime? @map("ended_at")
-  startedBy        Int       @map("started_by")
-  endedBy          Int?      @map("ended_by")
-  endReason        String?   @map("end_reason") @db.VarChar(255)
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  id                     Int       @id @default(autoincrement())
+  processingPlanId       Int       @map("processing_plan_id")
+  equipmentId            Int       @map("equipment_id")
+  stage                  Int       @db.TinyInt
+  portionNo              Int       @map("portion_no")
+  status                 Int       @default(1) @db.TinyInt
+  source                 Int       @default(1) @db.TinyInt
+  requestId              String?   @unique @map("request_id") @db.VarChar(64)
+  startedAt              DateTime  @default(now()) @map("started_at")
+  endedAt                DateTime? @map("ended_at")
+  startedBy              Int       @map("started_by")
+  endedBy                Int?      @map("ended_by")
+  endReason              String?   @map("end_reason") @db.VarChar(255)
+  voidedAt               DateTime? @map("voided_at")
+  voidedBy               Int?      @map("voided_by")
+  voidReason             String?   @map("void_reason") @db.VarChar(255)
+  transferredFromUsageId Int?      @map("transferred_from_usage_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  processingPlan ProcessingPlan       @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
-  equipment      ProcessingEquipment  @relation("EquipmentUsages", fields: [equipmentId], references: [id], onDelete: Restrict)
-  currentFor     ProcessingEquipment? @relation("EquipmentCurrentUsage")
+  processingPlan     ProcessingPlan                @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
+  equipment          ProcessingEquipment           @relation("EquipmentUsages", fields: [equipmentId], references: [id], onDelete: Restrict)
+  currentFor         ProcessingEquipment?          @relation("EquipmentCurrentUsage")
+  workflowExceptions ProcessingWorkflowException[]
 
   @@index([processingPlanId, stage, portionNo], map: "proc_equip_usage_plan_stage_portion_idx")
-  @@index([equipmentId, endedAt])
+  @@index([equipmentId, status, startedAt])
+  @@index([transferredFromUsageId])
   @@map("processing_equipment_usages")
+}
+
+model ProcessingWorkflowException {
+  id               Int      @id @default(autoincrement())
+  processingPlanId Int      @map("processing_plan_id")
+  usageId          Int?     @map("usage_id")
+  relatedUsageId   Int?     @map("related_usage_id")
+  type             Int      @db.TinyInt
+  status           Int      @default(2) @db.TinyInt
+  reason           String   @db.VarChar(255)
+  details          Json?
+  createdBy        Int      @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  processingPlan ProcessingPlan            @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
+  usage          ProcessingEquipmentUsage? @relation(fields: [usageId], references: [id], onDelete: SetNull)
+  creator        User                      @relation("ProcessingWorkflowExceptionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([processingPlanId, createdAt])
+  @@index([usageId])
+  @@index([type, status])
+  @@map("processing_workflow_exceptions")
 }
 
 model E6DoctorMapping {

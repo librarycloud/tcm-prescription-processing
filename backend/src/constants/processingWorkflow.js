@@ -26,6 +26,29 @@ export const EQUIPMENT_STATUS = Object.freeze({
   MAINTENANCE: 2,
 });
 
+export const EQUIPMENT_USAGE_STATUS = Object.freeze({
+  ACTIVE: 1,
+  COMPLETED: 2,
+  VOIDED: 3,
+});
+
+export const EQUIPMENT_USAGE_SOURCE = Object.freeze({
+  SCAN: 1,
+  MANUAL: 2,
+  FAULT_TRANSFER: 3,
+});
+
+export const WORKFLOW_EXCEPTION_TYPE = Object.freeze({
+  WRONG_SCAN: 1,
+  DEVICE_FAULT: 2,
+  MANUAL_ENTRY: 3,
+});
+
+export const WORKFLOW_EXCEPTION_STATUS = Object.freeze({
+  OPEN: 1,
+  RESOLVED: 2,
+});
+
 export const PROCESSING_PHOTO_KIND = Object.freeze({
   DISPENSING_COMPLETED: "DISPENSING_COMPLETED",
 });

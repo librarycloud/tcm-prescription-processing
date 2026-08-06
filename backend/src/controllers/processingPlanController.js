@@ -18,12 +18,15 @@ import {
 import { AppError } from "../utils/appError.js";
 import {
   completeDispensing,
+  createManualEquipmentUsage,
   deleteProcessingPhoto,
   findProcessingPlanByScan,
   finishEquipmentUsage,
   getProcessingPhoto,
   getProcessingWorkflow,
   startEquipmentUsage,
+  transferFaultyEquipment,
+  voidEquipmentUsage,
 } from "../services/processingWorkflowService.js";
 
 export async function listController(request, reply) {
@@ -186,11 +189,25 @@ export async function calendarController(request, reply) {
 }
 
 export async function workflowController(request, reply) {
-  return ok(reply, await getProcessingWorkflow(request.server.prisma, request.user, request.params.id));
+  return ok(
+    reply,
+    await getProcessingWorkflow(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+    ),
+  );
 }
 
 export async function scanController(request, reply) {
-  return ok(reply, await findProcessingPlanByScan(request.server.prisma, request.user, request.query?.code));
+  return ok(
+    reply,
+    await findProcessingPlanByScan(
+      request.server.prisma,
+      request.user,
+      request.query?.code,
+    ),
+  );
 }
 
 export async function completeDispensingController(request, reply) {
@@ -200,16 +217,22 @@ export async function completeDispensingController(request, reply) {
   try {
     buffer = await file.toBuffer();
   } catch (error) {
-    if (error?.code === "FST_REQ_FILE_TOO_LARGE") throw new AppError("照片不能超过 5MB", 400);
+    if (error?.code === "FST_REQ_FILE_TOO_LARGE")
+      throw new AppError("照片不能超过 5MB", 400);
     throw error;
   }
   return ok(
     reply,
-    await completeDispensing(request.server.prisma, request.user, request.params.id, {
-      buffer,
-      filename: file.filename,
-      mimetype: file.mimetype,
-    }),
+    await completeDispensing(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      {
+        buffer,
+        filename: file.filename,
+        mimetype: file.mimetype,
+      },
+    ),
     "调配已完成",
   );
 }
@@ -241,7 +264,12 @@ export async function deletePhotoController(request, reply) {
 export async function startEquipmentUsageController(request, reply) {
   return ok(
     reply,
-    await startEquipmentUsage(request.server.prisma, request.user, request.params.id, request.body || {}),
+    await startEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
     "设备工序已记录",
   );
 }
@@ -257,5 +285,46 @@ export async function finishEquipmentUsageController(request, reply) {
       request.body || {},
     ),
     "已完成煎煮并记录包装机",
+  );
+}
+
+export async function voidEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await voidEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+      request.body || {},
+    ),
+    "误扫记录已撤销",
+  );
+}
+
+export async function transferFaultyEquipmentController(request, reply) {
+  return ok(
+    reply,
+    await transferFaultyEquipment(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+      request.body || {},
+    ),
+    "故障设备已更换",
+  );
+}
+
+export async function createManualEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await createManualEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "工序补录成功",
   );
 }

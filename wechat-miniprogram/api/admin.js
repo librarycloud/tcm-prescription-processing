@@ -48,7 +48,11 @@ export function createProcessingPlan(data) {
 }
 
 export function createProcessingPlanBatch(data) {
-  return request({ url: '/admin/processing-plans/batch', method: 'POST', data });
+  return request({
+    url: '/admin/processing-plans/batch',
+    method: 'POST',
+    data
+  });
 }
 
 export function updateProcessingPlan(id, data) {
@@ -134,6 +138,22 @@ export function startProcessingEquipmentUsage(id, data) {
 export function finishProcessingEquipmentUsage(id, usageId, data) {
   return request({
     url: `/admin/processing-plans/${id}/equipment-usages/${usageId}/finish`,
+    method: 'POST',
+    data
+  });
+}
+
+export function voidProcessingEquipmentUsage(id, usageId, data) {
+  return request({
+    url: `/admin/processing-plans/${id}/equipment-usages/${usageId}/void`,
+    method: 'POST',
+    data
+  });
+}
+
+export function transferFaultyProcessingEquipment(id, usageId, data) {
+  return request({
+    url: `/admin/processing-plans/${id}/equipment-usages/${usageId}/fault-transfer`,
     method: 'POST',
     data
   });
@@ -284,11 +304,19 @@ export function getProducts(params = {}) {
 }
 
 export function registerProductDifference(data) {
-  return request({ url: '/admin/product-differences/register', method: 'POST', data });
+  return request({
+    url: '/admin/product-differences/register',
+    method: 'POST',
+    data
+  });
 }
 
 export function writeOffProductDifference(data) {
-  return request({ url: '/admin/product-differences/write-off', method: 'POST', data });
+  return request({
+    url: '/admin/product-differences/write-off',
+    method: 'POST',
+    data
+  });
 }
 
 export function reverseProductDifference(id, data) {

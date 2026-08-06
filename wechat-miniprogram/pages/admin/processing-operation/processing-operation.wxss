@@ -80,6 +80,10 @@
   margin-bottom: 18rpx;
 }
 
+.cancel-action {
+  margin-top: 12rpx;
+}
+
 .photo-item {
   display: flex;
   align-items: center;
@@ -95,6 +99,37 @@
 .usage-row > view,
 .history-main {
   min-width: 0;
+}
+
+.usage-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.usage-flags {
+  margin-top: 6rpx;
+  color: #0052d9;
+  font-size: 24rpx;
+}
+
+.exception-text,
+.blocker-item {
+  margin-top: 8rpx;
+  color: #c64700;
+  font-size: 24rpx;
+}
+
+.exception-item {
+  padding: 18rpx 0;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.blocker-card {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  border-left: 6rpx solid #e37318;
 }
 
 .empty-step {

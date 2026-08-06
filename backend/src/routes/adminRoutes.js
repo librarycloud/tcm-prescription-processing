@@ -60,10 +60,13 @@ import {
   workflowController as processingWorkflowController,
   scanController as scanProcessingPlanController,
   completeDispensingController,
+  createManualEquipmentUsageController,
   deletePhotoController as deleteProcessingPhotoController,
   photoController as processingPhotoController,
   startEquipmentUsageController,
   finishEquipmentUsageController,
+  transferFaultyEquipmentController,
+  voidEquipmentUsageController,
 } from "../controllers/processingPlanController.js";
 import {
   createController as createEquipmentController,
@@ -177,14 +180,26 @@ export default async function adminRoutes(fastify) {
   fastify.get("/herb-locations/layout", getHerbLocationLayoutController);
   fastify.get("/herb-locations/export", exportHerbLocationsController);
   fastify.get("/herb-locations/template", herbLocationTemplateController);
-  fastify.get("/herb-locations/move-template", herbLocationMoveTemplateController);
+  fastify.get(
+    "/herb-locations/move-template",
+    herbLocationMoveTemplateController,
+  );
   fastify.post("/herb-locations/import", importHerbLocationsController);
-  fastify.post("/herb-locations/move-import", importHerbLocationMovesController);
+  fastify.post(
+    "/herb-locations/move-import",
+    importHerbLocationMovesController,
+  );
   fastify.post("/herb-locations/assignments", assignHerbLocationController);
-  fastify.put("/herb-locations/assignments/:id", updateHerbLocationAssignmentController);
+  fastify.put(
+    "/herb-locations/assignments/:id",
+    updateHerbLocationAssignmentController,
+  );
   fastify.put("/herb-locations/herbs/:id", updateHerbController);
   fastify.put("/herb-locations/layout", updateHerbLocationLayoutController);
-  fastify.delete("/herb-locations/assignments/:id", removeHerbLocationAssignmentController);
+  fastify.delete(
+    "/herb-locations/assignments/:id",
+    removeHerbLocationAssignmentController,
+  );
   fastify.get("/products/stores", productStoresController);
   fastify.get("/e6/imports", listE6ImportsController);
   fastify.get("/e6/imports/:id", e6ImportDetailController);
@@ -207,7 +222,10 @@ export default async function adminRoutes(fastify) {
   fastify.get("/product-differences/logs", listProductDiffLogsController);
   fastify.post("/product-differences/register", registerProductDiffController);
   fastify.post("/product-differences/write-off", writeOffProductDiffController);
-  fastify.post("/product-differences/logs/:id/reverse", reverseProductDiffController);
+  fastify.post(
+    "/product-differences/logs/:id/reverse",
+    reverseProductDiffController,
+  );
   fastify.get("/store-transfers", listTransferController);
   fastify.get("/store-transfers/stats", transferStatsController);
   fastify.get("/store-transfers/stores", transferStoresController);
@@ -219,8 +237,14 @@ export default async function adminRoutes(fastify) {
     updateExpectedReturnDateController,
   );
   fastify.post("/store-transfers/:id/returns", addTransferReturnsController);
-  fastify.post("/store-transfers/:id/confirm-outbound", confirmTransferOutboundController);
-  fastify.post("/store-transfers/:id/returns/:returnId/confirm", confirmTransferReturnController);
+  fastify.post(
+    "/store-transfers/:id/confirm-outbound",
+    confirmTransferOutboundController,
+  );
+  fastify.post(
+    "/store-transfers/:id/returns/:returnId/confirm",
+    confirmTransferReturnController,
+  );
   fastify.post("/store-transfers/:id/cancel", cancelTransferController);
   fastify.get("/packages", listController);
   fastify.get("/packages/by-code/:pickupCode", pickupCodeDetailController);
@@ -235,9 +259,18 @@ export default async function adminRoutes(fastify) {
     verifyController,
   );
   fastify.get("/prescriptions", listPrescriptionController);
-  fastify.get("/prescriptions/:id/attachment", prescriptionAttachmentController);
-  fastify.post("/prescriptions/:id/attachment", uploadPrescriptionAttachmentController);
-  fastify.delete("/prescriptions/:id/attachment", deletePrescriptionAttachmentController);
+  fastify.get(
+    "/prescriptions/:id/attachment",
+    prescriptionAttachmentController,
+  );
+  fastify.post(
+    "/prescriptions/:id/attachment",
+    uploadPrescriptionAttachmentController,
+  );
+  fastify.delete(
+    "/prescriptions/:id/attachment",
+    deletePrescriptionAttachmentController,
+  );
   fastify.get("/prescriptions/:id", prescriptionDetailController);
   fastify.post("/prescriptions", createPrescriptionController);
   fastify.put("/prescriptions/:id", updatePrescriptionController);
@@ -255,13 +288,37 @@ export default async function adminRoutes(fastify) {
   fastify.post("/processing-plans/queue/restore", restoreQueueController);
   fastify.put("/processing-plans/:id", updatePlanController);
   fastify.get("/processing-plans/:id/workflow", processingWorkflowController);
-  fastify.post("/processing-plans/:id/dispensing-complete", completeDispensingController);
-  fastify.get("/processing-plans/:id/photos/:photoId", processingPhotoController);
-  fastify.delete("/processing-plans/:id/photos/:photoId", deleteProcessingPhotoController);
-  fastify.post("/processing-plans/:id/equipment-usages", startEquipmentUsageController);
+  fastify.post(
+    "/processing-plans/:id/dispensing-complete",
+    completeDispensingController,
+  );
+  fastify.get(
+    "/processing-plans/:id/photos/:photoId",
+    processingPhotoController,
+  );
+  fastify.delete(
+    "/processing-plans/:id/photos/:photoId",
+    deleteProcessingPhotoController,
+  );
+  fastify.post(
+    "/processing-plans/:id/equipment-usages",
+    startEquipmentUsageController,
+  );
+  fastify.post(
+    "/processing-plans/:id/equipment-usages/manual",
+    createManualEquipmentUsageController,
+  );
   fastify.post(
     "/processing-plans/:id/equipment-usages/:usageId/finish",
     finishEquipmentUsageController,
+  );
+  fastify.post(
+    "/processing-plans/:id/equipment-usages/:usageId/void",
+    voidEquipmentUsageController,
+  );
+  fastify.post(
+    "/processing-plans/:id/equipment-usages/:usageId/fault-transfer",
+    transferFaultyEquipmentController,
   );
   fastify.post("/processing-plans/:id/transition", transitionPlanController);
   fastify.post(

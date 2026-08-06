@@ -12,6 +12,8 @@ export const uploadProcessingPhoto = (planId, file) => {
 };
 export const deleteProcessingPhoto = (planId, photoId) =>
   request.delete(`/admin/processing-plans/${planId}/photos/${photoId}`);
+export const createManualProcessingUsage = (planId, data) =>
+  request.post(`/admin/processing-plans/${planId}/equipment-usages/manual`, data);
 export const createProcessingPlan = (data) => request.post('/admin/processing-plans', data);
 export const createProcessingPlanBatch = (data) =>
   request.post('/admin/processing-plans/batch', data);

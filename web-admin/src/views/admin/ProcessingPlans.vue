@@ -414,7 +414,18 @@
         <section v-if="detailPlan?.isDecoction" class="workflow-detail-section">
           <div class="workflow-detail-heading">
             <h3>设备工序记录</h3>
-            <span>浸泡、煎煮及打包扫码记录</span>
+            <div class="workflow-heading-actions">
+              <span>浸泡、煎煮及打包扫码记录</span>
+              <el-button
+                v-if="Number(detailPlan.status) === PROCESSING_STATUS.PROCESSING"
+                size="small"
+                type="primary"
+                plain
+                @click="openManualUsage"
+              >
+                补录工序
+              </el-button>
+            </div>
           </div>
           <el-table
             v-if="detailPlan.equipmentUsages?.length"
@@ -424,8 +435,8 @@
             <el-table-column label="工序" min-width="80">
               <template #default="{ row }">{{ usageStageText(row.stage) }}</template>
             </el-table-column>
-            <el-table-column prop="portionNo" label="批次" width="82">
-              <template #default="{ row }">第 {{ row.portionNo }} 批</template>
+            <el-table-column prop="portionNo" label="分组" width="82">
+              <template #default="{ row }">第 {{ row.portionNo }} 组</template>
             </el-table-column>
             <el-table-column label="设备" min-width="160">
               <template #default="{ row }">
@@ -435,6 +446,14 @@
             <el-table-column label="操作人" min-width="100">
               <template #default="{ row }">
                 {{ row.operator?.nickname || row.operator?.name || row.operator?.phone || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="记录状态" min-width="110">
+              <template #default="{ row }">
+                <el-tag :type="usageStatusTag(row.status)" effect="plain">
+                  {{ usageStatusText(row.status) }}
+                </el-tag>
+                <div class="secondary-text">{{ usageSourceText(row.source) }}</div>
               </template>
             </el-table-column>
             <el-table-column label="开始时间" min-width="155">
@@ -453,8 +472,97 @@
           </el-table>
           <el-empty v-else :image-size="64" description="尚无设备工序记录" />
         </section>
+
+        <section v-if="detailPlan?.workflowExceptions?.length" class="workflow-detail-section">
+          <div class="workflow-detail-heading">
+            <h3>异常处理记录</h3>
+            <span>{{ detailPlan.workflowExceptions.length }} 条</span>
+          </div>
+          <el-timeline>
+            <el-timeline-item
+              v-for="item in detailPlan.workflowExceptions"
+              :key="item.id"
+              :timestamp="formatDate(item.createdAt)"
+              type="warning"
+            >
+              <strong>{{ workflowExceptionTypeText(item.type) }}</strong>
+              <div>{{ item.reason }}</div>
+              <div class="secondary-text">
+                操作人：{{
+                  item.creator?.nickname || item.creator?.name || item.creator?.phone || '-'
+                }}
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+        </section>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="manualUsageVisible"
+      title="人工补录设备工序"
+      width="min(560px, 94vw)"
+      destroy-on-close
+    >
+      <el-alert
+        title="补录会永久标记为人工记录，并写入异常处理日志。"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+      <el-form class="manual-usage-form" :model="manualUsageForm" label-width="90px">
+        <el-form-item label="工序" required>
+          <el-select v-model="manualUsageForm.stage" @change="manualUsageForm.equipmentId = null">
+            <el-option label="浸泡" :value="3" />
+            <el-option label="煎煮" :value="4" />
+            <el-option label="打包" :value="5" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分组" required>
+          <el-input-number v-model="manualUsageForm.portionNo" :min="1" :max="99" />
+        </el-form-item>
+        <el-form-item label="设备" required>
+          <el-select v-model="manualUsageForm.equipmentId" filterable placeholder="请选择设备">
+            <el-option
+              v-for="item in manualUsageEquipmentOptions"
+              :key="item.id"
+              :label="`${item.equipmentNo} · ${item.name}`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="开始时间" required>
+          <el-date-picker
+            v-model="manualUsageForm.startedAt"
+            type="datetime"
+            placeholder="请选择开始时间"
+          />
+        </el-form-item>
+        <el-form-item label="结束时间" required>
+          <el-date-picker
+            v-model="manualUsageForm.endedAt"
+            type="datetime"
+            placeholder="请选择结束时间"
+          />
+        </el-form-item>
+        <el-form-item label="补录原因" required>
+          <el-input
+            v-model.trim="manualUsageForm.reason"
+            type="textarea"
+            :rows="3"
+            maxlength="255"
+            show-word-limit
+            placeholder="请说明漏扫原因"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="manualUsageVisible = false">取消</el-button>
+        <el-button type="primary" :loading="manualUsageSaving" @click="submitManualUsage">
+          确认补录
+        </el-button>
+      </template>
+    </el-dialog>
 
     <ProcessingPrintDialog
       v-model="planPrintVisible"
@@ -1101,6 +1209,7 @@ import { getStores } from '@/api/store';
 import {
   createProcessingPlan,
   createProcessingPlanBatch,
+  createManualProcessingUsage,
   deleteProcessingPhoto,
   deleteProcessingPlan,
   getDictionaries,
@@ -1117,6 +1226,7 @@ import {
   uploadProcessingPhoto,
   updateProcessingPlan
 } from '@/api/processing';
+import { getProcessingEquipment } from '@/api/processingEquipment';
 import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
 import {
@@ -1151,6 +1261,10 @@ const workflowStageNames = {
   7: '加工完成'
 };
 const usageStageNames = { 3: '浸泡', 4: '煎煮', 5: '打包' };
+const usageStatusNames = { 1: '进行中', 2: '已完成', 3: '已作废' };
+const usageSourceNames = { 1: '扫码记录', 2: '人工补录', 3: '故障接续' };
+const workflowExceptionTypeNames = { 1: '误扫撤销', 2: '设备故障换机', 3: '人工补录' };
+const equipmentTypeByStage = { 3: 'SOAK_BUCKET', 4: 'DECOCTION_POT', 5: 'PACKAGING_MACHINE' };
 const DETAIL_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
 
 function canvasToBlob(canvas, quality) {
@@ -1204,6 +1318,21 @@ function workflowStageText(stage) {
 }
 function usageStageText(stage) {
   return usageStageNames[Number(stage)] || '-';
+}
+function usageStatusText(status) {
+  return usageStatusNames[Number(status)] || '-';
+}
+function usageStatusTag(status) {
+  return { 1: 'primary', 2: 'success', 3: 'info' }[Number(status)] || 'info';
+}
+function usageSourceText(source) {
+  return usageSourceNames[Number(source)] || '-';
+}
+function workflowExceptionTypeText(type) {
+  return workflowExceptionTypeNames[Number(type)] || '异常处理';
+}
+function workflowRequestId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 function workflowDuration(start, end) {
   if (!start) return '-';
@@ -1345,6 +1474,10 @@ const PlanTable = defineComponent({
         PROCESSING_STATUS.FINISHED
       ].includes(row.status) ||
       (row.status === PROCESSING_STATUS.READY_PICKUP && Boolean(row.package));
+    const canCancelProcessing = (row) =>
+      row.status === PROCESSING_STATUS.PROCESSING &&
+      Number(row.currentStage) === 1 &&
+      !row.dispensingCompletedAt;
     const quickTagProps = (row, name, enabled = canQuickEdit(row), title = '点击修改') =>
       enabled
         ? {
@@ -1618,6 +1751,17 @@ const PlanTable = defineComponent({
                               () => '加工完成'
                             )
                           : null,
+                        canCancelProcessing(row)
+                          ? h(
+                              ElButton,
+                              {
+                                link: true,
+                                type: 'danger',
+                                onClick: () => action('cancel-processing', row)
+                              },
+                              () => '取消加工'
+                            )
+                          : null,
                         row.status === PROCESSING_STATUS.FINISHED && !row.package
                           ? h(
                               ElButton,
@@ -1709,6 +1853,22 @@ const detailLoading = ref(false);
 const detailPhotoUrls = ref([]);
 const detailPhotoUploading = ref(false);
 const detailPhotoUploadRef = ref(null);
+const manualUsageVisible = ref(false);
+const manualUsageSaving = ref(false);
+const manualUsageEquipment = ref([]);
+const manualUsageForm = reactive({
+  stage: 3,
+  portionNo: 1,
+  equipmentId: null,
+  startedAt: null,
+  endedAt: null,
+  reason: ''
+});
+const manualUsageEquipmentOptions = computed(() =>
+  manualUsageEquipment.value.filter(
+    (item) => item.type === equipmentTypeByStage[Number(manualUsageForm.stage)]
+  )
+);
 const canManageDetailPhotos = computed(
   () =>
     Number(detailPlan.value?.status) === PROCESSING_STATUS.PROCESSING &&
@@ -1800,6 +1960,53 @@ async function removeDetailPhoto(photoId) {
     await loadDetailWorkflow(detailPlan.value.id);
   } finally {
     detailPhotoUploading.value = false;
+  }
+}
+
+async function openManualUsage() {
+  if (!detailPlan.value?.id) return;
+  const endedAt = new Date();
+  const startedAt = new Date(endedAt.getTime() - 30 * 60 * 1000);
+  Object.assign(manualUsageForm, {
+    stage: 3,
+    portionNo: 1,
+    equipmentId: null,
+    startedAt,
+    endedAt,
+    reason: ''
+  });
+  const result = await getProcessingEquipment({
+    page: 1,
+    pageSize: 100,
+    status: 1,
+    storeId: detailPlan.value.storeId
+  });
+  manualUsageEquipment.value = result.list || [];
+  manualUsageVisible.value = true;
+}
+
+async function submitManualUsage() {
+  if (!detailPlan.value?.id || manualUsageSaving.value) return;
+  if (!manualUsageForm.equipmentId) return ElMessage.warning('请选择设备');
+  if (!manualUsageForm.startedAt || !manualUsageForm.endedAt)
+    return ElMessage.warning('请选择开始和结束时间');
+  if (!manualUsageForm.reason) return ElMessage.warning('请填写补录原因');
+  manualUsageSaving.value = true;
+  try {
+    await createManualProcessingUsage(detailPlan.value.id, {
+      stage: Number(manualUsageForm.stage),
+      portionNo: Number(manualUsageForm.portionNo),
+      equipmentId: Number(manualUsageForm.equipmentId),
+      startedAt: manualUsageForm.startedAt,
+      endedAt: manualUsageForm.endedAt,
+      reason: manualUsageForm.reason,
+      requestId: workflowRequestId()
+    });
+    manualUsageVisible.value = false;
+    ElMessage.success('工序已补录');
+    await loadDetailWorkflow(detailPlan.value.id);
+  } finally {
+    manualUsageSaving.value = false;
   }
 }
 
@@ -2488,6 +2695,32 @@ async function handleAction(name, row) {
   if (name === 'edit') return openEdit(row);
   if (name === 'finish') return finishPlan(row);
   if (name === 'generate-package') return generatePackage(row);
+  if (name === 'cancel-processing') {
+    if (
+      row.status !== PROCESSING_STATUS.PROCESSING ||
+      Number(row.currentStage) !== 1 ||
+      row.dispensingCompletedAt
+    ) {
+      ElMessage.warning('只有尚未完成调配的加工计划可以取消');
+      return;
+    }
+    try {
+      await ElMessageBox.confirm(
+        `确认取消“${row.prescription?.customerName || '该顾客'}”的${row.processType?.name || '加工计划'}吗？`,
+        '取消加工',
+        {
+          confirmButtonText: '确认取消',
+          cancelButtonText: '返回',
+          type: 'warning'
+        }
+      );
+    } catch {
+      return;
+    }
+    await transitionProcessingPlan(row.id, PROCESSING_STATUS.CANCELLED);
+    ElMessage.success('加工已取消');
+    return reloadAll();
+  }
   if (name === 'start') {
     try {
       await ElMessageBox.confirm(
@@ -2640,6 +2873,18 @@ onMounted(async () => {
 .workflow-detail-heading span {
   color: var(--app-muted);
   font-size: 13px;
+}
+.workflow-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.manual-usage-form {
+  margin-top: 18px;
+}
+.manual-usage-form :deep(.el-select),
+.manual-usage-form :deep(.el-date-editor) {
+  width: 100%;
 }
 .workflow-photo-tools {
   display: flex;
