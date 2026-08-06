@@ -123,9 +123,9 @@ test("edited built-in print templates are not seeded again", async () => {
           return [
             {
               templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
-              name: "加工标签（75×50热敏裁切顶端补偿版）",
+              name: "加工标签（热敏自定义版）",
               widthMm: 80,
-              heightMm: 50,
+              heightMm: 80,
             },
           ];
         }
@@ -144,13 +144,13 @@ test("edited built-in print templates are not seeded again", async () => {
     seeded.some(
       (item) =>
         item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
-        item.name === "加工标签（80×50热敏裁切顶端补偿版）",
+        item.name === "加工标签（80×80热敏裁切顶端补偿版）",
     ),
     false,
   );
 });
 
-test("legacy 75mm thermal processing templates upgrade in place", async () => {
+test("legacy thermal processing templates upgrade in place", async () => {
   let findManyCall = 0;
   let updated;
   let seeded = [];
@@ -207,7 +207,7 @@ test("legacy 75mm thermal processing templates upgrade in place", async () => {
   );
 });
 
-test("existing stores receive the 80mm thermal processing template", async () => {
+test("existing stores receive both 80mm thermal processing templates", async () => {
   let seeded = [];
   let findManyCall = 0;
   const prisma = {
@@ -234,11 +234,17 @@ test("existing stores receive the 80mm thermal processing template", async () =>
   const thermal = seeded.filter(
     (item) =>
       item.templateType === PRINT_TEMPLATE_TYPES.PROCESSING &&
-      Number(item.widthMm) === 80 &&
-      Number(item.heightMm) === 50,
+      Number(item.widthMm) === 80,
   );
-  assert.equal(thermal.length, 1);
-  assert.equal(thermal[0].isDefault, 0);
+  assert.equal(
+    thermal.filter((item) => Number(item.heightMm) === 50).length,
+    1,
+  );
+  assert.equal(
+    thermal.filter((item) => Number(item.heightMm) === 80).length,
+    1,
+  );
+  assert.ok(thermal.every((item) => item.isDefault === 0));
 });
 
 test("equipment labels identify the QR code as fixed to the equipment", () => {

@@ -485,6 +485,13 @@ export const THERMAL_PROCESSING_TEMPLATE = Object.freeze({
   ]
 });
 
+export const THERMAL_PROCESSING_SQUARE_TEMPLATE = Object.freeze({
+  ...THERMAL_PROCESSING_TEMPLATE,
+  id: 'local-processing-thermal-80-square',
+  name: '加工标签（80×80热敏裁切顶端补偿版）',
+  heightMm: 80
+});
+
 export const DEFAULT_EQUIPMENT_TEMPLATE = Object.freeze({
   id: 'local-equipment-default',
   templateType: EQUIPMENT_TEMPLATE_TYPE,

@@ -32,6 +32,11 @@ const THERMAL_PROCESSING_TEMPLATE = Object.freeze({
   widthMm: 80,
   heightMm: 50,
 });
+const THERMAL_PROCESSING_SQUARE_TEMPLATE = Object.freeze({
+  name: "加工标签（80×80热敏裁切顶端补偿版）",
+  widthMm: 80,
+  heightMm: 80,
+});
 
 const DEFAULT_TEMPLATES = [
   {
@@ -61,6 +66,13 @@ const DEFAULT_TEMPLATES = [
   {
     templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
     ...THERMAL_PROCESSING_TEMPLATE,
+    fields: defaultProcessingFields("thermal-80"),
+    isDefault: 0,
+    seedWhenTypeExists: true,
+  },
+  {
+    templateType: PRINT_TEMPLATE_TYPES.PROCESSING,
+    ...THERMAL_PROCESSING_SQUARE_TEMPLATE,
     fields: defaultProcessingFields("thermal-80"),
     isDefault: 0,
     seedWhenTypeExists: true,
