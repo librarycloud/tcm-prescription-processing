@@ -96,6 +96,14 @@
   border-top: 1rpx solid #f0f0f0;
 }
 
+.usage-row.next-step-row {
+  display: block;
+}
+
+.next-step-action {
+  margin-top: 16rpx;
+}
+
 .usage-row > view,
 .history-main {
   min-width: 0;
