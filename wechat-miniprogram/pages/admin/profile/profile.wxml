@@ -138,6 +138,10 @@
     </view>
   </view>
 
+  <view class="about">
+    <t-button variant="outline" block bind:tap="showAbout">关于</t-button>
+  </view>
+
   <view class="logout">
     <t-button variant="outline" block bind:tap="logout">退出登录</t-button>
   </view>

@@ -2,6 +2,7 @@ import { getProfile, sendEmailCode, updateProfile, verifyEmail } from '../../../
 import { bindWechat, rebindWechat } from '../../../api/auth';
 import { clearSession, getToken, getUser, setSession } from '../../../utils/auth';
 import { onUserTabChange } from '../../../utils/user-tabbar';
+import { getAppInfo } from '../../../utils/app-info';
 import { getWechatLoginCode } from '../../../utils/wechat';
 
 Page({
@@ -246,6 +247,16 @@ Page({
     } finally {
       this.setData({ saving: false });
     }
+  },
+
+  showAbout() {
+    const { version, uploadDate } = getAppInfo();
+    wx.showModal({
+      title: '关于',
+      content: `版本号：${version}\n上传日期：${uploadDate}`,
+      showCancel: false,
+      confirmText: '知道了'
+    });
   },
 
   logout() {

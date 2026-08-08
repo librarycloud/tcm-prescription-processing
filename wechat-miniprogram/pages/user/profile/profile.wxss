@@ -219,6 +219,10 @@
   line-height: 1;
 }
 
-.logout {
+.about {
   margin-top: 32rpx;
+}
+
+.logout {
+  margin-top: 16rpx;
 }

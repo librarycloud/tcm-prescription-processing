@@ -25,6 +25,7 @@ import {
   getProcessingPhoto,
   getProcessingWorkflow,
   startEquipmentUsage,
+  startPackagingUsage,
   transferFaultyEquipment,
   voidEquipmentUsage,
 } from "../services/processingWorkflowService.js";
@@ -282,9 +283,22 @@ export async function finishEquipmentUsageController(request, reply) {
       request.user,
       request.params.id,
       request.params.usageId,
+    ),
+    "已完成打包",
+  );
+}
+
+export async function startPackagingUsageController(request, reply) {
+  return ok(
+    reply,
+    await startPackagingUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
       request.body || {},
     ),
-    "已完成煎煮并记录包装机",
+    "已开始打包",
   );
 }
 

@@ -143,6 +143,14 @@ export function finishProcessingEquipmentUsage(id, usageId, data) {
   });
 }
 
+export function startPackagingEquipmentUsage(id, usageId, data) {
+  return request({
+    url: `/admin/processing-plans/${id}/equipment-usages/${usageId}/start-packaging`,
+    method: 'POST',
+    data
+  });
+}
+
 export function voidProcessingEquipmentUsage(id, usageId, data) {
   return request({
     url: `/admin/processing-plans/${id}/equipment-usages/${usageId}/void`,

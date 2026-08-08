@@ -64,6 +64,7 @@ import {
   deletePhotoController as deleteProcessingPhotoController,
   photoController as processingPhotoController,
   startEquipmentUsageController,
+  startPackagingUsageController,
   finishEquipmentUsageController,
   transferFaultyEquipmentController,
   voidEquipmentUsageController,
@@ -307,6 +308,10 @@ export default async function adminRoutes(fastify) {
   fastify.post(
     "/processing-plans/:id/equipment-usages/manual",
     createManualEquipmentUsageController,
+  );
+  fastify.post(
+    "/processing-plans/:id/equipment-usages/:usageId/start-packaging",
+    startPackagingUsageController,
   );
   fastify.post(
     "/processing-plans/:id/equipment-usages/:usageId/finish",

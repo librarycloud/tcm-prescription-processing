@@ -3,6 +3,7 @@ import {
   finishProcessingEquipmentUsage,
   getProcessingWorkflow,
   startProcessingEquipmentUsage,
+  startPackagingEquipmentUsage,
   transferFaultyProcessingEquipment,
   transitionProcessingPlan,
   uploadDispensingPhoto,
@@ -149,6 +150,7 @@ Page({
     stageName: '-',
     activeSoakings: [],
     activeDecoctions: [],
+    activePackagings: [],
     usageHistory: [],
     showProcessingSteps: false,
     processingFinished: false,
@@ -157,7 +159,8 @@ Page({
     canUploadPhoto: false,
     canCancel: false,
     canStartSoaking: false,
-    canFinish: false
+    canFinish: false,
+    finishing: false
   },
 
   onLoad(options) {
@@ -189,6 +192,9 @@ Page({
       const activeDecoctions = usages.filter(
         (item) => Number(item.stage) === 4 && Number(item.status) === 1
       );
+      const activePackagings = usages.filter(
+        (item) => Number(item.stage) === 5 && Number(item.status) === 1
+      );
       const inProgress = Number(detail.status) === 1;
       const processingFinished = [2, 3, 4].includes(Number(detail.status));
       const viewDetail = {
@@ -210,6 +216,7 @@ Page({
           STAGE_NAMES[detail.currentStage] || (Number(detail.status) === 0 ? '待加工' : '-'),
         activeSoakings,
         activeDecoctions,
+        activePackagings,
         usageHistory: usages,
         showProcessingSteps: [1, 2, 3, 4].includes(Number(detail.status)),
         processingFinished,
@@ -219,7 +226,7 @@ Page({
         canCancel: inProgress && Number(detail.currentStage) === 1 && !detail.dispensingCompletedAt,
         canStartSoaking:
           inProgress && detail.isDecoction && [2, 3].includes(Number(detail.currentStage)),
-        canFinish: inProgress && detail.canCompleteWorkflow
+        canFinish: inProgress && (detail.canCompleteWorkflow || detail.canFinalizeWorkflow)
       });
     } finally {
       this.setData({ loading: false });
@@ -308,14 +315,14 @@ Page({
     await this.load();
   },
 
-  async finishWithPackaging(e) {
+  async startPackaging(e) {
     const code = await scanEquipment().catch(() => '');
     if (!code) return;
-    await finishProcessingEquipmentUsage(this.data.id, e.currentTarget.dataset.usage, {
+    await startPackagingEquipmentUsage(this.data.id, e.currentTarget.dataset.usage, {
       equipmentCode: code,
       requestId: newRequestId()
     });
-    wx.showToast({ title: '煎煮和打包已记录', icon: 'success' });
+    wx.showToast({ title: '已开始打包', icon: 'success' });
     await this.load();
   },
 
@@ -384,13 +391,24 @@ Page({
   },
 
   async finishPlan() {
+    if (this.data.finishing) return;
     const createPackage = await chooseCompletionMode();
     if (createPackage === null) return;
-    await transitionProcessingPlan(this.data.id, 2, { createPackage });
-    wx.showToast({
-      title: createPackage ? '已完成并生成包裹' : '加工已完成',
-      icon: 'success'
-    });
-    await this.load();
+    this.setData({ finishing: true });
+    try {
+      for (const usage of this.data.activePackagings) {
+        await finishProcessingEquipmentUsage(this.data.id, usage.id, {
+          requestId: newRequestId()
+        });
+      }
+      await transitionProcessingPlan(this.data.id, 2, { createPackage });
+      wx.showToast({
+        title: createPackage ? '已完成并生成包裹' : '加工已完成',
+        icon: 'success'
+      });
+      await this.load();
+    } finally {
+      this.setData({ finishing: false });
+    }
   }
 });

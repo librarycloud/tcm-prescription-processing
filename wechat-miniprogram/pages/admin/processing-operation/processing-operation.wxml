@@ -73,7 +73,7 @@
         </view>
       </view>
       <view wx:if="{{processingFinished}}" class="step-result">浸泡已完成</view>
-      <t-button wx:if="{{canStartSoaking}}" variant="outline" block bind:tap="startSoaking">
+      <t-button theme="primary" wx:if="{{canStartSoaking}}" block bind:tap="startSoaking">
         扫码添加浸泡桶
       </t-button>
     </view>
@@ -113,7 +113,7 @@
     <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">4</view>
-        <view><view class="step-title">打包</view><view class="muted">每组药扫描包装机后即完成该组加工</view></view>
+        <view><view class="step-title">打包</view><view class="muted">扫描包装机开始打包，完成后点击底部“加工完成”</view></view>
       </view>
       <view class="usage-row next-step-row" wx:for="{{activeDecoctions}}" wx:key="id">
         <view>
@@ -121,15 +121,22 @@
           <view class="muted">煎药机：{{item.equipment.name}}</view>
         </view>
         <view class="next-step-action">
-          <t-button theme="primary" block data-usage="{{item.id}}" bind:tap="finishWithPackaging">
+          <t-button theme="primary" block data-usage="{{item.id}}" bind:tap="startPackaging">
             扫包装机开始打包
           </t-button>
+        </view>
+      </view>
+      <view class="usage-row" wx:for="{{activePackagings}}" wx:key="id">
+        <view>
+          <view class="usage-title">第 {{item.portionNo}} 组 · {{item.equipment.name}} · 打包中</view>
+          <view class="muted">{{item.startedAtText}} · {{item.durationText}}</view>
+          <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
       </view>
       <view wx:if="{{packagingCompleted}}" class="step-result">
         全部分组已完成打包
       </view>
-      <view wx:elif="{{!activeDecoctions.length}}" class="empty-step">等待煎煮完成后扫描包装机</view>
+      <view wx:elif="{{!activeDecoctions.length && !activePackagings.length}}" class="empty-step">等待煎煮完成后扫描包装机</view>
     </view>
 
     <view wx:if="{{usageHistory.length}}" class="app-card history-card">
@@ -160,7 +167,7 @@
     </view>
 
     <view wx:if="{{canFinish}}" class="finish-bar">
-      <t-button theme="success" block bind:tap="finishPlan">加工完成</t-button>
+      <t-button theme="success" block loading="{{finishing}}" bind:tap="finishPlan">加工完成</t-button>
     </view>
   </block>
 </view>

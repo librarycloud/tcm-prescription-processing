@@ -9,6 +9,7 @@ import {
   deleteProcessingPhoto,
   finishEquipmentUsage,
   getProcessingPhoto,
+  startPackagingUsage,
 } from "../src/services/processingWorkflowService.js";
 import { config } from "../src/config.js";
 import {
@@ -104,7 +105,7 @@ test("decoction workflows require released equipment and a completed decoction",
     () => assertProcessingWorkflowComplete(occupiedPrisma, plan),
     {
       statusCode: 409,
-      message: "还有浸泡桶或煎药机未结束",
+      message: "还有浸泡或煎煮工序未结束",
     },
   );
 
@@ -149,11 +150,11 @@ test("decoction workflows require a packaging-machine scan for every completed p
   };
   await assert.rejects(() => assertProcessingWorkflowComplete(prisma, plan), {
     statusCode: 409,
-    message: "第 1 组尚未扫描包装机",
+    message: "第 1 组尚未开始打包",
   });
 });
 
-test("scanning a packaging machine releases the decoction pot and records packaging", async () => {
+test("scanning starts packaging and manual completion finishes it", async () => {
   const state = {
     plan: {
       id: 21,
@@ -276,22 +277,36 @@ test("scanning a packaging machine releases the decoction pot and records packag
             item.processingPlanId === where.processingPlanId &&
             item.status === where.status,
         ).length,
+      findMany: async ({ where }) =>
+        state.usages.filter(
+          (item) =>
+            item.processingPlanId === where.processingPlanId &&
+            item.status === where.status,
+        ),
     },
     operationLog: { create: async () => ({ id: 1 }) },
     $transaction: async (work) => work(prisma),
   };
 
-  const result = await finishEquipmentUsage(prisma, actor, 21, 41, {
+  const started = await startPackagingUsage(prisma, actor, 21, 41, {
     equipmentCode: "TCM:EQUIPMENT:1:packer-token",
   });
 
   assert.equal(state.pot.currentUsageId, null);
-  assert.equal(state.packer.currentUsageId, null);
+  assert.equal(state.packer.currentUsageId, 42);
   assert.equal(state.usages[1].endReason, "煎煮完成");
   assert.equal(state.usages[1].status, EQUIPMENT_USAGE_STATUS.COMPLETED);
   assert.equal(state.usages[2].stage, PROCESSING_STAGE.PACKAGING);
+  assert.equal(state.usages[2].status, EQUIPMENT_USAGE_STATUS.ACTIVE);
+  assert.equal(state.plan.currentStage, PROCESSING_STAGE.PACKAGING);
+  assert.equal(started.canCompleteWorkflow, false);
+  assert.equal(started.canFinalizeWorkflow, true);
+
+  const result = await finishEquipmentUsage(prisma, actor, 21, 42);
+
+  assert.equal(state.packer.currentUsageId, null);
   assert.equal(state.usages[2].status, EQUIPMENT_USAGE_STATUS.COMPLETED);
-  assert.equal(state.usages[2].endReason, "扫码完成打包");
+  assert.equal(state.usages[2].endReason, "加工完成");
   assert.equal(state.plan.currentStage, PROCESSING_STAGE.PACKAGING_DONE);
   assert.equal(result.canCompleteWorkflow, true);
 });

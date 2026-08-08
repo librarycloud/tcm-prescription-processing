@@ -79,7 +79,11 @@ function isDecoction(plan) {
   );
 }
 
-function workflowCompletionState(plan, equipmentUsages) {
+function workflowCompletionState(
+  plan,
+  equipmentUsages,
+  { allowActivePackaging = false } = {},
+) {
   const blockers = [];
   if (!plan.dispensingCompletedAt) blockers.push("请先上传调配完成照片");
   if (!isDecoction(plan))
@@ -88,8 +92,24 @@ function workflowCompletionState(plan, equipmentUsages) {
   const valid = equipmentUsages.filter(
     (item) => item.status !== EQUIPMENT_USAGE_STATUS.VOIDED,
   );
-  if (valid.some((item) => item.status === EQUIPMENT_USAGE_STATUS.ACTIVE)) {
-    blockers.push("还有浸泡桶或煎药机未结束");
+  if (
+    valid.some(
+      (item) =>
+        item.status === EQUIPMENT_USAGE_STATUS.ACTIVE &&
+        item.stage !== PROCESSING_STAGE.PACKAGING,
+    )
+  ) {
+    blockers.push("还有浸泡或煎煮工序未结束");
+  }
+  if (
+    !allowActivePackaging &&
+    valid.some(
+      (item) =>
+        item.status === EQUIPMENT_USAGE_STATUS.ACTIVE &&
+        item.stage === PROCESSING_STAGE.PACKAGING,
+    )
+  ) {
+    blockers.push("还有打包工序未结束");
   }
   const soakingGroups = new Set(
     valid
@@ -114,7 +134,9 @@ function workflowCompletionState(plan, equipmentUsages) {
       .filter(
         (item) =>
           item.stage === PROCESSING_STAGE.PACKAGING &&
-          item.status === EQUIPMENT_USAGE_STATUS.COMPLETED,
+          (item.status === EQUIPMENT_USAGE_STATUS.COMPLETED ||
+            (allowActivePackaging &&
+              item.status === EQUIPMENT_USAGE_STATUS.ACTIVE)),
       )
       .map((item) => Number(item.portionNo)),
   );
@@ -123,7 +145,7 @@ function workflowCompletionState(plan, equipmentUsages) {
     if (!decoctionGroups.has(groupNo))
       blockers.push(`第 ${groupNo} 组尚未完成煎煮`);
     else if (!packagingGroups.has(groupNo))
-      blockers.push(`第 ${groupNo} 组尚未扫描包装机`);
+      blockers.push(`第 ${groupNo} 组尚未开始打包`);
   }
   return { canComplete: blockers.length === 0, blockers };
 }
@@ -154,11 +176,15 @@ function decoratePlan(plan) {
     (item) => item.status === EQUIPMENT_USAGE_STATUS.ACTIVE,
   );
   const completion = workflowCompletionState(plan, equipmentUsages);
+  const finalization = workflowCompletionState(plan, equipmentUsages, {
+    allowActivePackaging: true,
+  });
   return {
     ...plan,
     qrContent: processingPlanQrContent(plan.scanToken),
     isDecoction: isDecoction(plan),
     canCompleteWorkflow: completion.canComplete,
+    canFinalizeWorkflow: finalization.canComplete,
     completionBlockers: completion.blockers,
     activeUsages,
     equipmentUsages,
@@ -597,7 +623,7 @@ export async function startEquipmentUsage(prisma, actor, id, payload = {}) {
   return getProcessingWorkflow(prisma, actor, current.id);
 }
 
-export async function finishEquipmentUsage(
+export async function startPackagingUsage(
   prisma,
   actor,
   id,
@@ -677,41 +703,17 @@ export async function finishEquipmentUsage(
       });
       if (occupied.count !== 1)
         throw new AppError("包装机正在被其他加工计划使用", 409);
-      await tx.processingEquipmentUsage.update({
-        where: { id: packagingUsage.id },
-        data: {
-          status: EQUIPMENT_USAGE_STATUS.COMPLETED,
-          endedAt: now,
-          endedBy: Number(actor.id),
-          endReason: "扫码完成打包",
-        },
-      });
-      await tx.processingEquipment.updateMany({
-        where: { id: packagingMachine.id, currentUsageId: packagingUsage.id },
-        data: { currentUsageId: null, updatedBy: Number(actor.id) },
-      });
-      const activeCount = await tx.processingEquipmentUsage.count({
-        where: {
-          processingPlanId: current.id,
-          status: EQUIPMENT_USAGE_STATUS.ACTIVE,
-        },
-      });
-      await tx.processingPlan.update({
-        where: { id: current.id },
-        data: {
-          currentStage:
-            activeCount > 0
-              ? PROCESSING_STAGE.DECOCTING
-              : PROCESSING_STAGE.PACKAGING_DONE,
-          updatedBy: Number(actor.id),
-        },
-      });
+      await refreshCurrentStage(
+        tx,
+        current.id,
+        PROCESSING_STAGE.PACKAGING,
+      );
       await recordOperation(tx, actor, {
         module: "processing",
-        action: "packaging_complete",
+        action: "packaging_start",
         targetId: current.id,
         storeId: current.storeId,
-        description: `第 ${usage.portionNo} 组完成煎煮并扫码打包：${usage.equipment.equipmentNo} ${usage.equipment.name} → ${packagingMachine.equipmentNo} ${packagingMachine.name}`,
+        description: `第 ${usage.portionNo} 组完成煎煮并开始打包：${usage.equipment.equipmentNo} ${usage.equipment.name} → ${packagingMachine.equipmentNo} ${packagingMachine.name}`,
       });
     });
   } catch (error) {
@@ -722,6 +724,62 @@ export async function finishEquipmentUsage(
     });
     if (!duplicateRequest) throw error;
   }
+  return getProcessingWorkflow(prisma, actor, current.id);
+}
+
+export async function finishEquipmentUsage(prisma, actor, id, usageId) {
+  const current = await getWorkflowPlan(prisma, actor, id);
+  if (current.status !== PLAN_STATUS.PROCESSING)
+    throw new AppError("当前计划不在加工中", 409);
+  const existing = (current.equipmentUsages || []).find(
+    (item) => Number(item.id) === Number(usageId),
+  );
+  if (
+    existing?.stage === PROCESSING_STAGE.PACKAGING &&
+    existing?.status === EQUIPMENT_USAGE_STATUS.COMPLETED
+  ) {
+    return getProcessingWorkflow(prisma, actor, current.id);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const usage = await tx.processingEquipmentUsage.findFirst({
+      where: {
+        id: Number(usageId),
+        processingPlanId: current.id,
+        stage: PROCESSING_STAGE.PACKAGING,
+        status: EQUIPMENT_USAGE_STATUS.ACTIVE,
+      },
+      include: { equipment: true },
+    });
+    if (!usage) throw new AppError("打包记录不存在或已经完成", 409);
+
+    const now = new Date();
+    await tx.processingEquipmentUsage.update({
+      where: { id: usage.id },
+      data: {
+        status: EQUIPMENT_USAGE_STATUS.COMPLETED,
+        endedAt: now,
+        endedBy: Number(actor.id),
+        endReason: "加工完成",
+      },
+    });
+    await tx.processingEquipment.updateMany({
+      where: { id: usage.equipmentId, currentUsageId: usage.id },
+      data: { currentUsageId: null, updatedBy: Number(actor.id) },
+    });
+    await refreshCurrentStage(
+      tx,
+      current.id,
+      PROCESSING_STAGE.PACKAGING_DONE,
+    );
+    await recordOperation(tx, actor, {
+      module: "processing",
+      action: "packaging_complete",
+      targetId: current.id,
+      storeId: current.storeId,
+      description: `第 ${usage.portionNo} 组完成打包：${usage.equipment.equipmentNo} ${usage.equipment.name}`,
+    });
+  });
   return getProcessingWorkflow(prisma, actor, current.id);
 }
 
@@ -741,9 +799,11 @@ async function refreshCurrentStage(
     (item) => item.stage === PROCESSING_STAGE.DECOCTING,
   )
     ? PROCESSING_STAGE.DECOCTING
-    : active.some((item) => item.stage === PROCESSING_STAGE.SOAKING)
-      ? PROCESSING_STAGE.SOAKING
-      : fallback;
+    : active.some((item) => item.stage === PROCESSING_STAGE.PACKAGING)
+      ? PROCESSING_STAGE.PACKAGING
+      : active.some((item) => item.stage === PROCESSING_STAGE.SOAKING)
+        ? PROCESSING_STAGE.SOAKING
+        : fallback;
   await tx.processingPlan.update({
     where: { id: planId },
     data: { currentStage },
