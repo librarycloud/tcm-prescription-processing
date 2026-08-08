@@ -39,6 +39,14 @@ export function deletePrescriptionAttachment(id) {
   });
 }
 
+export function uploadPrescriptionAttachment(id, file) {
+  return uploadFile({
+    url: `/admin/prescriptions/${id}/attachment?originalName=${encodeURIComponent(file.originalName)}`,
+    filePath: file.filePath,
+    formData: { originalName: file.originalName }
+  });
+}
+
 export function getProcessingPlans(params) {
   return request({ url: '/admin/processing-plans', data: params });
 }

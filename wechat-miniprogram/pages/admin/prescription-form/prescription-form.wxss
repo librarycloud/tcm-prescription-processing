@@ -27,6 +27,43 @@
   background: #f7f8fa;
 }
 
+.attachment-field {
+  padding: 24rpx 0 8rpx;
+  border-top: 1rpx solid #eef0f5;
+}
+
+.attachment-field-head,
+.attachment-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.attachment-selection {
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 6px;
+  background: #f7f8fa;
+}
+
+.attachment-copy {
+  min-width: 0;
+}
+
+.attachment-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-hint {
+  margin-top: 14rpx;
+  color: #86909c;
+  font-size: 24rpx;
+}
+
 .submit {
   margin-top: 32rpx;
 }

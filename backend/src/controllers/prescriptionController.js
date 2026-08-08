@@ -35,7 +35,14 @@ export async function uploadAttachmentController(request, reply) {
       request.server.prisma,
       request.user,
       request.params.id,
-      { buffer, filename: file.filename, mimetype: file.mimetype },
+      {
+        buffer,
+        filename:
+          request.query?.originalName ||
+          file.fields?.originalName?.value ||
+          file.filename,
+        mimetype: file.mimetype,
+      },
     ),
     '处方原件已上传',
   );

@@ -113,7 +113,9 @@
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
+  align-items: flex-end;
   gap: 10rpx;
+  margin-left: auto;
 }
 
 .usage-flags {

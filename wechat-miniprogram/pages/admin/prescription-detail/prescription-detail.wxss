@@ -38,6 +38,12 @@
   min-width: 0;
 }
 
+.attachment-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12rpx;
+}
+
 .attachment-name {
   overflow: hidden;
   font-weight: 600;

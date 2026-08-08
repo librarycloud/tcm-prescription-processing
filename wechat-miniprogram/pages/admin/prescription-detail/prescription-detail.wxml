@@ -25,13 +25,23 @@
 
   <view class="section-title attachment-title">
     <text>处方原件</text>
+    <t-button
+      size="small"
+      theme="primary"
+      variant="outline"
+      loading="{{attachmentPreparing || attachmentUploading}}"
+      bind:tap="selectAndUploadAttachment"
+    >{{detail.attachment ? '重新上传' : '上传处方'}}</t-button>
   </view>
   <view class="app-card attachment-card" wx:if="{{detail.attachment}}">
     <view class="attachment-info">
       <view class="attachment-name">{{detail.attachment.originalName}}</view>
       <view class="muted">{{detail.attachment.fileSizeText}}</view>
     </view>
-    <t-button size="small" theme="danger" variant="outline" loading="{{attachmentDeleting}}" bind:tap="removeAttachment">删除</t-button>
+    <view class="attachment-actions">
+      <t-button size="small" variant="outline" loading="{{attachmentPreviewing}}" bind:tap="previewAttachment">预览</t-button>
+      <t-button size="small" theme="danger" variant="outline" loading="{{attachmentDeleting}}" bind:tap="removeAttachment">删除</t-button>
+    </view>
   </view>
   <view class="app-card empty-attachment" wx:else>暂无处方原件</view>
 

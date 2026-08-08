@@ -31,6 +31,31 @@
       <view class="picker-row"><text>处方状态</text><text class="picker-value">{{form.statusText}}</text></view>
     </picker>
     <t-textarea t-class-textarea="compact-textarea" label="备注" value="{{form.remark}}" maxlength="500" placeholder="请输入备注" data-field="remark" bind:change="onChange" />
+
+    <view class="attachment-field">
+      <view class="attachment-field-head">
+        <text>处方原件</text>
+        <t-button size="small" variant="outline" loading="{{attachmentPreparing}}" bind:tap="selectAttachment">
+          {{selectedAttachment || currentAttachment ? '重新选择' : '选择文件'}}
+        </t-button>
+      </view>
+      <view wx:if="{{selectedAttachment}}" class="attachment-selection">
+        <view class="attachment-copy">
+          <view class="attachment-name">{{selectedAttachment.originalName}}</view>
+          <view class="muted">
+            {{selectedAttachment.sizeText}}{{selectedAttachment.compressed ? '· 已自动压缩' : ''}}
+          </view>
+        </view>
+        <t-button size="small" theme="danger" variant="text" bind:tap="clearSelectedAttachment">移除</t-button>
+      </view>
+      <view wx:elif="{{currentAttachment}}" class="attachment-selection">
+        <view class="attachment-copy">
+          <view class="attachment-name">{{currentAttachment.originalName}}</view>
+          <view class="muted">已上传 · {{currentAttachment.sizeText}}</view>
+        </view>
+      </view>
+      <view wx:else class="attachment-hint">支持拍照、相册图片或 PDF</view>
+    </view>
     <view class="submit"><t-button theme="primary" block loading="{{loading}}" bind:tap="submit">保存</t-button></view>
   </view>
 

@@ -4,10 +4,15 @@ import {
   getDoctors,
   getPrescriptionDetail,
   getStores,
+  uploadPrescriptionAttachment,
   updatePrescription
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import {
+  choosePrescriptionAttachment,
+  formatAttachmentSize
+} from '../../../utils/prescription-attachment';
 
 const EXTERNAL_OPTIONS = [
   { label: '本方', value: false },
@@ -30,6 +35,9 @@ Page({
     isEdit: false,
     isSuperAdmin: false,
     loading: false,
+    attachmentPreparing: false,
+    currentAttachment: null,
+    selectedAttachment: null,
     stores: [],
     storeIndex: 0,
     doctors: [],
@@ -105,6 +113,12 @@ Page({
       sourceIndex,
       externalIndex: item.isExternal ? 1 : 0,
       statusIndex,
+      currentAttachment: item.attachment
+        ? {
+            ...item.attachment,
+            sizeText: formatAttachmentSize(item.attachment.fileSize)
+          }
+        : null,
       form: {
         storeId: item.storeId,
         storeName: item.store?.name || '',
@@ -178,6 +192,23 @@ Page({
     });
   },
 
+  async selectAttachment() {
+    if (this.data.attachmentPreparing || this.data.loading) return;
+    this.setData({ attachmentPreparing: true });
+    try {
+      const attachment = await choosePrescriptionAttachment();
+      if (attachment) this.setData({ selectedAttachment: attachment });
+    } catch (error) {
+      wx.showToast({ title: error.message || '文件处理失败', icon: 'none' });
+    } finally {
+      this.setData({ attachmentPreparing: false });
+    }
+  },
+
+  clearSelectedAttachment() {
+    this.setData({ selectedAttachment: null });
+  },
+
   async submit() {
     const form = this.data.form;
     if (this.data.isSuperAdmin && !this.data.isEdit && !form.storeId) {
@@ -213,8 +244,16 @@ Page({
       const result = this.data.isEdit
         ? await updatePrescription(this.data.id, payload)
         : await createPrescription(payload);
+      if (!this.data.isEdit) {
+        this.setData({ id: result.id, isEdit: true });
+        wx.setNavigationBarTitle({ title: '编辑处方' });
+      }
+      if (this.data.selectedAttachment) {
+        await uploadPrescriptionAttachment(result.id, this.data.selectedAttachment);
+        this.setData({ selectedAttachment: null });
+      }
       wx.showToast({
-        title: this.data.isEdit ? '修改成功' : '新增成功',
+        title: '保存成功',
         icon: 'success'
       });
       setTimeout(() => {

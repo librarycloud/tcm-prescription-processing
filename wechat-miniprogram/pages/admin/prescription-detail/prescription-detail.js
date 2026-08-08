@@ -1,9 +1,16 @@
 import {
   deletePrescriptionAttachment,
   deleteProcessingPlan,
-  getPrescriptionDetail
+  getPrescriptionDetail,
+  uploadPrescriptionAttachment
 } from '../../../api/admin';
+import { getToken } from '../../../utils/auth';
+import { getBaseUrl } from '../../../utils/config';
 import { formatDate, formatPickupCode } from '../../../utils/format';
+import {
+  choosePrescriptionAttachment,
+  formatAttachmentSize
+} from '../../../utils/prescription-attachment';
 
 const PRESCRIPTION_STATUS = {
   0: { text: '进行中', theme: 'primary' },
@@ -20,20 +27,15 @@ const PLAN_STATUS = {
   5: { text: '已取消', theme: 'default' }
 };
 
-function formatFileSize(value) {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return '0 B';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 Page({
   data: {
     id: null,
     detail: null,
     plans: [],
-    attachmentDeleting: false
+    attachmentDeleting: false,
+    attachmentPreparing: false,
+    attachmentUploading: false,
+    attachmentPreviewing: false
   },
 
   onLoad(options) {
@@ -63,7 +65,7 @@ Page({
         attachment: item.attachment
           ? {
               ...item.attachment,
-              fileSizeText: formatFileSize(item.attachment.fileSize)
+              fileSizeText: formatAttachmentSize(item.attachment.fileSize)
             }
           : null,
         canEdit: Number(item.status) !== 1,
@@ -172,6 +174,60 @@ Page({
           this.setData({ attachmentDeleting: false });
         }
       }
+    });
+  },
+
+  async selectAndUploadAttachment() {
+    if (this.data.attachmentPreparing || this.data.attachmentUploading) return;
+    this.setData({ attachmentPreparing: true });
+    let attachment = null;
+    try {
+      attachment = await choosePrescriptionAttachment();
+    } catch (error) {
+      wx.showToast({ title: error.message || '文件处理失败', icon: 'none' });
+    } finally {
+      this.setData({ attachmentPreparing: false });
+    }
+    if (!attachment) return;
+
+    this.setData({ attachmentUploading: true });
+    try {
+      await uploadPrescriptionAttachment(this.data.id, attachment);
+      wx.showToast({
+        title: attachment.compressed ? '已压缩并上传' : '上传成功',
+        icon: 'success'
+      });
+      await this.load();
+    } finally {
+      this.setData({ attachmentUploading: false });
+    }
+  },
+
+  previewAttachment() {
+    const attachment = this.data.detail?.attachment;
+    if (!attachment || this.data.attachmentPreviewing) return;
+    this.setData({ attachmentPreviewing: true });
+    wx.downloadFile({
+      url: `${getBaseUrl()}/admin/prescriptions/${this.data.id}/attachment`,
+      header: { Authorization: `Bearer ${getToken()}` },
+      success: (res) => {
+        if (res.statusCode !== 200) {
+          wx.showToast({ title: '处方原件加载失败', icon: 'none' });
+          return;
+        }
+        if (String(attachment.mimeType || '').startsWith('image/')) {
+          wx.previewImage({ urls: [res.tempFilePath] });
+          return;
+        }
+        wx.openDocument({
+          filePath: res.tempFilePath,
+          fileType: 'pdf',
+          showMenu: true,
+          fail: () => wx.showToast({ title: 'PDF 打开失败', icon: 'none' })
+        });
+      },
+      fail: () => wx.showToast({ title: '处方原件加载失败', icon: 'none' }),
+      complete: () => this.setData({ attachmentPreviewing: false })
     });
   },
 

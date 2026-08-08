@@ -67,9 +67,9 @@
           <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
         <view class="usage-actions">
-          <t-button size="small" variant="outline" data-usage="{{item.id}}" bind:tap="handleUsageException">
+          <t-tag theme="warning" variant="light" data-usage="{{item.id}}" bind:click="handleUsageException">
             异常处理
-          </t-button>
+          </t-tag>
         </view>
       </view>
       <view wx:if="{{processingFinished}}" class="step-result">浸泡已完成</view>
@@ -101,9 +101,9 @@
           <view class="muted">操作人：{{item.operatorName}}</view>
         </view>
         <view class="usage-actions">
-          <t-button size="small" variant="outline" data-usage="{{item.id}}" bind:tap="handleUsageException">
+          <t-tag theme="warning" variant="light" data-usage="{{item.id}}" bind:click="handleUsageException">
             异常处理
-          </t-button>
+          </t-tag>
         </view>
       </view>
       <view wx:if="{{processingFinished}}" class="step-result">煎煮已完成</view>
