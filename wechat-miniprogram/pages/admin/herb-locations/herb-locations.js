@@ -105,7 +105,8 @@ Page({
     herbEditVisible: false,
     positionEditVisible: false,
     selectedLocation: null,
-    assignmentForm: { locationCode: '', herbId: '', name: '', code: '', specification: '' },
+    assignmentForm: { type: 'D', unitNo: '', layerNo: '', columnNo: '', slotNo: '', herbId: '', name: '', code: '', specification: '' },
+    assignmentTypeIndex: 0,
     herbEditForm: { id: '', name: '', code: '', specification: '' },
     positionEditForm: { assignmentId: '', name: '', type: 'D', unitNo: '', layerNo: '', columnNo: '', slotNo: '' },
     positionTypeIndex: 0
@@ -188,10 +189,30 @@ Page({
   closeDetail() { this.setData({ detailVisible: false, selectedLocation: null }); },
 
   openAssignment() {
-    this.setData({ assignmentVisible: true, assignmentForm: { locationCode: this.data.selectedLocation?.displayCode || '', herbId: '', name: '', code: '', specification: '' } });
+    const location = this.data.selectedLocation;
+    const assignmentTypeIndex = Math.max(0, POSITION_TYPES.findIndex((item) => item.value === (location?.type || 'D')));
+    this.setData({
+      assignmentVisible: true,
+      assignmentTypeIndex,
+      assignmentForm: {
+        type: location?.type || 'D',
+        unitNo: String(location?.unitNo ?? ''),
+        layerNo: String(location?.layerNo ?? ''),
+        columnNo: String(location?.columnNo ?? ''),
+        slotNo: '',
+        herbId: '',
+        name: '',
+        code: '',
+        specification: ''
+      }
+    });
   },
   closeAssignment() { this.setData({ assignmentVisible: false }); },
   onAssignmentChange(e) { this.setData({ [`assignmentForm.${e.currentTarget.dataset.field}`]: e.detail.value }); },
+  onAssignmentTypeChange(e) {
+    const assignmentTypeIndex = Number(e.detail.value);
+    this.setData({ assignmentTypeIndex, 'assignmentForm.type': POSITION_TYPES[assignmentTypeIndex].value });
+  },
   onHerbChange(e) {
     const herb = this.data.herbs[Number(e.detail.value)];
     if (!herb) return;
@@ -199,10 +220,15 @@ Page({
   },
   async saveAssignment() {
     const form = this.data.assignmentForm;
-    if (!form.locationCode || (!form.herbId && !form.name)) return wx.showToast({ title: '请填写位置和药材名称', icon: 'none' });
+    if (!form.type || !form.unitNo || form.layerNo === '' || (form.type === 'D' && !form.columnNo) || (!form.herbId && !form.name)) {
+      return wx.showToast({ title: '请完整填写位置和药材名称', icon: 'none' });
+    }
+    const locationCode = form.type === 'D'
+      ? ['D', form.unitNo, form.layerNo, form.columnNo, form.slotNo].filter(Boolean).join('-')
+      : [form.type, form.unitNo, form.layerNo].join('-');
     this.setData({ saving: true });
     try {
-      await saveHerbLocationAssignment({ ...form, ...(this.data.isSuperAdmin ? { storeId: this.data.storeId } : {}) });
+      await saveHerbLocationAssignment({ ...form, locationCode, ...(this.data.isSuperAdmin ? { storeId: this.data.storeId } : {}) });
       this.setData({ assignmentVisible: false });
       await this.load();
       this.refreshSelectedLocation();

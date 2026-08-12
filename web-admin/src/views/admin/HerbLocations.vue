@@ -152,9 +152,28 @@
 
     <el-dialog v-model="assignmentVisible" title="配置药材" width="520px" destroy-on-close>
       <el-form label-position="top">
-        <el-form-item label="位置编号" required>
-          <el-input v-model.trim="assignmentForm.locationCode" placeholder="D122 或 D1222（末位为格内序号）" />
-        </el-form-item>
+        <div class="position-form-grid">
+          <el-form-item label="位置类型" required>
+            <el-select v-model="assignmentForm.type">
+              <el-option label="药斗" value="D" />
+              <el-option label="柜" value="G" />
+              <el-option label="冰箱" value="F" />
+              <el-option label="仓库" value="C" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="assignmentUnitLabel" required>
+            <el-input v-model.trim="assignmentForm.unitNo" inputmode="numeric" />
+          </el-form-item>
+          <el-form-item label="层" required>
+            <el-input v-model.trim="assignmentForm.layerNo" inputmode="numeric" />
+          </el-form-item>
+          <el-form-item v-if="assignmentForm.type === 'D'" label="列" required>
+            <el-input v-model.trim="assignmentForm.columnNo" inputmode="numeric" />
+          </el-form-item>
+          <el-form-item v-if="assignmentForm.type === 'D'" label="格内序号">
+            <el-input v-model.trim="assignmentForm.slotNo" inputmode="numeric" placeholder="可选" />
+          </el-form-item>
+        </div>
         <el-form-item label="已有药材">
           <el-select v-model="assignmentForm.herbId" clearable filterable :filter-method="filterExistingHerbs" placeholder="名称、拼音首字母或编码" style="width: 100%" @change="selectExistingHerb">
             <el-option v-for="herb in filteredExistingHerbs" :key="herb.id" :label="[herb.code, herb.name, herb.specification].filter(Boolean).join(' · ')" :value="herb.id" />
@@ -283,6 +302,7 @@ const layers = computed(() => [0, ...Array.from({ length: layout.value.drawerLay
 const columns = computed(() => Array.from({ length: Math.max(...columnsForSelectedCabinet.value) }, (_, index) => index + 1));
 const columnsForSelectedCabinet = computed(() => layout.value.drawerLayerColumns[selectedUnit.value - 1] || []);
 const positionUnitLabel = computed(() => ({ D: '斗', G: '柜', F: '冰箱', C: '仓库' }[positionEditForm.value.type] || '编号'));
+const assignmentUnitLabel = computed(() => ({ D: '斗', G: '柜', F: '冰箱', C: '仓库' }[assignmentForm.value.type] || '编号'));
 
 function defaultLayout() {
   return {
@@ -309,8 +329,18 @@ function normalizeLayout(value) {
   return { ...next, drawerLayerColumns: cabinetColumns };
 }
 
-function emptyAssignmentForm(locationCode = '') {
-  return { locationCode, herbId: null, name: '', code: '', specification: '' };
+function emptyAssignmentForm(location = null) {
+  return {
+    type: location?.type || locationType.value,
+    unitNo: String(location?.unitNo ?? selectedUnit.value ?? ''),
+    layerNo: String(location?.layerNo ?? ''),
+    columnNo: String(location?.columnNo ?? ''),
+    slotNo: '',
+    herbId: null,
+    name: '',
+    code: '',
+    specification: ''
+  };
 }
 
 function emptyPositionEditForm() {
@@ -421,7 +451,7 @@ function selectLocation(location) {
 
 function openAssignment(location = null) {
   existingHerbKeyword.value = '';
-  assignmentForm.value = emptyAssignmentForm(displayCode(location?.code || selectedLocation.value?.code || ''));
+  assignmentForm.value = emptyAssignmentForm(location || selectedLocation.value);
   assignmentVisible.value = true;
 }
 
@@ -509,10 +539,15 @@ async function loadData() {
 
 async function saveAssignment() {
   const form = assignmentForm.value;
-  if (!form.locationCode || (!form.herbId && !form.name)) return ElMessage.warning('请填写位置编号和药材名称');
+  if (!form.type || !form.unitNo || form.layerNo === '' || (form.type === 'D' && !form.columnNo) || (!form.herbId && !form.name)) {
+    return ElMessage.warning('请完整填写位置和药材名称');
+  }
+  const locationCode = form.type === 'D'
+    ? ['D', form.unitNo, form.layerNo, form.columnNo, form.slotNo].filter(Boolean).join('-')
+    : [form.type, form.unitNo, form.layerNo].join('-');
   saving.value = true;
   try {
-    const result = await saveHerbLocationAssignment({ ...form, storeId: storeId.value });
+    const result = await saveHerbLocationAssignment({ ...form, locationCode, storeId: storeId.value });
     assignmentVisible.value = false;
     ElMessage.success(result.created ? '斗谱已保存' : '该药材已在此位置');
     await loadData();
