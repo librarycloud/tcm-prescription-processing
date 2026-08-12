@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import {
+  assignHerbLocation,
   exportHerbLocations,
   getHerbLocationLayout,
   importHerbLocationMoves,
@@ -213,6 +214,65 @@ test("store administrators only read the layout of their assigned store", async 
 
   assert.equal(result.store.id, 7);
   assert.equal(result.layout.drawerLayerColumns.length, 5);
+});
+
+test("assigning an herb to a refrigerator ignores an empty drawer slot number", async () => {
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "F-2-3",
+    locationType: "F",
+    unitNo: 2,
+    layerNo: 3,
+    columnNo: null,
+  };
+  let assignmentData;
+  const transaction = {
+    herbLocation: {
+      findUnique: async () => location,
+      create: async () => location,
+    },
+    herb: {
+      findFirst: async () => ({ id: 40, storeId: 7, name: "冰箱药", status: 1 }),
+    },
+    herbLocationAssignment: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      create: async ({ data }) => {
+        assignmentData = data;
+        return { id: 30, ...data };
+      },
+    },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => ({
+        drawerUnitCount: 5,
+        drawerLayerCount: 8,
+        drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+        drawerTopColumnCount: 6,
+        bigCabinetUnitCount: 5,
+        bigCabinetLayerCount: 3,
+      }),
+    },
+    herbLocation: { createMany: async () => ({ count: 0 }) },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  await assignHerbLocation(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    { locationCode: "F-2-3", slotNo: "", herbId: 40 },
+  );
+
+  assert.deepEqual(assignmentData, {
+    locationId: 20,
+    herbId: 40,
+    slotNo: null,
+    createdBy: 10,
+  });
 });
 
 test("updates the final D-code digit used for ordering herbs in a drawer", async () => {

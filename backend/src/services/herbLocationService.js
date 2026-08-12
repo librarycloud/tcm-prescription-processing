@@ -520,7 +520,7 @@ async function createAssignment(
 
   const slotNo =
     locationResult.slotNo ??
-    (herbPayload.slotNo == null
+    (herbPayload.slotNo == null || String(herbPayload.slotNo).trim() === ""
       ? null
       : positiveDigit(herbPayload.slotNo, "格内序号"));
   if (slotNo !== null) {
