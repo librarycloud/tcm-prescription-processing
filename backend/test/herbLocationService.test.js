@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import {
+  exportHerbLocations,
   getHerbLocationLayout,
   importHerbLocationMoves,
   importHerbLocations,
@@ -110,6 +111,70 @@ test("uses the configured drawer cabinet count", () => {
   };
 
   assert.equal(parseLocationCode("D611", layout).locationCode, "D-6-1-1");
+});
+
+test("exports D/G/F/C locations into separate worksheets in one workbook", async () => {
+  const locations = [
+    ["D", "D-2-3-4", "斗药"],
+    ["G", "G-1-2", "柜药"],
+    ["F", "F-2-3", "冰箱药"],
+    ["C", "C-3-4", "仓库药"],
+  ].map(([locationType, locationCode, name], index) => ({
+    id: index + 1,
+    locationType,
+    locationCode,
+    unitNo: index + 1,
+    layerNo: index + 1,
+    columnNo: locationType === "D" ? 4 : null,
+    assignments: [
+      {
+        id: index + 10,
+        slotNo: locationType === "D" ? 1 : null,
+        herb: { code: `${locationType}01`, name, specification: "统货" },
+      },
+    ],
+  }));
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => ({
+        drawerUnitCount: 5,
+        drawerLayerCount: 8,
+        drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+        drawerTopColumnCount: 6,
+        bigCabinetUnitCount: 5,
+        bigCabinetLayerCount: 3,
+      }),
+    },
+    herbLocation: {
+      createMany: async () => ({ count: 0 }),
+      findMany: async () => locations,
+    },
+  };
+
+  const result = await exportHerbLocations(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    {},
+  );
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(result.buffer);
+
+  assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), [
+    "斗",
+    "柜",
+    "冰箱",
+    "仓库",
+  ]);
+  assert.deepEqual(
+    workbook.worksheets.map((sheet) => sheet.getRow(2).values.slice(1)),
+    [
+      ["D234", "D01", "斗药", "统货"],
+      ["G12", "G01", "柜药", "统货"],
+      ["F23", "F01", "冰箱药", "统货"],
+      ["C34", "C01", "仓库药", "统货"],
+    ],
+  );
 });
 
 test("store administrators only read the layout of their assigned store", async () => {

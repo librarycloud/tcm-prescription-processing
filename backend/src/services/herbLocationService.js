@@ -8,6 +8,12 @@ const LOCATION_TYPES = new Set(["D", "G", "F", "C"]);
 const IMPORT_HEADERS = ["位置编号", "药材编码", "药材名称", "规格"];
 const EXPORT_HEADERS = ["位置", "药材编码", "药材名称", "规格"];
 const MOVE_IMPORT_HEADERS = ["原位置", "新位置", "药材编码", "药材名称"];
+const EXPORT_SHEETS = [
+  ["D", "斗"],
+  ["G", "柜"],
+  ["F", "冰箱"],
+  ["C", "仓库"],
+];
 const DEFAULT_DRAWER_UNIT_COUNT = 5;
 const DEFAULT_DRAWER_LAYER_COLUMNS = [6, 6, 6, 6, 6, 6, 6, 3];
 const DEFAULT_LAYOUT = {
@@ -935,27 +941,36 @@ async function getWorkbookData(prisma, storeId) {
 async function buildWorkbook(prisma, storeId, template = false) {
   const locations = await getWorkbookData(prisma, storeId);
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(template ? "斗谱导入模板" : "斗谱表");
-  sheet.addRow(template ? IMPORT_HEADERS : EXPORT_HEADERS);
-  const rows = template
-    ? locations.map((location) => [
-        compactLocationCode(location.locationCode),
-        "",
-        "",
-        "",
-      ])
-    : worksheetRows(locations);
-  rows.forEach((row) => sheet.addRow(row));
-  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  sheet.getRow(1).fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF2563EB" },
-  };
-  sheet.columns = template
-    ? [{ width: 18 }, { width: 18 }, { width: 20 }, { width: 18 }]
-    : [{ width: 16 }, { width: 18 }, { width: 20 }, { width: 18 }];
-  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  const worksheetConfigs = template
+    ? [["斗谱导入模板", locations]]
+    : EXPORT_SHEETS.map(([type, name]) => [
+        name,
+        locations.filter((location) => location.locationType === type),
+      ]);
+
+  for (const [name, sheetLocations] of worksheetConfigs) {
+    const sheet = workbook.addWorksheet(name);
+    sheet.addRow(template ? IMPORT_HEADERS : EXPORT_HEADERS);
+    const rows = template
+      ? sheetLocations.map((location) => [
+          compactLocationCode(location.locationCode),
+          "",
+          "",
+          "",
+        ])
+      : worksheetRows(sheetLocations);
+    rows.forEach((row) => sheet.addRow(row));
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF2563EB" },
+    };
+    sheet.columns = template
+      ? [{ width: 18 }, { width: 18 }, { width: 20 }, { width: 18 }]
+      : [{ width: 16 }, { width: 18 }, { width: 20 }, { width: 18 }];
+    sheet.views = [{ state: "frozen", ySplit: 1 }];
+  }
   return workbook.xlsx.writeBuffer();
 }
 

@@ -186,9 +186,28 @@
 
     <el-dialog v-model="positionEditVisible" :title="`编辑“${positionEditForm.name}”位置`" width="430px" destroy-on-close>
       <el-form label-position="top">
-        <el-form-item label="位置编号" required>
-          <el-input v-model.trim="positionEditForm.locationCode" placeholder="如 D1221（末位为格内位置）" />
-        </el-form-item>
+        <div class="position-form-grid">
+          <el-form-item label="位置类型" required>
+            <el-select v-model="positionEditForm.type">
+              <el-option label="药斗" value="D" />
+              <el-option label="柜" value="G" />
+              <el-option label="冰箱" value="F" />
+              <el-option label="仓库" value="C" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="positionUnitLabel" required>
+            <el-input v-model.trim="positionEditForm.unitNo" inputmode="numeric" />
+          </el-form-item>
+          <el-form-item label="层" required>
+            <el-input v-model.trim="positionEditForm.layerNo" inputmode="numeric" />
+          </el-form-item>
+          <el-form-item v-if="positionEditForm.type === 'D'" label="列" required>
+            <el-input v-model.trim="positionEditForm.columnNo" inputmode="numeric" />
+          </el-form-item>
+          <el-form-item v-if="positionEditForm.type === 'D'" label="格内序号">
+            <el-input v-model.trim="positionEditForm.slotNo" inputmode="numeric" placeholder="可选" />
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="positionEditVisible = false">取消</el-button>
@@ -256,13 +275,14 @@ const herbEditVisible = ref(false);
 const herbEditSaving = ref(false);
 const positionEditVisible = ref(false);
 const positionEditSaving = ref(false);
-const positionEditForm = ref({ assignmentId: null, name: '', locationCode: '' });
+const positionEditForm = ref(emptyPositionEditForm());
 const herbEditForm = ref({ id: null, name: '', code: '', specification: '' });
 const assignmentForm = ref(emptyAssignmentForm());
 const layout = ref(defaultLayout());
 const layers = computed(() => [0, ...Array.from({ length: layout.value.drawerLayerCount }, (_, index) => index + 1)]);
 const columns = computed(() => Array.from({ length: Math.max(...columnsForSelectedCabinet.value) }, (_, index) => index + 1));
 const columnsForSelectedCabinet = computed(() => layout.value.drawerLayerColumns[selectedUnit.value - 1] || []);
+const positionUnitLabel = computed(() => ({ D: '斗', G: '柜', F: '冰箱', C: '仓库' }[positionEditForm.value.type] || '编号'));
 
 function defaultLayout() {
   return {
@@ -291,6 +311,10 @@ function normalizeLayout(value) {
 
 function emptyAssignmentForm(locationCode = '') {
   return { locationCode, herbId: null, name: '', code: '', specification: '' };
+}
+
+function emptyPositionEditForm() {
+  return { assignmentId: null, name: '', type: 'D', unitNo: '', layerNo: '', columnNo: '', slotNo: '' };
 }
 
 const locationMap = computed(() => new Map(locations.value.map((location) => [location.code, location])));
@@ -412,22 +436,32 @@ function openHerbEdit(herb) {
 }
 
 function openPositionEdit(herb) {
+  const location = selectedLocation.value;
   positionEditForm.value = {
     assignmentId: herb.assignmentId,
     name: herb.name,
-    locationCode: herbPosition(selectedLocation.value.code, herb.slotNo)
+    type: location.type,
+    unitNo: String(location.unitNo ?? ''),
+    layerNo: String(location.layerNo ?? ''),
+    columnNo: String(location.columnNo ?? ''),
+    slotNo: String(herb.slotNo ?? '')
   };
   positionEditVisible.value = true;
 }
 
 async function savePositionEdit() {
   const form = positionEditForm.value;
-  if (!form.locationCode) return ElMessage.warning('请填写位置编号');
+  if (!form.type || !form.unitNo || form.layerNo === '' || (form.type === 'D' && !form.columnNo)) {
+    return ElMessage.warning('请完整填写位置');
+  }
+  const locationCode = form.type === 'D'
+    ? ['D', form.unitNo, form.layerNo, form.columnNo, form.slotNo].filter(Boolean).join('-')
+    : [form.type, form.unitNo, form.layerNo].join('-');
   positionEditSaving.value = true;
   try {
     await updateHerbLocationAssignment(form.assignmentId, {
       storeId: storeId.value,
-      locationCode: form.locationCode
+      locationCode
     });
     positionEditVisible.value = false;
     ElMessage.success('药材位置已更新');
@@ -586,6 +620,8 @@ onMounted(async () => {
 .herb-actions { display: flex; align-items: center; }
 .herb-line span { margin-top: 5px; color: var(--app-muted); font-size: 13px; }
 .upload-icon { margin-bottom: 10px; font-size: 46px; color: var(--el-color-primary); }
+.position-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.position-form-grid :deep(.el-select) { width: 100%; }
 @media (max-width: 960px) { .paired-layout { grid-template-columns: 1fr; } .map-main { border-right: 0; border-bottom: 1px solid var(--app-border); } .paired-cabinet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .paired-cabinet .surface-title { grid-column: 1 / -1; } }
-@media (max-width: 680px) { .header-actions { width: 100%; } .header-actions .el-button { flex: 1; } .store-select { width: 100%; } .control-bar { align-items: stretch; } .control-bar :deep(.el-radio-group), .control-bar :deep(.el-input) { width: 100%; } .view-switch { margin-left: 0; } .paired-cabinet { grid-template-columns: 1fr; } .paired-cabinet .surface-title { grid-column: auto; } }
+@media (max-width: 680px) { .header-actions { width: 100%; } .header-actions .el-button { flex: 1; } .store-select { width: 100%; } .control-bar { align-items: stretch; } .control-bar :deep(.el-radio-group), .control-bar :deep(.el-input) { width: 100%; } .view-switch { margin-left: 0; } .paired-cabinet { grid-template-columns: 1fr; } .paired-cabinet .surface-title { grid-column: auto; } .position-form-grid { grid-template-columns: 1fr; } }
 </style>

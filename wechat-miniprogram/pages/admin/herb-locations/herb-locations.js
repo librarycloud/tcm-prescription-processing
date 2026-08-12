@@ -46,6 +46,7 @@ const TYPES = [
   { label: '冰箱 F', value: 'F' },
   { label: '仓库 C', value: 'C' }
 ];
+const POSITION_TYPES = TYPES.filter((item) => item.value);
 
 function typeText(type) { return TYPES.find((item) => item.value === type)?.label || type || '-'; }
 function locationText(code) { return String(code || '').replaceAll('-', ''); }
@@ -90,6 +91,7 @@ Page({
     storeId: '',
     storeName: '',
     types: TYPES,
+    positionTypes: POSITION_TYPES,
     typeIndex: 0,
     type: '',
     keyword: '',
@@ -105,7 +107,8 @@ Page({
     selectedLocation: null,
     assignmentForm: { locationCode: '', herbId: '', name: '', code: '', specification: '' },
     herbEditForm: { id: '', name: '', code: '', specification: '' },
-    positionEditForm: { assignmentId: '', name: '', locationCode: '' }
+    positionEditForm: { assignmentId: '', name: '', type: 'D', unitNo: '', layerNo: '', columnNo: '', slotNo: '' },
+    positionTypeIndex: 0
   },
 
   onTabChange: onAdminTabChange,
@@ -209,14 +212,37 @@ Page({
 
   openPositionEdit(e) {
     const herb = this.data.selectedLocation.herbs[Number(e.currentTarget.dataset.index)];
-    this.setData({ positionEditVisible: true, positionEditForm: { assignmentId: herb.assignmentId, name: herb.name, locationCode: `${locationText(this.data.selectedLocation.code)}${herb.slotNo || ''}` } });
+    const location = this.data.selectedLocation;
+    const positionTypeIndex = Math.max(0, POSITION_TYPES.findIndex((item) => item.value === location.type));
+    this.setData({
+      positionEditVisible: true,
+      positionTypeIndex,
+      positionEditForm: {
+        assignmentId: herb.assignmentId,
+        name: herb.name,
+        type: location.type,
+        unitNo: String(location.unitNo ?? ''),
+        layerNo: String(location.layerNo ?? ''),
+        columnNo: String(location.columnNo ?? ''),
+        slotNo: String(herb.slotNo ?? '')
+      }
+    });
   },
-  onPositionChange(e) { this.setData({ 'positionEditForm.locationCode': e.detail.value }); },
+  onPositionChange(e) { this.setData({ [`positionEditForm.${e.currentTarget.dataset.field}`]: e.detail.value }); },
+  onPositionTypeChange(e) {
+    const positionTypeIndex = Number(e.detail.value);
+    this.setData({ positionTypeIndex, 'positionEditForm.type': POSITION_TYPES[positionTypeIndex].value });
+  },
   async savePosition() {
     const form = this.data.positionEditForm;
-    if (!form.locationCode) return wx.showToast({ title: '请填写位置编号', icon: 'none' });
+    if (!form.type || !form.unitNo || form.layerNo === '' || (form.type === 'D' && !form.columnNo)) {
+      return wx.showToast({ title: '请完整填写位置', icon: 'none' });
+    }
+    const locationCode = form.type === 'D'
+      ? ['D', form.unitNo, form.layerNo, form.columnNo, form.slotNo].filter(Boolean).join('-')
+      : [form.type, form.unitNo, form.layerNo].join('-');
     this.setData({ saving: true });
-    try { await updateHerbLocationAssignment(form.assignmentId, { locationCode: form.locationCode }); this.setData({ positionEditVisible: false }); await this.load(); this.refreshSelectedLocation(); }
+    try { await updateHerbLocationAssignment(form.assignmentId, { locationCode }); this.setData({ positionEditVisible: false }); await this.load(); this.refreshSelectedLocation(); }
     finally { this.setData({ saving: false }); }
   },
 
