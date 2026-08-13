@@ -13,6 +13,8 @@ export const updateExpectedReturnDate = (id, data) =>
   request.put(`/admin/store-transfers/${id}/expected-return-date`, data);
 export const addStoreTransferReturns = (id, data) =>
   request.post(`/admin/store-transfers/${id}/returns`, data);
+export const updateStoreTransferReturn = (id, returnId, data) =>
+  request.put(`/admin/store-transfers/${id}/returns/${returnId}`, data);
 export const confirmStoreTransferReturn = (id, returnId) =>
   request.post(`/admin/store-transfers/${id}/returns/${returnId}/confirm`);
 export const cancelStoreTransfer = (id, data) =>

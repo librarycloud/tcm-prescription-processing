@@ -8,6 +8,7 @@ import {
   importHerbLocationMoves,
   importHerbLocations,
   parseLocationCode,
+  removeHerbLocationAssignment,
   updateHerbLocationAssignment,
 } from "../src/services/herbLocationService.js";
 
@@ -329,6 +330,126 @@ test("updates the final D-code digit used for ordering herbs in a drawer", async
   );
 
   assert.deepEqual(updateData, { locationId: 20, slotNo: 1 });
+});
+
+for (const [type, label] of [
+  ["F", "refrigerator"],
+  ["C", "warehouse"],
+]) {
+  test(`removes an empty old ${label} location after moving its herb`, async () => {
+    const source = {
+      id: 20,
+      storeId: 7,
+      locationCode: `${type}-5-1`,
+      locationType: type,
+      unitNo: 5,
+      layerNo: 1,
+      columnNo: null,
+    };
+    const destination = {
+      ...source,
+      id: 21,
+      locationCode: `${type}-1-5`,
+      unitNo: 1,
+      layerNo: 5,
+    };
+    const assignment = {
+      id: 30,
+      herbId: 40,
+      locationId: source.id,
+      slotNo: null,
+      location: source,
+      herb: { id: 40, name: "测试药材" },
+    };
+    const deletedLocations = [];
+    const transaction = {
+      herbLocation: {
+        findUnique: async () => destination,
+        deleteMany: async ({ where }) => {
+          deletedLocations.push(where);
+          return { count: 1 };
+        },
+      },
+      herbLocationAssignment: {
+        findFirst: async () => null,
+        update: async () => assignment,
+      },
+    };
+    const prisma = {
+      store: {
+        findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+        findFirst: async () => ({
+          drawerUnitCount: 5,
+          drawerLayerCount: 8,
+          drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+          drawerTopColumnCount: 6,
+          bigCabinetUnitCount: 5,
+          bigCabinetLayerCount: 3,
+        }),
+      },
+      herbLocationAssignment: { findUnique: async () => assignment },
+      operationLog: { create: async () => ({ id: 1 }) },
+      $transaction: async (callback) => callback(transaction),
+    };
+
+    await updateHerbLocationAssignment(
+      prisma,
+      { id: 10, role: 2, storeId: 7 },
+      30,
+      { locationCode: `${type}15` },
+    );
+
+    assert.deepEqual(deletedLocations, [
+      { id: source.id, assignments: { none: {} } },
+    ]);
+  });
+}
+
+test("removing the final herb also removes its empty warehouse location", async () => {
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "C-5-1",
+    locationType: "C",
+  };
+  const assignment = {
+    id: 30,
+    herbId: 40,
+    locationId: location.id,
+    location,
+    herb: { id: 40, name: "测试药材" },
+  };
+  const calls = [];
+  const transaction = {
+    herbLocationAssignment: {
+      delete: async (args) => calls.push(["assignment", args]),
+    },
+    herbLocation: {
+      deleteMany: async (args) => calls.push(["location", args]),
+    },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+    },
+    herbLocationAssignment: { findUnique: async () => assignment },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  await removeHerbLocationAssignment(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    30,
+  );
+
+  assert.deepEqual(calls, [
+    ["assignment", { where: { id: 30 } }],
+    [
+      "location",
+      { where: { id: location.id, assignments: { none: {} } } },
+    ],
+  ]);
 });
 
 test("temporarily releases a slot before swapping two assignments", async () => {

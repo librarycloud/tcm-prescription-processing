@@ -11,6 +11,7 @@ import {
   submitStoreTransferReturns,
   updateExpectedReturnDate,
   updateStoreTransfer,
+  updateStoreTransferReturn,
 } from "../services/storeTransferService.js";
 
 export async function listController(request, reply) {
@@ -43,6 +44,20 @@ export async function updateExpectedReturnDateController(request, reply) {
 
 export async function addReturnsController(request, reply) {
   return ok(reply, await submitStoreTransferReturns(request.server.prisma, request.user, request.params.id, request.body || {}), "归还申请已提交，等待调出门店确认收货");
+}
+
+export async function updateReturnController(request, reply) {
+  return ok(
+    reply,
+    await updateStoreTransferReturn(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.returnId,
+      request.body || {},
+    ),
+    "归还记录已更新",
+  );
 }
 
 export async function confirmOutboundController(request, reply) {

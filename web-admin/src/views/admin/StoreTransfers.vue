@@ -128,12 +128,18 @@
 
     <el-drawer
       v-model="drawerVisible"
-      :title="drawerMode === 'create' ? '新建调拨' : `调拨详情 · ${detail?.transferNo || ''}`"
+      :title="
+        drawerMode === 'create'
+          ? '新建调拨'
+          : drawerMode === 'edit'
+            ? `修改调拨 · ${detail?.transferNo || ''}`
+            : `调拨详情 · ${detail?.transferNo || ''}`
+      "
       size="min(920px, 92vw)"
       destroy-on-close
       @closed="resetDrawer"
     >
-      <template v-if="drawerMode === 'create'">
+      <template v-if="drawerMode === 'create' || drawerMode === 'edit'">
         <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="110px">
           <div class="form-grid">
             <el-form-item label="调出门店" prop="fromStoreId">
@@ -341,6 +347,16 @@
               <el-button
                 link
                 type="primary"
+                :disabled="
+                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
+                  !detail.permissions?.canSubmitReturn
+                "
+                @click="openReturnEdit(row)"
+                >修改</el-button
+              >
+              <el-button
+                link
+                type="primary"
                 :disabled="!detail.permissions?.canSubmitReturn || row.availableReturnQuantity <= 0"
                 @click="openReturn(row)"
                 >申请归还</el-button
@@ -413,11 +429,25 @@
             >取消调拨</el-button
           >
           <span class="footer-spacer" />
-          <template v-if="drawerMode === 'create'">
-            <el-button @click="drawerVisible = false">取消</el-button>
-            <el-button type="primary" :loading="saving" @click="saveCreate">提交调拨申请</el-button>
+          <template v-if="drawerMode === 'create' || drawerMode === 'edit'">
+            <el-button @click="drawerMode === 'edit' ? (drawerMode = 'detail') : (drawerVisible = false)"
+              >取消</el-button
+            >
+            <el-button
+              v-if="drawerMode === 'create'"
+              type="primary"
+              :loading="saving"
+              @click="saveCreate"
+              >提交调拨申请</el-button
+            >
+            <el-button v-else type="primary" :loading="saving" @click="saveEdit"
+              >保存修改</el-button
+            >
           </template>
           <template v-else>
+            <el-button v-if="detail?.permissions?.canUpdate" @click="openEdit"
+              >修改调拨</el-button
+            >
             <el-button
               v-if="detail?.permissions?.canConfirmOutbound"
               type="primary"
@@ -432,7 +462,9 @@
               @click="openReturn()"
               >发起归还</el-button
             >
-            <el-button :disabled="!detail?.permissions?.canUpdate" @click="openExpectedDate"
+            <el-button
+              :disabled="!detail?.permissions?.canUpdateExpectedReturnDate"
+              @click="openExpectedDate"
               >修改预计归还日期</el-button
             >
             <el-button @click="drawerVisible = false">关闭</el-button>
@@ -441,7 +473,12 @@
       </template>
     </el-drawer>
 
-    <el-dialog v-model="returnVisible" title="发起归还" width="680px" destroy-on-close>
+    <el-dialog
+      v-model="returnVisible"
+      :title="returnMode === 'edit' ? '修改归还记录' : '发起归还'"
+      width="680px"
+      destroy-on-close
+    >
       <el-form label-width="90px">
         <el-form-item label="归还日期" required>
           <el-date-picker v-model="returnForm.returnDate" type="date" value-format="YYYY-MM-DD" />
@@ -478,7 +515,7 @@
       </el-form>
       <template #footer>
         <el-button @click="returnVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveReturn">提交归还申请</el-button>
+        <el-button type="primary" :loading="saving" @click="saveReturn">{{ returnMode === 'edit' ? '保存修改' : '提交归还申请' }}</el-button>
       </template>
     </el-dialog>
 
@@ -527,7 +564,9 @@ import {
   getStoreTransfers,
   getStoreTransferStats,
   getTransferStores,
-  updateExpectedReturnDate
+  updateExpectedReturnDate,
+  updateStoreTransfer,
+  updateStoreTransferReturn
 } from '@/api/storeTransfer';
 
 const statusOptions = Object.freeze([
@@ -545,6 +584,8 @@ const detailLoading = ref(false);
 const saving = ref(false);
 const drawerVisible = ref(false);
 const returnVisible = ref(false);
+const returnMode = ref('create');
+const editingReturnId = ref(null);
 const expectedDateVisible = ref(false);
 const drawerMode = ref('detail');
 const detail = ref(null);
@@ -724,6 +765,26 @@ async function openDetail(row) {
   }
 }
 
+function openEdit() {
+  if (!detail.value?.permissions?.canUpdate) return;
+  Object.assign(createForm, {
+    fromStoreId: Number(detail.value.fromStoreId),
+    toStoreId: Number(detail.value.toStoreId),
+    transferDate: formatDateOnly(detail.value.transferDate, ''),
+    expectedReturnDate: formatDateOnly(detail.value.expectedReturnDate, ''),
+    remark: detail.value.remark || '',
+    items: (detail.value.items || []).map((item) => ({
+      itemName: item.itemName || '',
+      specification: item.specification || '',
+      batchNo: item.batchNo || '',
+      quantity: Number(item.quantity),
+      unit: item.unit || '',
+      remark: item.remark || ''
+    }))
+  });
+  drawerMode.value = 'edit';
+}
+
 function resetDrawer() {
   detail.value = null;
   createFormRef.value = null;
@@ -765,6 +826,27 @@ async function saveCreate() {
   }
 }
 
+async function saveEdit() {
+  await createFormRef.value?.validate();
+  if (createForm.expectedReturnDate < createForm.transferDate) {
+    ElMessage.warning('预计归还日期不能早于调拨日期');
+    return;
+  }
+  if (createForm.items.some((item) => !item.itemName || !item.unit || Number(item.quantity) <= 0)) {
+    ElMessage.warning('请完整填写每项明细的名称、数量和单位');
+    return;
+  }
+  saving.value = true;
+  try {
+    detail.value = await updateStoreTransfer(detail.value.id, createForm);
+    drawerMode.value = 'detail';
+    ElMessage.success('调拨已修改');
+    await reload();
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function confirmOutbound() {
   if (!detail.value?.permissions?.canConfirmOutbound) return;
   saving.value = true;
@@ -779,6 +861,8 @@ async function confirmOutbound() {
 
 function openReturn(selectedItem) {
   if (!detail.value?.permissions?.canSubmitReturn) return;
+  returnMode.value = 'create';
+  editingReturnId.value = null;
   const available = detail.value.items.filter((item) => item.availableReturnQuantity > 0);
   Object.assign(returnForm, {
     returnDate: localDate(),
@@ -794,6 +878,33 @@ function openReturn(selectedItem) {
   returnVisible.value = true;
 }
 
+function openReturnEdit(row) {
+  if (
+    row.status !== TRANSFER_RETURN_STATUS.PENDING ||
+    !detail.value?.permissions?.canSubmitReturn
+  )
+    return;
+  const item = detail.value.items.find((candidate) => candidate.id === row.transferItemId);
+  returnMode.value = 'edit';
+  editingReturnId.value = row.id;
+  Object.assign(returnForm, {
+    returnDate: formatDateOnly(row.returnDate, ''),
+    remark: row.remark || '',
+    items: [
+      {
+        transferItemId: row.transferItemId,
+        itemName: row.itemName,
+        unit: item?.unit || '',
+        availableReturnQuantity:
+          Math.round((Number(item?.availableReturnQuantity || 0) + Number(row.quantity)) * 1000) /
+          1000,
+        quantity: Number(row.quantity)
+      }
+    ]
+  });
+  returnVisible.value = true;
+}
+
 async function saveReturn() {
   if (!returnForm.returnDate) return ElMessage.warning('请选择归还日期');
   const items = returnForm.items
@@ -802,13 +913,22 @@ async function saveReturn() {
   if (!items.length) return ElMessage.warning('请至少填写一项归还数量');
   saving.value = true;
   try {
-    detail.value = await addStoreTransferReturns(detail.value.id, {
-      returnDate: returnForm.returnDate,
-      remark: returnForm.remark,
-      items
-    });
+    detail.value =
+      returnMode.value === 'edit'
+        ? await updateStoreTransferReturn(detail.value.id, editingReturnId.value, {
+            returnDate: returnForm.returnDate,
+            remark: returnForm.remark,
+            quantity: items[0].quantity
+          })
+        : await addStoreTransferReturns(detail.value.id, {
+            returnDate: returnForm.returnDate,
+            remark: returnForm.remark,
+            items
+          });
     returnVisible.value = false;
-    ElMessage.success('归还申请已提交，等待调出门店确认收货');
+    ElMessage.success(
+      returnMode.value === 'edit' ? '归还记录已修改' : '归还申请已提交，等待调出门店确认收货'
+    );
     await reload();
   } finally {
     saving.value = false;

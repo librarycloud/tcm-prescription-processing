@@ -227,6 +227,10 @@ export function createStoreTransfer(data) {
   return request({ url: '/admin/store-transfers', method: 'POST', data });
 }
 
+export function updateStoreTransfer(id, data) {
+  return request({ url: `/admin/store-transfers/${id}`, method: 'PUT', data });
+}
+
 export function updateExpectedReturnDate(id, data) {
   return request({
     url: `/admin/store-transfers/${id}/expected-return-date`,
@@ -239,6 +243,14 @@ export function addStoreTransferReturns(id, data) {
   return request({
     url: `/admin/store-transfers/${id}/returns`,
     method: 'POST',
+    data
+  });
+}
+
+export function updateStoreTransferReturn(id, returnId, data) {
+  return request({
+    url: `/admin/store-transfers/${id}/returns/${returnId}`,
+    method: 'PUT',
     data
   });
 }

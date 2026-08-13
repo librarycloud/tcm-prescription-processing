@@ -491,6 +491,16 @@ async function findOrCreateLocation(tx, storeId, locationCode, actor, layout) {
   return { location: existing || created, slotNo };
 }
 
+async function removeEmptyDynamicLocation(tx, location) {
+  if (!location || !["F", "C"].includes(location.locationType)) return;
+  await tx.herbLocation.deleteMany({
+    where: {
+      id: location.id,
+      assignments: { none: {} },
+    },
+  });
+}
+
 async function createAssignment(
   tx,
   storeId,
@@ -679,6 +689,7 @@ export async function updateHerbLocationAssignment(
       where: { id },
       data: { locationId: result.location.id, slotNo },
     });
+    await removeEmptyDynamicLocation(tx, current.location);
     return result.location;
   });
 
@@ -890,7 +901,10 @@ export async function removeHerbLocationAssignment(
   );
   if (storeId !== current.location.storeId)
     throw new AppError("无权操作该门店斗谱", 403);
-  await prisma.herbLocationAssignment.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.herbLocationAssignment.delete({ where: { id } });
+    await removeEmptyDynamicLocation(tx, current.location);
+  });
   await recordOperation(prisma, actor, {
     module: "herb-location",
     action: "remove",

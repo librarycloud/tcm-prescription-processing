@@ -28,5 +28,6 @@
 .sub-title { margin: 18rpx 0 10rpx; color: #1f2329; font-weight: 700; }
 .detail-item { position: relative; margin-bottom: 10rpx; padding: 16rpx; border-radius: 8rpx; background: #f7f8fa; }
 .detail-item t-button { margin-top: 10rpx; }
+.record-actions { display: flex; gap: 12rpx; }
 .return-row { margin: 12rpx 0; padding: 16rpx; border-radius: 8rpx; background: #f7f8fa; }
 .action-wrap { flex-wrap: wrap; justify-content: center; }

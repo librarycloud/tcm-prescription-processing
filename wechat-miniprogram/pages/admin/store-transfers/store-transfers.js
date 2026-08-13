@@ -8,7 +8,9 @@ import {
   getStoreTransferStats,
   getStoreTransfers,
   getTransferStores,
-  updateExpectedReturnDate
+  updateExpectedReturnDate,
+  updateStoreTransfer,
+  updateStoreTransferReturn
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
@@ -112,8 +114,11 @@ Page({
     loading: false,
     saving: false,
     createVisible: false,
+    formMode: 'create',
     detailVisible: false,
     returnVisible: false,
+    returnMode: 'create',
+    editingReturnId: null,
     dateVisible: false,
     detail: null,
     createForm: { fromStoreId: '', toStoreId: '', transferDate: localDate(), expectedReturnDate: localDate(7), remark: '', items: [emptyItem()] },
@@ -210,6 +215,7 @@ Page({
     const currentStoreIndex = Math.max(0, this.data.stores.findIndex((item) => Number(item.id) === currentStoreId));
     this.setData({
       createVisible: true,
+      formMode: 'create',
       createForm: {
         fromStoreId: '',
         toStoreId: this.data.isSuperAdmin ? '' : currentStoreId,
@@ -225,7 +231,43 @@ Page({
     });
   },
 
-  closeCreate() { this.setData({ createVisible: false }); },
+  closeCreate() {
+    this.setData({
+      createVisible: false,
+      detailVisible: this.data.formMode === 'edit' && Boolean(this.data.detail)
+    });
+  },
+
+  openEdit() {
+    const detail = this.data.detail;
+    if (!detail?.permissions?.canUpdate) return;
+    const fromStoreIndex = Math.max(0, this.data.stores.findIndex((item) => Number(item.id) === Number(detail.fromStoreId)));
+    const toStoreIndex = Math.max(0, this.data.stores.findIndex((item) => Number(item.id) === Number(detail.toStoreId)));
+    this.setData({
+      createVisible: true,
+      detailVisible: false,
+      formMode: 'edit',
+      fromStoreIndex,
+      toStoreIndex,
+      fromStoreName: this.storeNameById(detail.fromStoreId),
+      toStoreName: this.storeNameById(detail.toStoreId),
+      createForm: {
+        fromStoreId: Number(detail.fromStoreId),
+        toStoreId: Number(detail.toStoreId),
+        transferDate: String(detail.transferDate || '').slice(0, 10),
+        expectedReturnDate: String(detail.expectedReturnDate || '').slice(0, 10),
+        remark: detail.remark || '',
+        items: (detail.items || []).map((item) => ({
+          itemName: item.itemName || '',
+          specification: item.specification || '',
+          batchNo: item.batchNo || '',
+          quantity: Number(item.quantity),
+          unit: item.unit || '',
+          remark: item.remark || ''
+        }))
+      }
+    });
+  },
 
   onCreateFieldChange(e) {
     const field = e.currentTarget.dataset.field;
@@ -271,9 +313,16 @@ Page({
     }
     this.setData({ saving: true });
     try {
-      await createStoreTransfer({ ...form, fromStoreId: Number(form.fromStoreId), toStoreId: Number(form.toStoreId) });
-      wx.showToast({ title: '调拨申请已提交', icon: 'success' });
-      this.setData({ createVisible: false });
+      const payload = { ...form, fromStoreId: Number(form.fromStoreId), toStoreId: Number(form.toStoreId) };
+      if (this.data.formMode === 'edit') {
+        const detail = decorateDetail(await updateStoreTransfer(this.data.detail.id, payload));
+        this.setData({ detail, createVisible: false, detailVisible: true });
+        wx.showToast({ title: '调拨已修改', icon: 'success' });
+      } else {
+        await createStoreTransfer(payload);
+        wx.showToast({ title: '调拨申请已提交', icon: 'success' });
+        this.setData({ createVisible: false });
+      }
       await this.reload();
     } finally { this.setData({ saving: false }); }
   },
@@ -301,6 +350,8 @@ Page({
     if (!detail?.permissions?.canSubmitReturn) return;
     this.setData({
       returnVisible: true,
+      returnMode: 'create',
+      editingReturnId: null,
       returnForm: {
         returnDate: localDate(),
         remark: '',
@@ -311,6 +362,33 @@ Page({
           available: item.availableReturnQuantity,
           quantity: 0
         }))
+      }
+    });
+  },
+
+  openReturnEdit(e) {
+    const row = this.data.detail.returnRecords[Number(e.currentTarget.dataset.index)];
+    if (
+      !row ||
+      Number(row.status) !== TRANSFER_RETURN_STATUS.PENDING ||
+      !this.data.detail?.permissions?.canSubmitReturn
+    )
+      return;
+    const item = this.data.detail.items.find((candidate) => Number(candidate.id) === Number(row.transferItemId));
+    this.setData({
+      returnVisible: true,
+      returnMode: 'edit',
+      editingReturnId: row.id,
+      returnForm: {
+        returnDate: String(row.returnDate || '').slice(0, 10),
+        remark: row.remark || '',
+        items: [{
+          transferItemId: row.transferItemId,
+          itemName: row.itemName,
+          unit: item?.unit || '',
+          available: Math.round((Number(item?.availableReturnQuantity || 0) + Number(row.quantity)) * 1000) / 1000,
+          quantity: Number(row.quantity)
+        }]
       }
     });
   },
@@ -329,7 +407,15 @@ Page({
     if (items.some((item) => item.quantity > Number(form.items.find((row) => row.transferItemId === item.transferItemId).available))) return wx.showToast({ title: '归还数量不能超过可归还数量', icon: 'none' });
     this.setData({ saving: true });
     try {
-      this.setData({ detail: decorateDetail(await addStoreTransferReturns(this.data.detail.id, { returnDate: form.returnDate, remark: form.remark, items })), returnVisible: false });
+      const detail = this.data.returnMode === 'edit'
+        ? await updateStoreTransferReturn(this.data.detail.id, this.data.editingReturnId, {
+          returnDate: form.returnDate,
+          remark: form.remark,
+          quantity: items[0].quantity
+        })
+        : await addStoreTransferReturns(this.data.detail.id, { returnDate: form.returnDate, remark: form.remark, items });
+      this.setData({ detail: decorateDetail(detail), returnVisible: false });
+      wx.showToast({ title: this.data.returnMode === 'edit' ? '归还记录已修改' : '归还申请已提交', icon: 'success' });
       await this.reload();
     } finally { this.setData({ saving: false }); }
   },

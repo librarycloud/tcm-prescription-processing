@@ -123,7 +123,12 @@ function actorPermissions(actor, transfer, hasReturns, hasPendingReturns) {
     ? Number(transfer.fromStoreId)
     : Number(transfer.toStoreId);
   return {
-    canUpdate: active && (superAdmin || managingStoreId === actorStore),
+    canUpdate:
+      active &&
+      !outboundConfirmed &&
+      (superAdmin || managingStoreId === actorStore),
+    canUpdateExpectedReturnDate:
+      active && (superAdmin || managingStoreId === actorStore),
     canConfirmOutbound:
       active &&
       !outboundConfirmed &&
@@ -395,13 +400,16 @@ export async function createStoreTransfer(prisma, actor, payload) {
 export async function updateStoreTransfer(prisma, actor, idValue, payload) {
   const current = await getStoreTransfer(prisma, actor, idValue);
   assertCanManageTransfer(actor, current);
-  if (
-    [TRANSFER_STATUS.RETURNED, TRANSFER_STATUS.CANCELLED].includes(
-      current.status,
-    )
-  )
-    throw new AppError("已调平或已取消的调拨不能修改", 409);
+  if (current.outboundStatus !== OUTBOUND_STATUS.PENDING)
+    throw new AppError("已确认调出的调拨不能修改", 409);
   const data = { updatedBy: Number(actor.id) };
+  if (payload.fromStoreId !== undefined || payload.toStoreId !== undefined) {
+    const storeIds = await resolveTransferStoreIds(prisma, actor, {
+      fromStoreId: payload.fromStoreId ?? current.fromStoreId,
+      toStoreId: payload.toStoreId ?? current.toStoreId,
+    });
+    Object.assign(data, storeIds);
+  }
   if (payload.transferDate !== undefined)
     data.transferDate = dateOnly(payload.transferDate, "调拨日期");
   if (payload.expectedReturnDate !== undefined)
@@ -412,8 +420,6 @@ export async function updateStoreTransfer(prisma, actor, idValue, payload) {
   if (payload.remark !== undefined)
     data.remark = text(payload.remark, 500, "备注");
   if (payload.items !== undefined) {
-    if (current.returnRecords.length)
-      throw new AppError("已有归还记录，只能修改预计归还日期和备注", 409);
     data.items = { deleteMany: {}, create: normalizeItems(payload.items) };
   }
   const nextTransferDate = data.transferDate || current.transferDate;
@@ -616,6 +622,88 @@ export async function submitStoreTransferReturns(
     transactionResult.createdReturnIds.join("-"),
   );
   return transactionResult.transfer;
+}
+
+export async function updateStoreTransferReturn(
+  prisma,
+  actor,
+  idValue,
+  returnIdValue,
+  payload,
+) {
+  const returnId = Number(returnIdValue);
+  if (!Number.isInteger(returnId) || returnId <= 0)
+    throw new AppError("归还记录不正确", 400);
+  const returnDate = dateOnly(payload.returnDate, "归还日期");
+
+  return prisma.$transaction(
+    async (tx) => {
+      const transfer = await storeTransferRepository.findFirst(tx, {
+        where: { id: Number(idValue), AND: [transferScope(actor)] },
+        include: detailInclude(),
+      });
+      if (!transfer) throw new AppError("调拨单不存在", 404);
+      assertCanSubmitTransferReturn(actor, transfer);
+      if (transfer.outboundStatus !== OUTBOUND_STATUS.CONFIRMED)
+        throw new AppError("调出门店尚未确认调出，不能修改归还记录", 409);
+      if (
+        [TRANSFER_STATUS.RETURNED, TRANSFER_STATUS.CANCELLED].includes(
+          transfer.status,
+        )
+      )
+        throw new AppError("已调平或已取消的调拨不能修改归还记录", 409);
+      if (returnDate < transfer.transferDate)
+        throw new AppError("归还日期不能早于调拨日期", 400);
+
+      const item = transfer.items.find((candidate) =>
+        candidate.returns.some((record) => record.id === returnId),
+      );
+      const returnRecord = item?.returns.find(
+        (record) => record.id === returnId,
+      );
+      if (!returnRecord) throw new AppError("归还记录不属于当前调拨单", 404);
+      if (returnRecord.status !== RETURN_STATUS.PENDING)
+        throw new AppError("已确认的归还记录不能修改", 409);
+
+      const quantity = numberQuantity(payload.quantity, `${item.itemName}归还数量`);
+      const otherSubmitted = item.returns
+        .filter((record) => record.id !== returnId)
+        .reduce((sum, record) => sum + Number(record.quantity), 0);
+      const available =
+        Math.round((Number(item.quantity) - otherSubmitted) * 1000) / 1000;
+      if (quantity > available)
+        throw new AppError(
+          `${item.itemName}归还数量不能超过可归还数量 ${available}${item.unit}`,
+          409,
+        );
+
+      await storeTransferRepository.updateReturn(tx, {
+        where: { id: returnId },
+        data: {
+          quantity,
+          returnDate,
+          remark: text(payload.remark, 500, "归还备注"),
+        },
+      });
+      await storeTransferRepository.update(tx, {
+        where: { id: transfer.id },
+        data: { updatedBy: Number(actor.id) },
+      });
+      await recordOperation(tx, actor, {
+        module: "store-transfer",
+        action: "update-return",
+        targetId: transfer.id,
+        storeId: transfer.fromStoreId,
+        description: `修改调拨 ${transfer.transferNo} 归还记录：${item.itemName} ${quantity}${item.unit}`,
+      });
+      const updated = await storeTransferRepository.findFirst(tx, {
+        where: { id: transfer.id },
+        include: detailInclude(),
+      });
+      return withComputed(updated, actor);
+    },
+    { isolationLevel: "Serializable" },
+  );
 }
 
 export async function confirmStoreTransferReturn(
