@@ -33,6 +33,14 @@ function positiveDigit(value, label) {
   return number;
 }
 
+function positiveLayerNumber(value, label = "层数") {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1 || number > 32767) {
+    throw new AppError(`${label}必须为1到32767的正整数`, 400);
+  }
+  return number;
+}
+
 function layerDigit(value) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 0 || number > 9) {
@@ -120,11 +128,13 @@ export function parseLocationCode(value, layout = DEFAULT_LAYOUT) {
   } else {
     const match = compact.match(/^([DGFC])(\d+)$/);
     const typeDigits = match?.[2] || "";
-    const expectedDigits = match?.[1] === "D" ? [3, 4] : [2];
-    parts =
-      match && expectedDigits.includes(typeDigits.length)
-        ? [match[1], ...typeDigits.split("")]
-        : [];
+    if (match?.[1] === "D" && [3, 4].includes(typeDigits.length)) {
+      parts = [match[1], ...typeDigits.split("")];
+    } else if (match && typeDigits.length >= 2) {
+      parts = [match[1], typeDigits[0], typeDigits.slice(1)];
+    } else {
+      parts = [];
+    }
   }
   const type = parts[0];
   if (!LOCATION_TYPES.has(type)) {
@@ -178,18 +188,9 @@ export function parseLocationCode(value, layout = DEFAULT_LAYOUT) {
     parts[1],
     type === "F" ? "冰箱号" : type === "C" ? "仓库架号" : "大柜柜号",
   );
-  const layerNo = positiveDigit(parts[2], "层数");
-  const bigCabinetLayerCount =
-    Number(layout.bigCabinetLayerCount) || DEFAULT_LAYOUT.bigCabinetLayerCount;
-  if (
-    type === "G" &&
-    (unitNo > layout.bigCabinetUnitCount || layerNo > bigCabinetLayerCount)
-  ) {
-    throw new AppError(
-      `柜位置超出 ${layout.bigCabinetUnitCount} 柜、${bigCabinetLayerCount} 层的范围`,
-      400,
-    );
-  }
+  const layerNo = ["F", "G"].includes(type)
+    ? positiveLayerNumber(parts[2], type === "F" ? "冰箱层数" : "柜层数")
+    : positiveDigit(parts[2], "层数");
   return {
     locationCode: `${type}-${unitNo}-${layerNo}`,
     locationType: type,
@@ -492,7 +493,7 @@ async function findOrCreateLocation(tx, storeId, locationCode, actor, layout) {
 }
 
 async function removeEmptyDynamicLocation(tx, location) {
-  if (!location || !["F", "C"].includes(location.locationType)) return;
+  if (!location || !["G", "F", "C"].includes(location.locationType)) return;
   await tx.herbLocation.deleteMany({
     where: {
       id: location.id,
@@ -824,15 +825,8 @@ export async function updateHerbLocationLayout(prisma, actor, payload = {}) {
       bigCabinetRemovalRules.push({ unitNo: { gt: nextBigCabinetUnitCount } });
     }
     if (nextBigCabinetLayerCount < currentLayout.bigCabinetLayerCount) {
-      bigCabinetRemovalRules.push({
-        layerNo: { gt: nextBigCabinetLayerCount },
-      });
+      bigCabinetRemovalRules.push({ layerNo: { gt: nextBigCabinetLayerCount } });
     }
-    const removedBigCabinetWhere = {
-      storeId,
-      locationType: "G",
-      OR: bigCabinetRemovalRules,
-    };
     if (drawerRemovalRules.length) {
       const assignedLocationCount = await tx.herbLocation.count({
         where: { ...removedDrawerWhere, assignments: { some: {} } },
@@ -846,16 +840,14 @@ export async function updateHerbLocationLayout(prisma, actor, payload = {}) {
       await tx.herbLocation.deleteMany({ where: removedDrawerWhere });
     }
     if (bigCabinetRemovalRules.length) {
-      const assignedLocationCount = await tx.herbLocation.count({
-        where: { ...removedBigCabinetWhere, assignments: { some: {} } },
+      await tx.herbLocation.deleteMany({
+        where: {
+          storeId,
+          locationType: "G",
+          OR: bigCabinetRemovalRules,
+          assignments: { none: {} },
+        },
       });
-      if (assignedLocationCount) {
-        throw new AppError(
-          "待删除的柜中仍有药材，请先移除或调整这些药材的位置",
-          409,
-        );
-      }
-      await tx.herbLocation.deleteMany({ where: removedBigCabinetWhere });
     }
     nextLayout = {
       drawerUnitCount: nextDrawerUnitCount,

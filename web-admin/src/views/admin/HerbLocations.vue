@@ -352,10 +352,15 @@ const typeLocations = computed(() => locations.value.filter((location) => locati
 const unitNumbers = computed(() => {
   const units = [...new Set(typeLocations.value.map((location) => location.unitNo))].sort((a, b) => a - b);
   if (locationType.value === 'D') return Array.from({ length: layout.value.drawerUnitCount }, (_, index) => index + 1);
-  if (locationType.value === 'G') return Array.from({ length: layout.value.bigCabinetUnitCount }, (_, index) => index + 1);
+  if (locationType.value === 'G') {
+    const defaultUnits = Array.from({ length: layout.value.bigCabinetUnitCount }, (_, index) => index + 1);
+    return [...new Set([...defaultUnits, ...units])].sort((a, b) => a - b);
+  }
   return units;
 });
-const bigCabinetLayers = computed(() => Array.from({ length: layout.value.bigCabinetLayerCount }, (_, index) => index + 1).map((layerNo) => getLocation(`G-${selectedUnit.value}-${layerNo}`)).filter(Boolean));
+const bigCabinetLayers = computed(() => locations.value
+  .filter((location) => location.type === 'G' && location.unitNo === selectedUnit.value)
+  .sort((left, right) => left.layerNo - right.layerNo));
 const shelfLocations = computed(() => typeLocations.value.filter((location) => location.unitNo === selectedUnit.value));
 const existingHerbSearchIndex = computed(() =>
   herbs.value.map((herb) => ({

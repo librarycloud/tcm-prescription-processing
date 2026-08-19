@@ -189,7 +189,7 @@ model HerbLocation {
   locationCode     String   @map("location_code") @db.VarChar(20)
   locationType     String   @map("location_type") @db.Char(1)
   unitNo           Int      @map("unit_no") @db.TinyInt
-  layerNo          Int      @map("layer_no") @db.TinyInt
+  layerNo          Int      @map("layer_no") @db.SmallInt
   columnNo         Int?     @map("column_no") @db.TinyInt
   medicineCapacity Int?     @map("medicine_capacity") @db.TinyInt
   status           Int      @default(1) @db.TinyInt

@@ -60,17 +60,24 @@ test("parses the agreed D/G/F/C location code formats", () => {
   assert.equal(parseLocationCode("C-3-7").locationType, "C");
 });
 
-test("rejects locations outside the known drug-drawer and opposite-cabinet layouts", () => {
+test("rejects locations outside the known drug-drawer layout", () => {
   assert.throws(() => parseLocationCode("D-6-1-1"), { statusCode: 400 });
   assert.throws(() => parseLocationCode("D-1-9-1"), { statusCode: 400 });
-  assert.throws(() => parseLocationCode("G-1-4"), { statusCode: 400 });
   assert.throws(() => parseLocationCode("F-1-1-1"), { statusCode: 400 });
 });
 
-test("uses the configured opposite-cabinet layer count", () => {
+test("does not apply cabinet layout limits to G locations", () => {
   const layout = { bigCabinetUnitCount: 5, bigCabinetLayerCount: 2 };
   assert.equal(parseLocationCode("G-1-2", layout).locationCode, "G-1-2");
-  assert.throws(() => parseLocationCode("G-1-3", layout), { statusCode: 400 });
+  assert.equal(parseLocationCode("G-9-127", layout).locationCode, "G-9-127");
+  assert.equal(parseLocationCode("G9127", layout).locationCode, "G-9-127");
+});
+
+test("does not apply cabinet layout layer limits to refrigerators", () => {
+  const layout = { bigCabinetUnitCount: 1, bigCabinetLayerCount: 1 };
+  assert.equal(parseLocationCode("F-1-127", layout).locationCode, "F-1-127");
+  assert.equal(parseLocationCode("F1127", layout).locationCode, "F-1-127");
+  assert.throws(() => parseLocationCode("F-1-0", layout), { statusCode: 400 });
 });
 
 test("uses the current store drawer layout when validating a D location", () => {
@@ -333,6 +340,7 @@ test("updates the final D-code digit used for ordering herbs in a drawer", async
 });
 
 for (const [type, label] of [
+  ["G", "cabinet"],
   ["F", "refrigerator"],
   ["C", "warehouse"],
 ]) {
