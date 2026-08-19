@@ -63,8 +63,8 @@
                   :class="{ selected: selectedLocation?.code === dCode(layer, column), empty: !getLocation(dCode(layer, column))?.herbs.length }"
                   @click="selectLocation(getLocation(dCode(layer, column)))"
                 >
-                  <span>{{ displayCode(dCode(layer, column)) }}</span>
-                  <strong>{{ herbText(getLocation(dCode(layer, column))) || '未配置' }}</strong>
+                  <span v-html="highlightText(displayCode(dCode(layer, column)))" />
+                  <strong v-html="highlightText(herbText(getLocation(dCode(layer, column))) || '未配置')" />
                 </button>
               </div>
             </div>
@@ -78,8 +78,8 @@
               :class="{ selected: selectedLocation?.code === layer.code, empty: !layer.herbs.length }"
               @click="selectLocation(layer)"
             >
-              <span>{{ displayCode(layer.code) }} · 第 {{ layer.layerNo }} 层</span>
-              <strong>{{ herbText(layer) || '未配置' }}</strong>
+              <span v-html="highlightText(`${displayCode(layer.code)} · 第 ${layer.layerNo} 层`)" />
+              <strong v-html="highlightText(herbText(layer) || '未配置')" />
             </button>
           </aside>
         </section>
@@ -93,8 +93,8 @@
             :class="{ selected: selectedLocation?.code === location.code, empty: !location.herbs.length }"
             @click="selectLocation(location)"
           >
-            <span>{{ displayCode(location.code) }} · 第 {{ location.layerNo }} 层</span>
-            <strong>{{ herbText(location) || '未配置' }}</strong>
+            <span v-html="highlightText(`${displayCode(location.code)} · 第 ${location.layerNo} 层`)" />
+            <strong v-html="highlightText(herbText(location) || '未配置')" />
           </button>
           <el-empty v-if="!shelfLocations.length" description="暂无位置" :image-size="72">
             <el-button type="primary" @click="openAssignment()">配置药材</el-button>
@@ -105,13 +105,13 @@
       <section v-else-if="storeId" class="table-surface">
         <el-table :data="filteredLocations" border row-key="id" table-layout="auto">
           <el-table-column label="位置编号">
-            <template #default="{ row }">{{ displayCode(row.code) }}</template>
+            <template #default="{ row }"><span v-html="highlightText(displayCode(row.code))" /></template>
           </el-table-column>
           <el-table-column label="区域">
             <template #default="{ row }">{{ typeName(row.type) }}</template>
           </el-table-column>
           <el-table-column label="药材">
-            <template #default="{ row }">{{ herbText(row) || '-' }}</template>
+            <template #default="{ row }"><span v-html="highlightText(herbText(row) || '-')" /></template>
           </el-table-column>
           <el-table-column label="操作">
             <template #default="{ row }"><el-button link type="primary" @click="selectLocation(row)">查看</el-button></template>
@@ -125,7 +125,7 @@
       <div v-if="selectedLocation" class="location-detail">
         <div class="detail-heading">
           <div>
-            <div class="detail-code">{{ displayCode(selectedLocation.code) }}</div>
+            <div class="detail-code" v-html="highlightText(displayCode(selectedLocation.code))" />
             <div class="detail-area">{{ typeName(selectedLocation.type) }}</div>
           </div>
           <div class="detail-actions">
@@ -136,8 +136,8 @@
         <div class="detail-list">
             <div v-for="herb in selectedLocation.herbs" :key="herb.assignmentId" class="herb-line">
             <div>
-              <strong>{{ herb.name }}</strong>
-              <span>{{ [herbPosition(selectedLocation.code, herb.slotNo), herb.code, herb.specification].filter(Boolean).join(' · ') || '-' }}</span>
+              <strong v-html="highlightText(herb.name)" />
+              <span v-html="highlightText([herbPosition(selectedLocation.code, herb.slotNo), herb.code, herb.specification].filter(Boolean).join(' · ') || '-')" />
             </div>
             <div class="herb-actions">
               <el-button :icon="Location" link type="primary" title="编辑位置" @click="openPositionEdit(herb)">位置</el-button>
@@ -422,6 +422,29 @@ function displayCode(code) {
   return String(code || '').replaceAll('-', '');
 }
 
+function highlightText(value) {
+  const text = String(value ?? '');
+  const escapeHtml = (input) => input
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+  const search = String(keyword.value || '').trim();
+  if (!search) return escapeHtml(text);
+  const pattern = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matcher = new RegExp(pattern, 'gi');
+  let lastIndex = 0;
+  let result = '';
+  text.replace(matcher, (match, offset) => {
+    result += escapeHtml(text.slice(lastIndex, offset));
+    result += `<mark class="search-highlight">${escapeHtml(match)}</mark>`;
+    lastIndex = offset + match.length;
+    return match;
+  });
+  return result + escapeHtml(text.slice(lastIndex));
+}
+
 function herbPosition(locationCode, slotNo) {
   return `${displayCode(locationCode)}${slotNo || ''}`;
 }
@@ -654,6 +677,7 @@ onMounted(async () => {
 .herb-line strong, .herb-line span { display: block; }
 .herb-actions { display: flex; align-items: center; }
 .herb-line span { margin-top: 5px; color: var(--app-muted); font-size: 13px; }
+.herb-page :deep(.search-highlight) { padding: 0 2px; border-radius: 2px; color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-8); font-weight: 700; }
 .upload-icon { margin-bottom: 10px; font-size: 46px; color: var(--el-color-primary); }
 .position-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .position-form-grid :deep(.el-select) { width: 100%; }
