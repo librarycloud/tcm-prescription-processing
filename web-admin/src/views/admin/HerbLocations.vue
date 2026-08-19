@@ -64,7 +64,7 @@
                   @click="selectLocation(getLocation(dCode(layer, column)))"
                 >
                   <span v-html="highlightText(displayCode(dCode(layer, column)))" />
-                  <strong v-html="highlightText(herbText(getLocation(dCode(layer, column))) || '未配置')" />
+                  <strong v-html="highlightHerbText(getLocation(dCode(layer, column)) || null) || '未配置'" />
                 </button>
               </div>
             </div>
@@ -79,7 +79,7 @@
               @click="selectLocation(layer)"
             >
               <span v-html="highlightText(`${displayCode(layer.code)} · 第 ${layer.layerNo} 层`)" />
-              <strong v-html="highlightText(herbText(layer) || '未配置')" />
+              <strong v-html="highlightHerbText(layer) || '未配置'" />
             </button>
           </aside>
         </section>
@@ -94,7 +94,7 @@
             @click="selectLocation(location)"
           >
             <span v-html="highlightText(`${displayCode(location.code)} · 第 ${location.layerNo} 层`)" />
-            <strong v-html="highlightText(herbText(location) || '未配置')" />
+            <strong v-html="highlightHerbText(location) || '未配置'" />
           </button>
           <el-empty v-if="!shelfLocations.length" description="暂无位置" :image-size="72">
             <el-button type="primary" @click="openAssignment()">配置药材</el-button>
@@ -111,7 +111,7 @@
             <template #default="{ row }">{{ typeName(row.type) }}</template>
           </el-table-column>
           <el-table-column label="药材">
-            <template #default="{ row }"><span v-html="highlightText(herbText(row) || '-')" /></template>
+            <template #default="{ row }"><span v-html="highlightHerbText(row) || '-'" /></template>
           </el-table-column>
           <el-table-column label="操作">
             <template #default="{ row }"><el-button link type="primary" @click="selectLocation(row)">查看</el-button></template>
@@ -136,7 +136,7 @@
         <div class="detail-list">
             <div v-for="herb in selectedLocation.herbs" :key="herb.assignmentId" class="herb-line">
             <div>
-              <strong v-html="highlightText(herb.name)" />
+              <strong v-html="highlightText(herb.name, { matchPinyin: true })" />
               <span v-html="highlightText([herbPosition(selectedLocation.code, herb.slotNo), herb.code, herb.specification].filter(Boolean).join(' · ') || '-')" />
             </div>
             <div class="herb-actions">
@@ -422,7 +422,7 @@ function displayCode(code) {
   return String(code || '').replaceAll('-', '');
 }
 
-function highlightText(value) {
+function highlightText(value, { matchPinyin = false } = {}) {
   const text = String(value ?? '');
   const escapeHtml = (input) => input
     .replaceAll('&', '&amp;')
@@ -436,13 +436,43 @@ function highlightText(value) {
   const matcher = new RegExp(pattern, 'gi');
   let lastIndex = 0;
   let result = '';
+  let hasExactMatch = false;
   text.replace(matcher, (match, offset) => {
+    hasExactMatch = true;
     result += escapeHtml(text.slice(lastIndex, offset));
     result += `<mark class="search-highlight">${escapeHtml(match)}</mark>`;
     lastIndex = offset + match.length;
     return match;
   });
-  return result + escapeHtml(text.slice(lastIndex));
+  if (hasExactMatch || !matchPinyin || !/^[a-z]+$/i.test(search) || !/[\u3400-\u9fff]/.test(text)) {
+    return result + escapeHtml(text.slice(lastIndex));
+  }
+
+  const chars = Array.from(text);
+  const initials = pinyin(text, { pattern: 'first', toneType: 'none', type: 'array' });
+  const initialText = initials.join('').toLowerCase();
+  const query = search.toLowerCase();
+  const marked = new Set();
+  let searchStart = initialText.indexOf(query);
+  while (searchStart !== -1) {
+    let cursor = 0;
+    initials.forEach((initial, index) => {
+      const nextCursor = cursor + initial.length;
+      if (cursor < searchStart + query.length && nextCursor > searchStart) marked.add(index);
+      cursor = nextCursor;
+    });
+    searchStart = initialText.indexOf(query, searchStart + 1);
+  }
+  if (!marked.size) return escapeHtml(text);
+  return chars
+    .map((char, index) => marked.has(index)
+      ? `<mark class="search-highlight">${escapeHtml(char)}</mark>`
+      : escapeHtml(char))
+    .join('');
+}
+
+function highlightHerbText(location) {
+  return location?.herbs?.map((herb) => highlightText(herb.name, { matchPinyin: true })).join(' / ') || '';
 }
 
 function herbPosition(locationCode, slotNo) {
