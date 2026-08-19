@@ -448,27 +448,11 @@ function highlightText(value, { matchPinyin = false } = {}) {
     return result + escapeHtml(text.slice(lastIndex));
   }
 
-  const chars = Array.from(text);
   const initials = pinyin(text, { pattern: 'first', toneType: 'none', type: 'array' });
   const initialText = initials.join('').toLowerCase();
   const query = search.toLowerCase();
-  const marked = new Set();
-  let searchStart = initialText.indexOf(query);
-  while (searchStart !== -1) {
-    let cursor = 0;
-    initials.forEach((initial, index) => {
-      const nextCursor = cursor + initial.length;
-      if (cursor < searchStart + query.length && nextCursor > searchStart) marked.add(index);
-      cursor = nextCursor;
-    });
-    searchStart = initialText.indexOf(query, searchStart + 1);
-  }
-  if (!marked.size) return escapeHtml(text);
-  return chars
-    .map((char, index) => marked.has(index)
-      ? `<mark class="search-highlight">${escapeHtml(char)}</mark>`
-      : escapeHtml(char))
-    .join('');
+  if (!initialText.includes(query)) return escapeHtml(text);
+  return `<mark class="search-highlight">${escapeHtml(text)}</mark>`;
 }
 
 function highlightHerbText(location) {
