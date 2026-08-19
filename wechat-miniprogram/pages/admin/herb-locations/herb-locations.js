@@ -68,18 +68,78 @@ function positionText(location = {}) {
   return `${typeName}${unitNo}-${layerNo}层`;
 }
 
+function herbInitials(value) {
+  const text = String(value || '').trim();
+  const pinyinInitials = pinyinConverter
+    ? pinyinConverter(text, { pattern: 'first', toneType: 'none', type: 'array' })
+    : [];
+  return pinyinInitials.length
+    ? pinyinInitials.join('')
+    : Array.from(text).map((char) => COMMON_HERB_INITIALS[char] || '').join('');
+}
+
 function herbSearchText(herb) {
   const name = String(herb?.name || '').trim();
-  const pinyinInitials = pinyinConverter
-    ? pinyinConverter(name, { pattern: 'first', toneType: 'none', type: 'array' })
-    : [];
-  const initials = pinyinInitials.length
-    ? pinyinInitials.join('')
-    : Array.from(name).map((char) => COMMON_HERB_INITIALS[char] || '').join('');
+  const initials = herbInitials(name);
   return [name, initials, herb?.code]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+function highlightSegments(value, keyword, { matchPinyin = false } = {}) {
+  const text = String(value ?? '');
+  const search = String(keyword || '').trim();
+  if (!search) return [{ text, highlighted: false }];
+
+  const lowerText = text.toLowerCase();
+  const lowerSearch = search.toLowerCase();
+  const segments = [];
+  let cursor = 0;
+  let matchIndex = lowerText.indexOf(lowerSearch);
+  while (matchIndex !== -1) {
+    if (matchIndex > cursor) segments.push({ text: text.slice(cursor, matchIndex), highlighted: false });
+    segments.push({
+      text: text.slice(matchIndex, matchIndex + search.length),
+      highlighted: true
+    });
+    cursor = matchIndex + search.length;
+    matchIndex = lowerText.indexOf(lowerSearch, cursor);
+  }
+  if (segments.length) {
+    if (cursor < text.length) segments.push({ text: text.slice(cursor), highlighted: false });
+    return segments;
+  }
+
+  const isPinyinMatch = matchPinyin
+    && /^[a-z]+$/i.test(search)
+    && /[\u3400-\u9fff]/.test(text)
+    && herbInitials(text).toLowerCase().includes(lowerSearch);
+  return [{ text, highlighted: isPinyinMatch }];
+}
+
+function herbSummarySegments(herbs, keyword) {
+  if (!herbs.length) return highlightSegments('未配置', keyword);
+  return herbs.reduce((segments, herb, index) => {
+    if (index) segments.push({ text: ' / ', highlighted: false });
+    segments.push(...highlightSegments(herb.name, keyword, { matchPinyin: true }));
+    return segments;
+  }, []);
+}
+
+function decorateLocation(location, keyword) {
+  const herbs = location.herbs.map((herb) => ({
+    ...herb,
+    nameSegments: highlightSegments(herb.name, keyword, { matchPinyin: true }),
+    descriptionSegments: highlightSegments(herb.description, keyword)
+  }));
+  return {
+    ...location,
+    herbs,
+    displayCodeSegments: highlightSegments(location.displayCode, keyword),
+    positionLabelSegments: highlightSegments(location.positionLabel, keyword),
+    herbSummarySegments: herbSummarySegments(herbs, keyword)
+  };
 }
 
 Page({
@@ -164,12 +224,17 @@ Page({
 
   applyFilter() {
     const keyword = this.data.keyword.trim().toLowerCase();
-    const filteredLocations = this.data.locations.filter((location) => {
-      if (this.data.type && location.type !== this.data.type) return false;
-      if (!keyword) return true;
-      return location.searchText.includes(keyword);
-    });
-    this.setData({ filteredLocations });
+    const filteredLocations = this.data.locations
+      .filter((location) => {
+        if (this.data.type && location.type !== this.data.type) return false;
+        if (!keyword) return true;
+        return location.searchText.includes(keyword);
+      })
+      .map((location) => decorateLocation(location, keyword));
+    const selectedLocation = this.data.selectedLocation
+      ? decorateLocation(this.data.locations.find((location) => Number(location.id) === Number(this.data.selectedLocation.id)) || this.data.selectedLocation, keyword)
+      : null;
+    this.setData({ filteredLocations, selectedLocation });
   },
 
   onKeywordChange(e) { this.setData({ keyword: e.detail.value }, this.applyFilter); },
@@ -184,7 +249,7 @@ Page({
 
   selectLocation(e) {
     const location = this.data.locations.find((item) => Number(item.id) === Number(e.currentTarget.dataset.id));
-    if (location) this.setData({ selectedLocation: location, detailVisible: true });
+    if (location) this.setData({ selectedLocation: decorateLocation(location, this.data.keyword), detailVisible: true });
   },
   closeDetail() { this.setData({ detailVisible: false, selectedLocation: null }); },
 
@@ -297,7 +362,7 @@ Page({
   refreshSelectedLocation() {
     if (!this.data.selectedLocation) return;
     const selectedLocation = this.data.locations.find((item) => Number(item.id) === Number(this.data.selectedLocation.id));
-    this.setData({ selectedLocation });
+    this.setData({ selectedLocation: selectedLocation ? decorateLocation(selectedLocation, this.data.keyword) : null });
   },
   closePositionEdit() { this.setData({ positionEditVisible: false }); },
   closeHerbEdit() { this.setData({ herbEditVisible: false }); },

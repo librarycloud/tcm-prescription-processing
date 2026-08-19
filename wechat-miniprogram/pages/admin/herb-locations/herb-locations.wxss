@@ -15,6 +15,7 @@
 .location-card { margin-bottom: 14rpx; }
 .location-code { color: #0052d9; font-size: 30rpx; font-weight: 700; }
 .herb-summary { margin-top: 12rpx; color: #1f2329; line-height: 1.5; }
+.search-highlight { padding: 0 4rpx; border-radius: 4rpx; color: #0052d9; background: #d9e7ff; font-weight: 700; }
 .overlay { position: fixed; z-index: 1001; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: flex-end; background: rgba(0, 0, 0, .42); }
 .modal-card { width: 100%; max-width: 100vw; max-height: 88vh; padding: 28rpx; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; border-radius: 24rpx 24rpx 0 0; background: #fff; }
 .modal-title { margin-bottom: 20rpx; font-size: 34rpx; font-weight: 700; }
