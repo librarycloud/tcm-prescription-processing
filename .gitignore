@@ -18,6 +18,12 @@
 *.log
 *.pid
 
+# E6Sync .NET build artifacts
+E6Sync/bin/
+E6Sync/obj/
+E6Sync-Windows11/bin/
+E6Sync-Windows11/obj/
+
 # Downloaded IP geolocation database
 # backend/data/*.ipdb
 

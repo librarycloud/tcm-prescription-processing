@@ -1,0 +1,112 @@
+using System;
+using System.Globalization;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+using E6Sync.Models;
+
+namespace E6Sync.Services
+{
+    public sealed class ApiService : IDisposable
+    {
+        private readonly ApiConfig config;
+        private readonly LogService log;
+        private readonly HttpClient client;
+        private readonly JavaScriptSerializer serializer = new JavaScriptSerializer();
+
+        public ApiService(ApiConfig config, LogService log)
+        {
+            this.config = config;
+            this.log = log;
+            client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            client.DefaultRequestHeaders.ConnectionClose = true;
+        }
+
+        public async Task<ApiResult> SendAsync(E6Order order, string doctorCode, CancellationToken cancellationToken)
+        {
+            var requestBody = new PrescriptionRequest
+            {
+                externalOrderNo = order.ExternalOrderNo,
+                storeCode = config.StoreCode,
+                customerName = order.CustomerName ?? "",
+                phone = "",
+                e6DoctorCode = doctorCode,
+                totalPrice = order.TotalPrice.ToString("0.00", CultureInfo.InvariantCulture),
+                doseCount = 1,
+                remark = "",
+                sourceCreatedAt = ToIso8601(order.ReceiptDate)
+            };
+            var endpoint = config.BaseUrl.TrimEnd('/') + "/integrations/e6/v1/prescriptions";
+            var json = serializer.Serialize(requestBody);
+            using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
+            {
+                request.Headers.Add("X-API-Key", config.ApiKey);
+                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                try
+                {
+                    using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false))
+                    {
+                        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var statusCode = (int)response.StatusCode;
+                        log.Info(string.Format("单据 {0} API HTTP {1}", order.ExternalOrderNo, statusCode));
+                        ApiResponse payload = null;
+                        try { payload = serializer.Deserialize<ApiResponse>(responseText); }
+                        catch { /* malformed response is reported below */ }
+
+                        if (response.StatusCode != HttpStatusCode.OK)
+                        {
+                            var message = payload == null ? "HTTP 请求失败" : (payload.message ?? "HTTP 请求失败");
+                            return new ApiResult
+                            {
+                                HttpStatus = statusCode,
+                                Retryable = statusCode == 429 || statusCode >= 500,
+                                Message = string.Format("HTTP {0}：{1}", statusCode, message)
+                            };
+                        }
+                        if (payload == null)
+                            return new ApiResult { HttpStatus = statusCode, Message = "响应不是有效 JSON", Retryable = false };
+                        if (payload.code != 0)
+                            return new ApiResult { HttpStatus = statusCode, Message = payload.message ?? "接口返回失败", Retryable = false };
+
+                        var data = payload.data;
+                        return new ApiResult
+                        {
+                            Success = true,
+                            Duplicate = data != null && data.duplicate,
+                            BusinessStatus = data == null ? (int?)null : data.status,
+                            HttpStatus = statusCode,
+                            Message = payload.message ?? "同步成功"
+                        };
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    if (cancellationToken.IsCancellationRequested) throw;
+                    log.Warn("单据 " + order.ExternalOrderNo + " 请求超时");
+                    return new ApiResult { Retryable = true, Message = "网络超时（15秒）" };
+                }
+                catch (HttpRequestException ex)
+                {
+                    log.Warn("单据 " + order.ExternalOrderNo + " 网络异常：" + ex.Message);
+                    return new ApiResult { Retryable = true, Message = "网络异常：" + ex.Message };
+                }
+                catch (Exception ex)
+                {
+                    log.Error("单据 " + order.ExternalOrderNo + " API 调用异常：" + ex.Message);
+                    return new ApiResult { Message = "API 调用异常：" + ex.Message };
+                }
+            }
+        }
+
+        private static string ToIso8601(DateTime value)
+        {
+            var local = DateTime.SpecifyKind(value, DateTimeKind.Local);
+            return new DateTimeOffset(local).ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
+        }
+
+        public void Dispose() { client.Dispose(); }
+    }
+}
