@@ -171,8 +171,8 @@
         label-width="100px"
         class="confirm-form"
       >
-        <el-form-item label="顾客姓名" prop="customerName">
-          <el-input v-model.trim="confirmForm.customerName" maxlength="64" />
+        <el-form-item label="顾客姓名">
+          <el-input v-model.trim="confirmForm.customerName" maxlength="64" placeholder="可留空" />
         </el-form-item>
         <el-form-item label="系统医生" prop="doctorId">
           <el-select v-model="confirmForm.doctorId" filterable placeholder="请选择医生" style="width: 100%">
@@ -321,7 +321,6 @@ const confirmForm = reactive({
   processRemark: ''
 });
 const confirmRules = {
-  customerName: [{ required: true, message: '请输入顾客姓名', trigger: 'blur' }],
   doctorId: [{ required: true, message: '请选择医生', trigger: 'change' }],
   doseCount: [{ required: true, message: '请输入剂数', trigger: 'change' }],
   processTypeId: [{ required: true, message: '请选择加工方式', trigger: 'change' }],

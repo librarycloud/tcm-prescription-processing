@@ -627,11 +627,8 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
       if (claimed.count !== 1)
         throw new AppError("该导入记录正在处理或已完成", 409);
       const item = await tx.e6Import.findUnique({ where: { id: current.id } });
-      const customerName = clean(
-        payload.customerName ?? item.customerName,
-        64,
-        "顾客姓名",
-      );
+      const customerName =
+        clean(payload.customerName ?? item.customerName, 64, "顾客姓名", false) || "";
       const doseCount = positiveInteger(
         payload.doseCount ?? item.doseCount,
         "剂数",
@@ -670,6 +667,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         actor,
         {
           customerName,
+          allowEmptyCustomerName: true,
           phone: item.phone,
           doctorId,
           sourceId: source.id,

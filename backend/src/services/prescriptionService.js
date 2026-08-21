@@ -137,8 +137,11 @@ async function validateReferences(prisma, doctorId, sourceId) {
 
 function normalizeData(payload) {
   const isExternal = payload.isExternal ? 1 : 0;
+  const allowEmptyCustomerName = Boolean(payload.allowEmptyCustomerName);
   return {
-    customerName: text(payload.customerName, 64, "顾客姓名", true),
+    customerName:
+      text(payload.customerName, 64, "顾客姓名", !allowEmptyCustomerName) ??
+      (allowEmptyCustomerName ? "" : null),
     phone: normalizeOptionalPhone(payload.phone),
     doctorId: Number(payload.doctorId),
     sourceId: Number(payload.sourceId),

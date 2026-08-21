@@ -324,3 +324,18 @@ test("confirming an E6 import applies the reviewed customer, doctor, and dose", 
   assert.equal(state.prescription.doctorId, 9);
   assert.equal(state.plan.totalDose, 14);
 });
+
+test("confirming an E6 import allows an empty customer name", async () => {
+  const { prisma, state } = confirmFixture();
+
+  await confirmE6Import(prisma, storeAdmin, 81, {
+    customerName: "",
+    processTypeId: 20,
+    scheduleType: 1,
+    processDate: "2026-07-27",
+    pickupMethod: 0,
+  });
+
+  assert.equal(state.import.customerName, "");
+  assert.equal(state.prescription.customerName, "");
+});
