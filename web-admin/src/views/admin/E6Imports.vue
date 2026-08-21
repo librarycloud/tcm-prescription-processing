@@ -204,11 +204,11 @@
           <div class="detail-value error-text">{{ detail.errorMessage }}</div>
         </div>
       </div>
-      <div v-if="detail?.items?.length" class="raw-section">
+      <div v-if="detailItems.length" class="raw-section">
         <div class="detail-label">处方明细</div>
-        <el-table :data="detail.items" border size="small">
+        <el-table :data="detailItems" border size="small">
           <el-table-column prop="sequence" label="顺序" width="80" />
-          <el-table-column prop="herbName" label="中药名" />
+          <el-table-column prop="name" label="中药名" />
           <el-table-column label="数量">
             <template #default="{ row }">{{ row.quantity }}{{ row.unit }}</template>
           </el-table-column>
@@ -442,6 +442,12 @@ const isDecoction = computed(
     selectedProcessType.value?.code === 'DECOCTION' || selectedProcessType.value?.name === '代煎'
 );
 const rawPayloadText = computed(() => JSON.stringify(detail.value?.rawPayload || {}, null, 2));
+const detailItems = computed(() => {
+  const items = detail.value?.rawPayload?.items;
+  return Array.isArray(items)
+    ? [...items].sort((left, right) => Number(left.sequence) - Number(right.sequence))
+    : [];
+});
 
 function statusMeta(status) {
   return e6ImportStatusMeta(status);

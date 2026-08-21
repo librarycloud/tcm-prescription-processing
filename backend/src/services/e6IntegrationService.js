@@ -78,7 +78,7 @@ function itemQuantity(value) {
   return normalized;
 }
 
-function normalizeImportItems(value, paymentStatus) {
+function normalizeImportItems(value) {
   if (value === undefined || value === null) {
     return [];
   }
@@ -428,7 +428,7 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
     isPaid: paymentStatus === "PAID" ? 1 : 0,
-    items: normalizeImportItems(payload.items, paymentStatus),
+    items: normalizeImportItems(payload.items),
     remark: clean(payload.remark, 500, "备注", false),
     sourceCreatedAt: dateOrNull(payload.sourceCreatedAt, "E6创建时间"),
     sourceUpdatedAt: dateOrNull(payload.sourceUpdatedAt, "E6更新时间"),
@@ -553,7 +553,6 @@ async function persistImport(prisma, store, normalized, actor) {
           storeId: store.id,
           externalOrderNo: normalized.externalOrderNo,
           status: desiredStatus,
-          items: { create: normalized.items },
           ...desiredError,
         },
       });
@@ -582,9 +581,6 @@ async function persistImport(prisma, store, normalized, actor) {
         where: { id: existing.id },
         data: {
           ...baseData,
-          ...(!converted
-            ? { items: { deleteMany: {}, create: normalized.items } }
-            : {}),
           status,
           ...error,
           syncCount: { increment: 1 },
@@ -640,20 +636,16 @@ export async function receiveE6Prescription(
 export async function mergeE6Imports(prisma, actor, payload = {}) {
   const ids = [...new Set((Array.isArray(payload.ids) ? payload.ids : []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
   if (ids.length < 2) throw new AppError("至少选择两个E6订单合并", 400);
-  const items = await prisma.e6Import.findMany({
+  const imports = await prisma.e6Import.findMany({
     where: { id: { in: ids }, ...businessScope(actor) },
-    include: { items: { orderBy: { sequence: "asc" } } },
     orderBy: { sourceCreatedAt: "asc" },
   });
-  if (items.length !== ids.length) throw new AppError("部分E6订单不存在或无权操作", 404);
-  const first = items[0];
-  if (items.some((item) => item.storeId !== first.storeId)) throw new AppError("只能合并同一门店的订单", 400);
-  if (items.some((item) => item.prescriptionId || item.status === E6_IMPORT_STATUS.IMPORT_CONVERTED)) throw new AppError("已生成处方的订单不能合并", 409);
-  if (items.some((item) => !CONVERTIBLE_STATUSES.includes(item.status))) throw new AppError("存在当前状态不能确认的订单", 409);
-  if (items.some((item) => Number(item.doseCount) !== Number(first.doseCount))) throw new AppError("合并订单的剂数必须一致", 400);
-  const mergedItems = [];
-  let sequence = 1;
-  for (const item of items) for (const herb of item.items) mergedItems.push({ sequence: sequence++, herbName: herb.herbName, quantity: herb.quantity, unit: herb.unit });
+  if (imports.length !== ids.length) throw new AppError("部分E6订单不存在或无权操作", 404);
+  const first = imports[0];
+  if (imports.some((item) => item.storeId !== first.storeId)) throw new AppError("只能合并同一门店的订单", 400);
+  if (imports.some((item) => item.prescriptionId || item.status === E6_IMPORT_STATUS.IMPORT_CONVERTED)) throw new AppError("已生成处方的订单不能合并", 409);
+  if (imports.some((item) => !CONVERTIBLE_STATUSES.includes(item.status))) throw new AppError("存在当前状态不能确认的订单", 409);
+  if (imports.some((item) => Number(item.doseCount) !== Number(first.doseCount))) throw new AppError("合并订单的剂数必须一致", 400);
   const mergedPayload = {
     customerName: first.customerName,
     phone: first.phone,
@@ -673,7 +665,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     priority: payload.priority,
   };
   return prisma.$transaction(async (tx) => {
-    const totalPrice = items.reduce((sum, item) => sum + Number(item.totalPrice), 0).toFixed(2);
+    const totalPrice = imports.reduce((sum, item) => sum + Number(item.totalPrice), 0).toFixed(2);
     const claimed = await tx.e6Import.updateMany({
       where: { id: { in: ids }, prescriptionId: null, status: { in: CONVERTIBLE_STATUSES } },
       data: { status: E6_IMPORT_STATUS.IMPORT_PROCESSING, errorCode: null, errorMessage: null },
@@ -681,7 +673,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     if (claimed.count !== ids.length) throw new AppError("所选订单正在处理或状态已变化", 409);
     const primary = await tx.e6Import.update({
       where: { id: first.id },
-      data: { totalPrice, items: { deleteMany: {}, create: mergedItems } },
+      data: { totalPrice },
     });
     const customerName = clean(mergedPayload.customerName ?? primary.customerName, 64, "顾客姓名", false) || "";
     const phone = normalizeOptionalPhone(mergedPayload.phone ?? primary.phone);
@@ -702,7 +694,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
       storeId: primary.storeId,
       totalPrice,
       remark: primary.remark,
-    }, { description: `合并E6订单 ${items.map((item) => item.externalOrderNo).join("、")} 并生成处方` });
+    }, { description: `合并E6订单 ${imports.map((item) => item.externalOrderNo).join("、")} 并生成处方` });
     const pickupMethod = Number(mergedPayload.pickupMethod);
     if (!PICKUP_METHOD_VALUES.includes(pickupMethod)) throw new AppError("请选择取货方式", 400);
     const plan = await createProcessingPlanRecord(tx, actor, {
@@ -722,7 +714,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
       expressAddress: mergedPayload.expressAddress,
       processRemark: mergedPayload.processRemark,
       remark: primary.remark,
-    }, { description: `由合并E6订单 ${items.map((item) => item.externalOrderNo).join("、")} 生成加工计划` });
+    }, { description: `由合并E6订单 ${imports.map((item) => item.externalOrderNo).join("、")} 生成加工计划` });
     await tx.e6Import.updateMany({
       where: { id: { in: ids } },
       data: { customerName, phone, status: E6_IMPORT_STATUS.IMPORT_CONVERTED, prescriptionId: prescription.id, processingPlanId: plan.id, confirmedBy: Number(actor.id), confirmedAt: new Date(), errorCode: null, errorMessage: null },
@@ -733,7 +725,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
       action: "import_merge_confirm",
       targetId: primary.id,
       storeId: primary.storeId,
-      description: `合并E6订单 ${items.map((item) => item.externalOrderNo).join("、")}，生成处方 ${prescription.prescriptionNo}`,
+      description: `合并E6订单 ${imports.map((item) => item.externalOrderNo).join("、")}，生成处方 ${prescription.prescriptionNo}`,
     });
     return converted;
   });
@@ -751,7 +743,6 @@ function importInclude(includeRaw = false) {
       },
     },
     processingPlan: { select: { id: true, status: true } },
-    items: { orderBy: { sequence: "asc" } },
     ...(includeRaw ? {} : {}),
   };
 }

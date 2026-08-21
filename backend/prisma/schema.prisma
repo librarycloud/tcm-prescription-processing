@@ -599,7 +599,6 @@ model E6Import {
   store          Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
   prescription   Prescription?   @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
   processingPlan ProcessingPlan? @relation(fields: [processingPlanId], references: [id], onDelete: SetNull)
-  items          E6ImportItem[]
 
   @@unique([storeId, externalOrderNo])
   @@index([storeId, status, syncedAt])
@@ -607,23 +606,6 @@ model E6Import {
   @@index([lastSyncedAt])
   @@index([isPaid])
   @@map("e6_imports")
-}
-
-model E6ImportItem {
-  id         Int       @id @default(autoincrement())
-  e6ImportId Int       @map("e6_import_id")
-  sequence   Int
-  herbName   String    @map("herb_name") @db.VarChar(200)
-  quantity   Decimal   @db.Decimal(14, 3)
-  unit       String    @default("g") @db.VarChar(10)
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-
-  e6Import E6Import @relation(fields: [e6ImportId], references: [id], onDelete: Cascade)
-
-  @@unique([e6ImportId, sequence])
-  @@index([e6ImportId])
-  @@map("e6_import_items")
 }
 
 model SmsConfig {
