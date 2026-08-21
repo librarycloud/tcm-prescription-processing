@@ -71,6 +71,6 @@ API 文档未定义健康检查或测试接口，因此程序不会构造虚假�
 
 ## 已知字段边界
 
-当前确认可映射的字段为：E6 `单据id` -> `externalOrderNo`、`购药人` -> `customerName`、`收款金额` -> `totalPrice`、`单据日期` -> `sourceCreatedAt`、`处方药师`原值 -> `e6DoctorCode`（由后端负责映射）。`phone` 发送空字符串，`doseCount` 固定为 `1`，`remark` 发送空字符串。
+当前确认可映射的字段为：E6 `单据id` -> `externalOrderNo`、`购药人` -> `customerName`、`收款金额` -> `totalPrice`、`操作日期` -> `sourceCreatedAt`、`处方药师`原值 -> `e6DoctorCode`（由后端负责映射）。`操作日期` 会按 `yyyy-MM-dd HH:mm:ss` 读取，忽略末尾毫秒；`phone` 发送空字符串，`doseCount` 固定为 `1`，`remark` 发送空字符串。
 
-当前 E6 字段清单中没有“最后更新时间”，所以程序**不发送**可选字段 `sourceUpdatedAt`，不会用“单据日期”猜测替代。E6 数据中的“购药人”也可能为空；这是 API 的必填项，订单会得到 HTTP 400 并保留在下一轮的重新查询范围内，需先核实 E6 数据。
+当前 E6 字段清单中没有“最后更新时间”，所以程序**不发送**可选字段 `sourceUpdatedAt`，不会用“操作日期”猜测替代。E6 数据中的“购药人”也可能为空；这是 API 的必填项，订单会得到 HTTP 400 并保留在下一轮的重新查询范围内，需先核实 E6 数据。

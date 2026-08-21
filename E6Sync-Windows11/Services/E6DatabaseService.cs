@@ -55,16 +55,20 @@ namespace E6Sync.Services
                 builder.Password = e6.Password;
             }
 
-            const string sql = @"SELECT
+            const string sql = @"WITH receipts AS (
+SELECT
     r.[单据id],
-    r.[单据日期],
+    CONVERT(datetime, LEFT(CONVERT(varchar(23), r.[操作日期], 121), 19), 120) AS [操作日期],
     r.[收款金额],
     p.[购药人],
     p.[处方药师]
 FROM dbo.[AC款台_零售收款记录] r
 LEFT JOIN dbo.[AC款台_处方登记] p ON r.[单据id] = p.[单据ID]
-WHERE r.[单据日期] >= @start AND r.[单据日期] < @end
-ORDER BY r.[单据日期], r.[单据ID];";
+)
+SELECT [单据id], [操作日期], [收款金额], [购药人], [处方药师]
+FROM receipts
+WHERE [操作日期] >= @start AND [操作日期] < @end
+ORDER BY [操作日期], [单据id];";
 
             try
             {
@@ -79,7 +83,7 @@ ORDER BY r.[单据日期], r.[单据ID];";
                     using (var reader = command.ExecuteReader())
                     {
                         var orderNoOrdinal = reader.GetOrdinal("单据id");
-                        var dateOrdinal = reader.GetOrdinal("单据日期");
+                        var dateOrdinal = reader.GetOrdinal("操作日期");
                         var priceOrdinal = reader.GetOrdinal("收款金额");
                         var customerOrdinal = reader.GetOrdinal("购药人");
                         var doctorOrdinal = reader.GetOrdinal("处方药师");
