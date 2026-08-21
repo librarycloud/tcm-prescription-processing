@@ -103,11 +103,12 @@
           </template>
         </el-table-column>
         <el-table-column label="状态">
-          <template #default="{ row }"
-            ><el-tag :type="statusMeta(row.status).type" effect="plain">{{
-              statusMeta(row.status).label
-            }}</el-tag></template
-          >
+          <template #default="{ row }">
+            <div class="status-cell">
+              <el-tag :type="statusMeta(row.status).type" effect="plain">{{ statusMeta(row.status).label }}</el-tag>
+              <el-button v-if="canConfirm(row)" link type="success" @click="openConfirm(row)">确认</el-button>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column label="同步时间">
           <template #default="{ row }">{{ formatDate(row.lastSyncedAt) }}</template>
@@ -122,13 +123,6 @@
                 type="primary"
                 @click="editPrescription(row)"
                 >编辑处方</el-button
-              >
-              <el-button
-                v-if="canConfirm(row)"
-                link
-                type="success"
-                @click="openConfirm(row)"
-                >确认</el-button
               >
               <el-button v-if="canConfirm(row)" link type="warning" @click="handleRevalidate(row)"
                 >重校验</el-button
@@ -209,14 +203,14 @@
           <div class="detail-label">处方明细</div>
           <el-table :data="detailItems" border size="small">
             <el-table-column prop="sequence" label="顺序" width="80" />
-            <el-table-column prop="name" label="中药名" />
-          <el-table-column label="单剂量">
-            <template #default="{ row }">{{ row.quantity }}{{ row.unit }}</template>
-          </el-table-column>
-          <el-table-column label="总量">
-            <template #default="{ row }">{{ row.totalQuantity }}{{ row.unit }}</template>
-          </el-table-column>
-          <el-table-column prop="doseCount" label="剂数" width="90" />
+            <el-table-column prop="name" label="商品名称" />
+            <el-table-column prop="doseCount" label="剂数" width="90" />
+            <el-table-column label="单剂量">
+              <template #default="{ row }">{{ row.quantity }}{{ row.unit }}</template>
+            </el-table-column>
+            <el-table-column label="总量">
+              <template #default="{ row }">{{ row.totalQuantity }}{{ row.unit }}</template>
+            </el-table-column>
           </el-table>
         </div>
         <div class="raw-section">
@@ -661,7 +655,7 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
   grid-column: 1 / -1;
 }
 .e6-import-detail .detail-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .raw-section {
   margin-top: 20px;
@@ -694,6 +688,12 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .e6-import-table :deep(.table-actions .el-button + .el-button) {
   margin-left: 0;
+}
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 .merge-actions {
   display: flex;
