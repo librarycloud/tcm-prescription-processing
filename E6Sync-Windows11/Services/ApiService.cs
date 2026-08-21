@@ -52,6 +52,8 @@ namespace E6Sync.Services
                         var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                         var statusCode = (int)response.StatusCode;
                         log.Info(string.Format("单据 {0} API HTTP {1}", order.ExternalOrderNo, statusCode));
+                        if (!response.IsSuccessStatusCode)
+                            log.Error(string.Format("单据 {0} API 响应：{1}", order.ExternalOrderNo, responseText));
                         ApiResponse payload = null;
                         try { payload = serializer.Deserialize<ApiResponse>(responseText); }
                         catch { /* malformed response is reported below */ }
