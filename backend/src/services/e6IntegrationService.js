@@ -539,6 +539,25 @@ async function attachMappedDoctors(prisma, list) {
   }));
 }
 
+function orderDateRange(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text))
+    throw new AppError("订单日期格式不正确", 400);
+  const [year, month, day] = text.split("-").map(Number);
+  const start = new Date(year, month - 1, day);
+  if (
+    start.getFullYear() !== year ||
+    start.getMonth() !== month - 1 ||
+    start.getDate() !== day
+  ) {
+    throw new AppError("订单日期格式不正确", 400);
+  }
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
+
 export async function listE6Imports(prisma, actor, query = {}) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);
@@ -549,6 +568,8 @@ export async function listE6Imports(prisma, actor, query = {}) {
       throw new AppError("导入状态不正确", 400);
     where.status = status;
   }
+  const orderDate = orderDateRange(query.orderDate);
+  if (orderDate) where.sourceCreatedAt = { gte: orderDate.start, lt: orderDate.end };
   if (query.keyword) {
     const keyword = String(query.keyword).trim();
     where.OR = [
@@ -562,7 +583,11 @@ export async function listE6Imports(prisma, actor, query = {}) {
     prisma.e6Import.findMany({
       where,
       include: importInclude(),
-      orderBy: [{ syncedAt: "desc" }, { id: "desc" }],
+      orderBy: [
+        { sourceCreatedAt: "desc" },
+        { externalOrderNo: "desc" },
+        { id: "desc" },
+      ],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

@@ -15,6 +15,13 @@
           clearable
           placeholder="订单号、顾客、电话或医师编码"
         />
+        <el-date-picker
+          v-model="query.orderDate"
+          type="date"
+          value-format="YYYY-MM-DD"
+          clearable
+          placeholder="订单时间"
+        />
         <el-select
           v-if="userStore.isSuperAdmin"
           v-model="query.storeId"
@@ -318,7 +325,7 @@ const pickupOptions = [
   { label: '跑腿', value: 1 },
   { label: '快递', value: 2 }
 ];
-const query = reactive({ keyword: '', storeId: '', status: '' });
+const query = reactive({ keyword: '', orderDate: todayText(), storeId: '', status: '' });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const confirmForm = reactive({
   customerName: '',
@@ -428,7 +435,7 @@ function handleSearch() {
   else loadData();
 }
 function handleReset() {
-  Object.assign(query, { keyword: '', storeId: '', status: '' });
+  Object.assign(query, { keyword: '', orderDate: todayText(), storeId: '', status: '' });
   handleSearch();
 }
 
@@ -502,7 +509,7 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 <style scoped>
 .search-form {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 180px 180px auto auto;
+  grid-template-columns: minmax(260px, 1fr) repeat(3, 180px) auto auto;
   gap: 10px;
 }
 .mapping-missing,

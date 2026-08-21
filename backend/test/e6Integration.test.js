@@ -4,6 +4,7 @@ import test from "node:test";
 import { E6_IMPORT_STATUS } from "../src/constants/e6Integration.js";
 import {
   confirmE6Import,
+  listE6Imports,
   receiveE6Prescription,
   saveE6StoreConfig,
 } from "../src/services/e6IntegrationService.js";
@@ -178,6 +179,34 @@ test("an unmapped E6 order can omit both customer name and doctor code", async (
   assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED);
   assert.equal(state.import.customerName, "");
   assert.equal(state.import.e6DoctorCode, "");
+});
+
+test("listing E6 imports filters and sorts by E6 order time", async () => {
+  let receivedWhere;
+  let receivedOrderBy;
+  const prisma = {
+    e6Import: {
+      findMany: async ({ where, orderBy }) => {
+        receivedWhere = where;
+        receivedOrderBy = orderBy;
+        return [];
+      },
+      count: async () => 0,
+    },
+    e6DoctorMapping: { findMany: async () => [] },
+  };
+
+  await listE6Imports(prisma, storeAdmin, { orderDate: "2026-08-21" });
+
+  assert.deepEqual(receivedWhere.sourceCreatedAt, {
+    gte: new Date(2026, 7, 21),
+    lt: new Date(2026, 7, 22),
+  });
+  assert.deepEqual(receivedOrderBy, [
+    { sourceCreatedAt: "desc" },
+    { externalOrderNo: "desc" },
+    { id: "desc" },
+  ]);
 });
 
 function confirmFixture({ mapped = true } = {}) {
