@@ -10,8 +10,19 @@ namespace E6Sync.Models
         public string e6DoctorCode { get; set; }
         public string totalPrice { get; set; }
         public int doseCount { get; set; }
+        public string paymentStatus { get; set; }
+        public E6PrescriptionItemRequest[] items { get; set; }
         public string remark { get; set; }
         public string sourceCreatedAt { get; set; }
+        public string sourceUpdatedAt { get; set; }
+    }
+
+    public sealed class E6PrescriptionItemRequest
+    {
+        public int sequence { get; set; }
+        public string name { get; set; }
+        public string quantity { get; set; }
+        public string unit { get; set; }
     }
 
     public sealed class ApiResponse

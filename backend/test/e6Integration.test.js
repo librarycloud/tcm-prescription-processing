@@ -25,6 +25,11 @@ const payload = {
   e6DoctorCode: "D001",
   totalPrice: "268.00",
   doseCount: 7,
+  paymentStatus: "PAID",
+  items: [
+    { sequence: 1, name: "当归", quantity: "20.000", unit: "g" },
+    { sequence: 2, name: "白芍", quantity: "15.000", unit: "g" },
+  ],
   remark: "饭后服用",
   sourceCreatedAt: "2026-07-26T10:22:00+08:00",
 };
@@ -136,6 +141,11 @@ test("E6 synchronization only creates an import and deduplicates the original or
   assert.equal(second.duplicate, true);
   assert.equal(state.import.syncCount, 2);
   assert.equal(state.import.cashierName, "收银员甲");
+  assert.equal(state.import.isPaid, 1);
+  assert.deepEqual(state.import.items.create, [
+    { sequence: 1, herbName: "当归", quantity: "20.000", unit: "g" },
+    { sequence: 2, herbName: "白芍", quantity: "15.000", unit: "g" },
+  ]);
   assert.equal(state.prescriptionCreates, 0);
   assert.deepEqual(
     state.operationLogs.map((item) => item.action),

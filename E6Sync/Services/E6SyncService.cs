@@ -115,6 +115,12 @@ namespace E6Sync.Services
 
         private async Task<string> ProcessOrderAsync(E6Order order, SyncStats stats, CancellationToken cancellationToken)
         {
+            if (!string.IsNullOrWhiteSpace(order.ValidationError))
+            {
+                stats.FailureCount++;
+                log.Error("单据 " + order.ExternalOrderNo + " 同步失败：" + order.ValidationError);
+                return "失败：" + order.ValidationError;
+            }
             // 优先传递 E6 原始医师值；空值时以配置的 E6 编码作为后端映射键。
             var doctorCode = string.IsNullOrWhiteSpace(order.DoctorName)
                 ? (config.E6.DefaultDoctorCode ?? "").Trim()

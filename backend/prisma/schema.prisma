@@ -337,7 +337,7 @@ model Prescription {
   store      Store                   @relation(fields: [storeId], references: [id])
   creator    User                    @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
   plans      ProcessingPlan[]
-  e6Import   E6Import?
+  e6Imports  E6Import[]
   attachment PrescriptionAttachment?
 
   @@index([phone])
@@ -412,7 +412,7 @@ model ProcessingPlan {
   creator              User                          @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
   store                Store                         @relation(fields: [storeId], references: [id])
   package              Package?
-  e6Import             E6Import?
+  e6Imports            E6Import[]
   photos               ProcessingPhoto[]
   equipmentUsages      ProcessingEquipmentUsage[]
   workflowExceptions   ProcessingWorkflowException[]
@@ -574,6 +574,7 @@ model E6Import {
   e6DoctorCode     String    @map("e6_doctor_code") @db.VarChar(100)
   totalPrice       Decimal   @map("total_price") @db.Decimal(14, 2)
   doseCount        Int       @map("dose_count")
+  isPaid           Int       @default(0) @map("is_paid") @db.TinyInt
   remark           String?   @db.VarChar(500)
   rawPayload       String    @map("raw_payload") @db.LongText
   payloadHash      String    @map("payload_hash") @db.Char(64)
@@ -585,8 +586,8 @@ model E6Import {
   syncedAt         DateTime  @default(now()) @map("synced_at")
   lastSyncedAt     DateTime  @default(now()) @map("last_synced_at")
   syncCount        Int       @default(1) @map("sync_count")
-  prescriptionId   Int?      @unique @map("prescription_id")
-  processingPlanId Int?      @unique @map("processing_plan_id")
+  prescriptionId   Int?      @map("prescription_id")
+  processingPlanId Int?      @map("processing_plan_id")
   confirmedBy      Int?      @map("confirmed_by")
   confirmedAt      DateTime? @map("confirmed_at")
   rejectedBy       Int?      @map("rejected_by")
@@ -598,12 +599,31 @@ model E6Import {
   store          Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
   prescription   Prescription?   @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
   processingPlan ProcessingPlan? @relation(fields: [processingPlanId], references: [id], onDelete: SetNull)
+  items          E6ImportItem[]
 
   @@unique([storeId, externalOrderNo])
   @@index([storeId, status, syncedAt])
   @@index([e6DoctorCode])
   @@index([lastSyncedAt])
+  @@index([isPaid])
   @@map("e6_imports")
+}
+
+model E6ImportItem {
+  id         Int       @id @default(autoincrement())
+  e6ImportId Int       @map("e6_import_id")
+  sequence   Int
+  herbName   String    @map("herb_name") @db.VarChar(200)
+  quantity   Decimal   @db.Decimal(14, 3)
+  unit       String    @default("g") @db.VarChar(10)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  e6Import E6Import @relation(fields: [e6ImportId], references: [id], onDelete: Cascade)
+
+  @@unique([e6ImportId, sequence])
+  @@index([e6ImportId])
+  @@map("e6_import_items")
 }
 
 model SmsConfig {

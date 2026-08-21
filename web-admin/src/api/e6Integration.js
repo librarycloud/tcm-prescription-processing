@@ -26,6 +26,7 @@ export const getE6Imports = (params) => request.get('/admin/e6/imports', { param
 export const getE6Import = (id) => request.get(`/admin/e6/imports/${id}`);
 export const confirmE6Import = (id, data) =>
   request.post(`/admin/e6/imports/${id}/confirm`, data);
+export const mergeE6Imports = (data) => request.post('/admin/e6/imports/merge', data);
 export const rejectE6Import = (id, reason) =>
   request.post(`/admin/e6/imports/${id}/reject`, { reason });
 export const revalidateE6Import = (id) =>

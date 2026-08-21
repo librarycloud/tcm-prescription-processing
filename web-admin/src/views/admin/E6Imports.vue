@@ -63,6 +63,7 @@
       <el-table
         v-loading="loading"
         :data="list"
+        @selection-change="handleSelectionChange"
         :fit="true"
         border
         class="e6-import-table"
@@ -70,6 +71,7 @@
         table-layout="auto"
       >
         <template #empty><EmptyView description="暂无E6导入数据" /></template>
+        <el-table-column type="selection" width="44" :selectable="canMerge" />
         <el-table-column label="订单时间">
           <template #default="{ row }">{{ formatDateSeconds(row.sourceCreatedAt) }}</template>
         </el-table-column>
@@ -93,6 +95,13 @@
           ><template #default="{ row }">¥{{ money(row.totalPrice) }}</template></el-table-column
         >
         <el-table-column prop="doseCount" label="剂数" />
+        <el-table-column label="付款">
+          <template #default="{ row }">
+            <el-tag :type="Number(row.isPaid) === 1 ? 'success' : 'warning'" effect="plain">
+              {{ Number(row.isPaid) === 1 ? '已付款' : '未付款' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="状态">
           <template #default="{ row }"
             ><el-tag :type="statusMeta(row.status).type" effect="plain">{{
@@ -131,6 +140,12 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="merge-actions">
+        <span>已选 {{ selectedRows.length }} 个订单</span>
+        <el-button type="primary" :disabled="selectedRows.length < 2" @click="openMergeConfirm">
+          合并生成处方
+        </el-button>
+      </div>
       <Pagination
         v-model:page="pagination.page"
         v-model:page-size="pagination.pageSize"
@@ -176,6 +191,10 @@
           <div class="detail-label">剂数</div>
           <div class="detail-value">{{ detail.doseCount }}</div>
         </div>
+        <div class="detail-item">
+          <div class="detail-label">付款状态</div>
+          <div class="detail-value">{{ Number(detail.isPaid) === 1 ? '已付款' : '未付款' }}</div>
+        </div>
         <div class="detail-item detail-wide">
           <div class="detail-label">备注</div>
           <div class="detail-value">{{ detail.remark || '-' }}</div>
@@ -184,6 +203,16 @@
           <div class="detail-label">错误信息</div>
           <div class="detail-value error-text">{{ detail.errorMessage }}</div>
         </div>
+      </div>
+      <div v-if="detail?.items?.length" class="raw-section">
+        <div class="detail-label">处方明细</div>
+        <el-table :data="detail.items" border size="small">
+          <el-table-column prop="sequence" label="顺序" width="80" />
+          <el-table-column prop="herbName" label="中药名" />
+          <el-table-column label="数量">
+            <template #default="{ row }">{{ row.quantity }}{{ row.unit }}</template>
+          </el-table-column>
+        </el-table>
       </div>
       <div class="raw-section">
         <div class="detail-label">E6原始数据</div>
@@ -305,6 +334,7 @@ import {
   getE6Import,
   getE6Imports,
   getE6OperatorMappings,
+  mergeE6Imports,
   rejectE6Import,
   revalidateE6Import
 } from '@/api/e6Integration';
@@ -333,6 +363,8 @@ const doctors = ref([]);
 const operatorOptions = ref([]);
 const detail = ref(null);
 const selected = ref(null);
+const selectedRows = ref([]);
+const isMerging = ref(false);
 const statusOptions = E6_IMPORT_STATUS_OPTIONS.filter(
   (item) => item.value !== E6_IMPORT_STATUS.IMPORT_PROCESSING
 );
@@ -425,6 +457,12 @@ function todayText() {
 function canConfirm(row) {
   return [0, 1, 2].includes(Number(row.status)) && !row.prescriptionId;
 }
+function canMerge(row) {
+  return canConfirm(row);
+}
+function handleSelectionChange(rows) {
+  selectedRows.value = rows;
+}
 
 async function loadData() {
   loading.value = true;
@@ -486,6 +524,7 @@ function editPrescription(row) {
 
 function openConfirm(row) {
   selected.value = row;
+  isMerging.value = false;
   Object.assign(confirmForm, {
     customerName: row.customerName || '',
     phone: row.phone || '',
@@ -504,6 +543,39 @@ function openConfirm(row) {
   confirmVisible.value = true;
 }
 
+function openMergeConfirm() {
+  if (selectedRows.value.length < 2) return;
+  const rows = selectedRows.value;
+  const storeId = rows[0].storeId;
+  const doseCount = Number(rows[0].doseCount);
+  if (rows.some((row) => row.storeId !== storeId)) {
+    ElMessage.error('只能合并同一门店的订单');
+    return;
+  }
+  if (rows.some((row) => Number(row.doseCount) !== doseCount)) {
+    ElMessage.error('合并订单的剂数必须一致');
+    return;
+  }
+  selected.value = rows[0];
+  isMerging.value = true;
+  Object.assign(confirmForm, {
+    customerName: rows[0].customerName || '',
+    phone: rows[0].phone || '',
+    doctorId: rows[0].doctorMapping?.doctor?.id || null,
+    doseCount,
+    processTypeId: '',
+    scheduleType: 1,
+    processDate: todayText(),
+    pickupMethod: 0,
+    expressAddress: '',
+    bagCount: doseCount * 2,
+    volumeMl: 200,
+    usageMethod: '',
+    processRemark: ''
+  });
+  confirmVisible.value = true;
+}
+
 async function submitConfirm() {
   const valid = await confirmFormRef.value?.validate().catch(() => false);
   if (!valid || !selected.value) return;
@@ -513,9 +585,16 @@ async function submitConfirm() {
     if (payload.scheduleType === 2) payload.processDate = null;
     if (!isDecoction.value)
       Object.assign(payload, { bagCount: null, volumeMl: null, usageMethod: null });
-    await confirmE6Import(selected.value.id, payload);
-    ElMessage.success('已生成处方并进入加工工作台');
+    if (isMerging.value) {
+      await mergeE6Imports({ ...payload, ids: selectedRows.value.map((row) => row.id) });
+      ElMessage.success('已合并生成处方并进入加工工作台');
+    } else {
+      await confirmE6Import(selected.value.id, payload);
+      ElMessage.success('已生成处方并进入加工工作台');
+    }
     confirmVisible.value = false;
+    isMerging.value = false;
+    selectedRows.value = [];
     await loadData();
   } finally {
     confirming.value = false;
@@ -600,6 +679,12 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .e6-import-table :deep(.table-actions .el-button + .el-button) {
   margin-left: 0;
+}
+.merge-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
 }
 @media (max-width: 900px) {
   .search-form > :first-child {

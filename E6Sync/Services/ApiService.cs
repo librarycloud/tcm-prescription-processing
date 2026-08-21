@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 using System.Web.Script.Serialization;
 using E6Sync.Models;
 
@@ -36,9 +37,18 @@ namespace E6Sync.Services
                 cashierName = LimitLength(order.CashierName, 200),
                 e6DoctorCode = doctorCode,
                 totalPrice = order.TotalPrice.ToString("0.00", CultureInfo.InvariantCulture),
-                doseCount = 1,
+                doseCount = order.DoseCount > 0 ? order.DoseCount : 1,
+                paymentStatus = order.IsPaid ? "PAID" : "UNPAID",
+                items = order.Items.Select(item => new E6PrescriptionItemRequest
+                {
+                    sequence = item.Sequence,
+                    name = LimitLength(item.Name, 200),
+                    quantity = item.Quantity.ToString("0.###", CultureInfo.InvariantCulture),
+                    unit = item.Unit
+                }).ToArray(),
                 remark = LimitLength(order.PrescriptionRemark, 500),
-                sourceCreatedAt = ToIso8601(order.ReceiptDate)
+                sourceCreatedAt = ToIso8601(order.ReceiptDate),
+                sourceUpdatedAt = ToIso8601(order.ReceiptDate)
             };
             var endpoint = config.BaseUrl.TrimEnd('/') + "/integrations/e6/v1/prescriptions";
             var json = serializer.Serialize(requestBody);

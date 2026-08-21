@@ -63,6 +63,42 @@ function positiveInteger(value, label) {
   return number;
 }
 
+function normalizePaymentStatus(value) {
+  const status = String(value ?? "").trim().toUpperCase();
+  if (!status) return "UNPAID";
+  if (status !== "PAID" && status !== "UNPAID")
+    throw new AppError("付款状态不正确", 400);
+  return status;
+}
+
+function itemQuantity(value) {
+  const normalized = String(value ?? "").trim();
+  if (!/^\d{1,11}(\.\d{1,3})?$/.test(normalized) || Number(normalized) <= 0)
+    throw new AppError("药材数量格式不正确", 400);
+  return normalized;
+}
+
+function normalizeImportItems(value, paymentStatus) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) throw new AppError("处方明细格式不正确", 400);
+  const seen = new Set();
+  return value.map((item) => {
+    const sequence = positiveInteger(item?.sequence, "处方明细 ri");
+    if (seen.has(sequence)) throw new AppError("处方明细 ri 不能重复", 400);
+    seen.add(sequence);
+    const unit = clean(item?.unit, 10, "药材单位");
+    if (unit !== "g") throw new AppError("药材单位必须为 g", 400);
+    return {
+      sequence,
+      herbName: clean(item?.name, 200, "中药名"),
+      quantity: itemQuantity(item?.quantity),
+      unit,
+    };
+  });
+}
+
 const API_KEY_HASH_ROUNDS = 12;
 
 function hashApiKey(value) {
@@ -381,6 +417,7 @@ export async function deleteE6OperatorMapping(prisma, actor, idValue) {
 
 function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode) {
   const storeCode = clean(payload.storeCode, 50, "门店编码").toUpperCase();
+  const paymentStatus = normalizePaymentStatus(payload.paymentStatus);
   const normalized = {
     storeCode,
     externalOrderNo: clean(payload.externalOrderNo, 100, "E6原始订单号"),
@@ -390,6 +427,8 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
     e6DoctorCode: normalizeDoctorCode(doctorCode, false) || "",
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
+    isPaid: paymentStatus === "PAID" ? 1 : 0,
+    items: normalizeImportItems(payload.items, paymentStatus),
     remark: clean(payload.remark, 500, "备注", false),
     sourceCreatedAt: dateOrNull(payload.sourceCreatedAt, "E6创建时间"),
     sourceUpdatedAt: dateOrNull(payload.sourceUpdatedAt, "E6更新时间"),
@@ -497,6 +536,7 @@ async function persistImport(prisma, store, normalized, actor) {
       e6DoctorCode: normalized.e6DoctorCode,
       totalPrice: normalized.totalPrice,
       doseCount: normalized.doseCount,
+      isPaid: normalized.isPaid,
       remark: normalized.remark,
       rawPayload: normalized.rawPayload,
       payloadHash: normalized.payloadHash,
@@ -513,6 +553,7 @@ async function persistImport(prisma, store, normalized, actor) {
           storeId: store.id,
           externalOrderNo: normalized.externalOrderNo,
           status: desiredStatus,
+          items: { create: normalized.items },
           ...desiredError,
         },
       });
@@ -541,6 +582,9 @@ async function persistImport(prisma, store, normalized, actor) {
         where: { id: existing.id },
         data: {
           ...baseData,
+          ...(!converted
+            ? { items: { deleteMany: {}, create: normalized.items } }
+            : {}),
           status,
           ...error,
           syncCount: { increment: 1 },
@@ -593,6 +637,108 @@ export async function receiveE6Prescription(
   }
 }
 
+export async function mergeE6Imports(prisma, actor, payload = {}) {
+  const ids = [...new Set((Array.isArray(payload.ids) ? payload.ids : []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length < 2) throw new AppError("至少选择两个E6订单合并", 400);
+  const items = await prisma.e6Import.findMany({
+    where: { id: { in: ids }, ...businessScope(actor) },
+    include: { items: { orderBy: { sequence: "asc" } } },
+    orderBy: { sourceCreatedAt: "asc" },
+  });
+  if (items.length !== ids.length) throw new AppError("部分E6订单不存在或无权操作", 404);
+  const first = items[0];
+  if (items.some((item) => item.storeId !== first.storeId)) throw new AppError("只能合并同一门店的订单", 400);
+  if (items.some((item) => item.prescriptionId || item.status === E6_IMPORT_STATUS.IMPORT_CONVERTED)) throw new AppError("已生成处方的订单不能合并", 409);
+  if (items.some((item) => !CONVERTIBLE_STATUSES.includes(item.status))) throw new AppError("存在当前状态不能确认的订单", 409);
+  if (items.some((item) => Number(item.doseCount) !== Number(first.doseCount))) throw new AppError("合并订单的剂数必须一致", 400);
+  const mergedItems = [];
+  let sequence = 1;
+  for (const item of items) for (const herb of item.items) mergedItems.push({ sequence: sequence++, herbName: herb.herbName, quantity: herb.quantity, unit: herb.unit });
+  const mergedPayload = {
+    customerName: first.customerName,
+    phone: first.phone,
+    doctorId: payload.doctorId,
+    doseCount: first.doseCount,
+    processTypeId: payload.processTypeId,
+    scheduleType: payload.scheduleType,
+    processDate: payload.processDate,
+    pickupMethod: payload.pickupMethod,
+    expressAddress: payload.expressAddress,
+    bagCount: payload.bagCount,
+    volumeMl: payload.volumeMl,
+    usageMethod: payload.usageMethod,
+    paymentStatus: payload.paymentStatus,
+    notifyType: payload.notifyType,
+    processRemark: payload.processRemark,
+    priority: payload.priority,
+  };
+  return prisma.$transaction(async (tx) => {
+    const totalPrice = items.reduce((sum, item) => sum + Number(item.totalPrice), 0).toFixed(2);
+    const claimed = await tx.e6Import.updateMany({
+      where: { id: { in: ids }, prescriptionId: null, status: { in: CONVERTIBLE_STATUSES } },
+      data: { status: E6_IMPORT_STATUS.IMPORT_PROCESSING, errorCode: null, errorMessage: null },
+    });
+    if (claimed.count !== ids.length) throw new AppError("所选订单正在处理或状态已变化", 409);
+    const primary = await tx.e6Import.update({
+      where: { id: first.id },
+      data: { totalPrice, items: { deleteMany: {}, create: mergedItems } },
+    });
+    const customerName = clean(mergedPayload.customerName ?? primary.customerName, 64, "顾客姓名", false) || "";
+    const phone = normalizeOptionalPhone(mergedPayload.phone ?? primary.phone);
+    const selectedDoctorId = mergedPayload.doctorId === undefined || mergedPayload.doctorId === null || mergedPayload.doctorId === ""
+      ? null
+      : positiveInteger(mergedPayload.doctorId, "医生");
+    const mapping = selectedDoctorId ? null : await activeDoctorMapping(tx, primary.storeId, primary.e6DoctorCode);
+    const doctorId = selectedDoctorId ?? mapping?.doctorId;
+    if (!doctorId) throw conversionError("请先配置该门店的E6医师映射，或在确认时选择系统医生", E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED, E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED);
+    const source = await tx.dictionary.findFirst({ where: { type: DICTIONARY_TYPES.PRESCRIPTION_SOURCE, code: E6_SOURCE_CODE, status: RECORD_STATUS.ENABLED, deletedAt: null } });
+    if (!source) throw conversionError("E6处方来源字典不存在或已停用", E6_IMPORT_STATUS.IMPORT_ERROR, E6_ERROR_CODE.CONVERSION_FAILED);
+    const prescription = await createPrescriptionRecord(tx, actor, {
+      customerName,
+      allowEmptyCustomerName: true,
+      phone,
+      doctorId,
+      sourceId: source.id,
+      storeId: primary.storeId,
+      totalPrice,
+      remark: primary.remark,
+    }, { description: `合并E6订单 ${items.map((item) => item.externalOrderNo).join("、")} 并生成处方` });
+    const pickupMethod = Number(mergedPayload.pickupMethod);
+    if (!PICKUP_METHOD_VALUES.includes(pickupMethod)) throw new AppError("请选择取货方式", 400);
+    const plan = await createProcessingPlanRecord(tx, actor, {
+      prescriptionId: prescription.id,
+      batchNo: 1,
+      processTypeId: mergedPayload.processTypeId,
+      totalDose: first.doseCount,
+      bagCount: mergedPayload.bagCount,
+      volumeMl: mergedPayload.volumeMl,
+      usageMethod: mergedPayload.usageMethod,
+      scheduleType: mergedPayload.scheduleType,
+      processDate: mergedPayload.processDate,
+      priority: mergedPayload.priority ?? PRIORITY.NORMAL,
+      notifyType: mergedPayload.notifyType,
+      paymentStatus: mergedPayload.paymentStatus ?? (Number(primary.isPaid) === 1 ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID),
+      pickupMethod,
+      expressAddress: mergedPayload.expressAddress,
+      processRemark: mergedPayload.processRemark,
+      remark: primary.remark,
+    }, { description: `由合并E6订单 ${items.map((item) => item.externalOrderNo).join("、")} 生成加工计划` });
+    await tx.e6Import.updateMany({
+      where: { id: { in: ids } },
+      data: { customerName, phone, status: E6_IMPORT_STATUS.IMPORT_CONVERTED, prescriptionId: prescription.id, processingPlanId: plan.id, confirmedBy: Number(actor.id), confirmedAt: new Date(), errorCode: null, errorMessage: null },
+    });
+    const converted = await tx.e6Import.findUnique({ where: { id: primary.id }, include: importInclude() });
+    await recordOperation(tx, actor, {
+      module: "e6-integration",
+      action: "import_merge_confirm",
+      targetId: primary.id,
+      storeId: primary.storeId,
+      description: `合并E6订单 ${items.map((item) => item.externalOrderNo).join("、")}，生成处方 ${prescription.prescriptionNo}`,
+    });
+    return converted;
+  });
+}
+
 function importInclude(includeRaw = false) {
   return {
     store: { select: { id: true, name: true, code: true } },
@@ -605,6 +751,7 @@ function importInclude(includeRaw = false) {
       },
     },
     processingPlan: { select: { id: true, status: true } },
+    items: { orderBy: { sequence: "asc" } },
     ...(includeRaw ? {} : {}),
   };
 }
@@ -822,7 +969,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
           processDate: payload.processDate,
           priority: payload.priority ?? PRIORITY.NORMAL,
           notifyType: payload.notifyType,
-          paymentStatus: payload.paymentStatus ?? PAYMENT_STATUS.PAID,
+          paymentStatus: payload.paymentStatus ?? (Number(item.isPaid) === 1 ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID),
            pickupMethod,
            expressAddress: payload.expressAddress,
            processRemark: payload.processRemark,

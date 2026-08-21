@@ -8,6 +8,7 @@ import {
   listE6DoctorMappings,
   listE6OperatorMappings,
   listE6Imports,
+  mergeE6Imports,
   receiveE6Prescription,
   rejectE6Import,
   revalidateE6Import,
@@ -151,6 +152,10 @@ export async function confirmImportController(request, reply) {
     ),
     "已生成处方并进入加工工作台",
   );
+}
+
+export async function mergeImportsController(request, reply) {
+  return ok(reply, await mergeE6Imports(request.server.prisma, request.user, request.body || {}), "已合并生成处方");
 }
 
 export async function rejectImportController(request, reply) {

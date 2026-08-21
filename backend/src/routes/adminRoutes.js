@@ -159,6 +159,7 @@ import {
 } from "../controllers/productDifferenceController.js";
 import {
   confirmImportController as confirmE6ImportController,
+  mergeImportsController as mergeE6ImportsController,
   createDoctorMappingController as createE6DoctorMappingController,
   deleteDoctorMappingController as deleteE6DoctorMappingController,
   deleteOperatorMappingController as deleteE6OperatorMappingController,
@@ -210,6 +211,7 @@ export default async function adminRoutes(fastify) {
   fastify.get("/e6/imports", listE6ImportsController);
   fastify.get("/e6/imports/:id", e6ImportDetailController);
   fastify.post("/e6/imports/:id/confirm", confirmE6ImportController);
+  fastify.post("/e6/imports/merge", mergeE6ImportsController);
   fastify.post("/e6/imports/:id/reject", rejectE6ImportController);
   fastify.post("/e6/imports/:id/revalidate", revalidateE6ImportController);
   fastify.get("/e6/stores/:storeId/config", getE6StoreConfigController);
