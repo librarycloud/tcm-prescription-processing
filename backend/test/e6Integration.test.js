@@ -175,7 +175,7 @@ test("a missing E6 doctor code is rejected when multiple server mappings exist",
   );
 });
 
-function confirmFixture() {
+function confirmFixture({ mapped = true } = {}) {
   const state = {
     import: {
       id: 81,
@@ -216,14 +216,17 @@ function confirmFixture() {
       },
     },
     e6DoctorMapping: {
-      findFirst: async () => ({
-        id: 8,
-        storeId: 3,
-        e6DoctorCode: "D001",
-        doctorId: 9,
-        status: 1,
-        doctor: { id: 9, name: "李医生", status: 1, deletedAt: null },
-      }),
+      findFirst: async () =>
+        mapped
+          ? {
+              id: 8,
+              storeId: 3,
+              e6DoctorCode: "D001",
+              doctorId: 9,
+              status: 1,
+              doctor: { id: 9, name: "李医生", status: 1, deletedAt: null },
+            }
+          : null,
       findMany: async () => [],
     },
     doctor: {
@@ -300,4 +303,24 @@ test("confirming an E6 import creates one prescription and one waiting plan", as
   assert.equal(state.plan.status, 0);
   assert.match(state.plan.pickupCode, /^\d{6}$/);
   assert.equal(state.plan.expressAddress, "苏州市测试路 1 号");
+});
+
+test("confirming an E6 import applies the reviewed customer, doctor, and dose", async () => {
+  const { prisma, state } = confirmFixture({ mapped: false });
+
+  await confirmE6Import(prisma, storeAdmin, 81, {
+    customerName: "李四",
+    doctorId: 9,
+    doseCount: 14,
+    processTypeId: 20,
+    scheduleType: 1,
+    processDate: "2026-07-27",
+    pickupMethod: 0,
+  });
+
+  assert.equal(state.import.customerName, "李四");
+  assert.equal(state.import.doseCount, 14);
+  assert.equal(state.prescription.customerName, "李四");
+  assert.equal(state.prescription.doctorId, 9);
+  assert.equal(state.plan.totalDose, 14);
 });

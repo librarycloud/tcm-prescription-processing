@@ -61,8 +61,8 @@
         <el-table-column prop="e6DoctorCode" label="E6医师编码" />
         <el-table-column label="系统医生">
           <template #default="{ row }">
-            <span :class="{ 'mapping-missing': !row.doctorMapping }">{{
-              row.doctorMapping?.doctor?.name || '未映射'
+            <span :class="{ 'mapping-missing': !row.prescription?.doctor && !row.doctorMapping }">{{
+              row.prescription?.doctor?.name || row.doctorMapping?.doctor?.name || '未映射'
             }}</span>
           </template>
         </el-table-column>
@@ -88,7 +88,6 @@
                 v-if="canConfirm(row)"
                 link
                 type="success"
-                :disabled="!row.doctorMapping"
                 @click="openConfirm(row)"
                 >确认</el-button
               >
@@ -133,7 +132,7 @@
         </div>
         <div class="detail-item">
           <div class="detail-label">系统医生</div>
-          <div class="detail-value">{{ detail.doctorMapping?.doctor?.name || '未映射' }}</div>
+          <div class="detail-value">{{ detail.prescription?.doctor?.name || detail.doctorMapping?.doctor?.name || '未映射' }}</div>
         </div>
         <div class="detail-item">
           <div class="detail-label">总价</div>
@@ -172,6 +171,17 @@
         label-width="100px"
         class="confirm-form"
       >
+        <el-form-item label="顾客姓名" prop="customerName">
+          <el-input v-model.trim="confirmForm.customerName" maxlength="64" />
+        </el-form-item>
+        <el-form-item label="系统医生" prop="doctorId">
+          <el-select v-model="confirmForm.doctorId" filterable placeholder="请选择医生" style="width: 100%">
+            <el-option v-for="doctor in doctors" :key="doctor.id" :label="doctor.name" :value="doctor.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="剂数" prop="doseCount">
+          <el-input-number v-model="confirmForm.doseCount" :min="1" :max="9999" style="width: 100%" />
+        </el-form-item>
         <el-form-item label="加工方式" prop="processTypeId">
           <el-select
             v-model="confirmForm.processTypeId"
@@ -259,7 +269,7 @@ import {
   rejectE6Import,
   revalidateE6Import
 } from '@/api/e6Integration';
-import { getDictionaries } from '@/api/processing';
+import { getDictionaries, getDoctors } from '@/api/processing';
 import { getStores } from '@/api/store';
 import {
   E6_IMPORT_STATUS,
@@ -279,6 +289,7 @@ const confirmFormRef = ref(null);
 const list = ref([]);
 const stores = ref([]);
 const processTypes = ref([]);
+const doctors = ref([]);
 const detail = ref(null);
 const selected = ref(null);
 const statusOptions = E6_IMPORT_STATUS_OPTIONS.filter(
@@ -296,6 +307,9 @@ const pickupOptions = [
 const query = reactive({ keyword: '', storeId: '', status: '' });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const confirmForm = reactive({
+  customerName: '',
+  doctorId: null,
+  doseCount: 1,
   processTypeId: '',
   scheduleType: 1,
   processDate: '',
@@ -307,6 +321,9 @@ const confirmForm = reactive({
   processRemark: ''
 });
 const confirmRules = {
+  customerName: [{ required: true, message: '请输入顾客姓名', trigger: 'blur' }],
+  doctorId: [{ required: true, message: '请选择医生', trigger: 'change' }],
+  doseCount: [{ required: true, message: '请输入剂数', trigger: 'change' }],
   processTypeId: [{ required: true, message: '请选择加工方式', trigger: 'change' }],
   scheduleType: [{ required: true, message: '请选择安排方式', trigger: 'change' }],
   processDate: [
@@ -370,10 +387,11 @@ async function loadData() {
 }
 
 async function loadReferences() {
-  const requests = [getDictionaries('ProcessType')];
+  const requests = [getDictionaries('ProcessType'), getDoctors()];
   if (userStore.isSuperAdmin) requests.push(getStores({ page: 1, pageSize: 100, status: 1 }));
-  const [types, storeData] = await Promise.all(requests);
+  const [types, doctorData, storeData] = await Promise.all(requests);
   processTypes.value = types || [];
+  doctors.value = doctorData || [];
   stores.value = storeData?.list || [];
 }
 
@@ -394,6 +412,9 @@ async function openDetail(row) {
 function openConfirm(row) {
   selected.value = row;
   Object.assign(confirmForm, {
+    customerName: row.customerName || '',
+    doctorId: row.doctorMapping?.doctor?.id || null,
+    doseCount: Number(row.doseCount) || 1,
     processTypeId: '',
     scheduleType: 1,
     processDate: '',

@@ -510,7 +510,14 @@ export async function receiveE6Prescription(
 function importInclude(includeRaw = false) {
   return {
     store: { select: { id: true, name: true, code: true } },
-    prescription: { select: { id: true, prescriptionNo: true, status: true } },
+    prescription: {
+      select: {
+        id: true,
+        prescriptionNo: true,
+        status: true,
+        doctor: { select: { id: true, name: true } },
+      },
+    },
     processingPlan: { select: { id: true, status: true } },
     ...(includeRaw ? {} : {}),
   };
@@ -620,14 +627,26 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
       if (claimed.count !== 1)
         throw new AppError("该导入记录正在处理或已完成", 409);
       const item = await tx.e6Import.findUnique({ where: { id: current.id } });
-      const mapping = await activeDoctorMapping(
-        tx,
-        item.storeId,
-        item.e6DoctorCode,
+      const customerName = clean(
+        payload.customerName ?? item.customerName,
+        64,
+        "顾客姓名",
       );
-      if (!mapping) {
+      const doseCount = positiveInteger(
+        payload.doseCount ?? item.doseCount,
+        "剂数",
+      );
+      const selectedDoctorId =
+        payload.doctorId === undefined || payload.doctorId === null || payload.doctorId === ""
+          ? null
+          : positiveInteger(payload.doctorId, "医生");
+      const mapping = selectedDoctorId
+        ? null
+        : await activeDoctorMapping(tx, item.storeId, item.e6DoctorCode);
+      const doctorId = selectedDoctorId ?? mapping?.doctorId;
+      if (!doctorId) {
         throw conversionError(
-          "请先配置该门店的E6医师映射",
+          "请先配置该门店的E6医师映射，或在确认时选择系统医生",
           E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED,
           E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
         );
@@ -650,9 +669,9 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         tx,
         actor,
         {
-          customerName: item.customerName,
+          customerName,
           phone: item.phone,
-          doctorId: mapping.doctorId,
+          doctorId,
           sourceId: source.id,
           storeId: item.storeId,
           totalPrice: item.totalPrice,
@@ -670,7 +689,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
           prescriptionId: prescription.id,
           batchNo: 1,
           processTypeId: payload.processTypeId,
-          totalDose: item.doseCount,
+          totalDose: doseCount,
           bagCount: payload.bagCount,
           volumeMl: payload.volumeMl,
           usageMethod: payload.usageMethod,
@@ -689,6 +708,8 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
       const converted = await tx.e6Import.update({
         where: { id: item.id },
         data: {
+          customerName,
+          doseCount,
           status: E6_IMPORT_STATUS.IMPORT_CONVERTED,
           prescriptionId: prescription.id,
           processingPlanId: plan.id,
@@ -704,7 +725,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         action: "import_confirm",
         targetId: converted.id,
         storeId: converted.storeId,
-        description: `确认E6订单 ${converted.externalOrderNo}，生成处方 ${prescription.prescriptionNo}`,
+        description: `确认E6订单 ${converted.externalOrderNo}，顾客 ${customerName}，医生 ${prescription.doctor.name}，${doseCount} 剂，生成处方 ${prescription.prescriptionNo}`,
       });
       return converted;
     });
