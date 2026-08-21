@@ -1,0 +1,63 @@
+name: Build E6Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - E6Sync/**
+      - E6Sync-Windows11/**
+      - .github/workflows/build-e6sync.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - E6Sync/**
+      - E6Sync-Windows11/**
+      - .github/workflows/build-e6sync.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: E6Sync-Server2008
+            solution: E6Sync/E6Sync.sln
+            output: E6Sync/bin/Release
+            requires_net462: true
+          - name: E6Sync-Windows11
+            solution: E6Sync-Windows11/E6Sync.sln
+            output: E6Sync-Windows11/bin/Release
+            requires_net462: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET Framework 4.6.2 targeting pack
+        if: matrix.requires_net462
+        shell: pwsh
+        run: |
+          $targetingPack = 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2'
+          if (-not (Test-Path $targetingPack)) {
+            choco install netfx-4.6.2-devpack --yes --no-progress
+          }
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release
+        shell: pwsh
+        run: msbuild '${{ matrix.solution }}' /restore /m /p:Configuration=Release /p:Platform='Any CPU'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.output }}
+          if-no-files-found: error

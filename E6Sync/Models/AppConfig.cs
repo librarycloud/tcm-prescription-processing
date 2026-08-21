@@ -11,7 +11,7 @@ namespace E6Sync.Models
     {
         public string Server { get; set; } = "127.0.0.1";
         public string Database { get; set; } = "E6观前街中医诊所";
-        public string Username { get; set; } = "sa";
+        public string Username { get; set; } = "";
         public string Password { get; set; } = "";
     }
 

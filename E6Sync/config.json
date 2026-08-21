@@ -2,8 +2,8 @@
   "e6": {
     "server": "127.0.0.1",
     "database": "E6观前街中医诊所",
-    "username": "sa",
-    "password": "你的SQL密码"
+    "username": "",
+    "password": ""
   },
   "api": {
     "baseUrl": "https://你的域名/api",
