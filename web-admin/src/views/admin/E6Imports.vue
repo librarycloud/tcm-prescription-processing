@@ -153,72 +153,78 @@
       />
     </el-card>
 
-    <el-dialog v-model="detailVisible" title="E6导入详情" width="760px" align-center>
-      <div v-if="detail" class="detail-grid">
-        <div class="detail-item">
-          <div class="detail-label">E6订单号</div>
-          <div class="detail-value">{{ detail.externalOrderNo }}</div>
+    <el-drawer v-model="detailVisible" title="E6导入详情" direction="rtl" size="min(1180px, 96vw)" destroy-on-close>
+      <div class="e6-import-detail">
+        <div v-if="detail" class="detail-grid">
+          <div class="detail-item">
+            <div class="detail-label">E6订单号</div>
+            <div class="detail-value">{{ detail.externalOrderNo }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">门店</div>
+            <div class="detail-value">{{ detail.store?.name }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">顾客</div>
+            <div class="detail-value">{{ detail.customerName }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">手机号</div>
+            <div class="detail-value">{{ maskPhone(detail.phone) }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">操作员</div>
+            <div class="detail-value">{{ detail.operatorMapping?.operatorName || detail.cashierName || '-' }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">E6医师编码</div>
+            <div class="detail-value">{{ detail.e6DoctorCode }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">系统医生</div>
+            <div class="detail-value">{{ detail.prescription?.doctor?.name || detail.doctorMapping?.doctor?.name || '未映射' }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">总价</div>
+            <div class="detail-value">¥{{ money(detail.totalPrice) }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">剂数</div>
+            <div class="detail-value">{{ detail.doseCount }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">付款状态</div>
+            <div class="detail-value">{{ Number(detail.isPaid) === 1 ? '已付款' : '未付款' }}</div>
+          </div>
+          <div class="detail-item detail-wide">
+            <div class="detail-label">备注</div>
+            <div class="detail-value">{{ detail.remark || '-' }}</div>
+          </div>
+          <div v-if="detail.errorMessage" class="detail-item detail-wide">
+            <div class="detail-label">错误信息</div>
+            <div class="detail-value error-text">{{ detail.errorMessage }}</div>
+          </div>
         </div>
-        <div class="detail-item">
-          <div class="detail-label">门店</div>
-          <div class="detail-value">{{ detail.store?.name }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">顾客</div>
-          <div class="detail-value">{{ detail.customerName }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">手机号</div>
-          <div class="detail-value">{{ maskPhone(detail.phone) }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">操作员</div>
-          <div class="detail-value">{{ detail.operatorMapping?.operatorName || detail.cashierName || '-' }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">E6医师编码</div>
-          <div class="detail-value">{{ detail.e6DoctorCode }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">系统医生</div>
-          <div class="detail-value">{{ detail.prescription?.doctor?.name || detail.doctorMapping?.doctor?.name || '未映射' }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">总价</div>
-          <div class="detail-value">¥{{ money(detail.totalPrice) }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">剂数</div>
-          <div class="detail-value">{{ detail.doseCount }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">付款状态</div>
-          <div class="detail-value">{{ Number(detail.isPaid) === 1 ? '已付款' : '未付款' }}</div>
-        </div>
-        <div class="detail-item detail-wide">
-          <div class="detail-label">备注</div>
-          <div class="detail-value">{{ detail.remark || '-' }}</div>
-        </div>
-        <div v-if="detail.errorMessage" class="detail-item detail-wide">
-          <div class="detail-label">错误信息</div>
-          <div class="detail-value error-text">{{ detail.errorMessage }}</div>
-        </div>
-      </div>
-      <div v-if="detailItems.length" class="raw-section">
-        <div class="detail-label">处方明细</div>
-        <el-table :data="detailItems" border size="small">
-          <el-table-column prop="sequence" label="顺序" width="80" />
-          <el-table-column prop="name" label="中药名" />
-          <el-table-column label="数量">
+        <div v-if="detailItems.length" class="raw-section">
+          <div class="detail-label">处方明细</div>
+          <el-table :data="detailItems" border size="small">
+            <el-table-column prop="sequence" label="顺序" width="80" />
+            <el-table-column prop="name" label="中药名" />
+          <el-table-column label="单剂量">
             <template #default="{ row }">{{ row.quantity }}{{ row.unit }}</template>
           </el-table-column>
-        </el-table>
+          <el-table-column label="总量">
+            <template #default="{ row }">{{ row.totalQuantity }}{{ row.unit }}</template>
+          </el-table-column>
+          <el-table-column prop="doseCount" label="剂数" width="90" />
+          </el-table>
+        </div>
+        <div class="raw-section">
+          <div class="detail-label">E6原始数据</div>
+          <pre>{{ rawPayloadText }}</pre>
+        </div>
       </div>
-      <div class="raw-section">
-        <div class="detail-label">E6原始数据</div>
-        <pre>{{ rawPayloadText }}</pre>
-      </div>
-    </el-dialog>
+    </el-drawer>
 
     <el-dialog v-model="confirmVisible" title="确认导入并生成加工计划" width="620px" align-center>
       <el-alert v-if="selected" :closable="false" type="info" show-icon>
@@ -654,6 +660,9 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 .detail-wide {
   grid-column: 1 / -1;
 }
+.e6-import-detail .detail-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 .raw-section {
   margin-top: 20px;
 }
@@ -698,6 +707,14 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
   }
   .search-form > :not(:first-child) {
     flex: 1 1 180px;
+  }
+  .e6-import-detail .detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .e6-import-detail .detail-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

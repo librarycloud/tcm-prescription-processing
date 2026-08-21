@@ -24,6 +24,8 @@ namespace E6Sync.Models
         public int Sequence { get; set; }
         public string Name { get; set; }
         public decimal Quantity { get; set; }
+        public decimal TotalQuantity { get; set; }
         public string Unit { get; set; }
+        public int DoseCount { get; set; }
     }
 }

@@ -77,6 +77,7 @@ SELECT
     counter.[_proofstate],
     detail.[商品名称],
     detail.[单付数量],
+    detail.[数量],
     detail.[单位],
     detail.[付数],
     detail.[ri]
@@ -117,6 +118,7 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                         var proofStateOrdinal = reader.GetOrdinal("_proofstate");
                         var itemNameOrdinal = reader.GetOrdinal("商品名称");
                         var itemQuantityOrdinal = reader.GetOrdinal("单付数量");
+                        var itemTotalQuantityOrdinal = reader.GetOrdinal("数量");
                         var itemUnitOrdinal = reader.GetOrdinal("单位");
                         var doseCountOrdinal = reader.GetOrdinal("付数");
                         var sequenceOrdinal = reader.GetOrdinal("ri");
@@ -156,6 +158,10 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                             try { singleDoseQuantity = reader.IsDBNull(itemQuantityOrdinal) ? 0m : Convert.ToDecimal(reader.GetValue(itemQuantityOrdinal)); }
                             catch { order.ValidationError = "处方明细「" + itemName + "」单付数量无效"; continue; }
                             if (singleDoseQuantity <= 0m) { order.ValidationError = "处方明细「" + itemName + "」单付数量必须大于零"; continue; }
+                            decimal totalQuantity;
+                            try { totalQuantity = reader.IsDBNull(itemTotalQuantityOrdinal) ? 0m : Convert.ToDecimal(reader.GetValue(itemTotalQuantityOrdinal)); }
+                            catch { order.ValidationError = "处方明细「" + itemName + "」数量无效"; continue; }
+                            if (totalQuantity <= 0m) { order.ValidationError = "处方明细「" + itemName + "」数量必须大于零"; continue; }
                             int doseCount;
                             try { doseCount = reader.IsDBNull(doseCountOrdinal) ? 0 : Convert.ToInt32(reader.GetValue(doseCountOrdinal)); }
                             catch { order.ValidationError = "处方明细「" + itemName + "」付数无效"; continue; }
@@ -165,7 +171,16 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                             catch { order.ValidationError = "处方明细「" + itemName + "」ri 无效"; continue; }
                             if (sequence <= 0) { order.ValidationError = "处方明细「" + itemName + "」ri 必须为正整数"; continue; }
                             order.DoseCount = Math.Max(order.DoseCount, doseCount);
-                            order.Items.Add(new E6PrescriptionItem { Sequence = sequence, Name = itemName, Quantity = singleDoseQuantity * multiplier, Unit = "g" });
+                            var quantityInGrams = singleDoseQuantity * multiplier;
+                            order.Items.Add(new E6PrescriptionItem
+                            {
+                                Sequence = sequence,
+                                Name = itemName,
+                                Quantity = quantityInGrams,
+                                TotalQuantity = totalQuantity * multiplier,
+                                Unit = "g",
+                                DoseCount = doseCount
+                            });
                         }
                     }
                 }

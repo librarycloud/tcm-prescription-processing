@@ -27,8 +27,8 @@ const payload = {
   doseCount: 7,
   paymentStatus: "PAID",
   items: [
-    { sequence: 1, name: "当归", quantity: "20.000", unit: "g" },
-    { sequence: 2, name: "白芍", quantity: "15.000", unit: "g" },
+    { sequence: 1, name: "当归", quantity: "20.000", totalQuantity: "140.000", unit: "g", doseCount: 7 },
+    { sequence: 2, name: "白芍", quantity: "15.000", totalQuantity: "75.000", unit: "g", doseCount: 5 },
   ],
   remark: "饭后服用",
   sourceCreatedAt: "2026-07-26T10:22:00+08:00",
@@ -157,6 +157,18 @@ test("E6 synchronization rejects an API key from another store", async () => {
     { statusCode: 401 },
   );
   assert.equal(state.import, null);
+});
+
+test("E6 synchronization retains each item dose count independently", async () => {
+  const { apiKey, prisma, state } = await syncFixture();
+
+  await receiveE6Prescription(prisma, payload, apiKey);
+
+  const items = JSON.parse(state.import.rawPayload).items;
+  assert.equal(items[0].doseCount, 7);
+  assert.equal(items[0].totalQuantity, "140.000");
+  assert.equal(items[1].doseCount, 5);
+  assert.equal(items[1].totalQuantity, "75.000");
 });
 
 test("a mapped E6 doctor leaves the synchronized order pending confirmation", async () => {

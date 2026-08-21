@@ -54,15 +54,27 @@ Content-Type: application/json; charset=utf-8
 | `e6DoctorCode` | string | 否* | 1-100 字符 | E6 医师编码；系统按门店配置医生映射 |
 | `totalPrice` | string/number | 是 | 非负金额，最多 2 位小数 | 订单总价；推荐使用字符串，例如 `"268.00"` |
 | `doseCount` | integer | 是 | 大于 0 | 剂数 |
+| `items` | array | 是 | 至少一条明细 | 处方明细，见下表 |
 | `remark` | string | 否 | 最多 500 字符 | 处方或订单备注 |
 | `sourceCreatedAt` | string | 否 | ISO 8601 | E6 订单创建时间，必须携带时区 |
 | `sourceUpdatedAt` | string | 否 | ISO 8601 | E6 订单最后更新时间，必须携带时区 |
 
 门店编码和医师编码由接口统一转换为大写后匹配。E6 端仍应始终传递稳定、格式一致的编码。
 
+### 4.1 处方明细字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---:|:---:|---|
+| `sequence` | integer | 是 | 明细顺序，来自 E6 `ri`，同一订单内不能重复 |
+| `name` | string | 是 | 中药名称，来自 E6 `商品名称` |
+| `quantity` | string/number | 是 | 单剂数量，单位固定为克；E6 客户端按 `单付数量 * 单位` 换算后传入，不乘 `付数` |
+| `totalQuantity` | string/number | 是 | 总量，单位固定为克；E6 客户端按 `数量 * 单位` 换算后传入 |
+| `unit` | string | 是 | 固定为 `g` |
+| `doseCount` | integer | 是 | 该明细行的 E6 `付数`；同一处方的不同明细可不一致 |
+
 `e6DoctorCode` 为空时，服务端仅在该门店恰好配置一条启用中的医师映射时自动使用该映射；其他情况订单会进入“待映射”，由门店管理员确认时选择系统医生。
 
-### 4.1 请求示例
+### 4.2 请求示例
 
 ```json
 {
@@ -73,6 +85,10 @@ Content-Type: application/json; charset=utf-8
   "e6DoctorCode": "D001",
   "totalPrice": "268.00",
   "doseCount": 7,
+  "items": [
+    { "sequence": 1, "name": "北柴胡", "quantity": "6", "totalQuantity": "42", "unit": "g", "doseCount": 7 },
+    { "sequence": 2, "name": "白芍", "quantity": "15", "totalQuantity": "75", "unit": "g", "doseCount": 5 }
+  ],
   "remark": "饭后服用",
   "sourceCreatedAt": "2026-07-26T10:22:00+08:00",
   "sourceUpdatedAt": "2026-07-26T10:25:00+08:00"

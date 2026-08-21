@@ -22,7 +22,9 @@ namespace E6Sync.Models
         public int sequence { get; set; }
         public string name { get; set; }
         public string quantity { get; set; }
+        public string totalQuantity { get; set; }
         public string unit { get; set; }
+        public int doseCount { get; set; }
     }
 
     public sealed class ApiResponse

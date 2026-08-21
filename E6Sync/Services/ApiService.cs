@@ -44,7 +44,9 @@ namespace E6Sync.Services
                     sequence = item.Sequence,
                     name = LimitLength(item.Name, 200),
                     quantity = item.Quantity.ToString("0.###", CultureInfo.InvariantCulture),
-                    unit = item.Unit
+                    totalQuantity = item.TotalQuantity.ToString("0.###", CultureInfo.InvariantCulture),
+                    unit = item.Unit,
+                    doseCount = item.DoseCount
                 }).ToArray(),
                 remark = LimitLength(order.PrescriptionRemark, 500),
                 sourceCreatedAt = ToIso8601(order.ReceiptDate),

@@ -94,7 +94,9 @@ function normalizeImportItems(value) {
       sequence,
       herbName: clean(item?.name, 200, "中药名"),
       quantity: itemQuantity(item?.quantity),
+      totalQuantity: itemQuantity(item?.totalQuantity),
       unit,
+      doseCount: positiveInteger(item?.doseCount, "处方明细付数"),
     };
   });
 }
