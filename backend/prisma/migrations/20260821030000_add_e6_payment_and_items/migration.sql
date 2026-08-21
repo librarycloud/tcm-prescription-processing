@@ -2,10 +2,22 @@ ALTER TABLE `e6_imports`
   ADD COLUMN `is_paid` TINYINT NOT NULL DEFAULT 0;
 
 ALTER TABLE `e6_imports`
+  DROP FOREIGN KEY `e6_imports_prescription_id_fkey`,
+  DROP FOREIGN KEY `e6_imports_processing_plan_id_fkey`;
+
+ALTER TABLE `e6_imports`
   DROP INDEX `e6_imports_prescription_id_key`,
   DROP INDEX `e6_imports_processing_plan_id_key`;
 
 CREATE INDEX `e6_imports_is_paid_idx` ON `e6_imports`(`is_paid`);
+
+ALTER TABLE `e6_imports`
+  ADD CONSTRAINT `e6_imports_prescription_id_fkey`
+  FOREIGN KEY (`prescription_id`) REFERENCES `prescriptions`(`id`)
+  ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `e6_imports_processing_plan_id_fkey`
+  FOREIGN KEY (`processing_plan_id`) REFERENCES `processing_plans`(`id`)
+  ON DELETE SET NULL ON UPDATE CASCADE;
 
 CREATE TABLE `e6_import_items` (
   `id` INTEGER NOT NULL AUTO_INCREMENT,
