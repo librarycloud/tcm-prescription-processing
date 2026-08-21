@@ -150,7 +150,7 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                             if (string.IsNullOrWhiteSpace(itemName)) { order.ValidationError = "处方明细存在空商品名称"; continue; }
                             decimal multiplier;
                             if (unit == "10g" || unit == "10克") multiplier = 10m;
-                            else if (unit == "1g" || unit == "1克") multiplier = 1m;
+                            else if (unit == "1g" || unit == "1克" || unit == "克") multiplier = 1m;
                             else { order.ValidationError = "处方明细「" + itemName + "」单位不支持：" + unit; continue; }
                             decimal singleDoseQuantity;
                             try { singleDoseQuantity = reader.IsDBNull(itemQuantityOrdinal) ? 0m : Convert.ToDecimal(reader.GetValue(itemQuantityOrdinal)); }
@@ -160,12 +160,11 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                             try { doseCount = reader.IsDBNull(doseCountOrdinal) ? 0 : Convert.ToInt32(reader.GetValue(doseCountOrdinal)); }
                             catch { order.ValidationError = "处方明细「" + itemName + "」付数无效"; continue; }
                             if (doseCount <= 0) { order.ValidationError = "处方明细「" + itemName + "」付数必须为正整数"; continue; }
-                            if (order.DoseCount > 0 && order.DoseCount != doseCount) { order.ValidationError = "同一订单的处方明细付数不一致"; continue; }
                             int sequence;
                             try { sequence = reader.IsDBNull(sequenceOrdinal) ? 0 : Convert.ToInt32(reader.GetValue(sequenceOrdinal)); }
                             catch { order.ValidationError = "处方明细「" + itemName + "」ri 无效"; continue; }
                             if (sequence <= 0) { order.ValidationError = "处方明细「" + itemName + "」ri 必须为正整数"; continue; }
-                            order.DoseCount = doseCount;
+                            order.DoseCount = Math.Max(order.DoseCount, doseCount);
                             order.Items.Add(new E6PrescriptionItem { Sequence = sequence, Name = itemName, Quantity = singleDoseQuantity * multiplier, Unit = "g" });
                         }
                     }
