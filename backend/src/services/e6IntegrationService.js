@@ -297,9 +297,9 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
   const normalized = {
     storeCode,
     externalOrderNo: clean(payload.externalOrderNo, 100, "E6原始订单号"),
-    customerName: clean(payload.customerName, 64, "顾客姓名"),
+    customerName: clean(payload.customerName, 64, "顾客姓名", false) || "",
     phone: normalizeOptionalPhone(payload.phone),
-    e6DoctorCode: normalizeDoctorCode(doctorCode, false),
+    e6DoctorCode: normalizeDoctorCode(doctorCode, false) || "",
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
     remark: clean(payload.remark, 500, "备注", false),
@@ -333,10 +333,7 @@ async function resolveImportDoctorCode(prisma, storeId, value) {
     select: { e6DoctorCode: true },
   });
   if (mappings.length === 1) return mappings[0].e6DoctorCode;
-  if (mappings.length > 1) {
-    throw new AppError("E6医师编码为空，当前门店有多个启用映射，无法确定医生", 400);
-  }
-  throw new AppError("请输入E6医师编码，或为门店配置唯一的启用医师映射", 400);
+  return "";
 }
 
 async function authenticateStore(prisma, storeCode, apiKey) {

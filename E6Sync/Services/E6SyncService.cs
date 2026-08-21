@@ -119,13 +119,6 @@ namespace E6Sync.Services
             var doctorCode = string.IsNullOrWhiteSpace(order.DoctorName)
                 ? (config.E6.DefaultDoctorCode ?? "").Trim()
                 : order.DoctorName.Trim();
-            if (string.IsNullOrWhiteSpace(doctorCode))
-            {
-                stats.FailureCount++;
-                const string message = "E6 处方药师为空，且未配置 e6.defaultDoctorCode";
-                log.Error("单据 " + order.ExternalOrderNo + " 同步失败：" + message);
-                return "失败：" + message;
-            }
             var result = await api.SendAsync(order, doctorCode, cancellationToken).ConfigureAwait(false);
             if (!result.Success)
             {

@@ -167,12 +167,17 @@ test("a sole active server mapping supplies a missing E6 doctor code", async () 
   assert.equal(state.import.e6DoctorCode, "D001");
 });
 
-test("a missing E6 doctor code is rejected when multiple server mappings exist", async () => {
-  const { apiKey, prisma } = await syncFixture({ fallbackCodes: ["D001", "D002"] });
-  await assert.rejects(
-    () => receiveE6Prescription(prisma, { ...payload, e6DoctorCode: "" }, apiKey),
-    { statusCode: 400, message: "E6医师编码为空，当前门店有多个启用映射，无法确定医生" },
+test("an unmapped E6 order can omit both customer name and doctor code", async () => {
+  const { apiKey, prisma, state } = await syncFixture({ fallbackCodes: ["D001", "D002"] });
+  const result = await receiveE6Prescription(
+    prisma,
+    { ...payload, customerName: "", e6DoctorCode: "" },
+    apiKey,
   );
+
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED);
+  assert.equal(state.import.customerName, "");
+  assert.equal(state.import.e6DoctorCode, "");
 });
 
 function confirmFixture({ mapped = true } = {}) {

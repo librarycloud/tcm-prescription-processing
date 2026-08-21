@@ -49,7 +49,7 @@ Content-Type: application/json; charset=utf-8
 |---|---:|:---:|---|---|
 | `externalOrderNo` | string | 是 | 1-100 字符 | E6 原始订单号；同一门店内必须唯一且保持不变 |
 | `storeCode` | string | 是 | 2-50 字符 | 门店编码，与系统门店管理中的编码一致 |
-| `customerName` | string | 是 | 1-64 字符 | 顾客姓名 |
+| `customerName` | string | 否 | 最多 64 字符 | 顾客姓名；可传空字符串 |
 | `phone` | string | 否 | 中国大陆手机号 | 顾客手机号；没有时可省略或传空字符串 |
 | `e6DoctorCode` | string | 否* | 1-100 字符 | E6 医师编码；系统按门店配置医生映射 |
 | `totalPrice` | string/number | 是 | 非负金额，最多 2 位小数 | 订单总价；推荐使用字符串，例如 `"268.00"` |
@@ -60,7 +60,7 @@ Content-Type: application/json; charset=utf-8
 
 门店编码和医师编码由接口统一转换为大写后匹配。E6 端仍应始终传递稳定、格式一致的编码。
 
-`e6DoctorCode` 为空时，服务端仅在该门店恰好配置一条启用中的医师映射时自动使用该映射；配置多条映射时无法安全判断目标医生，将返回 `400`，应由 E6 端传递原始医师编码。
+`e6DoctorCode` 为空时，服务端仅在该门店恰好配置一条启用中的医师映射时自动使用该映射；其他情况订单会进入“待映射”，由门店管理员确认时选择系统医生。
 
 ### 4.1 请求示例
 
