@@ -13,6 +13,14 @@ export const updateE6DoctorMapping = (id, data) =>
   request.put(`/admin/e6/doctor-mappings/${id}`, data);
 export const deleteE6DoctorMapping = (id) =>
   request.delete(`/admin/e6/doctor-mappings/${id}`);
+export const getE6OperatorMappings = (params) =>
+  request.get('/admin/e6/operator-mappings', { params });
+export const createE6OperatorMapping = (data) =>
+  request.post('/admin/e6/operator-mappings', data);
+export const updateE6OperatorMapping = (id, data) =>
+  request.put(`/admin/e6/operator-mappings/${id}`, data);
+export const deleteE6OperatorMapping = (id) =>
+  request.delete(`/admin/e6/operator-mappings/${id}`);
 
 export const getE6Imports = (params) => request.get('/admin/e6/imports', { params });
 export const getE6Import = (id) => request.get(`/admin/e6/imports/${id}`);

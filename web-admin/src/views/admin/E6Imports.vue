@@ -44,6 +44,14 @@
             :value="item.value"
           />
         </el-select>
+        <el-select v-model="query.cashierName" clearable filterable placeholder="全部操作员">
+          <el-option
+            v-for="item in operatorOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
         <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
         <el-button @click="handleShowAll">显示全部</el-button>
         <el-button :icon="Refresh" @click="handleReset">重置</el-button>
@@ -70,7 +78,9 @@
         <el-table-column label="电话"
           ><template #default="{ row }">{{ maskPhone(row.phone) }}</template></el-table-column
         >
-        <el-table-column prop="cashierName" label="操作员" show-overflow-tooltip />
+        <el-table-column label="操作员" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.operatorMapping?.operatorName || row.cashierName || '-' }}</template>
+        </el-table-column>
         <el-table-column label="系统医生">
           <template #default="{ row }">
             <span :class="{ 'mapping-missing': !row.prescription?.doctor && !row.doctorMapping }">{{
@@ -147,7 +157,7 @@
         </div>
         <div class="detail-item">
           <div class="detail-label">操作员</div>
-          <div class="detail-value">{{ detail.cashierName || '-' }}</div>
+          <div class="detail-value">{{ detail.operatorMapping?.operatorName || detail.cashierName || '-' }}</div>
         </div>
         <div class="detail-item">
           <div class="detail-label">E6医师编码</div>
@@ -293,6 +303,7 @@ import {
   confirmE6Import,
   getE6Import,
   getE6Imports,
+  getE6OperatorMappings,
   rejectE6Import,
   revalidateE6Import
 } from '@/api/e6Integration';
@@ -318,6 +329,7 @@ const list = ref([]);
 const stores = ref([]);
 const processTypes = ref([]);
 const doctors = ref([]);
+const operatorOptions = ref([]);
 const detail = ref(null);
 const selected = ref(null);
 const statusOptions = E6_IMPORT_STATUS_OPTIONS.filter(
@@ -332,7 +344,7 @@ const pickupOptions = [
   { label: '跑腿', value: 1 },
   { label: '快递', value: 2 }
 ];
-const query = reactive({ keyword: '', orderDate: todayText(), storeId: '', status: '' });
+const query = reactive({ keyword: '', orderDate: todayText(), storeId: '', status: '', cashierName: '' });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const confirmForm = reactive({
   customerName: '',
@@ -435,6 +447,18 @@ async function loadReferences() {
   processTypes.value = types || [];
   doctors.value = doctorData || [];
   stores.value = storeData?.list || [];
+  await loadOperatorOptions();
+}
+
+async function loadOperatorOptions() {
+  const result = await getE6OperatorMappings(
+    userStore.isSuperAdmin && query.storeId ? { storeId: query.storeId } : undefined
+  );
+  const mappedNames = new Map((result?.list || []).map((item) => [item.e6OperatorName, item.operatorName]));
+  operatorOptions.value = (result?.operators || []).map((name) => ({
+    value: name,
+    label: mappedNames.get(name) || name
+  }));
 }
 
 function handleSearch() {
@@ -442,7 +466,7 @@ function handleSearch() {
   else loadData();
 }
 function handleReset() {
-  Object.assign(query, { keyword: '', orderDate: todayText(), storeId: '', status: '' });
+  Object.assign(query, { keyword: '', orderDate: todayText(), storeId: '', status: '', cashierName: '' });
   handleSearch();
 }
 function handleShowAll() {
@@ -514,6 +538,10 @@ async function handleReject(row) {
 }
 
 watch(() => [pagination.page, pagination.pageSize], loadData);
+watch(() => query.storeId, async () => {
+  query.cashierName = '';
+  await loadOperatorOptions();
+});
 onMounted(() => Promise.all([loadData(), loadReferences()]));
 </script>
 

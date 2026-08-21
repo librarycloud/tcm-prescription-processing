@@ -2,14 +2,17 @@ import { ok } from "../utils/response.js";
 import {
   confirmE6Import,
   deleteE6DoctorMapping,
+  deleteE6OperatorMapping,
   getE6Import,
   getE6StoreConfig,
   listE6DoctorMappings,
+  listE6OperatorMappings,
   listE6Imports,
   receiveE6Prescription,
   rejectE6Import,
   revalidateE6Import,
   saveE6DoctorMapping,
+  saveE6OperatorMapping,
   saveE6StoreConfig,
 } from "../services/e6IntegrationService.js";
 
@@ -59,6 +62,22 @@ export async function listDoctorMappingsController(request, reply) {
       request.query || {},
     ),
   );
+}
+
+export async function listOperatorMappingsController(request, reply) {
+  return ok(reply, await listE6OperatorMappings(request.server.prisma, request.user, request.query || {}));
+}
+
+export async function createOperatorMappingController(request, reply) {
+  return ok(reply, await saveE6OperatorMapping(request.server.prisma, request.user, null, request.body || {}), "创建成功");
+}
+
+export async function updateOperatorMappingController(request, reply) {
+  return ok(reply, await saveE6OperatorMapping(request.server.prisma, request.user, request.params.id, request.body || {}), "更新成功");
+}
+
+export async function deleteOperatorMappingController(request, reply) {
+  return ok(reply, await deleteE6OperatorMapping(request.server.prisma, request.user, request.params.id), "删除成功");
 }
 
 export async function createDoctorMappingController(request, reply) {

@@ -177,10 +177,52 @@
             </el-table-column>
           </el-table>
         </section>
+
+        <section class="config-section">
+          <div class="section-heading">
+            <div><h3>操作员映射</h3><p>每个门店独立配置，用于 E6 导入列表的操作员显示与筛选。</p></div>
+            <el-button type="primary" :icon="Plus" @click="openOperatorMapping()">新增映射</el-button>
+          </div>
+          <el-table :data="e6OperatorMappings" border row-key="id" table-layout="auto">
+            <template #empty><EmptyView description="暂无操作员映射" /></template>
+            <el-table-column prop="e6OperatorName" label="E6操作员" />
+            <el-table-column prop="operatorName" label="显示操作员" />
+            <el-table-column label="状态">
+              <template #default="{ row }">
+                <el-switch :model-value="row.status" :active-value="1" :inactive-value="0" @change="(status) => toggleOperatorMapping(row, status)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作">
+              <template #default="{ row }">
+                <div class="table-actions">
+                  <el-button link type="primary" @click="openOperatorMapping(row)">编辑</el-button>
+                  <el-button link type="danger" @click="removeOperatorMapping(row)">删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
       </div>
       <template #footer>
         <el-button @click="e6Visible = false">关闭</el-button>
         <el-button type="primary" :loading="e6Saving" @click="saveE6Config">保存配置</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="operatorMappingVisible" :title="operatorMappingForm.id ? '编辑操作员映射' : '新增操作员映射'" width="460px" append-to-body align-center>
+      <el-form label-position="top">
+        <el-form-item label="E6操作员" required><el-input v-model.trim="operatorMappingForm.e6OperatorName" maxlength="100" /></el-form-item>
+        <el-form-item label="显示操作员" required><el-input v-model.trim="operatorMappingForm.operatorName" maxlength="100" /></el-form-item>
+        <el-form-item label="状态">
+          <el-radio-group v-model="operatorMappingForm.status">
+            <el-radio-button :value="1">启用</el-radio-button>
+            <el-radio-button :value="0">停用</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="operatorMappingVisible = false">取消</el-button>
+        <el-button type="primary" :loading="operatorMappingSaving" @click="saveOperatorMapping">保存</el-button>
       </template>
     </el-dialog>
 
@@ -228,11 +270,15 @@ import { createStore, deleteStore, getStores, updateStore } from '@/api/store';
 import { getHerbLocationLayout, updateHerbLocationLayout } from '@/api/herbLocation';
 import {
   createE6DoctorMapping,
+  createE6OperatorMapping,
   deleteE6DoctorMapping,
+  deleteE6OperatorMapping,
   getE6DoctorMappings,
+  getE6OperatorMappings,
   getE6StoreConfig,
   saveE6StoreConfig as saveStoreE6Config,
-  updateE6DoctorMapping
+  updateE6DoctorMapping,
+  updateE6OperatorMapping
 } from '@/api/e6Integration';
 import { getDoctors } from '@/api/processing';
 import { useUserStore } from '@/stores/user';
@@ -257,6 +303,9 @@ const e6Saving = ref(false);
 const mappingVisible = ref(false);
 const mappingSaving = ref(false);
 const e6Mappings = ref([]);
+const operatorMappingVisible = ref(false);
+const operatorMappingSaving = ref(false);
+const e6OperatorMappings = ref([]);
 const e6Doctors = ref([]);
 const newApiKey = ref('');
 const list = ref([]);
@@ -265,6 +314,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({ name: '', code: '', address: '', phone: '', status: 1 });
 const e6Config = reactive({ enabled: 0, hasApiKey: false, apiKeyHint: '', lastUsedAt: null });
 const mappingForm = reactive({ id: null, e6DoctorCode: '', doctorId: '', status: 1 });
+const operatorMappingForm = reactive({ id: null, e6OperatorName: '', operatorName: '', status: 1 });
 const layoutForm = reactive({
   drawerUnitCount: 5,
   drawerLayerCount: 8,
@@ -401,13 +451,15 @@ async function loadE6Config() {
   if (!e6Store.value) return;
   e6Loading.value = true;
   try {
-    const [configData, mappings, doctors] = await Promise.all([
+    const [configData, mappings, operatorMappings, doctors] = await Promise.all([
       getE6StoreConfig(e6Store.value.id),
       getE6DoctorMappings({ storeId: e6Store.value.id }),
+      getE6OperatorMappings({ storeId: e6Store.value.id }),
       getDoctors(true)
     ]);
     Object.assign(e6Config, configData?.config || { enabled: 0, hasApiKey: false, apiKeyHint: '', lastUsedAt: null });
     e6Mappings.value = mappings || [];
+    e6OperatorMappings.value = operatorMappings?.list || [];
     e6Doctors.value = doctors || [];
   } finally {
     e6Loading.value = false;
@@ -493,6 +545,48 @@ async function removeMapping(row) {
   await ElMessageBox.confirm(`确认删除医师编码“${row.e6DoctorCode}”的映射吗？`, '删除映射', { type: 'warning' });
   await deleteE6DoctorMapping(row.id);
   ElMessage.success('医师映射已删除');
+  await loadE6Config();
+}
+
+function openOperatorMapping(row) {
+  Object.assign(operatorMappingForm, row
+    ? { id: row.id, e6OperatorName: row.e6OperatorName, operatorName: row.operatorName, status: Number(row.status) }
+    : { id: null, e6OperatorName: '', operatorName: '', status: 1 });
+  operatorMappingVisible.value = true;
+}
+
+async function saveOperatorMapping() {
+  if (!e6Store.value || !operatorMappingForm.e6OperatorName || !operatorMappingForm.operatorName) {
+    return ElMessage.warning('请填写E6操作员和显示操作员');
+  }
+  operatorMappingSaving.value = true;
+  try {
+    const payload = { ...operatorMappingForm, storeId: e6Store.value.id };
+    if (operatorMappingForm.id) await updateE6OperatorMapping(operatorMappingForm.id, payload);
+    else await createE6OperatorMapping(payload);
+    operatorMappingVisible.value = false;
+    ElMessage.success('操作员映射已保存');
+    await loadE6Config();
+  } finally {
+    operatorMappingSaving.value = false;
+  }
+}
+
+async function toggleOperatorMapping(row, status) {
+  await updateE6OperatorMapping(row.id, {
+    storeId: row.storeId,
+    e6OperatorName: row.e6OperatorName,
+    operatorName: row.operatorName,
+    status
+  });
+  ElMessage.success(status ? '映射已启用' : '映射已停用');
+  await loadE6Config();
+}
+
+async function removeOperatorMapping(row) {
+  await ElMessageBox.confirm(`确认删除操作员“${row.e6OperatorName}”的映射吗？`, '删除映射', { type: 'warning' });
+  await deleteE6OperatorMapping(row.id);
+  ElMessage.success('操作员映射已删除');
   await loadE6Config();
 }
 

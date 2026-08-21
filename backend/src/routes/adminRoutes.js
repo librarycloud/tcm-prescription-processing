@@ -161,14 +161,18 @@ import {
   confirmImportController as confirmE6ImportController,
   createDoctorMappingController as createE6DoctorMappingController,
   deleteDoctorMappingController as deleteE6DoctorMappingController,
+  deleteOperatorMappingController as deleteE6OperatorMappingController,
   getStoreConfigController as getE6StoreConfigController,
   importDetailController as e6ImportDetailController,
   listDoctorMappingsController as listE6DoctorMappingsController,
+  listOperatorMappingsController as listE6OperatorMappingsController,
   listImportsController as listE6ImportsController,
   rejectImportController as rejectE6ImportController,
   revalidateImportController as revalidateE6ImportController,
   saveStoreConfigController as saveE6StoreConfigController,
   updateDoctorMappingController as updateE6DoctorMappingController,
+  createOperatorMappingController as createE6OperatorMappingController,
+  updateOperatorMappingController as updateE6OperatorMappingController,
 } from "../controllers/e6IntegrationController.js";
 
 export default async function adminRoutes(fastify) {
@@ -214,6 +218,10 @@ export default async function adminRoutes(fastify) {
   fastify.post("/e6/doctor-mappings", createE6DoctorMappingController);
   fastify.put("/e6/doctor-mappings/:id", updateE6DoctorMappingController);
   fastify.delete("/e6/doctor-mappings/:id", deleteE6DoctorMappingController);
+  fastify.get("/e6/operator-mappings", listE6OperatorMappingsController);
+  fastify.post("/e6/operator-mappings", createE6OperatorMappingController);
+  fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
+  fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
   fastify.get("/products/import-template", productImportTemplateController);
   fastify.post("/products/import-preview", previewProductImportController);
   fastify.post("/products/import", importProductsController);

@@ -96,6 +96,7 @@ model Store {
   products            Product[]
   productDiffLogs     ProductsDiffLog[]
   e6DoctorMappings    E6DoctorMapping[]
+  e6OperatorMappings  E6OperatorMapping[]
   e6Imports           E6Import[]
   processingEquipment ProcessingEquipment[]
 
@@ -543,6 +544,24 @@ model E6DoctorMapping {
   @@index([doctorId])
   @@index([storeId, status])
   @@map("e6_doctor_mappings")
+}
+
+model E6OperatorMapping {
+  id             Int      @id @default(autoincrement())
+  storeId        Int      @map("store_id")
+  e6OperatorName String   @map("e6_operator_name") @db.VarChar(100)
+  operatorName   String   @map("operator_name") @db.VarChar(100)
+  status         Int      @default(1) @db.TinyInt
+  createdBy      Int?     @map("created_by")
+  updatedBy      Int?     @map("updated_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, e6OperatorName])
+  @@index([storeId, status])
+  @@map("e6_operator_mappings")
 }
 
 model E6Import {
