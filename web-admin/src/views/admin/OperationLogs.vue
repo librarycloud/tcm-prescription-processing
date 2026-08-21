@@ -10,7 +10,7 @@
 
     <el-card shadow="never">
       <el-form class="search-form" @submit.prevent="handleSearch">
-        <el-select v-model="filters.storeId" clearable filterable placeholder="全部门店">
+        <el-select v-model="filters.storeId" clearable filterable placeholder="全部门店" @change="handleSearch">
           <el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" />
         </el-select>
         <el-input-number
@@ -19,6 +19,7 @@
           :controls="false"
           placeholder="操作人 ID"
           style="width: 100%"
+          @change="handleSearch"
         />
         <el-input v-model.trim="filters.module" clearable placeholder="模块，例如 prescription" />
         <el-input v-model.trim="filters.action" clearable placeholder="动作，例如 create" />
@@ -29,6 +30,7 @@
           start-placeholder="开始日期"
           end-placeholder="结束日期"
           value-format="YYYY-MM-DD"
+          @change="handleSearch"
         />
         <div class="search-actions">
           <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>

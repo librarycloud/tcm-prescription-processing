@@ -20,17 +20,17 @@
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" clearable placeholder="全部状态">
+          <el-select v-model="query.status" clearable placeholder="全部状态" @change="search">
             <el-option v-for="item in statusOptions" :key="item.value" v-bind="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="医生">
-          <el-select v-model="query.doctorId" clearable filterable placeholder="全部医生">
+          <el-select v-model="query.doctorId" clearable filterable placeholder="全部医生" @change="search">
             <el-option v-for="item in doctors" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="userStore.isSuperAdmin" label="门店">
-          <el-select v-model="query.storeId" clearable filterable placeholder="全部门店">
+          <el-select v-model="query.storeId" clearable filterable placeholder="全部门店" @change="search">
             <el-option v-for="item in stores" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>

@@ -28,6 +28,7 @@
           v-model="query.storeId"
           clearable
           placeholder="全部门店"
+          @change="handleSearch"
         >
           <el-option
             v-for="store in stores"
@@ -36,7 +37,7 @@
             :value="store.id"
           />
         </el-select>
-        <el-select v-model="query.status" clearable placeholder="全部状态">
+        <el-select v-model="query.status" clearable placeholder="全部状态" @change="handleSearch">
           <el-option
             v-for="item in statusOptions"
             :key="item.value"
@@ -44,7 +45,7 @@
             :value="item.value"
           />
         </el-select>
-        <el-select v-model="query.cashierName" clearable filterable placeholder="全部操作员">
+        <el-select v-model="query.cashierName" clearable filterable placeholder="全部操作员" @change="handleSearch">
           <el-option
             v-for="item in operatorOptions"
             :key="item.value"

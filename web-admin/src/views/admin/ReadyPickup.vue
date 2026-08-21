@@ -28,7 +28,7 @@
           />
         </el-form-item>
         <el-form-item v-if="userStore.isSuperAdmin" label="门店">
-          <el-select v-model="query.storeId" clearable placeholder="全部门店">
+          <el-select v-model="query.storeId" clearable placeholder="全部门店" @change="handleSearch">
             <el-option
               v-for="store in stores"
               :key="store.id"

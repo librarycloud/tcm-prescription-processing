@@ -15,10 +15,10 @@
           clearable
           placeholder="搜索姓名、昵称、手机号或门店"
         />
-        <el-select v-model="query.storeId" clearable filterable placeholder="全部门店">
+        <el-select v-model="query.storeId" clearable filterable placeholder="全部门店" @change="handleSearch">
           <el-option v-for="item in stores" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
-        <el-select v-model="query.status" clearable placeholder="全部状态">
+        <el-select v-model="query.status" clearable placeholder="全部状态" @change="handleSearch">
           <el-option label="启用" :value="1" />
           <el-option label="停用" :value="0" />
         </el-select>

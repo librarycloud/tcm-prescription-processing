@@ -93,6 +93,7 @@ function updateField(field, value) {
     [field]: value,
     ...(field === 'dateScope' && value === 'overdue' ? { status: '' } : {})
   });
+  if (field !== 'keyword') emit('search');
 }
 </script>
 

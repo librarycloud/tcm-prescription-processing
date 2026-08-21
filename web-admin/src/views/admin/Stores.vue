@@ -11,7 +11,7 @@
     <el-card v-if="userStore.isSuperAdmin" shadow="never">
       <el-form class="search-form" @submit.prevent="handleSearch">
         <el-input v-model.trim="query.keyword" clearable placeholder="搜索名称、编码、地址或电话" />
-        <el-select v-model="query.status" clearable placeholder="全部状态">
+        <el-select v-model="query.status" clearable placeholder="全部状态" @change="handleSearch">
           <el-option label="启用" :value="1" />
           <el-option label="停用" :value="0" />
         </el-select>

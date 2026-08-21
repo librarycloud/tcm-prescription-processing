@@ -101,17 +101,17 @@
 
       <el-tab-pane label="发送记录" name="logs">
         <div class="log-filters">
-          <el-select v-model="logQuery.robotId" clearable placeholder="全部机器人"
+          <el-select v-model="logQuery.robotId" clearable placeholder="全部机器人" @change="searchLogs"
             ><el-option v-for="item in robots" :key="item.id" :label="item.name" :value="item.id"
           /></el-select>
-          <el-select v-model="logQuery.eventCode" clearable placeholder="全部事件"
+          <el-select v-model="logQuery.eventCode" clearable placeholder="全部事件" @change="searchLogs"
             ><el-option
               v-for="item in eventDefinitions"
               :key="item.eventCode"
               :label="item.name"
               :value="item.eventCode"
           /></el-select>
-          <el-select v-model="logQuery.status" clearable placeholder="全部状态"
+          <el-select v-model="logQuery.status" clearable placeholder="全部状态" @change="searchLogs"
             ><el-option
               v-for="item in statusOptions"
               :key="item.value"

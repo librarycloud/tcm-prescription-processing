@@ -42,15 +42,16 @@
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             value-format="YYYY-MM-DD"
+            @change="search"
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" clearable placeholder="全部状态">
+          <el-select v-model="query.status" clearable placeholder="全部状态" @change="search">
             <el-option v-for="item in statusOptions" :key="item.value" v-bind="item" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="userStore.isSuperAdmin" label="门店">
-          <el-select v-model="query.storeId" clearable filterable placeholder="全部门店">
+          <el-select v-model="query.storeId" clearable filterable placeholder="全部门店" @change="search">
             <el-option
               v-for="store in stores"
               :key="store.id"

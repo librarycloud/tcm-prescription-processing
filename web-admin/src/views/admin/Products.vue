@@ -19,6 +19,7 @@
           v-model="query.storeId"
           clearable
           placeholder="全部门店"
+          @change="search"
         >
           <el-option
             v-for="store in stores"
@@ -28,7 +29,7 @@
           />
         </el-select>
         <el-input v-model.trim="query.keyword" clearable placeholder="商品编号、名称或规格" />
-        <el-select v-model="query.status" clearable placeholder="全部状态">
+        <el-select v-model="query.status" clearable placeholder="全部状态" @change="search">
           <el-option label="启用" value="1" />
           <el-option label="停用" value="0" />
         </el-select>

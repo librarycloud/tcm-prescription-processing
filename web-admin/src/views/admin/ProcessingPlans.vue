@@ -111,7 +111,7 @@
             <el-input v-model.trim="query.keyword" clearable placeholder="姓名、手机号或备注" />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" clearable placeholder="全部状态">
+            <el-select v-model="query.status" clearable placeholder="全部状态" @change="search">
               <el-option
                 v-for="item in statuses"
                 :key="item.value"
@@ -121,7 +121,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="加工方式">
-            <el-select v-model="query.processTypeId" clearable placeholder="全部方式">
+            <el-select v-model="query.processTypeId" clearable placeholder="全部方式" @change="search">
               <el-option
                 v-for="item in processTypes"
                 :key="item.id"
@@ -131,7 +131,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="医生">
-            <el-select v-model="query.doctorId" clearable filterable placeholder="全部医生">
+            <el-select v-model="query.doctorId" clearable filterable placeholder="全部医生" @change="search">
               <el-option
                 v-for="item in doctors"
                 :key="item.id"
@@ -141,7 +141,7 @@
             </el-select>
           </el-form-item>
           <el-form-item v-if="userStore.isSuperAdmin" label="门店">
-            <el-select v-model="query.storeId" clearable placeholder="全部门店">
+            <el-select v-model="query.storeId" clearable placeholder="全部门店" @change="search">
               <el-option
                 v-for="item in stores"
                 :key="item.id"

@@ -16,11 +16,11 @@
           placeholder="手机号、昵称、IP、User-Agent"
           @keyup.enter="handleSearch"
         />
-        <el-select v-model="filters.success" clearable placeholder="全部结果">
+        <el-select v-model="filters.success" clearable placeholder="全部结果" @change="handleSearch">
           <el-option label="登录成功" :value="1" />
           <el-option label="登录失败" :value="0" />
         </el-select>
-        <el-select v-model="filters.loginType" clearable placeholder="全部类型">
+        <el-select v-model="filters.loginType" clearable placeholder="全部类型" @change="handleSearch">
           <el-option label="管理员登录" value="admin" />
           <el-option label="用户登录" value="user" />
           <el-option label="微信登录" value="wechat" />
@@ -33,6 +33,7 @@
           start-placeholder="开始日期"
           end-placeholder="结束日期"
           value-format="YYYY-MM-DD"
+          @change="handleSearch"
         />
         <div class="search-actions">
           <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>

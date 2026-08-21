@@ -68,7 +68,7 @@
           clearable
           placeholder="商品编号、名称或规格"
         />
-        <el-checkbox v-model="includeBalanced">包含已对平</el-checkbox>
+        <el-checkbox v-model="includeBalanced" @change="searchCurrent">包含已对平</el-checkbox>
         <el-button type="primary" :icon="Search" @click="searchCurrent">查询</el-button>
         <el-button :icon="Refresh" @click="resetCurrent">重置</el-button>
       </el-form>
@@ -135,6 +135,7 @@
           v-model="logQuery.storeId"
           clearable
           placeholder="全部门店"
+          @change="searchLogs"
         >
           <el-option
             v-for="store in stores"
@@ -148,7 +149,7 @@
           clearable
           placeholder="单号、商品、供货商、经办人"
         />
-        <el-select v-model="logQuery.operationType" clearable placeholder="全部类型">
+        <el-select v-model="logQuery.operationType" clearable placeholder="全部类型" @change="searchLogs">
           <el-option
             v-for="item in operationOptions"
             :key="item.value"
@@ -162,6 +163,7 @@
           value-format="YYYY-MM-DD"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
+          @change="searchLogs"
         />
         <el-button type="primary" :icon="Search" @click="searchLogs">查询</el-button>
         <el-button :icon="Refresh" @click="resetLogs">重置</el-button>
