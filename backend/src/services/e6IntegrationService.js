@@ -299,6 +299,7 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
     externalOrderNo: clean(payload.externalOrderNo, 100, "E6原始订单号"),
     customerName: clean(payload.customerName, 64, "顾客姓名", false) || "",
     phone: normalizeOptionalPhone(payload.phone),
+    cashierName: clean(payload.cashierName, 200, "操作员", false),
     e6DoctorCode: normalizeDoctorCode(doctorCode, false) || "",
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
@@ -405,6 +406,7 @@ async function persistImport(prisma, store, normalized, actor) {
     const baseData = {
       customerName: normalized.customerName,
       phone: normalized.phone,
+      cashierName: normalized.cashierName,
       e6DoctorCode: normalized.e6DoctorCode,
       totalPrice: normalized.totalPrice,
       doseCount: normalized.doseCount,

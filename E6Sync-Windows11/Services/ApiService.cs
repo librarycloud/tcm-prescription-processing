@@ -33,6 +33,7 @@ namespace E6Sync.Services
                 storeCode = config.StoreCode,
                 customerName = order.CustomerName ?? "",
                 phone = order.CustomerPhone ?? "",
+                cashierName = LimitLength(order.CashierName, 200),
                 e6DoctorCode = doctorCode,
                 totalPrice = order.TotalPrice.ToString("0.00", CultureInfo.InvariantCulture),
                 doseCount = 1,

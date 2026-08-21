@@ -21,6 +21,7 @@ const payload = {
   storeCode: "SZ001",
   customerName: "张三",
   phone: "13800138000",
+  cashierName: "收银员甲",
   e6DoctorCode: "D001",
   totalPrice: "268.00",
   doseCount: 7,
@@ -134,6 +135,7 @@ test("E6 synchronization only creates an import and deduplicates the original or
   assert.equal(first.duplicate, false);
   assert.equal(second.duplicate, true);
   assert.equal(state.import.syncCount, 2);
+  assert.equal(state.import.cashierName, "收银员甲");
   assert.equal(state.prescriptionCreates, 0);
   assert.deepEqual(
     state.operationLogs.map((item) => item.action),
@@ -213,6 +215,7 @@ function confirmFixture({ mapped = true } = {}) {
       externalOrderNo: payload.externalOrderNo,
       customerName: payload.customerName,
       phone: payload.phone,
+      cashierName: payload.cashierName,
       e6DoctorCode: payload.e6DoctorCode,
       totalPrice: payload.totalPrice,
       doseCount: payload.doseCount,

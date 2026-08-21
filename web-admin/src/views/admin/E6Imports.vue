@@ -70,6 +70,7 @@
         <el-table-column label="电话"
           ><template #default="{ row }">{{ maskPhone(row.phone) }}</template></el-table-column
         >
+        <el-table-column prop="cashierName" label="操作员" show-overflow-tooltip />
         <el-table-column label="系统医生">
           <template #default="{ row }">
             <span :class="{ 'mapping-missing': !row.prescription?.doctor && !row.doctorMapping }">{{
@@ -143,6 +144,10 @@
         <div class="detail-item">
           <div class="detail-label">手机号</div>
           <div class="detail-value">{{ maskPhone(detail.phone) }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">操作员</div>
+          <div class="detail-value">{{ detail.cashierName || '-' }}</div>
         </div>
         <div class="detail-item">
           <div class="detail-label">E6医师编码</div>

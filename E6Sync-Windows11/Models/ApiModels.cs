@@ -6,6 +6,7 @@ namespace E6Sync.Models
         public string storeCode { get; set; }
         public string customerName { get; set; }
         public string phone { get; set; }
+        public string cashierName { get; set; }
         public string e6DoctorCode { get; set; }
         public string totalPrice { get; set; }
         public int doseCount { get; set; }

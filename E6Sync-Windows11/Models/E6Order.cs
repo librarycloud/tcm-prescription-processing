@@ -9,6 +9,7 @@ namespace E6Sync.Models
         public decimal TotalPrice { get; set; }
         public string CustomerName { get; set; }
         public string CustomerPhone { get; set; }
+        public string CashierName { get; set; }
         public string DoctorName { get; set; }
         public string PrescriptionRemark { get; set; }
     }

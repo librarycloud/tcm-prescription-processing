@@ -551,6 +551,7 @@ model E6Import {
   externalOrderNo  String    @map("external_order_no") @db.VarChar(100)
   customerName     String    @map("customer_name") @db.VarChar(64)
   phone            String?   @db.VarChar(20)
+  cashierName      String?   @map("cashier_name") @db.VarChar(200)
   e6DoctorCode     String    @map("e6_doctor_code") @db.VarChar(100)
   totalPrice       Decimal   @map("total_price") @db.Decimal(14, 2)
   doseCount        Int       @map("dose_count")

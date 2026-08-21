@@ -71,6 +71,6 @@ API 文档未定义健康检查或测试接口，因此程序不会构造虚假�
 
 ## 已知字段边界
 
-当前确认可映射的字段为：E6 `单据id` -> `externalOrderNo`、`购药人` -> `customerName`、`购药人电话` -> `phone`、`收款金额` -> `totalPrice`、`操作日期` -> `sourceCreatedAt`、`处方药师`原值 -> `e6DoctorCode`（由后端负责映射）、`处方备注` -> `remark`。`操作日期` 会按 `yyyy-MM-dd HH:mm:ss` 读取，忽略末尾毫秒；`doseCount` 固定为 `1`。
+当前确认可映射的字段为：E6 `单据id` -> `externalOrderNo`、`购药人` -> `customerName`、`购药人电话` -> `phone`、`收款金额`合计 -> `totalPrice`、最后收款记录的`操作日期` -> `sourceCreatedAt`、最后收款记录的`操作员` -> `cashierName`、`处方药师`原值 -> `e6DoctorCode`（由后端负责映射）、`处方备注` -> `remark`。仅同步处方登记中存在的单据；同一单据的现金、银联卡、医保卡等多笔收款会合计为一笔订单。`操作日期` 会按 `yyyy-MM-dd HH:mm:ss` 读取，忽略末尾毫秒；`doseCount` 固定为 `1`。
 
 当前 E6 字段清单中没有“最后更新时间”，所以程序**不发送**可选字段 `sourceUpdatedAt`，不会用“操作日期”猜测替代。E6 数据中的“购药人”可为空，订单仍可同步后由后台确认时补充；处方备注超过 500 字符时会自动截断。
