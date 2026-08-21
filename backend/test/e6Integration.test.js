@@ -202,11 +202,7 @@ test("listing E6 imports filters and sorts by E6 order time", async () => {
     gte: new Date(2026, 7, 21),
     lt: new Date(2026, 7, 22),
   });
-  assert.deepEqual(receivedOrderBy, [
-    { sourceCreatedAt: "desc" },
-    { externalOrderNo: "desc" },
-    { id: "desc" },
-  ]);
+  assert.deepEqual(receivedOrderBy, [{ sourceCreatedAt: "desc" }]);
 });
 
 function confirmFixture({ mapped = true } = {}) {

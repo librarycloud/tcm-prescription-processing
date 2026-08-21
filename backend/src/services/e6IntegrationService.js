@@ -583,11 +583,7 @@ export async function listE6Imports(prisma, actor, query = {}) {
     prisma.e6Import.findMany({
       where,
       include: importInclude(),
-      orderBy: [
-        { sourceCreatedAt: "desc" },
-        { externalOrderNo: "desc" },
-        { id: "desc" },
-      ],
+      orderBy: [{ sourceCreatedAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

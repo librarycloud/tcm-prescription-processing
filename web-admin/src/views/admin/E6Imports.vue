@@ -21,6 +21,7 @@
           value-format="YYYY-MM-DD"
           clearable
           placeholder="订单时间"
+          @change="handleSearch"
         />
         <el-select
           v-if="userStore.isSuperAdmin"
