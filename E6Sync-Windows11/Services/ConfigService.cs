@@ -63,6 +63,8 @@ namespace E6Sync.Services
                     errors.Add("启用 Windows 身份验证时应清空 username 和 password");
                 if (!config.E6.WindowsAuthentication && string.IsNullOrWhiteSpace(config.E6.Username))
                     errors.Add("关闭 Windows 身份验证时必须填写 username");
+                if (config.E6.DefaultDoctorCode != null && config.E6.DefaultDoctorCode.Trim().Length > 100)
+                    errors.Add("E6 defaultDoctorCode 不能超过 100 个字符");
             }
             if (config.Api == null) errors.Add("缺少 api 配置");
             else
@@ -197,7 +199,8 @@ namespace E6Sync.Services
                     ["database"] = config.E6.Database,
                     ["windowsAuthentication"] = config.E6.WindowsAuthentication,
                     ["username"] = config.E6.Username,
-                    ["password"] = config.E6.Password
+                    ["password"] = config.E6.Password,
+                    ["defaultDoctorCode"] = config.E6.DefaultDoctorCode
                 },
                 ["api"] = new Dictionary<string, object>
                 {

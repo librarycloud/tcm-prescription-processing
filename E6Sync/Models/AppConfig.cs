@@ -14,6 +14,7 @@ namespace E6Sync.Models
         public bool WindowsAuthentication { get; set; } = true;
         public string Username { get; set; } = "";
         public string Password { get; set; } = "";
+        public string DefaultDoctorCode { get; set; } = "";
     }
 
     public sealed class ApiConfig

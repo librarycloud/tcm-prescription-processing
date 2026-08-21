@@ -4,7 +4,8 @@
     "database": "E6观前街中医诊所",
     "windowsAuthentication": true,
     "username": "",
-    "password": ""
+    "password": "",
+    "defaultDoctorCode": ""
   },
   "api": {
     "baseUrl": "https://你的域名/api",
