@@ -303,6 +303,7 @@ import Verify from './Verify.vue';
 import {
   createPrescription,
   deletePrescription,
+  getPrescription,
   getPrescriptions,
   updatePrescription
 } from '@/api/prescription';
@@ -521,6 +522,11 @@ onMounted(async () => {
   stores.value = storeData?.list || [];
   if (userStore.isSuperAdmin && route.query.storeId) query.storeId = Number(route.query.storeId);
   resetForm();
+  const editId = Number(route.query.editId);
+  if (Number.isInteger(editId) && editId > 0) {
+    const prescription = await getPrescription(editId);
+    openEdit(prescription);
+  }
   await load();
 });
 </script>

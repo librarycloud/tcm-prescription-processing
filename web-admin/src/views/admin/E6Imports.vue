@@ -87,6 +87,13 @@
             <div class="table-actions">
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
               <el-button
+                v-if="row.prescriptionId"
+                link
+                type="primary"
+                @click="editPrescription(row)"
+                >编辑处方</el-button
+              >
+              <el-button
                 v-if="canConfirm(row)"
                 link
                 type="success"
@@ -262,6 +269,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { Refresh, Search } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
@@ -286,6 +294,7 @@ import { maskPhone } from '@/utils/phone';
 import { useUserStore } from '@/stores/user';
 
 const userStore = useUserStore();
+const router = useRouter();
 const loading = ref(false);
 const confirming = ref(false);
 const detailVisible = ref(false);
@@ -318,7 +327,7 @@ const confirmForm = reactive({
   doseCount: 1,
   processTypeId: '',
   scheduleType: 1,
-  processDate: '',
+  processDate: todayText(),
   pickupMethod: 0,
   expressAddress: '',
   bagCount: null,
@@ -381,6 +390,11 @@ function statusMeta(status) {
 function money(value) {
   return Number(value || 0).toFixed(2);
 }
+function todayText() {
+  const date = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 function canConfirm(row) {
   return [0, 1, 2].includes(Number(row.status)) && !row.prescriptionId;
 }
@@ -423,6 +437,10 @@ async function openDetail(row) {
   detailVisible.value = true;
 }
 
+function editPrescription(row) {
+  router.push({ name: 'Prescriptions', query: { editId: row.prescriptionId } });
+}
+
 function openConfirm(row) {
   selected.value = row;
   Object.assign(confirmForm, {
@@ -432,7 +450,7 @@ function openConfirm(row) {
     doseCount: Number(row.doseCount) || 1,
     processTypeId: '',
     scheduleType: 1,
-    processDate: '',
+    processDate: todayText(),
     pickupMethod: 0,
     expressAddress: '',
     bagCount: Number(row.doseCount) * 2,
