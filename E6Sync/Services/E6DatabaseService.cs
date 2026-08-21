@@ -73,7 +73,7 @@ SELECT
     counter.[购药人电话],
     counter.[处方药师],
     counter.[处方备注],
-    counter.[操作员],
+    cashier.[操作员],
     counter.[_proofstate],
     detail.[商品名称],
     detail.[单付数量],
@@ -83,6 +83,12 @@ SELECT
 FROM dbo.[PF新零售收款台_处方明细] detail
 INNER JOIN dbo.[PF新零售收款台] counter ON counter.[id] = detail.[PID]
 INNER JOIN receipt_summary receipt ON receipt.[单据id] = counter.[id]
+OUTER APPLY (
+    SELECT TOP 1 CONVERT(nvarchar(200), source_receipt.[操作员]) AS [操作员]
+    FROM dbo.[AC款台_零售收款记录] source_receipt
+    WHERE source_receipt.[单据id] = counter.[id]
+    ORDER BY source_receipt.[操作日期] DESC
+) cashier
 WHERE ISNULL(CONVERT(nvarchar(50), counter.[_proofstate]), N'') <> N'作废'
   AND receipt.[订单日期] >= @start
   AND receipt.[订单日期] < @end
