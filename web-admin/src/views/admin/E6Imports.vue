@@ -44,6 +44,7 @@
           />
         </el-select>
         <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
+        <el-button @click="handleShowAll">显示全部</el-button>
         <el-button :icon="Refresh" @click="handleReset">重置</el-button>
       </el-form>
     </el-card>
@@ -438,6 +439,10 @@ function handleReset() {
   Object.assign(query, { keyword: '', orderDate: todayText(), storeId: '', status: '' });
   handleSearch();
 }
+function handleShowAll() {
+  query.orderDate = '';
+  handleSearch();
+}
 
 async function openDetail(row) {
   detail.value = await getE6Import(row.id);
@@ -508,9 +513,19 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 
 <style scoped>
 .search-form {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) repeat(3, 180px) auto auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
+}
+.search-form > :first-child {
+  flex: 1 1 260px;
+}
+.search-form > :not(:first-child) {
+  flex: 0 0 180px;
+}
+.search-form > :deep(.el-button) {
+  flex-basis: auto;
 }
 .mapping-missing,
 .error-text {
@@ -552,11 +567,11 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
   margin-left: 0;
 }
 @media (max-width: 900px) {
-  .search-form {
-    grid-template-columns: 1fr 1fr;
+  .search-form > :first-child {
+    flex-basis: 100%;
   }
-  .search-form :deep(.el-input) {
-    grid-column: 1 / -1;
+  .search-form > :not(:first-child) {
+    flex: 1 1 180px;
   }
 }
 </style>
