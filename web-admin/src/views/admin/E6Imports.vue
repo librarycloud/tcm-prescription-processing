@@ -104,10 +104,15 @@
         </el-table-column>
         <el-table-column label="状态">
           <template #default="{ row }">
-            <div class="status-cell">
-              <el-tag :type="statusMeta(row.status).type" effect="plain">{{ statusMeta(row.status).label }}</el-tag>
-              <el-button v-if="canConfirm(row)" link type="success" @click="openConfirm(row)">确认</el-button>
-            </div>
+            <el-tag
+              v-if="canConfirm(row)"
+              class="status-confirm-tag"
+              type="warning"
+              effect="plain"
+              @click="openConfirm(row)"
+              >待确认</el-tag
+            >
+            <el-tag v-else :type="statusMeta(row.status).type" effect="plain">{{ statusMeta(row.status).label }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="同步时间">
@@ -689,10 +694,8 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 .e6-import-table :deep(.table-actions .el-button + .el-button) {
   margin-left: 0;
 }
-.status-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.status-confirm-tag {
+  cursor: pointer;
   white-space: nowrap;
 }
 .merge-actions {
