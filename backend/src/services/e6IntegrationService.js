@@ -37,8 +37,8 @@ function clean(value, max, label, required = true) {
   return result || null;
 }
 
-function normalizeDoctorCode(value) {
-  return clean(value, 100, "E6医师编码").toUpperCase();
+function normalizeDoctorCode(value, required = true) {
+  return clean(value, 100, "E6医师编码", required)?.toUpperCase() || null;
 }
 
 function dateOrNull(value, label) {
@@ -292,14 +292,14 @@ export async function deleteE6DoctorMapping(prisma, actor, idValue) {
   return { id };
 }
 
-function normalizeImportPayload(payload = {}) {
+function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode) {
   const storeCode = clean(payload.storeCode, 50, "门店编码").toUpperCase();
   const normalized = {
     storeCode,
     externalOrderNo: clean(payload.externalOrderNo, 100, "E6原始订单号"),
     customerName: clean(payload.customerName, 64, "顾客姓名"),
     phone: normalizeOptionalPhone(payload.phone),
-    e6DoctorCode: normalizeDoctorCode(payload.e6DoctorCode),
+    e6DoctorCode: normalizeDoctorCode(doctorCode, false),
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
     remark: clean(payload.remark, 500, "备注", false),
@@ -318,6 +318,25 @@ function normalizeImportPayload(payload = {}) {
       .update(JSON.stringify(canonical))
       .digest("hex"),
   };
+}
+
+async function resolveImportDoctorCode(prisma, storeId, value) {
+  const explicitCode = normalizeDoctorCode(value, false);
+  if (explicitCode) return explicitCode;
+
+  const mappings = await prisma.e6DoctorMapping.findMany({
+    where: {
+      storeId,
+      status: E6_MAPPING_STATUS.ENABLED,
+      doctor: { status: RECORD_STATUS.ENABLED, deletedAt: null },
+    },
+    select: { e6DoctorCode: true },
+  });
+  if (mappings.length === 1) return mappings[0].e6DoctorCode;
+  if (mappings.length > 1) {
+    throw new AppError("E6医师编码为空，当前门店有多个启用映射，无法确定医生", 400);
+  }
+  throw new AppError("请输入E6医师编码，或为门店配置唯一的启用医师映射", 400);
 }
 
 async function authenticateStore(prisma, storeCode, apiKey) {
@@ -464,8 +483,14 @@ export async function receiveE6Prescription(
   apiKey,
   requestMeta = {},
 ) {
-  const normalized = normalizeImportPayload(payload);
-  const store = await authenticateStore(prisma, normalized.storeCode, apiKey);
+  const storeCode = clean(payload?.storeCode, 50, "门店编码").toUpperCase();
+  const store = await authenticateStore(prisma, storeCode, apiKey);
+  const doctorCode = await resolveImportDoctorCode(
+    prisma,
+    store.id,
+    payload?.e6DoctorCode,
+  );
+  const normalized = normalizeImportPayload(payload, doctorCode);
   const actor = {
     nickname: `E6:${store.code}`,
     storeId: store.id,

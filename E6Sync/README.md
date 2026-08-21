@@ -32,6 +32,7 @@
   "e6": {
     "server": "127.0.0.1",
     "database": "E6观前街中医诊所",
+    "windowsAuthentication": true,
     "username": "",
     "password": ""
   },
@@ -50,7 +51,7 @@
 
 医生/药师映射由后端配置。E6Sync 不再维护本地 `doctorMappings`，会将 E6 的 `处方药师`原始值直接放入 API 的 `e6DoctorCode` 字段，由后端按其配置进行映射。旧版 `config.json` 中若仍有 `doctorMappings`，程序会忽略它。
 
-SQL Server 2008 使用 Windows 身份验证：请保持 `username` 和 `password` 为空。程序会以启动 `E6Sync.exe` 的 Windows 帐户连接 SQL Server；请先为该帐户授予目标数据库的只读权限。所有配置更新（自动同步保存 `lastSyncTime`）都会先写临时文件再替换原文件。不要把 API Key 提交到源代码库；程序日志也不会写入敏感值。
+SQL Server 2008 使用 Windows 身份验证：请将 `windowsAuthentication` 设为 `true`，并保持 `username` 和 `password` 为空。程序会以启动 `E6Sync.exe` 的 Windows 帐户连接 SQL Server；请先为该帐户授予目标数据库的只读权限。所有配置更新（自动同步保存 `lastSyncTime`）都会先写临时文件再替换原文件。不要把 API Key 提交到源代码库；程序日志也不会写入敏感值。
 
 ## 运行与测试
 

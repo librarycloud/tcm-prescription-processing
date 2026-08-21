@@ -58,8 +58,11 @@ namespace E6Sync.Services
             {
                 if (string.IsNullOrWhiteSpace(config.E6.Server)) errors.Add("E6 server 未配置");
                 if (string.IsNullOrWhiteSpace(config.E6.Database)) errors.Add("E6 database 未配置");
-                if (string.IsNullOrWhiteSpace(config.E6.Username) && string.IsNullOrWhiteSpace(config.E6.Password) == false)
-                    errors.Add("E6 username 为空时应使用 Windows 身份验证，并清空 password");
+                if (config.E6.WindowsAuthentication &&
+                    (!string.IsNullOrWhiteSpace(config.E6.Username) || !string.IsNullOrWhiteSpace(config.E6.Password)))
+                    errors.Add("启用 Windows 身份验证时应清空 username 和 password");
+                if (!config.E6.WindowsAuthentication && string.IsNullOrWhiteSpace(config.E6.Username))
+                    errors.Add("关闭 Windows 身份验证时必须填写 username");
             }
             if (config.Api == null) errors.Add("缺少 api 配置");
             else
@@ -192,6 +195,7 @@ namespace E6Sync.Services
                 {
                     ["server"] = config.E6.Server,
                     ["database"] = config.E6.Database,
+                    ["windowsAuthentication"] = config.E6.WindowsAuthentication,
                     ["username"] = config.E6.Username,
                     ["password"] = config.E6.Password
                 },

@@ -25,7 +25,7 @@ namespace E6Sync.Services
                 DataSource = e6.Server,
                 InitialCatalog = e6.Database,
                 ConnectTimeout = 5,
-                IntegratedSecurity = string.IsNullOrWhiteSpace(e6.Username)
+                IntegratedSecurity = e6.WindowsAuthentication
             };
             if (!builder.IntegratedSecurity)
             {
@@ -47,7 +47,7 @@ namespace E6Sync.Services
                 DataSource = e6.Server,
                 InitialCatalog = e6.Database,
                 ConnectTimeout = 5,
-                IntegratedSecurity = string.IsNullOrWhiteSpace(e6.Username)
+                IntegratedSecurity = e6.WindowsAuthentication
             };
             if (!builder.IntegratedSecurity)
             {

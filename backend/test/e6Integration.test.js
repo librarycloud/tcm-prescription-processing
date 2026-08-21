@@ -72,7 +72,7 @@ test("enabling a store E6 integration generates a one-time API key", async () =>
   assert.equal("apiKeyHash" in result.config, false);
 });
 
-async function syncFixture({ mapped = false } = {}) {
+async function syncFixture({ mapped = false, fallbackCodes = [] } = {}) {
   const apiKey = "e6_test_key";
   const apiKeyHash = await bcrypt.hash(apiKey, 12);
   const state = { import: null, prescriptionCreates: 0, operationLogs: [] };
@@ -93,6 +93,7 @@ async function syncFixture({ mapped = false } = {}) {
         mapped
           ? { id: 8, storeId: 3, e6DoctorCode: "D001", doctorId: 9, status: 1 }
           : null,
+      findMany: async () => fallbackCodes.map((e6DoctorCode) => ({ e6DoctorCode })),
     },
     e6Import: {
       findUnique: async () => state.import && { ...state.import },
@@ -152,6 +153,26 @@ test("a mapped E6 doctor leaves the synchronized order pending confirmation", as
   const { apiKey, prisma } = await syncFixture({ mapped: true });
   const result = await receiveE6Prescription(prisma, payload, apiKey);
   assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_PENDING);
+});
+
+test("a sole active server mapping supplies a missing E6 doctor code", async () => {
+  const { apiKey, prisma, state } = await syncFixture({ mapped: true, fallbackCodes: ["D001"] });
+  const result = await receiveE6Prescription(
+    prisma,
+    { ...payload, e6DoctorCode: "" },
+    apiKey,
+  );
+
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_PENDING);
+  assert.equal(state.import.e6DoctorCode, "D001");
+});
+
+test("a missing E6 doctor code is rejected when multiple server mappings exist", async () => {
+  const { apiKey, prisma } = await syncFixture({ fallbackCodes: ["D001", "D002"] });
+  await assert.rejects(
+    () => receiveE6Prescription(prisma, { ...payload, e6DoctorCode: "" }, apiKey),
+    { statusCode: 400, message: "E6医师编码为空，当前门店有多个启用映射，无法确定医生" },
+  );
 });
 
 function confirmFixture() {
