@@ -61,7 +61,6 @@
         <el-table-column label="电话"
           ><template #default="{ row }">{{ maskPhone(row.phone) }}</template></el-table-column
         >
-        <el-table-column prop="e6DoctorCode" label="E6医师编码" />
         <el-table-column label="系统医生">
           <template #default="{ row }">
             <span :class="{ 'mapping-missing': !row.prescription?.doctor && !row.doctorMapping }">{{
@@ -522,6 +521,10 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .e6-import-table :deep(.table-actions) {
   width: auto;
+  gap: 3px;
+}
+.e6-import-table :deep(.table-actions .el-button + .el-button) {
+  margin-left: 0;
 }
 @media (max-width: 900px) {
   .search-form {
