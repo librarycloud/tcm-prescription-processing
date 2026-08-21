@@ -67,9 +67,9 @@ Content-Type: application/json; charset=utf-8
 |---|---:|:---:|---|
 | `sequence` | integer | 是 | 明细顺序，来自 E6 `ri`，同一订单内不能重复 |
 | `name` | string | 是 | 中药名称，来自 E6 `商品名称` |
-| `quantity` | string/number | 是 | 单剂数量，单位固定为克；E6 客户端按 `单付数量 * 单位` 换算后传入，不乘 `付数` |
-| `totalQuantity` | string/number | 是 | 总量，单位固定为克；E6 客户端按 `数量 * 单位` 换算后传入 |
-| `unit` | string | 是 | 固定为 `g` |
+| `quantity` | string/number | 是 | 单剂数量；重量单位按 E6 `单付数量 * 单位` 换算为克，不乘 `付数`；`条`、`个`保持原数量 |
+| `totalQuantity` | string/number | 是 | 总量；重量单位按 E6 `数量 * 单位` 换算为克；`条`、`个`保持原数量 |
+| `unit` | string | 是 | `g`、`条`或`个`；重量单位统一上传为 `g` |
 | `doseCount` | integer | 是 | 该明细行的 E6 `付数`；同一处方的不同明细可不一致 |
 
 `e6DoctorCode` 为空时，服务端仅在该门店恰好配置一条启用中的医师映射时自动使用该映射；其他情况订单会进入“待映射”，由门店管理员确认时选择系统医生。
@@ -87,7 +87,8 @@ Content-Type: application/json; charset=utf-8
   "doseCount": 7,
   "items": [
     { "sequence": 1, "name": "北柴胡", "quantity": "6", "totalQuantity": "42", "unit": "g", "doseCount": 7 },
-    { "sequence": 2, "name": "白芍", "quantity": "15", "totalQuantity": "75", "unit": "g", "doseCount": 5 }
+    { "sequence": 2, "name": "白芍", "quantity": "15", "totalQuantity": "75", "unit": "g", "doseCount": 5 },
+    { "sequence": 3, "name": "阿胶", "quantity": "1", "totalQuantity": "7", "unit": "条", "doseCount": 7 }
   ],
   "remark": "饭后服用",
   "sourceCreatedAt": "2026-07-26T10:22:00+08:00",

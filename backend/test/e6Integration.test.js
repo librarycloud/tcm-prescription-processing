@@ -29,6 +29,7 @@ const payload = {
   items: [
     { sequence: 1, name: "当归", quantity: "20.000", totalQuantity: "140.000", unit: "g", doseCount: 7 },
     { sequence: 2, name: "白芍", quantity: "15.000", totalQuantity: "75.000", unit: "g", doseCount: 5 },
+    { sequence: 3, name: "阿胶", quantity: "1", totalQuantity: "7", unit: "条", doseCount: 7 },
   ],
   remark: "饭后服用",
   sourceCreatedAt: "2026-07-26T10:22:00+08:00",
@@ -169,6 +170,7 @@ test("E6 synchronization retains each item dose count independently", async () =
   assert.equal(items[0].totalQuantity, "140.000");
   assert.equal(items[1].doseCount, 5);
   assert.equal(items[1].totalQuantity, "75.000");
+  assert.equal(items[2].unit, "条");
 });
 
 test("a mapped E6 doctor leaves the synchronized order pending confirmation", async () => {

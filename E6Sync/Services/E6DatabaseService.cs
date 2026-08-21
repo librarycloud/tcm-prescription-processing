@@ -155,13 +155,16 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                                 continue;
                             }
                             decimal multiplier;
+                            string normalizedUnit;
                             if (unit == "10g" || unit == "10克") multiplier = 10m;
-                            else if (unit == "1g" || unit == "1克" || unit == "克") multiplier = 1m;
+                            else if (unit == "g" || unit == "1g" || unit == "1克" || unit == "克") multiplier = 1m;
+                            else if (unit == "条" || unit == "个") multiplier = 1m;
                             else
                             {
                                 order.ValidationError = "处方明细「" + itemName + "」单位不支持：" + unit;
                                 continue;
                             }
+                            normalizedUnit = unit == "条" || unit == "个" ? unit : "g";
                             decimal singleDoseQuantity;
                             try { singleDoseQuantity = reader.IsDBNull(itemQuantityOrdinal) ? 0m : Convert.ToDecimal(reader.GetValue(itemQuantityOrdinal)); }
                             catch { order.ValidationError = "处方明细「" + itemName + "」单付数量无效"; continue; }
@@ -202,7 +205,7 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                                 Name = itemName,
                                 Quantity = quantityInGrams,
                                 TotalQuantity = totalQuantity * multiplier,
-                                Unit = "g",
+                                Unit = normalizedUnit,
                                 DoseCount = doseCount
                             });
                         }
