@@ -67,11 +67,19 @@ namespace E6Sync.Services
             return stats;
         }
 
-        public Task<SyncStats> RunManualAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken)
+        public async Task<SyncStats> RunManualAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken)
         {
             var endExclusive = endDate.Date.AddDays(1);
             log.Info(string.Format("开始手动同步：{0:yyyy-MM-dd} 至 {1:yyyy-MM-dd}", startDate.Date, endDate.Date));
-            return RunAsync(startDate.Date, endExclusive, false, cancellationToken);
+            var stats = await RunAsync(startDate.Date, endExclusive, false, cancellationToken).ConfigureAwait(false);
+            if (stats.FailureCount == 0 && !cancellationToken.IsCancellationRequested)
+            {
+                config.Sync.LastSyncTime = new DateTimeOffset(DateTime.Now).ToString("o");
+                configService.Save(config);
+                log.Info("本轮手动同步全部处理完成，已更新 lastSyncTime");
+            }
+            else log.Warn("本轮手动同步存在失败，未推进 lastSyncTime");
+            return stats;
         }
 
         private async Task<SyncStats> RunAsync(DateTime start, DateTime end, bool automatic, CancellationToken cancellationToken)
