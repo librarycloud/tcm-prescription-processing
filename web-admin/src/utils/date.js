@@ -9,6 +9,17 @@ export function formatDate(value, fallback = '-') {
   )}:${pad(date.getMinutes())}`;
 }
 
+export function formatDateSeconds(value, fallback = '-') {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+
+  const pad = (num) => String(num).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 export function formatDateOnly(value, fallback = '-') {
   if (!value) return fallback;
   const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);

@@ -52,6 +52,9 @@
         table-layout="auto"
       >
         <template #empty><EmptyView description="暂无E6导入数据" /></template>
+        <el-table-column label="订单时间">
+          <template #default="{ row }">{{ formatDateSeconds(row.sourceCreatedAt) }}</template>
+        </el-table-column>
         <el-table-column prop="externalOrderNo" label="E6订单号" />
         <el-table-column v-if="userStore.isSuperAdmin" prop="store.name" label="门店" />
         <el-table-column prop="customerName" label="顾客" />
@@ -279,7 +282,7 @@ import {
   E6_IMPORT_STATUS_OPTIONS,
   e6ImportStatusMeta
 } from '@/constants/e6Integration';
-import { formatDate } from '@/utils/date';
+import { formatDate, formatDateSeconds } from '@/utils/date';
 import { maskPhone } from '@/utils/phone';
 import { useUserStore } from '@/stores/user';
 
