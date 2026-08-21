@@ -61,11 +61,13 @@ SELECT
     CONVERT(datetime, LEFT(CONVERT(varchar(23), r.[操作日期], 121), 19), 120) AS [操作日期],
     r.[收款金额],
     p.[购药人],
-    p.[处方药师]
+    p.[购药人电话],
+    p.[处方药师],
+    p.[处方备注]
 FROM dbo.[AC款台_零售收款记录] r
 LEFT JOIN dbo.[AC款台_处方登记] p ON r.[单据id] = p.[单据ID]
 )
-SELECT [单据id], [操作日期], [收款金额], [购药人], [处方药师]
+SELECT [单据id], [操作日期], [收款金额], [购药人], [购药人电话], [处方药师], [处方备注]
 FROM receipts
 WHERE [操作日期] >= @start AND [操作日期] < @end
 ORDER BY [操作日期], [单据id];";
@@ -86,7 +88,9 @@ ORDER BY [操作日期], [单据id];";
                         var dateOrdinal = reader.GetOrdinal("操作日期");
                         var priceOrdinal = reader.GetOrdinal("收款金额");
                         var customerOrdinal = reader.GetOrdinal("购药人");
+                        var phoneOrdinal = reader.GetOrdinal("购药人电话");
                         var doctorOrdinal = reader.GetOrdinal("处方药师");
+                        var remarkOrdinal = reader.GetOrdinal("处方备注");
                         while (reader.Read())
                         {
                             var order = new E6Order
@@ -95,7 +99,9 @@ ORDER BY [操作日期], [单据id];";
                                 ReceiptDate = reader.IsDBNull(dateOrdinal) ? start : Convert.ToDateTime(reader.GetValue(dateOrdinal)),
                                 TotalPrice = reader.IsDBNull(priceOrdinal) ? 0m : Convert.ToDecimal(reader.GetValue(priceOrdinal)),
                                 CustomerName = reader.IsDBNull(customerOrdinal) ? "" : Convert.ToString(reader.GetValue(customerOrdinal)),
-                                DoctorName = reader.IsDBNull(doctorOrdinal) ? "" : Convert.ToString(reader.GetValue(doctorOrdinal))
+                                CustomerPhone = reader.IsDBNull(phoneOrdinal) ? "" : Convert.ToString(reader.GetValue(phoneOrdinal)),
+                                DoctorName = reader.IsDBNull(doctorOrdinal) ? "" : Convert.ToString(reader.GetValue(doctorOrdinal)),
+                                PrescriptionRemark = reader.IsDBNull(remarkOrdinal) ? "" : Convert.ToString(reader.GetValue(remarkOrdinal))
                             };
                             result.Add(order);
                         }

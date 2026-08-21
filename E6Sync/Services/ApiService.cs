@@ -32,11 +32,11 @@ namespace E6Sync.Services
                 externalOrderNo = order.ExternalOrderNo,
                 storeCode = config.StoreCode,
                 customerName = order.CustomerName ?? "",
-                phone = "",
+                phone = order.CustomerPhone ?? "",
                 e6DoctorCode = doctorCode,
                 totalPrice = order.TotalPrice.ToString("0.00", CultureInfo.InvariantCulture),
                 doseCount = 1,
-                remark = "",
+                remark = LimitLength(order.PrescriptionRemark, 500),
                 sourceCreatedAt = ToIso8601(order.ReceiptDate)
             };
             var endpoint = config.BaseUrl.TrimEnd('/') + "/integrations/e6/v1/prescriptions";
@@ -107,6 +107,12 @@ namespace E6Sync.Services
         {
             var local = DateTime.SpecifyKind(value, DateTimeKind.Local);
             return new DateTimeOffset(local).ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
+        }
+
+        private static string LimitLength(string value, int maximumLength)
+        {
+            var text = value ?? "";
+            return text.Length <= maximumLength ? text : text.Substring(0, maximumLength);
         }
 
         public void Dispose() { client.Dispose(); }
