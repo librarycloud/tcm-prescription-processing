@@ -174,6 +174,9 @@
         <el-form-item label="顾客姓名">
           <el-input v-model.trim="confirmForm.customerName" maxlength="64" placeholder="可留空" />
         </el-form-item>
+        <el-form-item label="手机号" prop="phone">
+          <el-input v-model.trim="confirmForm.phone" maxlength="11" placeholder="可留空" />
+        </el-form-item>
         <el-form-item label="系统医生" prop="doctorId">
           <el-select v-model="confirmForm.doctorId" filterable placeholder="请选择医生" style="width: 100%">
             <el-option v-for="doctor in doctors" :key="doctor.id" :label="doctor.name" :value="doctor.id" />
@@ -308,6 +311,7 @@ const query = reactive({ keyword: '', storeId: '', status: '' });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const confirmForm = reactive({
   customerName: '',
+  phone: '',
   doctorId: null,
   doseCount: 1,
   processTypeId: '',
@@ -321,6 +325,15 @@ const confirmForm = reactive({
   processRemark: ''
 });
 const confirmRules = {
+  phone: [
+    {
+      validator: (_rule, value, callback) =>
+        !value || /^1[3-9]\d{9}$/.test(value)
+          ? callback()
+          : callback(new Error('请输入正确的手机号')),
+      trigger: 'blur'
+    }
+  ],
   doctorId: [{ required: true, message: '请选择医生', trigger: 'change' }],
   doseCount: [{ required: true, message: '请输入剂数', trigger: 'change' }],
   processTypeId: [{ required: true, message: '请选择加工方式', trigger: 'change' }],
@@ -412,6 +425,7 @@ function openConfirm(row) {
   selected.value = row;
   Object.assign(confirmForm, {
     customerName: row.customerName || '',
+    phone: row.phone || '',
     doctorId: row.doctorMapping?.doctor?.id || null,
     doseCount: Number(row.doseCount) || 1,
     processTypeId: '',

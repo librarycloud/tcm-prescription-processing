@@ -315,6 +315,7 @@ test("confirming an E6 import applies the reviewed customer, doctor, and dose", 
 
   await confirmE6Import(prisma, storeAdmin, 81, {
     customerName: "李四",
+    phone: "13900139000",
     doctorId: 9,
     doseCount: 14,
     processTypeId: 20,
@@ -324,8 +325,10 @@ test("confirming an E6 import applies the reviewed customer, doctor, and dose", 
   });
 
   assert.equal(state.import.customerName, "李四");
+  assert.equal(state.import.phone, "13900139000");
   assert.equal(state.import.doseCount, 14);
   assert.equal(state.prescription.customerName, "李四");
+  assert.equal(state.prescription.phone, "13900139000");
   assert.equal(state.prescription.doctorId, 9);
   assert.equal(state.plan.totalDose, 14);
 });

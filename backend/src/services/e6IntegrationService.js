@@ -626,6 +626,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
       const item = await tx.e6Import.findUnique({ where: { id: current.id } });
       const customerName =
         clean(payload.customerName ?? item.customerName, 64, "顾客姓名", false) || "";
+      const phone = normalizeOptionalPhone(payload.phone ?? item.phone);
       const doseCount = positiveInteger(
         payload.doseCount ?? item.doseCount,
         "剂数",
@@ -665,7 +666,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         {
           customerName,
           allowEmptyCustomerName: true,
-          phone: item.phone,
+          phone,
           doctorId,
           sourceId: source.id,
           storeId: item.storeId,
@@ -704,6 +705,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         where: { id: item.id },
         data: {
           customerName,
+          phone,
           doseCount,
           status: E6_IMPORT_STATUS.IMPORT_CONVERTED,
           prescriptionId: prescription.id,
@@ -720,7 +722,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         action: "import_confirm",
         targetId: converted.id,
         storeId: converted.storeId,
-        description: `确认E6订单 ${converted.externalOrderNo}，顾客 ${customerName}，医生 ${prescription.doctor.name}，${doseCount} 剂，生成处方 ${prescription.prescriptionNo}`,
+        description: `确认E6订单 ${converted.externalOrderNo}，顾客 ${customerName}，电话 ${phone || "未留"}，医生 ${prescription.doctor.name}，${doseCount} 剂，生成处方 ${prescription.prescriptionNo}`,
       });
       return converted;
     });
