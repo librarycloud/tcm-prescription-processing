@@ -972,6 +972,10 @@
               </div>
             </div>
             <div class="batch-unified-grid batch-unified-grid-secondary">
+              <div class="batch-field batch-field-wide">
+                <span class="batch-field-label">服用方法</span>
+                <UsageMethodInput v-model="batchForm.usageMethod" />
+              </div>
               <div
                 v-if="[1, 2].includes(Number(batchForm.pickupMethod))"
                 class="batch-field"
@@ -983,10 +987,6 @@
                   placeholder="选填"
                   @change="syncBatchSettings"
                 />
-              </div>
-              <div class="batch-field batch-field-wide">
-                <span class="batch-field-label">服用方法</span>
-                <UsageMethodInput v-model="batchForm.usageMethod" />
               </div>
             </div>
           </div>
