@@ -214,24 +214,25 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
             }
         }
 
-        public List<E6PharmacyProductUpload> QueryPharmacyProducts(DateTime? modifiedAfter)
+        public E6PharmacyProductSnapshot QueryPharmacyProducts(string cursor)
         {
-            var result = new List<E6PharmacyProductUpload>();
-            const string sql = @"SELECT p.[ID], p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[创建日期], p.[修改日期]
+            var result = new E6PharmacyProductSnapshot();
+            var cursorBytes = DecodeCursor(cursor);
+            var cursorClause = cursorBytes == null ? "" : " AND p.[_c_] > @cursor ";
+            var sql = @"SELECT p.[ID], p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[创建日期], p.[修改日期], p.[_c_]
 FROM dbo.[DC商品] p
-WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0)
-  AND (@modifiedAfter IS NULL OR p.[修改日期] > @modifiedAfter)
-ORDER BY p.[修改日期], p.[ID];";
+WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0) " + cursorClause + @"
+ ORDER BY p.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
             {
-                command.Parameters.Add("@modifiedAfter", SqlDbType.DateTime).Value = (object)modifiedAfter ?? DBNull.Value;
+                if (cursorBytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = cursorBytes;
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        result.Add(new E6PharmacyProductUpload
+                        result.Products.Add(new E6PharmacyProductUpload
                         {
                             e6ProductId = Convert.ToInt32(reader["ID"]),
                             productCode = Convert.ToString(reader["编号"])?.Trim(),
@@ -247,18 +248,29 @@ ORDER BY p.[修改日期], p.[ID];";
                             e6CreatedAt = ToIso(reader["创建日期"]),
                             e6ModifiedAt = ToIso(reader["修改日期"])
                         });
+                        result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]);
                     }
                 }
             }
             return result;
         }
 
-        public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor)
+        public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor, string locationCursor)
         {
             var result = new E6PharmacyInventorySnapshot();
             var cursorBytes = DecodeCursor(cursor);
-            var cursorClause = cursorBytes == null ? "" : " AND [_c_] > @cursor ";
-            var sql = @"SELECT i.[商品id], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[金额], i.[_c_]
+            var locationCursorBytes = DecodeCursor(locationCursor);
+            var cursorClause = cursorBytes == null && locationCursorBytes == null ? "" : @" AND EXISTS (
+    SELECT 1
+    FROM dbo.[AC货位商品帐] changed
+    LEFT JOIN dbo.[DC货位] changedLocation ON changedLocation.[ID] = changed.[货位id]
+    WHERE changed.[商品id] = i.[商品id]
+      AND ISNULL(changed.[批号], '') = ISNULL(i.[批号], '')" +
+                ((cursorBytes == null && locationCursorBytes == null) ? "" : " AND (" +
+                    (cursorBytes == null ? "" : "changed.[_c_] > @cursor") +
+                    (cursorBytes == null || locationCursorBytes == null ? "" : " OR ") +
+                    (locationCursorBytes == null ? "" : "changedLocation.[_c_] > @locationCursor") + ")") + @") ";
+            var sql = @"SELECT i.[商品id], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[金额], i.[_c_], l.[_c_] AS [货位_c_]
 FROM dbo.[AC货位商品帐] i
 LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id]
 WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
@@ -266,6 +278,7 @@ WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
             using (var command = new SqlCommand(sql, connection))
             {
                 if (cursorBytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = cursorBytes;
+                if (locationCursorBytes != null) command.Parameters.Add("@locationCursor", SqlDbType.Binary, 8).Value = locationCursorBytes;
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {
@@ -282,7 +295,8 @@ WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
                             quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
                             amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
                         });
-                        result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]);
+                        result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
+                        if (!reader.IsDBNull(reader.GetOrdinal("货位_c_"))) result.LocationCursor = MaxCursor(result.LocationCursor, reader["货位_c_"]);
                     }
                 }
             }
@@ -304,6 +318,20 @@ WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
             if (string.IsNullOrWhiteSpace(value)) return null;
             try { var bytes = Convert.FromBase64String(value); return bytes.Length == 8 ? bytes : null; }
             catch { return null; }
+        }
+
+        private static string MaxCursor(string current, object value)
+        {
+            if (value == null || value == DBNull.Value) return current;
+            var candidate = (byte[])value;
+            if (string.IsNullOrWhiteSpace(current)) return Convert.ToBase64String(candidate);
+            var existing = Convert.FromBase64String(current);
+            for (var i = 0; i < candidate.Length; i++)
+            {
+                if (candidate[i] == existing[i]) continue;
+                return candidate[i] > existing[i] ? Convert.ToBase64String(candidate) : current;
+            }
+            return current;
         }
     }
 }

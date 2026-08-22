@@ -177,20 +177,16 @@ namespace E6Sync.Services
         private async Task<SyncStats> SyncPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
         {
             var stats = new SyncStats();
-            DateTime? modifiedAfter = null;
-            DateTime parsed;
-            if (!fullSync && DateTime.TryParse(config.Sync.LastPharmacyProductModifiedAt, out parsed)) modifiedAfter = parsed;
-            var products = await Task.Run(() => database.QueryPharmacyProducts(modifiedAfter), cancellationToken).ConfigureAwait(false);
+            var productSnapshot = await Task.Run(() => database.QueryPharmacyProducts(fullSync ? "" : config.Sync.LastPharmacyProductCursor), cancellationToken).ConfigureAwait(false);
+            var products = productSnapshot.Products;
             stats.QueryCount += products.Count;
             if (products.Count > 0)
             {
                 var productResult = await api.SendPharmacyProductsAsync(products, cancellationToken).ConfigureAwait(false);
                 if (!productResult.Success) throw new InvalidOperationException(productResult.Message);
                 stats.SuccessCount++;
-                var latest = products[products.Count - 1].e6ModifiedAt;
-                if (!string.IsNullOrWhiteSpace(latest)) config.Sync.LastPharmacyProductModifiedAt = latest;
             }
-            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor), cancellationToken).ConfigureAwait(false);
+            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor), cancellationToken).ConfigureAwait(false);
             stats.QueryCount += snapshot.Batches.Count;
             log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，模式 {2}", products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
             if (fullSync && snapshot.Batches.Count == 0)
@@ -198,7 +194,9 @@ namespace E6Sync.Services
             var inventoryResult = await api.SendPharmacyInventoryAsync(snapshot.Batches, fullSync, cancellationToken).ConfigureAwait(false);
             if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
             stats.SuccessCount++;
+            if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor)) config.Sync.LastPharmacyProductCursor = productSnapshot.Cursor;
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
+            if (!string.IsNullOrWhiteSpace(snapshot.LocationCursor)) config.Sync.LastPharmacyLocationCursor = snapshot.LocationCursor;
             SaveConfig();
             log.Info(string.Format("药店同步完成：商品 {0}，库存批次 {1}{2}", products.Count, snapshot.Batches.Count, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
             return stats;

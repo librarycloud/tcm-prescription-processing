@@ -60,6 +60,25 @@ function normalizeBatch(item) {
   };
 }
 
+export function mergeBatches(items) {
+  const merged = new Map();
+  for (const item of items) {
+    const key = `${item.e6ProductId}\u0000${item.batchNo}`;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, { ...item });
+      continue;
+    }
+    const locations = [existing.locationName, item.locationName]
+      .filter(Boolean)
+      .flatMap((value) => String(value).split(", "));
+    existing.quantity = (Number(existing.quantity) + Number(item.quantity)).toFixed(3);
+    // 金额字段按 E6 原值作为单价保存；跨货位合并时只汇总库存数量。
+    existing.locationName = [...new Set(locations)].join(", ").slice(0, 120) || null;
+  }
+  return [...merged.values()];
+}
+
 async function storeFromRequest(prisma, payload, apiKey) {
   const storeCode = text(payload?.storeCode, 50, "门店编码", true).toUpperCase();
   return authenticateStore(prisma, storeCode, apiKey);
@@ -92,7 +111,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   const store = await storeFromRequest(prisma, payload, apiKey);
   const items = Array.isArray(payload?.batches) ? payload.batches : [];
   if (items.length > 10000) throw new AppError("单次库存上传不能超过10000条", 400);
-  const normalized = items.map(normalizeBatch);
+  const normalized = mergeBatches(items.map(normalizeBatch));
   const productIds = [...new Set(normalized.map((item) => item.e6ProductId))];
   const products = await prisma.e6PharmacyProduct.findMany({
     where: { storeId: store.id, e6ProductId: { in: productIds } },
@@ -108,7 +127,6 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   for (const item of normalized) {
     const productId = productMap.get(item.e6ProductId);
     const key = `${productId}\u0000${item.batchNo}`;
-    if (seen.has(key)) throw new AppError(`库存批次重复：${item.e6ProductId}/${item.batchNo}`, 400);
     seen.add(key);
     const existing = await prisma.e6PharmacyInventoryBatch.findUnique({
       where: { storeId_productId_batchNo: { storeId: store.id, productId, batchNo: item.batchNo } },
