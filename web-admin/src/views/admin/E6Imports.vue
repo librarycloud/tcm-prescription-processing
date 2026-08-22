@@ -213,6 +213,24 @@
           :description="conflictSummary(detail)"
           show-icon
         />
+        <div v-if="detail?.prescription?.plans?.length" class="raw-section">
+          <div class="detail-label">加工计划批次</div>
+          <el-table :data="detail.prescription.plans" border size="small">
+            <el-table-column label="批次" width="80">
+              <template #default="{ row }">第 {{ row.batchNo }} 批</template>
+            </el-table-column>
+            <el-table-column prop="totalDose" label="剂数" width="90" />
+            <el-table-column label="安排方式" width="110">
+              <template #default="{ row }">{{ Number(row.scheduleType) === 2 ? '等待通知' : '指定日期' }}</template>
+            </el-table-column>
+            <el-table-column label="加工日期">
+              <template #default="{ row }">{{ row.processDate ? formatDate(row.processDate) : '-' }}</template>
+            </el-table-column>
+            <el-table-column label="状态">
+              <template #default="{ row }">{{ row.deletedAt ? '已删除' : '有效' }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
         <div v-if="detailItems.length" class="raw-section">
           <div class="detail-label">处方明细</div>
           <el-table :data="detailItems" border size="small">
@@ -234,7 +252,13 @@
       </div>
     </el-drawer>
 
-    <el-dialog v-model="confirmVisible" title="确认导入并生成加工计划" width="620px" align-center>
+    <el-drawer
+      v-model="confirmVisible"
+      title="确认导入并生成加工计划"
+      direction="rtl"
+      size="min(900px, 96vw)"
+      destroy-on-close
+    >
       <el-alert v-if="selected" :closable="false" type="info" show-icon>
         <template #title
           >{{ selected.externalOrderNo }} · {{ selected.customerName }} ·
@@ -262,6 +286,15 @@
         <el-form-item label="剂数" prop="doseCount">
           <el-input-number v-model="confirmForm.doseCount" :min="1" :max="9999" style="width: 100%" />
         </el-form-item>
+        <el-form-item label="批次数">
+          <el-input-number
+            v-model="confirmForm.batchCount"
+            :min="1"
+            :max="Math.max(1, Number(confirmForm.doseCount) || 1)"
+            style="width: 100%"
+            @change="setBatchCount"
+          />
+        </el-form-item>
         <el-form-item label="加工方式" prop="processTypeId">
           <el-select
             v-model="confirmForm.processTypeId"
@@ -276,16 +309,48 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="安排方式" prop="scheduleType">
-          <el-segmented v-model="confirmForm.scheduleType" :options="scheduleOptions" />
-        </el-form-item>
-        <el-form-item v-if="confirmForm.scheduleType === 1" label="加工日期" prop="processDate">
-          <el-date-picker
-            v-model="confirmForm.processDate"
-            type="date"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
+        <el-form-item label="加工批次" class="batch-form-item">
+          <div class="batch-editor">
+            <div v-for="(batch, index) in confirmForm.batches" :key="batch.key" class="batch-row">
+              <div class="batch-row-header">
+                <span>第 {{ index + 1 }} 批</span>
+                <el-button
+                  v-if="confirmForm.batches.length > 1"
+                  link
+                  type="danger"
+                  @click="removeBatch(index)"
+                >删除</el-button>
+              </div>
+              <div class="batch-row-fields">
+                <el-input-number
+                  v-model="batch.totalDose"
+                  :min="1"
+                  :max="9999"
+                  controls-position="right"
+                  @change="syncBatchDates"
+                />
+                <span class="batch-unit">剂</span>
+                <el-segmented
+                  v-model="batch.scheduleType"
+                  :options="scheduleOptions"
+                  @change="handleBatchScheduleChange(batch)"
+                />
+                <el-date-picker
+                  v-if="batch.scheduleType === 1"
+                  v-model="batch.processDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  @change="handleBatchDateChange(batch)"
+                />
+              </div>
+            </div>
+            <div class="batch-editor-footer">
+              <span :class="{ 'batch-total-error': batchDoseTotal !== Number(confirmForm.doseCount) }">
+                已分配 {{ batchDoseTotal }} / {{ confirmForm.doseCount }} 剂
+              </span>
+              <el-button link type="primary" @click="addBatch">新增批次</el-button>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="取货方式" prop="pickupMethod">
           <el-segmented v-model="confirmForm.pickupMethod" :options="pickupOptions" />
@@ -331,7 +396,7 @@
         <el-button @click="confirmVisible = false">取消</el-button>
         <el-button type="primary" :loading="confirming" @click="submitConfirm">确认生成</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -398,9 +463,9 @@ const confirmForm = reactive({
   phone: '',
   doctorId: null,
   doseCount: 1,
+  batchCount: 1,
   processTypeId: '',
-  scheduleType: 1,
-  processDate: todayText(),
+  batches: [],
   pickupMethod: 0,
   expressAddress: '',
   bagCount: null,
@@ -408,6 +473,7 @@ const confirmForm = reactive({
   usageMethod: '',
   processRemark: ''
 });
+let batchKey = 0;
 const confirmRules = {
   phone: [
     {
@@ -421,16 +487,6 @@ const confirmRules = {
   doctorId: [{ required: true, message: '请选择医生', trigger: 'change' }],
   doseCount: [{ required: true, message: '请输入剂数', trigger: 'change' }],
   processTypeId: [{ required: true, message: '请选择加工方式', trigger: 'change' }],
-  scheduleType: [{ required: true, message: '请选择安排方式', trigger: 'change' }],
-  processDate: [
-    {
-      validator: (_rule, value, callback) =>
-        confirmForm.scheduleType === 1 && !value
-          ? callback(new Error('请选择加工日期'))
-          : callback(),
-      trigger: 'change'
-    }
-  ],
   pickupMethod: [{ required: true, message: '请选择取货方式', trigger: 'change' }],
   bagCount: [
     {
@@ -462,6 +518,9 @@ const detailItems = computed(() => {
     ? [...items].sort((left, right) => Number(left.sequence) - Number(right.sequence))
     : [];
 });
+const batchDoseTotal = computed(() =>
+  confirmForm.batches.reduce((sum, batch) => sum + Number(batch.totalDose || 0), 0)
+);
 
 function statusMeta(status) {
   return e6ImportStatusMeta(status);
@@ -496,6 +555,75 @@ function todayText() {
   const date = new Date();
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+function datePlusDays(dateText, days) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateText || ''));
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date();
+  date.setDate(date.getDate() + Number(days || 0));
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+function createBatch(totalDose, processDate = todayText(), scheduleType = 1) {
+  return {
+    key: ++batchKey,
+    totalDose: Number(totalDose) || 1,
+    scheduleType,
+    processDate: scheduleType === 1 ? processDate : null,
+    autoDate: true
+  };
+}
+function setBatchCount(value = confirmForm.batchCount) {
+  const count = Math.max(1, Math.min(Number(value) || 1, Number(confirmForm.doseCount) || 1));
+  const totalDose = Number(confirmForm.doseCount) || 1;
+  const baseDose = Math.floor(totalDose / count);
+  const remainder = totalDose % count;
+  confirmForm.batchCount = count;
+  confirmForm.batches = Array.from({ length: count }, (_, index) =>
+    createBatch(baseDose + (index < remainder ? 1 : 0))
+  );
+  syncBatchDates();
+}
+function syncBatchDates() {
+  let cursorDate = todayText();
+  confirmForm.batches.forEach((batch, index) => {
+    if (index === 0 && batch.autoDate && batch.scheduleType === 1) {
+      batch.processDate = cursorDate;
+    }
+    if (batch.scheduleType === 2) {
+      batch.processDate = null;
+    } else if (batch.autoDate) {
+      batch.processDate = cursorDate;
+    }
+    const effectiveDate = batch.processDate || cursorDate;
+    cursorDate = datePlusDays(effectiveDate, batch.totalDose);
+  });
+}
+function handleBatchScheduleChange(batch) {
+  if (batch.scheduleType === 2) {
+    batch.processDate = null;
+    batch.autoDate = true;
+  } else {
+    batch.autoDate = true;
+    syncBatchDates();
+  }
+}
+function handleBatchDateChange(batch) {
+  batch.autoDate = false;
+  syncBatchDates();
+}
+function addBatch() {
+  const remaining = Math.max(Number(confirmForm.doseCount || 0) - batchDoseTotal.value, 0);
+  confirmForm.batches.push(createBatch(remaining || 1));
+  confirmForm.batchCount = confirmForm.batches.length;
+  syncBatchDates();
+}
+function removeBatch(index) {
+  if (confirmForm.batches.length <= 1) return;
+  confirmForm.batches.splice(index, 1);
+  confirmForm.batchCount = confirmForm.batches.length;
+  syncBatchDates();
 }
 function canConfirm(row) {
   return (
@@ -584,9 +712,9 @@ function openConfirm(row) {
     phone: row.phone || '',
     doctorId: row.doctorMapping?.doctor?.id || null,
     doseCount: Number(row.doseCount) || 1,
+    batchCount: 1,
     processTypeId: '',
-    scheduleType: 1,
-    processDate: todayText(),
+    batches: [createBatch(Number(row.doseCount) || 1)],
     pickupMethod: 0,
     expressAddress: '',
     bagCount: Number(row.doseCount) * 2,
@@ -617,9 +745,9 @@ function openMergeConfirm() {
     phone: rows[0].phone || '',
     doctorId: rows[0].doctorMapping?.doctor?.id || null,
     doseCount,
+    batchCount: 1,
     processTypeId: '',
-    scheduleType: 1,
-    processDate: todayText(),
+    batches: [createBatch(doseCount)],
     pickupMethod: 0,
     expressAddress: '',
     bagCount: doseCount * 2,
@@ -633,10 +761,29 @@ function openMergeConfirm() {
 async function submitConfirm() {
   const valid = await confirmFormRef.value?.validate().catch(() => false);
   if (!valid || !selected.value) return;
+  if (batchDoseTotal.value !== Number(confirmForm.doseCount)) {
+    ElMessage.error(`分批剂数合计必须等于 ${confirmForm.doseCount} 剂`);
+    return;
+  }
+  if (confirmForm.batches.some((batch) => Number(batch.totalDose) < 1)) {
+    ElMessage.error('每批剂数必须大于 0');
+    return;
+  }
+  if (confirmForm.batches.some((batch) => Number(batch.scheduleType) === 1 && !batch.processDate)) {
+    ElMessage.error('指定日期批次请选择加工日期');
+    return;
+  }
   confirming.value = true;
   try {
     const payload = { ...confirmForm };
-    if (payload.scheduleType === 2) payload.processDate = null;
+    payload.batches = confirmForm.batches.map(({ key, autoDate, ...batch }) => ({
+      ...batch,
+      totalDose: Number(batch.totalDose),
+      scheduleType: Number(batch.scheduleType),
+      processDate: Number(batch.scheduleType) === 2 ? null : batch.processDate
+    }));
+    payload.scheduleType = payload.batches[0]?.scheduleType;
+    payload.processDate = payload.batches[0]?.processDate || null;
     if (!isDecoction.value)
       Object.assign(payload, { bagCount: null, volumeMl: null, usageMethod: null });
     if (isMerging.value) {
@@ -721,6 +868,13 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .confirm-form {
   margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 16px;
+}
+.confirm-form > :deep(.batch-form-item),
+.confirm-form > :deep(.el-form-item:last-child) {
+  grid-column: 1 / -1;
 }
 .e6-import-table {
   width: auto;
@@ -747,6 +901,44 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
   gap: 12px;
   margin-top: 12px;
 }
+.batch-editor {
+  width: 100%;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.batch-row {
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+}
+.batch-row + .batch-row {
+  margin-top: 8px;
+}
+.batch-row-header,
+.batch-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.batch-row-fields {
+  display: grid;
+  grid-template-columns: 150px 24px minmax(160px, 1fr) minmax(150px, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.batch-row-fields :deep(.el-input-number),
+.batch-row-fields :deep(.el-date-editor) {
+  width: 100%;
+}
+.batch-unit {
+  color: var(--el-text-color-secondary);
+}
+.batch-total-error {
+  color: var(--el-color-danger);
+}
 @media (max-width: 900px) {
   .search-form > :first-child {
     flex-basis: 100%;
@@ -757,10 +949,23 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
   .e6-import-detail .detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .confirm-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 600px) {
   .e6-import-detail .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .confirm-form {
+    display: block;
+  }
+  .batch-row-fields {
+    grid-template-columns: 1fr 24px;
+  }
+  .batch-row-fields :deep(.el-segmented),
+  .batch-row-fields :deep(.el-date-editor) {
+    grid-column: 1 / -1;
   }
 }
 </style>

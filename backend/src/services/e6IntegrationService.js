@@ -8,6 +8,7 @@ import {
   DICTIONARY_TYPES,
   PAYMENT_STATUS,
   PRIORITY,
+  SCHEDULE_TYPES,
 } from "../constants/processing.js";
 import {
   E6_CONFIG_STATUS,
@@ -677,6 +678,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     phone: first.phone,
     doctorId: payload.doctorId,
     doseCount: first.doseCount,
+    batches: payload.batches,
     processTypeId: payload.processTypeId,
     scheduleType: payload.scheduleType,
     processDate: payload.processDate,
@@ -723,24 +725,29 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     }, { description: `合并E6订单 ${imports.map((item) => item.externalOrderNo).join("、")} 并生成处方` });
     const pickupMethod = Number(mergedPayload.pickupMethod);
     if (!PICKUP_METHOD_VALUES.includes(pickupMethod)) throw new AppError("请选择取货方式", 400);
-    const plan = await createProcessingPlanRecord(tx, actor, {
-      prescriptionId: prescription.id,
-      batchNo: 1,
-      processTypeId: mergedPayload.processTypeId,
-      totalDose: first.doseCount,
-      bagCount: mergedPayload.bagCount,
-      volumeMl: mergedPayload.volumeMl,
-      usageMethod: mergedPayload.usageMethod,
-      scheduleType: mergedPayload.scheduleType,
-      processDate: mergedPayload.processDate,
-      priority: mergedPayload.priority ?? PRIORITY.NORMAL,
-      notifyType: mergedPayload.notifyType,
-      paymentStatus: mergedPayload.paymentStatus ?? (Number(primary.isPaid) === 1 ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID),
-      pickupMethod,
-      expressAddress: mergedPayload.expressAddress,
-      processRemark: mergedPayload.processRemark,
-      remark: primary.remark,
-    }, { description: `由合并E6订单 ${imports.map((item) => item.externalOrderNo).join("、")} 生成加工计划` });
+    const batches = normalizePlanBatches(mergedPayload, first.doseCount);
+    const plans = [];
+    for (const [index, batch] of batches.entries()) {
+      plans.push(await createProcessingPlanRecord(tx, actor, {
+        prescriptionId: prescription.id,
+        batchNo: index + 1,
+        processTypeId: mergedPayload.processTypeId,
+        totalDose: batch.totalDose,
+        bagCount: batch.bagCount ?? (batches.length > 1 ? batch.totalDose * 2 : mergedPayload.bagCount),
+        volumeMl: batch.volumeMl ?? mergedPayload.volumeMl,
+        usageMethod: batch.usageMethod ?? mergedPayload.usageMethod,
+        scheduleType: batch.scheduleType,
+        processDate: batch.processDate,
+        priority: batch.priority ?? mergedPayload.priority ?? PRIORITY.NORMAL,
+        notifyType: batch.notifyType ?? mergedPayload.notifyType,
+        paymentStatus: batch.paymentStatus ?? mergedPayload.paymentStatus ?? (Number(primary.isPaid) === 1 ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID),
+        pickupMethod: batch.pickupMethod ?? pickupMethod,
+        expressAddress: batch.expressAddress ?? mergedPayload.expressAddress,
+        processRemark: batch.processRemark ?? mergedPayload.processRemark,
+        remark: primary.remark,
+      }, { description: `由合并E6订单 ${imports.map((item) => item.externalOrderNo).join("、")} 生成第${index + 1}批加工计划` }));
+    }
+    const plan = plans[0];
     await tx.e6Import.updateMany({
       where: { id: { in: ids } },
       data: { customerName, phone, status: E6_IMPORT_STATUS.IMPORT_CONVERTED, prescriptionId: prescription.id, processingPlanId: plan.id, confirmedBy: Number(actor.id), confirmedAt: new Date(), errorCode: null, errorMessage: null },
@@ -770,6 +777,20 @@ function importInclude(includeRaw = false) {
         totalPrice: true,
         remark: true,
         doctor: { select: { id: true, name: true } },
+        plans: {
+          where: { deletedAt: null },
+          orderBy: { batchNo: "asc" },
+          select: {
+            id: true,
+            batchNo: true,
+            totalDose: true,
+            status: true,
+            scheduleType: true,
+            processDate: true,
+            paymentStatus: true,
+            deletedAt: true,
+          },
+        },
       },
     },
     processingPlan: {
@@ -907,6 +928,28 @@ function conversionError(message, status, code) {
   return error;
 }
 
+function normalizePlanBatches(payload, totalDose) {
+  const source = Array.isArray(payload.batches) && payload.batches.length
+    ? payload.batches
+    : [{ totalDose, scheduleType: payload.scheduleType, processDate: payload.processDate }];
+  const batches = source.map((item, index) => {
+    const batchDose = positiveInteger(item.totalDose ?? item.doseCount, `第${index + 1}批剂数`);
+    const scheduleType = Number(item.scheduleType ?? SCHEDULE_TYPES.DATE);
+    if (![SCHEDULE_TYPES.DATE, SCHEDULE_TYPES.NOTICE].includes(scheduleType))
+      throw new AppError(`第${index + 1}批安排方式不正确`, 400);
+    const processDate = scheduleType === SCHEDULE_TYPES.DATE
+      ? dateOrNull(item.processDate, `第${index + 1}批加工日期`)
+      : null;
+    if (scheduleType === SCHEDULE_TYPES.DATE && !processDate)
+      throw new AppError(`请选择第${index + 1}批加工日期`, 400);
+    return { ...item, totalDose: batchDose, scheduleType, processDate };
+  });
+  const sum = batches.reduce((value, item) => value + item.totalDose, 0);
+  if (sum !== Number(totalDose))
+    throw new AppError(`分批剂数合计必须等于 ${totalDose} 剂`, 400);
+  return batches;
+}
+
 export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
   const current = await findScopedImport(prisma, actor, idValue);
   const canRegeneratePlan = Boolean(
@@ -942,6 +985,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         payload.doseCount ?? item.doseCount,
         "剂数",
       );
+      const batches = normalizePlanBatches(payload, doseCount);
       const selectedDoctorId =
         payload.doctorId === undefined || payload.doctorId === null || payload.doctorId === ""
           ? null
@@ -1003,29 +1047,33 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
       const pickupMethod = Number(payload.pickupMethod);
       if (!PICKUP_METHOD_VALUES.includes(pickupMethod))
         throw new AppError("请选择取货方式", 400);
-      const plan = await createProcessingPlanRecord(
-        tx,
-        actor,
-        {
-          prescriptionId: prescription.id,
-          batchNo: 1,
-          processTypeId: payload.processTypeId,
-          totalDose: doseCount,
-          bagCount: payload.bagCount,
-          volumeMl: payload.volumeMl,
-          usageMethod: payload.usageMethod,
-          scheduleType: payload.scheduleType,
-          processDate: payload.processDate,
-          priority: payload.priority ?? PRIORITY.NORMAL,
-          notifyType: payload.notifyType,
-          paymentStatus: payload.paymentStatus ?? (Number(item.isPaid) === 1 ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID),
-           pickupMethod,
-           expressAddress: payload.expressAddress,
-           processRemark: payload.processRemark,
-          remark: item.remark,
-        },
-        { description: `由E6订单 ${item.externalOrderNo} 生成加工计划` },
-      );
+      const plans = [];
+      for (const [index, batch] of batches.entries()) {
+        plans.push(await createProcessingPlanRecord(
+          tx,
+          actor,
+          {
+            prescriptionId: prescription.id,
+            batchNo: index + 1,
+            processTypeId: payload.processTypeId,
+            totalDose: batch.totalDose,
+            bagCount: batch.bagCount ?? (batches.length > 1 ? batch.totalDose * 2 : payload.bagCount),
+            volumeMl: batch.volumeMl ?? payload.volumeMl,
+            usageMethod: batch.usageMethod ?? payload.usageMethod,
+            scheduleType: batch.scheduleType,
+            processDate: batch.processDate,
+            priority: batch.priority ?? payload.priority ?? PRIORITY.NORMAL,
+            notifyType: batch.notifyType ?? payload.notifyType,
+            paymentStatus: batch.paymentStatus ?? payload.paymentStatus ?? (Number(item.isPaid) === 1 ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID),
+            pickupMethod: batch.pickupMethod ?? pickupMethod,
+            expressAddress: batch.expressAddress ?? payload.expressAddress,
+            processRemark: batch.processRemark ?? payload.processRemark,
+            remark: item.remark,
+          },
+          { description: `由E6订单 ${item.externalOrderNo} 生成第${index + 1}批加工计划` },
+        ));
+      }
+      const plan = plans[0];
       const converted = await tx.e6Import.update({
         where: { id: item.id },
         data: {
