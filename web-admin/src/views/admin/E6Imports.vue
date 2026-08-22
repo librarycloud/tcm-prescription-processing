@@ -272,6 +272,7 @@
         label-width="100px"
         class="confirm-form"
       >
+        <el-divider class="confirm-section-divider" content-position="left">订单信息</el-divider>
         <el-form-item label="顾客姓名">
           <el-input v-model.trim="confirmForm.customerName" maxlength="64" placeholder="可留空" />
         </el-form-item>
@@ -309,7 +310,8 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="加工批次" class="batch-form-item">
+        <div class="batch-section">
+          <el-divider class="confirm-section-divider" content-position="left">加工批次</el-divider>
           <div class="batch-editor">
             <div v-for="(batch, index) in confirmForm.batches" :key="batch.key" class="batch-row">
               <div class="batch-row-header">
@@ -351,7 +353,8 @@
               <el-button link type="primary" @click="addBatch">新增批次</el-button>
             </div>
           </div>
-        </el-form-item>
+        </div>
+        <el-divider class="confirm-section-divider" content-position="left">取货与备注</el-divider>
         <el-form-item label="取货方式" prop="pickupMethod">
           <el-segmented v-model="confirmForm.pickupMethod" :options="pickupOptions" />
         </el-form-item>
@@ -872,9 +875,16 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 16px;
 }
-.confirm-form > :deep(.batch-form-item),
+.confirm-form > :deep(.el-divider),
+.confirm-form > .batch-section,
 .confirm-form > :deep(.el-form-item:last-child) {
   grid-column: 1 / -1;
+}
+.confirm-section-divider {
+  margin: 8px 0 14px;
+}
+.batch-section {
+  min-width: 0;
 }
 .e6-import-table {
   width: auto;
