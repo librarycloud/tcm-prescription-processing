@@ -966,6 +966,24 @@
                   @change="syncBatchSettings"
                 />
               </div>
+              <div class="batch-field">
+                <span class="batch-field-label">提醒方式</span>
+                <el-select v-model="batchForm.notifyType" @change="syncBatchSettings">
+                  <el-option
+                    v-for="item in notifyTypes"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+              </div>
+              <div class="batch-field">
+                <span class="batch-field-label">收费状态</span>
+                <el-select v-model="batchForm.paymentStatus" @change="syncBatchSettings">
+                  <el-option label="已收费" :value="PAYMENT_STATUS.PAID" />
+                  <el-option label="未收费" :value="PAYMENT_STATUS.UNPAID" />
+                </el-select>
+              </div>
               <div class="batch-field batch-field-wide">
                 <span class="batch-field-label">服用方法</span>
                 <UsageMethodInput v-model="batchForm.usageMethod" />
@@ -1056,24 +1074,6 @@
                       inactive-text="普通"
                     />
                   </div>
-                </div>
-                <div class="batch-field">
-                  <span class="batch-field-label">提醒方式</span>
-                  <el-select v-model="row.notifyType">
-                    <el-option
-                      v-for="item in notifyTypes"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value"
-                    />
-                  </el-select>
-                </div>
-                <div class="batch-field">
-                  <span class="batch-field-label">收费状态</span>
-                  <el-select v-model="row.paymentStatus">
-                    <el-option label="已收费" :value="PAYMENT_STATUS.PAID" />
-                    <el-option label="未收费" :value="PAYMENT_STATUS.UNPAID" />
-                  </el-select>
                 </div>
                 <div class="batch-field batch-field-wide">
                   <span class="batch-field-label">加工备注</span>
@@ -2104,6 +2104,8 @@ const batchForm = reactive({
   bagsPerDose: 2,
   volumeMl: 200,
   usageMethod: '',
+  notifyType: null,
+  paymentStatus: PAYMENT_STATUS.PAID,
   prescription: {
     storeId: null,
     customerName: '',
@@ -2200,6 +2202,8 @@ function syncBatchPlan(plan) {
   plan.pickupMethod = batchForm.pickupMethod;
   plan.expressAddress = batchForm.expressAddress;
   plan.usageMethod = batchForm.usageMethod;
+  plan.notifyType = batchForm.notifyType;
+  plan.paymentStatus = batchForm.paymentStatus;
   plan.volumeMl = Number(batchForm.volumeMl) || null;
   plan.bagCount = batchBagCount(plan);
 }
@@ -2212,6 +2216,8 @@ function syncBatchSettings() {
     plan.pickupMethod = batchForm.pickupMethod;
     plan.expressAddress = batchForm.expressAddress;
     plan.usageMethod = batchForm.usageMethod;
+    plan.notifyType = batchForm.notifyType;
+    plan.paymentStatus = batchForm.paymentStatus;
     plan.volumeMl = batchFormIsDecoction.value ? Number(batchForm.volumeMl) || null : null;
     plan.bagCount = batchFormIsDecoction.value ? batchBagCount(plan) : null;
   });
@@ -2263,6 +2269,8 @@ function resetBatchForm() {
     bagsPerDose: 2,
     volumeMl: 200,
     usageMethod: '',
+    notifyType: null,
+    paymentStatus: PAYMENT_STATUS.PAID,
     prescription: {
       storeId: null,
       customerName: '',
@@ -2569,6 +2577,8 @@ async function saveBatchPlan() {
         pickupMethod: batchForm.pickupMethod,
         expressAddress: batchForm.expressAddress,
         usageMethod: batchForm.usageMethod,
+        notifyType: batchForm.notifyType,
+        paymentStatus: batchForm.paymentStatus,
         ...(batchFormIsDecoction.value
           ? { bagCount: batchBagCount(plan), volumeMl: Number(batchForm.volumeMl) }
           : { bagCount: null, volumeMl: null }),
