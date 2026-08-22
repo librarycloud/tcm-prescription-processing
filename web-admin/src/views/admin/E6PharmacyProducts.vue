@@ -79,7 +79,12 @@
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
         <el-table-column label="商品名称" min-width="150">
-          <template #default="{ row }"><TextWithTooltip :value="row.name" /></template>
+          <template #default="{ row }">
+            <el-tooltip v-if="isLongText(row.name)" :content="row.name" placement="top">
+              <span>{{ shortText(row.name) }}</span>
+            </el-tooltip>
+            <span v-else>{{ row.name || '-' }}</span>
+          </template>
         </el-table-column>
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
@@ -94,13 +99,23 @@
           <template #default="{ row }">{{ row.barcode || '-' }}</template>
         </el-table-column>
         <el-table-column label="规格" min-width="120">
-          <template #default="{ row }"><TextWithTooltip :value="row.specification" /></template>
+          <template #default="{ row }">
+            <el-tooltip v-if="isLongText(row.specification)" :content="row.specification" placement="top">
+              <span>{{ shortText(row.specification) }}</span>
+            </el-tooltip>
+            <span v-else>{{ row.specification || '-' }}</span>
+          </template>
         </el-table-column>
         <el-table-column prop="dosageForm" label="剂型" min-width="100">
           <template #default="{ row }">{{ row.dosageForm || '-' }}</template>
         </el-table-column>
         <el-table-column label="生产厂商" min-width="150">
-          <template #default="{ row }"><TextWithTooltip :value="row.manufacturer" /></template>
+          <template #default="{ row }">
+            <el-tooltip v-if="isLongText(row.manufacturer)" :content="row.manufacturer" placement="top">
+              <span>{{ shortText(row.manufacturer) }}</span>
+            </el-tooltip>
+            <span v-else>{{ row.manufacturer || '-' }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="E6修改时间" min-width="170">
           <template #default="{ row }">{{ dateTimeText(row.e6ModifiedAt) }}</template>
@@ -123,11 +138,6 @@ import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { getProductStores } from '@/api/productDifference';
 import { getE6PharmacyProducts } from '@/api/e6Pharmacy';
-
-const TextWithTooltip = {
-  props: { value: { type: String, default: '' } },
-  template: `<el-tooltip v-if="value && value.length > 12" :content="value" placement="top"><span>{{ value.slice(0, 12) }}…</span></el-tooltip><span v-else>{{ value || '-' }}</span>`
-};
 
 const userStore = useUserStore();
 const tableRef = ref();
@@ -154,6 +164,14 @@ function quantityText(value) {
 
 function moneyText(value) {
   return `¥ ${Number(value || 0).toFixed(2)}`;
+}
+
+function isLongText(value) {
+  return String(value || '').length > 12;
+}
+
+function shortText(value) {
+  return `${String(value).slice(0, 12)}…`;
 }
 
 async function loadStores() {
