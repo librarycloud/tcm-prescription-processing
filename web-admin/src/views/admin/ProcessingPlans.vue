@@ -901,7 +901,7 @@
             </div>
           </template>
           <div class="batch-unified-settings">
-            <div class="batch-unified-grid">
+            <div class="batch-unified-grid batch-unified-grid-main">
               <div class="batch-field">
                 <span class="batch-field-label required">加工方式</span>
                 <el-select
@@ -952,20 +952,6 @@
                   @change="syncBatchSettings"
                 />
               </div>
-            </div>
-            <div class="batch-unified-grid batch-unified-grid-secondary">
-              <div
-                v-if="[1, 2].includes(Number(batchForm.pickupMethod))"
-                class="batch-field"
-              >
-                <span class="batch-field-label">地址</span>
-                <el-input
-                  v-model.trim="batchForm.expressAddress"
-                  maxlength="500"
-                  placeholder="选填"
-                  @change="syncBatchSettings"
-                />
-              </div>
               <div class="batch-field">
                 <span class="batch-field-label">提醒方式</span>
                 <el-select v-model="batchForm.notifyType" @change="syncBatchSettings">
@@ -983,6 +969,20 @@
                   <el-option label="已收费" :value="PAYMENT_STATUS.PAID" />
                   <el-option label="未收费" :value="PAYMENT_STATUS.UNPAID" />
                 </el-select>
+              </div>
+            </div>
+            <div class="batch-unified-grid batch-unified-grid-secondary">
+              <div
+                v-if="[1, 2].includes(Number(batchForm.pickupMethod))"
+                class="batch-field"
+              >
+                <span class="batch-field-label">地址</span>
+                <el-input
+                  v-model.trim="batchForm.expressAddress"
+                  maxlength="500"
+                  placeholder="选填"
+                  @change="syncBatchSettings"
+                />
               </div>
               <div class="batch-field batch-field-wide">
                 <span class="batch-field-label">服用方法</span>
@@ -3213,6 +3213,9 @@ onMounted(async () => {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
+.batch-unified-grid-main {
+  grid-template-columns: repeat(6, minmax(120px, 150px));
+}
 .batch-unified-grid-secondary {
   grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, 2fr));
 }
@@ -3309,6 +3312,9 @@ onMounted(async () => {
   .batch-unified-grid-secondary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .batch-unified-grid-main {
+    grid-template-columns: repeat(3, minmax(120px, 150px));
+  }
 }
 @media (max-width: 768px) {
   .page-actions,
@@ -3324,6 +3330,9 @@ onMounted(async () => {
   }
   .batch-unified-grid,
   .batch-unified-grid-secondary {
+    grid-template-columns: 1fr;
+  }
+  .batch-unified-grid-main {
     grid-template-columns: 1fr;
   }
   .batch-field-wide {
