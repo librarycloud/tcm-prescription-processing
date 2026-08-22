@@ -300,7 +300,8 @@ namespace E6Sync
             pharmacyAutomaticValue.Text = "运行中";
             try
             {
-                await syncService.RunPharmacyAutomaticAsync(cancellation.Token);
+                var stats = await syncService.RunPharmacyAutomaticAsync(cancellation.Token);
+                SetStats(stats);
                 UpdatePharmacyLastSyncLabel();
             }
             catch (Exception ex) { log.Error("药店自动同步异常：" + ex.Message); }
@@ -317,7 +318,8 @@ namespace E6Sync
             manualPharmacySyncButton.Enabled = false;
             try
             {
-                await syncService.RunPharmacyManualAsync(cancellation.Token);
+                var stats = await syncService.RunPharmacyManualAsync(cancellation.Token);
+                SetStats(stats);
                 UpdatePharmacyLastSyncLabel();
             }
             catch (Exception ex) { log.Error("药店手动同步异常：" + ex.Message); }
@@ -358,7 +360,8 @@ namespace E6Sync
             ResetStats();
             try
             {
-                await syncService.RunPharmacyManualAsync(cancellation.Token);
+                var stats = await syncService.RunPharmacyManualAsync(cancellation.Token);
+                SetStats(stats);
                 UpdatePharmacyLastSyncLabel();
             }
             catch (Exception ex)

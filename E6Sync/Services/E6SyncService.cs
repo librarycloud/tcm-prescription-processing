@@ -192,6 +192,9 @@ namespace E6Sync.Services
             }
             var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor), cancellationToken).ConfigureAwait(false);
             stats.QueryCount += snapshot.Batches.Count;
+            log.Info(string.Format("药店本地查询：日期 {0:yyyy-MM-dd}，商品 {1}，库存批次 {2}，模式 {3}", DateTime.Today, products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
+            if (fullSync && snapshot.Batches.Count == 0)
+                throw new InvalidOperationException(string.Format("药店当天库存查询为 0（日期 {0:yyyy-MM-dd}），已停止全量上传；请检查库存日报日期、药店数据库和系统日期", DateTime.Today));
             var inventoryResult = await api.SendPharmacyInventoryAsync(snapshot.Batches, fullSync, cancellationToken).ConfigureAwait(false);
             if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
             stats.SuccessCount++;
