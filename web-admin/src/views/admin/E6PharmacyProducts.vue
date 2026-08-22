@@ -247,6 +247,8 @@ onMounted(async () => {
 
 .e6-pharmacy-page :deep(.el-table .cell) {
   min-width: 0;
+  padding-right: 4px;
+  padding-left: 4px;
 }
 
 .batch-panel {
