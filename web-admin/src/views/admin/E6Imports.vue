@@ -383,9 +383,7 @@
               :max="9999"
               style="width: 100%"
           /></el-form-item>
-          <el-form-item label="服用方法"
-            ><el-input v-model.trim="confirmForm.usageMethod" maxlength="200"
-          /></el-form-item>
+          <el-form-item label="服用方法"><UsageMethodInput v-model="confirmForm.usageMethod" /></el-form-item>
         </template>
         <el-form-item label="加工备注"
           ><el-input
@@ -412,6 +410,7 @@ import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
+import UsageMethodInput from '@/components/UsageMethodInput.vue';
 import {
   confirmE6Import,
   getE6Import,
@@ -431,6 +430,7 @@ import {
 import { formatDate, formatDateSeconds } from '@/utils/date';
 import { maskPhone } from '@/utils/phone';
 import { useUserStore } from '@/stores/user';
+import { datePlusDays, splitDoseBatches } from '@/utils/processingBatches';
 
 const userStore = useUserStore();
 const router = useRouter();
@@ -561,15 +561,6 @@ function todayText() {
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
-function datePlusDays(dateText, days) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateText || ''));
-  const date = match
-    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-    : new Date();
-  date.setDate(date.getDate() + Number(days || 0));
-  const pad = (value) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
 function createBatch(totalDose, processDate = todayText(), scheduleType = 1) {
   return {
     key: ++batchKey,
@@ -584,13 +575,9 @@ function batchBagCount(batch) {
 }
 function setBatchCount(value = confirmForm.batchCount) {
   const count = Math.max(1, Math.min(Number(value) || 1, Number(confirmForm.doseCount) || 1));
-  const totalDose = Number(confirmForm.doseCount) || 1;
-  const baseDose = Math.floor(totalDose / count);
-  const remainder = totalDose % count;
   confirmForm.batchCount = count;
-  confirmForm.batches = Array.from({ length: count }, (_, index) =>
-    createBatch(baseDose + (index < remainder ? 1 : 0))
-  );
+  confirmForm.batches = splitDoseBatches(confirmForm.doseCount, count, todayText())
+    .map((batch) => createBatch(batch.totalDose, batch.processDate));
   syncBatchDates();
 }
 function syncBatchDates() {
@@ -786,7 +773,7 @@ async function submitConfirm() {
   confirming.value = true;
   try {
     const payload = { ...confirmForm };
-    payload.batches = confirmForm.batches.map(({ key, autoDate, ...batch }) => ({
+    payload.batches = confirmForm.batches.map((batch) => ({
       ...batch,
       totalDose: Number(batch.totalDose),
       scheduleType: Number(batch.scheduleType),

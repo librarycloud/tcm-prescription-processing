@@ -873,6 +873,15 @@
             <div class="batch-section-header">
               <span>加工批次</span>
               <div class="batch-tools">
+                <span class="batch-count-label">总剂数</span>
+                <el-input-number
+                  v-model="batchForm.totalDose"
+                  :min="1"
+                  :max="9999"
+                  size="small"
+                  :controls="false"
+                  @change="generateBatchPlans"
+                />
                 <span class="batch-count-label">总批次</span>
                 <el-input-number
                   v-model="batchForm.batchCount"
@@ -880,6 +889,16 @@
                   :max="100"
                   size="small"
                   :controls="false"
+                  @change="generateBatchPlans"
+                />
+                <span class="batch-count-label">每剂袋数</span>
+                <el-input-number
+                  v-model="batchForm.bagsPerDose"
+                  :min="1"
+                  :max="9999"
+                  size="small"
+                  :controls="false"
+                  @change="syncAllBatchBags"
                 />
                 <el-button size="small" @click="generateBatchPlans">生成批次</el-button>
                 <el-button size="small" type="primary" plain :icon="Plus" @click="addBatchPlan">
@@ -921,7 +940,7 @@
                 </div>
                 <div class="batch-field">
                   <span class="batch-field-label required">加工方式</span>
-                  <el-select v-model="row.processTypeId" placeholder="请选择">
+                  <el-select v-model="row.processTypeId" placeholder="请选择" @change="syncBatchPlan(row)">
                     <el-option
                       v-for="item in processTypes"
                       :key="item.id"
@@ -950,11 +969,23 @@
                 </div>
                 <div class="batch-field">
                   <span class="batch-field-label required">剂数</span>
-                  <el-input-number v-model="row.totalDose" :min="1" :max="999" :controls="false" />
+                  <el-input-number
+                    v-model="row.totalDose"
+                    :min="1"
+                    :max="999"
+                    :controls="false"
+                    @change="syncBatchPlan(row)"
+                  />
                 </div>
                 <div v-if="isDecoctionProcessType(row.processTypeId)" class="batch-field">
-                  <span class="batch-field-label required">袋数</span>
-                  <el-input-number v-model="row.bagCount" :min="1" :max="9999" :controls="false" />
+                  <span class="batch-field-label required">本批袋数</span>
+                  <el-input-number
+                    :model-value="batchBagCount(row)"
+                    :min="1"
+                    :max="9999"
+                    :controls="false"
+                    disabled
+                  />
                 </div>
                 <div class="batch-field batch-field-wide">
                   <span class="batch-field-label">服用方法</span>
@@ -1230,6 +1261,7 @@ import { getProcessingEquipment } from '@/api/processingEquipment';
 import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
 import { compressImageForUpload } from '@/utils/imageUpload';
+import { splitDoseBatches } from '@/utils/processingBatches';
 import {
   NOTIFY_STATUS,
   PAYMENT_STATUS,
@@ -2035,7 +2067,9 @@ const metadataOnlyEdit = computed(() =>
 const batchForm = reactive({
   prescriptionMode: 'existing',
   prescriptionId: null,
+  totalDose: 1,
   batchCount: 1,
+  bagsPerDose: 2,
   prescription: {
     storeId: null,
     customerName: '',
@@ -2118,13 +2152,29 @@ function isDecoctionProcessType(processTypeId) {
 function isDecoctionPlan(plan) {
   return plan?.processType?.code === PROCESS_TYPE_CODES.DECOCTION;
 }
+function batchBagCount(plan) {
+  if (!batchForm.plans.includes(plan)) return Number(plan?.bagCount || 0);
+  return Number(plan?.totalDose || 0) * Number(batchForm.bagsPerDose || 0);
+}
+function syncBatchPlan(plan) {
+  if (!isDecoctionProcessType(plan.processTypeId)) {
+    plan.bagCount = null;
+    plan.volumeMl = null;
+    return;
+  }
+  plan.bagCount = batchBagCount(plan);
+}
+function syncAllBatchBags() {
+  batchForm.plans.forEach((plan) => syncBatchPlan(plan));
+}
 function decoctionFields(plan) {
   if (!isDecoctionProcessType(plan.processTypeId)) return { bagCount: null, volumeMl: null };
   return { bagCount: Number(plan.bagCount), volumeMl: Number(plan.volumeMl) };
 }
 function validateDecoctionFields(plan, prefix = '') {
   if (!isDecoctionProcessType(plan.processTypeId)) return '';
-  if (!Number.isInteger(Number(plan.bagCount)) || Number(plan.bagCount) <= 0) {
+  const bagCount = batchBagCount(plan);
+  if (!Number.isInteger(Number(bagCount)) || Number(bagCount) <= 0) {
     return `${prefix}袋数必须为正整数`;
   }
   if (!Number.isInteger(Number(plan.volumeMl)) || Number(plan.volumeMl) <= 0) {
@@ -2156,7 +2206,9 @@ function resetBatchForm() {
   Object.assign(batchForm, {
     prescriptionMode: 'existing',
     prescriptionId: null,
+    totalDose: 1,
     batchCount: 1,
+    bagsPerDose: 2,
     prescription: {
       storeId: null,
       customerName: '',
@@ -2175,14 +2227,20 @@ function resetBatchForm() {
 function generateBatchPlans() {
   const count = Math.min(Math.max(Number(batchForm.batchCount) || 1, 1), 100);
   const firstPlan = batchForm.plans[0] || createBatchPlan(1);
+  const doseBatches = splitDoseBatches(batchForm.totalDose, count, todayText());
   batchForm.batchCount = count;
-  batchForm.plans = Array.from({ length: count }, (_item, index) =>
-    createBatchPlan(index + 1, batchForm.plans[index] || firstPlan)
-  );
+  batchForm.plans = doseBatches.map((doseBatch, index) => {
+    const plan = createBatchPlan(index + 1, batchForm.plans[index] || firstPlan);
+    plan.totalDose = doseBatch.totalDose;
+    plan.processDate = doseBatch.processDate;
+    plan.scheduleType = SCHEDULE_TYPES.DATE;
+    return plan;
+  });
+  syncAllBatchBags();
 }
 function addBatchPlan() {
-  batchForm.plans.push(createBatchPlan(batchForm.plans.length + 1, batchForm.plans.at(-1)));
-  batchForm.batchCount = batchForm.plans.length;
+  batchForm.batchCount = Math.min(batchForm.plans.length + 1, 100);
+  generateBatchPlans();
 }
 function removeBatchPlan(index) {
   if (batchForm.plans.length === 1) return;
@@ -2191,6 +2249,7 @@ function removeBatchPlan(index) {
     plan.batchNo = planIndex + 1;
   });
   batchForm.batchCount = batchForm.plans.length;
+  generateBatchPlans();
 }
 function copyPreviousBatch(index) {
   if (index <= 0) return ElMessage.warning('第一批没有上一批可复制');
@@ -2403,6 +2462,11 @@ async function saveBatchPlan() {
     if (!prescription.sourceId) return ElMessage.warning('请选择处方来源');
   }
   if (!batchForm.plans.length) return ElMessage.warning('请至少添加一个加工批次');
+  syncAllBatchBags();
+  const totalDose = batchForm.plans.reduce((sum, plan) => sum + Number(plan.totalDose || 0), 0);
+  if (totalDose !== Number(batchForm.totalDose)) {
+    return ElMessage.warning(`批次剂数合计必须等于 ${batchForm.totalDose} 剂`);
+  }
 
   const batchNos = new Set();
   for (const plan of batchForm.plans) {
@@ -2436,7 +2500,9 @@ async function saveBatchPlan() {
           : undefined,
       plans: batchForm.plans.map((plan) => ({
         ...plan,
-        ...decoctionFields(plan),
+        ...(isDecoctionProcessType(plan.processTypeId)
+          ? { bagCount: batchBagCount(plan), volumeMl: Number(plan.volumeMl) }
+          : { bagCount: null, volumeMl: null }),
         batchNo: Number(plan.batchNo),
         totalDose: Number(plan.totalDose),
         processDate: plan.scheduleType === SCHEDULE_TYPES.DATE ? plan.processDate : null
