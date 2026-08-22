@@ -79,7 +79,11 @@ namespace E6Sync.Services
                 if (string.IsNullOrWhiteSpace(config.Api.StoreCode)) errors.Add("API storeCode 未配置");
             }
             if (config.Sync == null) errors.Add("缺少 sync 配置");
-            else if (config.Sync.IntervalSeconds < 1) errors.Add("sync intervalSeconds 必须大于 0");
+            else
+            {
+                if (config.Sync.IntervalSeconds < 1) errors.Add("sync intervalSeconds 必须大于 0");
+                if (config.Sync.PharmacyIntervalSeconds < 1) errors.Add("sync pharmacyIntervalSeconds 必须大于 0");
+            }
             return errors;
         }
 
@@ -184,6 +188,8 @@ namespace E6Sync.Services
                 var autoSyncEnabledKey = FindKey(sync, "autoSyncEnabled") ?? "autoSyncEnabled";
                 sync[autoSyncEnabledKey] = config.Sync.AutoSyncEnabled;
                 sync[FindKey(sync, "pharmacySyncEnabled") ?? "pharmacySyncEnabled"] = config.Sync.PharmacySyncEnabled;
+                sync[FindKey(sync, "pharmacyIntervalSeconds") ?? "pharmacyIntervalSeconds"] = config.Sync.PharmacyIntervalSeconds;
+                sync[FindKey(sync, "lastPharmacySyncTime") ?? "lastPharmacySyncTime"] = config.Sync.LastPharmacySyncTime ?? "";
                 sync[FindKey(sync, "lastPharmacyProductModifiedAt") ?? "lastPharmacyProductModifiedAt"] = config.Sync.LastPharmacyProductModifiedAt ?? "";
                 sync[FindKey(sync, "lastPharmacyInventoryCursor") ?? "lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? "";
                 return serializer.Serialize(root);
@@ -226,7 +232,9 @@ namespace E6Sync.Services
                     ["autoSyncEnabled"] = config.Sync.AutoSyncEnabled,
                     ["pharmacySyncEnabled"] = config.Sync.PharmacySyncEnabled,
                     ["intervalSeconds"] = config.Sync.IntervalSeconds,
+                    ["pharmacyIntervalSeconds"] = config.Sync.PharmacyIntervalSeconds,
                     ["lastSyncTime"] = config.Sync.LastSyncTime ?? "",
+                    ["lastPharmacySyncTime"] = config.Sync.LastPharmacySyncTime ?? "",
                     ["lastPharmacyProductModifiedAt"] = config.Sync.LastPharmacyProductModifiedAt ?? "",
                     ["lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? ""
                 }
@@ -261,6 +269,7 @@ namespace E6Sync.Services
             if (config.Api == null) config.Api = new ApiConfig();
             if (config.Sync == null) config.Sync = new SyncConfig();
             if (config.Sync.IntervalSeconds < 1) config.Sync.IntervalSeconds = 60;
+            if (config.Sync.PharmacyIntervalSeconds < 1) config.Sync.PharmacyIntervalSeconds = 60;
         }
     }
 }

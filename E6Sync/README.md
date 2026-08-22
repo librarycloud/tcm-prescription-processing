@@ -54,6 +54,8 @@
     "autoSyncEnabled": true,
     "lastSyncTime": "",
     "pharmacySyncEnabled": false,
+    "pharmacyIntervalSeconds": 60,
+    "lastPharmacySyncTime": "",
     "lastPharmacyProductModifiedAt": "",
     "lastPharmacyInventoryCursor": ""
   }
@@ -62,11 +64,11 @@
 
 医生/药师映射由后端配置。E6Sync 会将 E6 的 `处方药师`原始值放入 API 的 `e6DoctorCode` 字段，由后端按其配置进行映射。若 E6 的 `处方药师`为空，请将 `defaultDoctorCode` 设置为服务端“E6医师映射”中已配置的编码（如 `D001`）；程序仅在原始值为空时使用该默认值。旧版 `config.json` 中若仍有 `doctorMappings`，程序会忽略它。
 
-SQL Server 2008 使用 Windows 身份验证：请将 `windowsAuthentication` 设为 `true`，并保持 `username` 和 `password` 为空。程序会以启动 `E6Sync.exe` 的 Windows 帐户连接 SQL Server；请先为该帐户授予目标数据库的只读权限。所有配置更新（自动同步保存 `lastSyncTime`）都会先写临时文件再替换原文件。不要把 API Key 提交到源代码库；程序日志也不会写入敏感值。
+SQL Server 2008 使用 Windows 身份验证：请将 `windowsAuthentication` 设为 `true`，并保持 `username` 和 `password` 为空。程序会以启动 `E6Sync.exe` 的 Windows 帐户连接 SQL Server；请先为该帐户授予目标数据库的只读权限。所有配置更新都会先写临时文件再替换原文件。不要把 API Key 提交到源代码库；程序日志也不会写入敏感值。
 
 ## 运行与测试
 
-启动程序后可分别点击“测试 SQL 连接”和“测试药店 SQL”。前者测试 `e6` 诊所库，后者测试 `pharmacyE6` 药店库；两者只打开和关闭 SQL 连接，不执行写操作。启用“启用药店同步”后，自动同步按商品 `修改日期` 和库存表 `_c_` 增量上传；手动同步会上传当天库存全量并清理服务器中已不存在的批次。库存请求不上传 `_c_`、日期和零售价。
+启动程序后可分别点击“测试 SQL 连接”和“测试药店 SQL”。前者测试 `e6` 诊所库，后者测试 `pharmacyE6` 药店库；两者只打开和关闭 SQL 连接，不执行写操作。诊所和药店分别有自动开关、同步间隔和手动按钮：诊所手动同步按日期上传处方，药店手动同步上传当天库存全量并清理服务器中已不存在的批次。药店自动同步按商品 `修改日期` 和库存表 `_c_` 增量上传。库存请求不上传 `_c_`、日期和零售价。
 
 API 文档未定义健康检查或测试接口，因此程序不会构造虚假订单测试 API。选择一段包含已知订单的日期，点击“开始同步”进行实际联调：
 
@@ -75,9 +77,9 @@ API 文档未定义健康检查或测试接口，因此程序不会构造虚假�
 3. 只有 HTTP `200` 且 JSON `code` 为 `0` 计为成功。`duplicate=true` 计为“重复”而不是失败。
 4. GUI 与当天的 `logs\\sync-yyyy-MM-dd.log` 会记录 API 导入状态：待确认、待映射、导入异常、已生成处方、已驳回、已取消、数据冲突或处理中。
 
-程序启动后自动定时器运行。首次 `lastSyncTime` 为空时，程序不会自动全量查询，只会提示先执行一次手动同步。手动同步整轮没有失败时，程序会将 `lastSyncTime` 更新为同步完成时刻；存在失败或任务取消时不会更新。正常自动同步会查询 `lastSyncTime - 2 分钟` 到当前时间；只有整轮没有失败，才会将 `lastSyncTime` 前移。失败后会在下一轮重新查询，API 的 `storeCode + externalOrderNo` 幂等规则可处理边界重复。
+程序启动后两套自动定时器独立运行。首次 `lastSyncTime` 为空时，诊所不会自动全量查询，需先执行诊所手动同步；首次 `lastPharmacySyncTime` 为空时，药店也需先执行药店手动同步。两套同步分别保存完成时间和增量游标，失败或任务取消时不会推进对应游标；诊所自动同步查询 `lastSyncTime - 2 分钟` 到当前时间，药店自动同步按商品 `修改日期` 和库存 `_c_` 增量查询。
 
-关闭主窗口会隐藏到系统托盘。主窗口的“启用自动同步”复选框和托盘菜单可随时暂停或恢复自动同步，设置会保存到 `sync.autoSyncEnabled`，下次启动仍然生效。托盘菜单提供“打开”“立即同步”“暂停自动同步”和“退出”。自动任务与手动任务由单一锁串行执行。
+关闭主窗口会隐藏到系统托盘。程序使用窗口模式运行，不再弹出独立命令提示符；所有运行日志直接显示在窗口并写入按天日志文件。主窗口和托盘菜单可分别暂停或恢复诊所、药店自动同步，设置会保存到 `sync.autoSyncEnabled`、`sync.pharmacySyncEnabled` 及各自间隔字段，下次启动仍然生效。两套同步可以独立运行。
 
 ## 已知字段边界
 

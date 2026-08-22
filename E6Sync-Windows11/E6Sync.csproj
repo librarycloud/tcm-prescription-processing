@@ -4,7 +4,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{0D3D5E0C-8B0D-4F7C-A1B6-BF22B8A0E6C1}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <RootNamespace>E6Sync</RootNamespace>
     <AssemblyName>E6Sync</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>

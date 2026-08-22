@@ -39,7 +39,9 @@ namespace E6Sync.Models
         public bool AutoSyncEnabled { get; set; } = true;
         public bool PharmacySyncEnabled { get; set; } = false;
         public int IntervalSeconds { get; set; } = 60;
+        public int PharmacyIntervalSeconds { get; set; } = 60;
         public string LastSyncTime { get; set; } = "";
+        public string LastPharmacySyncTime { get; set; } = "";
         public string LastPharmacyProductModifiedAt { get; set; } = "";
         public string LastPharmacyInventoryCursor { get; set; } = "";
     }

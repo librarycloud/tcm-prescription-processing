@@ -23,7 +23,9 @@
     "autoSyncEnabled": true,
     "pharmacySyncEnabled": false,
     "intervalSeconds": 60,
+    "pharmacyIntervalSeconds": 60,
     "lastSyncTime": "",
+    "lastPharmacySyncTime": "",
     "lastPharmacyProductModifiedAt": "",
     "lastPharmacyInventoryCursor": ""
   }

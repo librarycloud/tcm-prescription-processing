@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using E6Sync.Models;
@@ -30,7 +29,9 @@ namespace E6Sync.Services
         private readonly E6DatabaseService database;
         private readonly ApiService api;
         private readonly LogService log;
-        private readonly SemaphoreSlim gate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim clinicGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim pharmacyGate = new SemaphoreSlim(1, 1);
+        private readonly object configSaveLock = new object();
 
         public event Action<SyncProgress> ProgressChanged;
 
@@ -43,58 +44,94 @@ namespace E6Sync.Services
             this.log = log;
         }
 
-        public bool IsBusy { get; private set; }
+        public bool IsClinicBusy { get; private set; }
+        public bool IsPharmacyBusy { get; private set; }
+        public bool IsBusy { get { return IsClinicBusy || IsPharmacyBusy; } }
 
         public async Task<SyncStats> RunAutomaticAsync(CancellationToken cancellationToken)
         {
             DateTimeOffset last;
             if (string.IsNullOrWhiteSpace(config.Sync.LastSyncTime) || !DateTimeOffset.TryParse(config.Sync.LastSyncTime, out last))
             {
-                log.Warn("lastSyncTime 为空或无效，请先在 GUI 执行一次手动同步");
+                log.Warn("诊所 lastSyncTime 为空或无效，请先执行诊所手动同步");
                 return new SyncStats();
             }
             var start = last.LocalDateTime.AddMinutes(-2);
             var end = DateTime.Now;
-            log.Info(string.Format("开始自动同步：{0:yyyy-MM-dd HH:mm:ss} 至 {1:yyyy-MM-dd HH:mm:ss}", start, end));
-            var stats = await RunAsync(start, end, true, cancellationToken).ConfigureAwait(false);
+            log.Info(string.Format("开始诊所自动同步：{0:yyyy-MM-dd HH:mm:ss} 至 {1:yyyy-MM-dd HH:mm:ss}", start, end));
+            var stats = await RunClinicAsync(start, end, true, cancellationToken).ConfigureAwait(false);
             if (stats.FailureCount == 0 && !cancellationToken.IsCancellationRequested)
             {
                 config.Sync.LastSyncTime = new DateTimeOffset(end).ToString("o");
-                configService.Save(config);
-                log.Info("本轮自动同步全部处理完成，已更新 lastSyncTime");
+                SaveConfig();
+                log.Info("诊所自动同步完成，已更新 lastSyncTime");
             }
-            else log.Warn("本轮自动同步存在失败，未推进 lastSyncTime");
+            else log.Warn("诊所自动同步存在失败，未推进 lastSyncTime");
             return stats;
         }
 
         public async Task<SyncStats> RunManualAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken)
         {
             var endExclusive = endDate.Date.AddDays(1);
-            log.Info(string.Format("开始手动同步：{0:yyyy-MM-dd} 至 {1:yyyy-MM-dd}", startDate.Date, endDate.Date));
-            var stats = await RunAsync(startDate.Date, endExclusive, false, cancellationToken).ConfigureAwait(false);
+            log.Info(string.Format("开始诊所手动同步：{0:yyyy-MM-dd} 至 {1:yyyy-MM-dd}", startDate.Date, endDate.Date));
+            var stats = await RunClinicAsync(startDate.Date, endExclusive, false, cancellationToken).ConfigureAwait(false);
             if (stats.FailureCount == 0 && !cancellationToken.IsCancellationRequested)
             {
                 config.Sync.LastSyncTime = new DateTimeOffset(DateTime.Now).ToString("o");
-                configService.Save(config);
-                log.Info("本轮手动同步全部处理完成，已更新 lastSyncTime");
+                SaveConfig();
+                log.Info("诊所手动同步完成，已更新 lastSyncTime");
             }
-            else log.Warn("本轮手动同步存在失败，未推进 lastSyncTime");
+            else log.Warn("诊所手动同步存在失败，未推进 lastSyncTime");
             return stats;
         }
 
-        private async Task<SyncStats> RunAsync(DateTime start, DateTime end, bool automatic, CancellationToken cancellationToken)
+        public async Task<SyncStats> RunPharmacyAutomaticAsync(CancellationToken cancellationToken)
         {
-            if (!await gate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            DateTimeOffset last;
+            if (string.IsNullOrWhiteSpace(config.Sync.LastPharmacySyncTime) || !DateTimeOffset.TryParse(config.Sync.LastPharmacySyncTime, out last))
             {
-                log.Warn("已有同步任务正在执行，本次请求跳过");
+                log.Warn("药店 lastPharmacySyncTime 为空或无效，请先执行药店手动同步");
                 return new SyncStats();
             }
-            IsBusy = true;
+            log.Info("开始药店自动同步（按修改日期和 _c_ 增量）");
+            var stats = await RunPharmacyAsync(false, cancellationToken).ConfigureAwait(false);
+            if (stats.FailureCount == 0 && !cancellationToken.IsCancellationRequested)
+            {
+                config.Sync.LastPharmacySyncTime = new DateTimeOffset(DateTime.Now).ToString("o");
+                SaveConfig();
+                log.Info("药店自动同步完成，已更新 lastPharmacySyncTime");
+            }
+            else log.Warn("药店自动同步存在失败，未推进 lastPharmacySyncTime");
+            return stats;
+        }
+
+        public async Task<SyncStats> RunPharmacyManualAsync(CancellationToken cancellationToken)
+        {
+            log.Info("开始药店手动同步：当天库存全量");
+            var stats = await RunPharmacyAsync(true, cancellationToken).ConfigureAwait(false);
+            if (stats.FailureCount == 0 && !cancellationToken.IsCancellationRequested)
+            {
+                config.Sync.LastPharmacySyncTime = new DateTimeOffset(DateTime.Now).ToString("o");
+                SaveConfig();
+                log.Info("药店手动同步完成，已更新 lastPharmacySyncTime");
+            }
+            else log.Warn("药店手动同步存在失败，未推进 lastPharmacySyncTime");
+            return stats;
+        }
+
+        private async Task<SyncStats> RunClinicAsync(DateTime start, DateTime end, bool automatic, CancellationToken cancellationToken)
+        {
+            if (!await clinicGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                log.Warn("已有诊所同步任务正在执行，本次请求跳过");
+                return new SyncStats();
+            }
+            IsClinicBusy = true;
             try
             {
                 var orders = await Task.Run(() => database.QueryOrders(start, end), cancellationToken).ConfigureAwait(false);
                 var stats = new SyncStats { QueryCount = orders.Count };
-                log.Info("查询到 " + orders.Count + " 条");
+                log.Info("诊所查询到 " + orders.Count + " 条");
                 var current = 0;
                 foreach (var order in orders)
                 {
@@ -103,40 +140,65 @@ namespace E6Sync.Services
                     var resultText = await ProcessOrderAsync(order, stats, cancellationToken).ConfigureAwait(false);
                     RaiseProgress(new SyncProgress { Order = order, Current = current, Total = orders.Count, Result = resultText, Stats = stats });
                 }
-                if (config.Sync.PharmacySyncEnabled)
-                {
-                    try { await SyncPharmacyAsync(!automatic, cancellationToken).ConfigureAwait(false); }
-                    catch (Exception ex) { stats.FailureCount++; log.Error("药店商品库存同步失败：" + ex.Message); }
-                }
-                log.Info(string.Format("{0}同步完成：查询 {1}，成功 {2}，重复 {3}，失败 {4}", automatic ? "自动" : "手动", stats.QueryCount, stats.SuccessCount, stats.DuplicateCount, stats.FailureCount));
+                log.Info(string.Format("诊所{0}同步完成：查询 {1}，成功 {2}，重复 {3}，失败 {4}", automatic ? "自动" : "手动", stats.QueryCount, stats.SuccessCount, stats.DuplicateCount, stats.FailureCount));
                 return stats;
             }
             finally
             {
-                IsBusy = false;
-                gate.Release();
+                IsClinicBusy = false;
+                clinicGate.Release();
             }
         }
 
-        private async Task SyncPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
+        private async Task<SyncStats> RunPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
         {
+            if (!await pharmacyGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                log.Warn("已有药店同步任务正在执行，本次请求跳过");
+                return new SyncStats();
+            }
+            IsPharmacyBusy = true;
+            try
+            {
+                return await SyncPharmacyAsync(fullSync, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                log.Error("药店商品库存同步失败：" + ex.Message);
+                return new SyncStats { FailureCount = 1 };
+            }
+            finally
+            {
+                IsPharmacyBusy = false;
+                pharmacyGate.Release();
+            }
+        }
+
+        private async Task<SyncStats> SyncPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
+        {
+            var stats = new SyncStats();
             DateTime? modifiedAfter = null;
             DateTime parsed;
             if (!fullSync && DateTime.TryParse(config.Sync.LastPharmacyProductModifiedAt, out parsed)) modifiedAfter = parsed;
             var products = await Task.Run(() => database.QueryPharmacyProducts(modifiedAfter), cancellationToken).ConfigureAwait(false);
+            stats.QueryCount += products.Count;
             if (products.Count > 0)
             {
                 var productResult = await api.SendPharmacyProductsAsync(products, cancellationToken).ConfigureAwait(false);
                 if (!productResult.Success) throw new InvalidOperationException(productResult.Message);
+                stats.SuccessCount++;
                 var latest = products[products.Count - 1].e6ModifiedAt;
                 if (!string.IsNullOrWhiteSpace(latest)) config.Sync.LastPharmacyProductModifiedAt = latest;
             }
             var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor), cancellationToken).ConfigureAwait(false);
+            stats.QueryCount += snapshot.Batches.Count;
             var inventoryResult = await api.SendPharmacyInventoryAsync(snapshot.Batches, fullSync, cancellationToken).ConfigureAwait(false);
             if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
+            stats.SuccessCount++;
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
-            configService.Save(config);
+            SaveConfig();
             log.Info(string.Format("药店同步完成：商品 {0}，库存批次 {1}{2}", products.Count, snapshot.Batches.Count, fullSync ? "（今日全量）" : "（增量）"));
+            return stats;
         }
 
         private async Task<string> ProcessOrderAsync(E6Order order, SyncStats stats, CancellationToken cancellationToken)
@@ -147,7 +209,6 @@ namespace E6Sync.Services
                 log.Error("单据 " + order.ExternalOrderNo + " 同步失败：" + order.ValidationError);
                 return "失败：" + order.ValidationError;
             }
-            // 优先传递 E6 原始医师值；空值时以配置的 E6 编码作为后端映射键。
             var doctorCode = string.IsNullOrWhiteSpace(order.DoctorName)
                 ? (config.E6.DefaultDoctorCode ?? "").Trim()
                 : order.DoctorName.Trim();
@@ -159,7 +220,6 @@ namespace E6Sync.Services
                 else log.Error("单据 " + order.ExternalOrderNo + " 同步失败：" + result.Message);
                 return "失败：" + result.Message;
             }
-
             if (result.Duplicate)
             {
                 stats.DuplicateCount++;
@@ -170,9 +230,13 @@ namespace E6Sync.Services
                 stats.SuccessCount++;
                 log.Info("单据 " + order.ExternalOrderNo + " 同步成功");
             }
-            if (result.BusinessStatus.HasValue)
-                log.Info("单据 " + order.ExternalOrderNo + " API 状态：" + DescribeStatus(result.BusinessStatus.Value));
+            if (result.BusinessStatus.HasValue) log.Info("单据 " + order.ExternalOrderNo + " API 状态：" + DescribeStatus(result.BusinessStatus.Value));
             return result.Duplicate ? "重复" : "成功";
+        }
+
+        private void SaveConfig()
+        {
+            lock (configSaveLock) configService.Save(config);
         }
 
         private void RaiseProgress(SyncProgress progress)
