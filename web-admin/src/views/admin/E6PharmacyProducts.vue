@@ -35,9 +35,17 @@
     </el-card>
 
     <el-card shadow="never">
-      <el-table v-loading="loading" :data="list" row-key="id" border table-layout="auto">
+      <el-table
+        ref="tableRef"
+        v-loading="loading"
+        :data="list"
+        row-key="id"
+        border
+        table-layout="auto"
+        @row-click="toggleRow"
+      >
         <template #empty><EmptyView description="暂无 E6 药店库存" /></template>
-        <el-table-column type="expand" width="48">
+        <el-table-column type="expand" width="1">
           <template #default="{ row }">
             <div class="batch-panel">
               <div class="batch-title">批号库存（{{ row.batchCount }}）</div>
@@ -70,27 +78,29 @@
           <template #default="{ row }">{{ row.store?.name || '-' }}</template>
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
-        <el-table-column prop="name" label="商品名称" min-width="180" />
+        <el-table-column label="商品名称" min-width="150">
+          <template #default="{ row }"><TextWithTooltip :value="row.name" /></template>
+        </el-table-column>
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="barcode" label="条形码" min-width="140">
-          <template #default="{ row }">{{ row.barcode || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="specification" label="规格" min-width="140">
-          <template #default="{ row }">{{ row.specification || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="dosageForm" label="剂型" min-width="100">
-          <template #default="{ row }">{{ row.dosageForm || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="manufacturer" label="生产厂商" min-width="180">
-          <template #default="{ row }">{{ row.manufacturer || '-' }}</template>
         </el-table-column>
         <el-table-column label="批号数" width="90" align="center">
           <template #default="{ row }">{{ row.batchCount }}</template>
         </el-table-column>
         <el-table-column label="总库存" width="110" align="right">
           <template #default="{ row }">{{ quantityText(row.totalQuantity) }}</template>
+        </el-table-column>
+        <el-table-column prop="barcode" label="条形码" min-width="140">
+          <template #default="{ row }">{{ row.barcode || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="规格" min-width="120">
+          <template #default="{ row }"><TextWithTooltip :value="row.specification" /></template>
+        </el-table-column>
+        <el-table-column prop="dosageForm" label="剂型" min-width="100">
+          <template #default="{ row }">{{ row.dosageForm || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="生产厂商" min-width="150">
+          <template #default="{ row }"><TextWithTooltip :value="row.manufacturer" /></template>
         </el-table-column>
         <el-table-column label="E6修改时间" min-width="170">
           <template #default="{ row }">{{ dateTimeText(row.e6ModifiedAt) }}</template>
@@ -114,7 +124,13 @@ import Pagination from '@/components/Pagination.vue';
 import { getProductStores } from '@/api/productDifference';
 import { getE6PharmacyProducts } from '@/api/e6Pharmacy';
 
+const TextWithTooltip = {
+  props: { value: { type: String, default: '' } },
+  template: `<el-tooltip v-if="value && value.length > 12" :content="value" placement="top"><span>{{ value.slice(0, 12) }}…</span></el-tooltip><span v-else>{{ value || '-' }}</span>`
+};
+
 const userStore = useUserStore();
+const tableRef = ref();
 const loading = ref(false);
 const list = ref([]);
 const stores = ref([]);
@@ -173,6 +189,10 @@ function resetSearch() {
   load();
 }
 
+function toggleRow(row) {
+  tableRef.value?.toggleRowExpansion(row);
+}
+
 watch(() => [pagination.page, pagination.pageSize], load);
 
 onMounted(async () => {
@@ -182,6 +202,35 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.search-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.search-form :deep(.el-input) {
+  width: 280px;
+}
+
+.search-form :deep(.el-select) {
+  width: 150px;
+}
+
+.e6-pharmacy-page :deep(.el-table__expand-column) {
+  width: 0 !important;
+  padding: 0 !important;
+}
+
+.e6-pharmacy-page :deep(.el-table__expand-column .cell),
+.e6-pharmacy-page :deep(.el-table__expand-icon) {
+  display: none;
+}
+
+.e6-pharmacy-page :deep(.el-table .cell) {
+  min-width: 0;
+}
+
 .batch-panel {
   padding: 4px 18px 12px 52px;
 }
@@ -192,6 +241,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
+  .search-form :deep(.el-input),
+  .search-form :deep(.el-select) {
+    width: 100%;
+  }
+
   .batch-panel {
     padding-left: 8px;
     padding-right: 8px;
