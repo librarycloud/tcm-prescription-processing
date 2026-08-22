@@ -28,6 +28,10 @@ const CONVERTIBLE_STATUSES = [
   E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED,
   E6_IMPORT_STATUS.IMPORT_ERROR,
 ];
+const RECONVERTIBLE_STATUSES = [
+  ...CONVERTIBLE_STATUSES,
+  E6_IMPORT_STATUS.IMPORT_CONVERTED,
+];
 
 function clean(value, max, label, required = true) {
   const result = String(value ?? "").trim();
@@ -763,7 +767,7 @@ function importInclude(includeRaw = false) {
         doctor: { select: { id: true, name: true } },
       },
     },
-    processingPlan: { select: { id: true, status: true } },
+    processingPlan: { select: { id: true, status: true, deletedAt: true } },
     ...(includeRaw ? {} : {}),
   };
 }
@@ -891,17 +895,22 @@ function conversionError(message, status, code) {
 
 export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
   const current = await findScopedImport(prisma, actor, idValue);
-  if (current.prescriptionId || current.status === E6_IMPORT_STATUS.IMPORT_CONVERTED)
+  const canRegeneratePlan = Boolean(
+    current.prescriptionId &&
+      (!current.processingPlanId || current.processingPlan?.deletedAt),
+  );
+  if (current.prescriptionId && !canRegeneratePlan)
     throw new AppError("该E6订单已生成处方", 409);
-  if (!CONVERTIBLE_STATUSES.includes(current.status))
+  if (!RECONVERTIBLE_STATUSES.includes(current.status))
     throw new AppError("当前导入状态不能确认", 409);
   try {
     const result = await prisma.$transaction(async (tx) => {
       const claimed = await tx.e6Import.updateMany({
         where: {
           id: current.id,
-          prescriptionId: null,
-          status: { in: CONVERTIBLE_STATUSES },
+          prescriptionId: current.prescriptionId || null,
+          processingPlanId: current.processingPlanId || null,
+          status: { in: RECONVERTIBLE_STATUSES },
         },
         data: {
           status: E6_IMPORT_STATUS.IMPORT_PROCESSING,
@@ -923,46 +932,60 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
         payload.doctorId === undefined || payload.doctorId === null || payload.doctorId === ""
           ? null
           : positiveInteger(payload.doctorId, "医生");
-      const mapping = selectedDoctorId
-        ? null
-        : await activeDoctorMapping(tx, item.storeId, item.e6DoctorCode);
-      const doctorId = selectedDoctorId ?? mapping?.doctorId;
-      if (!doctorId) {
-        throw conversionError(
-          "请先配置该门店的E6医师映射，或在确认时选择系统医生",
-          E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED,
-          E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
+      let prescription;
+      if (item.prescriptionId) {
+        prescription = await tx.prescription.findFirst({
+          where: { id: item.prescriptionId, storeId: item.storeId, deletedAt: null },
+          include: { doctor: { select: { id: true, name: true } } },
+        });
+        if (!prescription)
+          throw conversionError(
+            "原处方不存在，无法重新生成加工计划",
+            E6_IMPORT_STATUS.IMPORT_ERROR,
+            E6_ERROR_CODE.CONVERSION_FAILED,
+          );
+      } else {
+        const mapping = selectedDoctorId
+          ? null
+          : await activeDoctorMapping(tx, item.storeId, item.e6DoctorCode);
+        const doctorId = selectedDoctorId ?? mapping?.doctorId;
+        if (!doctorId) {
+          throw conversionError(
+            "请先配置该门店的E6医师映射，或在确认时选择系统医生",
+            E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED,
+            E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
+          );
+        }
+        const source = await tx.dictionary.findFirst({
+          where: {
+            type: DICTIONARY_TYPES.PRESCRIPTION_SOURCE,
+            code: E6_SOURCE_CODE,
+            status: RECORD_STATUS.ENABLED,
+            deletedAt: null,
+          },
+        });
+        if (!source)
+          throw conversionError(
+            "E6处方来源字典不存在或已停用",
+            E6_IMPORT_STATUS.IMPORT_ERROR,
+            E6_ERROR_CODE.CONVERSION_FAILED,
+          );
+        prescription = await createPrescriptionRecord(
+          tx,
+          actor,
+          {
+            customerName,
+            allowEmptyCustomerName: true,
+            phone,
+            doctorId,
+            sourceId: source.id,
+            storeId: item.storeId,
+            totalPrice: item.totalPrice,
+            remark: item.remark,
+          },
+          { description: `确认E6订单 ${item.externalOrderNo} 并生成处方` },
         );
       }
-      const source = await tx.dictionary.findFirst({
-        where: {
-          type: DICTIONARY_TYPES.PRESCRIPTION_SOURCE,
-          code: E6_SOURCE_CODE,
-          status: RECORD_STATUS.ENABLED,
-          deletedAt: null,
-        },
-      });
-      if (!source)
-        throw conversionError(
-          "E6处方来源字典不存在或已停用",
-          E6_IMPORT_STATUS.IMPORT_ERROR,
-          E6_ERROR_CODE.CONVERSION_FAILED,
-        );
-      const prescription = await createPrescriptionRecord(
-        tx,
-        actor,
-        {
-          customerName,
-          allowEmptyCustomerName: true,
-          phone,
-          doctorId,
-          sourceId: source.id,
-          storeId: item.storeId,
-          totalPrice: item.totalPrice,
-          remark: item.remark,
-        },
-        { description: `确认E6订单 ${item.externalOrderNo} 并生成处方` },
-      );
       const pickupMethod = Number(payload.pickupMethod);
       if (!PICKUP_METHOD_VALUES.includes(pickupMethod))
         throw new AppError("请选择取货方式", 400);
@@ -1021,7 +1044,11 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
     const errorCode = error.e6ErrorCode ?? E6_ERROR_CODE.CONVERSION_FAILED;
     const message = String(error.message || "E6导入转换失败").slice(0, 500);
     const failed = await prisma.e6Import.updateMany({
-      where: { id: current.id, prescriptionId: null, status: { in: CONVERTIBLE_STATUSES } },
+      where: {
+        id: current.id,
+        prescriptionId: current.prescriptionId || null,
+        status: { in: RECONVERTIBLE_STATUSES },
+      },
       data: { status, errorCode, errorMessage: message },
     });
     if (failed.count) {

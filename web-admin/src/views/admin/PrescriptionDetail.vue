@@ -296,6 +296,34 @@
       </el-table>
     </el-card>
 
+    <el-card v-if="e6Imports.length" shadow="never" class="e6-detail-card">
+      <template #header><span>E6导入处方明细</span></template>
+      <div v-for="item in e6Imports" :key="item.id" class="e6-import-block">
+        <div class="e6-import-summary">
+          <span>订单号：{{ item.externalOrderNo || '-' }}</span>
+          <span>操作员：{{ item.cashierName || '-' }}</span>
+          <span>订单时间：{{ formatDate(item.sourceCreatedAt) }}</span>
+          <span>总价：{{ item.totalPrice == null ? '-' : `¥${Number(item.totalPrice).toFixed(2)}` }}</span>
+          <el-tag :type="Number(item.isPaid) === 1 ? 'success' : 'warning'" effect="plain">
+            {{ Number(item.isPaid) === 1 ? '已付款' : '未付款' }}
+          </el-tag>
+        </div>
+        <el-table :data="e6ImportItems(item)" border size="small">
+          <template #empty><el-empty description="暂无处方明细" :image-size="52" /></template>
+          <el-table-column prop="sequence" label="顺序" width="80" />
+          <el-table-column prop="name" label="商品名称" />
+          <el-table-column prop="doseCount" label="剂数" width="80" />
+          <el-table-column label="单剂量">
+            <template #default="{ row }">{{ row.quantity || '-' }}{{ row.unit || '' }}</template>
+          </el-table-column>
+          <el-table-column label="总量">
+            <template #default="{ row }">{{ row.totalQuantity || '-' }}{{ row.unit || '' }}</template>
+          </el-table-column>
+        </el-table>
+        <div v-if="item.remark" class="e6-import-remark">备注：{{ item.remark }}</div>
+      </div>
+    </el-card>
+
     <el-dialog
       v-model="planVisible"
       :title="editingPlanId ? '编辑加工批次' : '新增加工批次'"
@@ -530,6 +558,7 @@ const notifyTypes = ref([]);
 const planForm = reactive({});
 const plans = computed(() => prescription.value?.plans || []);
 const pickupRecords = computed(() => plans.value.filter((plan) => plan.package));
+const e6Imports = computed(() => prescription.value?.e6Imports || []);
 const planFormIsDecoction = computed(() => isDecoctionProcessType(planForm.processTypeId));
 const planMetadataOnlyEdit = computed(() =>
   [PROCESSING_STATUS.FINISHED, PROCESSING_STATUS.READY_PICKUP].includes(planForm.status)
@@ -562,6 +591,21 @@ function todayText() {
 
 function dayText(value) {
   return value ? String(value).slice(0, 10) : '-';
+}
+
+function e6ImportItems(item) {
+  let payload = item?.rawPayload;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = null;
+    }
+  }
+  const items = payload?.items;
+  return Array.isArray(items)
+    ? [...items].sort((left, right) => Number(left.sequence) - Number(right.sequence))
+    : [];
 }
 
 function prescriptionStatusText(status) {
@@ -1009,6 +1053,32 @@ onBeforeUnmount(() => {
   margin-left: 0;
   padding-right: 2px;
   padding-left: 2px;
+}
+
+.e6-detail-card {
+  margin-bottom: 20px;
+}
+
+.e6-import-block + .e6-import-block {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.e6-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-bottom: 12px;
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.e6-import-remark {
+  margin-top: 10px;
+  color: var(--app-muted);
+  font-size: 13px;
 }
 
 @media (max-width: 768px) {

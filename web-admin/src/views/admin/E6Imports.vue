@@ -110,7 +110,7 @@
               type="warning"
               effect="plain"
               @click="openConfirm(row)"
-              >待确认</el-tag
+              >{{ isPlanRegeneration(row) ? '重新生成加工计划' : Number(row.status) === E6_IMPORT_STATUS.IMPORT_CONVERTED ? '重新生成' : '待确认' }}</el-tag
             >
             <el-tag v-else :type="statusMeta(row.status).type" effect="plain">{{ statusMeta(row.status).label }}</el-tag>
           </template>
@@ -466,10 +466,21 @@ function todayText() {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 function canConfirm(row) {
-  return [0, 1, 2].includes(Number(row.status)) && !row.prescriptionId;
+  return (
+    ([0, 1, 2].includes(Number(row.status)) && !row.prescriptionId) ||
+    (Number(row.status) === E6_IMPORT_STATUS.IMPORT_CONVERTED &&
+      (!row.prescriptionId || !row.processingPlanId || row.processingPlan?.deletedAt))
+  );
+}
+function isPlanRegeneration(row) {
+  return (
+    Number(row.status) === E6_IMPORT_STATUS.IMPORT_CONVERTED &&
+    Boolean(row.prescriptionId) &&
+    (!row.processingPlanId || row.processingPlan?.deletedAt)
+  );
 }
 function canMerge(row) {
-  return canConfirm(row);
+  return [0, 1, 2].includes(Number(row.status)) && !row.prescriptionId;
 }
 function handleSelectionChange(rows) {
   selectedRows.value = rows;

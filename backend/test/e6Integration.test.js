@@ -265,7 +265,13 @@ function confirmFixture({ mapped = true } = {}) {
       findFirst: async () => ({ ...state.import }),
       findUnique: async () => ({ ...state.import }),
       updateMany: async ({ where, data }) => {
-        if (state.import.prescriptionId || !where.status.in.includes(state.import.status))
+        if (
+          (where.prescriptionId === null && state.import.prescriptionId !== null) ||
+          (where.prescriptionId !== null && state.import.prescriptionId !== where.prescriptionId) ||
+          (where.processingPlanId === null && state.import.processingPlanId !== null) ||
+          (where.processingPlanId !== null && state.import.processingPlanId !== where.processingPlanId) ||
+          !where.status.in.includes(state.import.status)
+        )
           return { count: 0 };
         Object.assign(state.import, data);
         return { count: 1 };
@@ -324,12 +330,22 @@ function confirmFixture({ mapped = true } = {}) {
         };
         return { ...state.prescription };
       },
-      findFirst: async () => ({ id: 100, storeId: 3, status: 0 }),
+      findFirst: async () => state.prescription || { id: 100, storeId: 3, status: 0 },
     },
     processingPlan: {
-      findFirst: async () => null,
+      findFirst: async () => state.plan && {
+        id: state.plan.id,
+        deletedAt: state.plan.deletedAt,
+        pickupCode: state.plan.pickupCode,
+        planCode: state.plan.planCode,
+        scanToken: state.plan.scanToken,
+      },
       count: async () => 0,
       updateMany: async () => ({ count: 0 }),
+      update: async ({ data }) => {
+        Object.assign(state.plan, data);
+        return { ...state.plan };
+      },
       create: async ({ data }) => {
         state.plan = {
           id: 200,
@@ -368,6 +384,58 @@ test("confirming an E6 import creates one prescription and one waiting plan", as
   assert.equal(state.plan.status, 0);
   assert.match(state.plan.pickupCode, /^\d{6}$/);
   assert.equal(state.plan.expressAddress, "苏州市测试路 1 号");
+});
+
+test("an E6 import can be regenerated after its prescription was deleted", async () => {
+  const { prisma, state } = confirmFixture();
+  state.import.status = E6_IMPORT_STATUS.IMPORT_CONVERTED;
+  state.import.prescriptionId = null;
+  state.import.processingPlanId = null;
+
+  const result = await confirmE6Import(prisma, storeAdmin, 81, {
+    processTypeId: 20,
+    scheduleType: 1,
+    processDate: "2026-07-27",
+    pickupMethod: 0,
+  });
+
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_CONVERTED);
+  assert.equal(result.prescriptionId, 100);
+  assert.equal(result.processingPlanId, 200);
+});
+
+test("an E6 import can regenerate a processing plan after the plan was deleted", async () => {
+  const { prisma, state } = confirmFixture();
+  state.import.status = E6_IMPORT_STATUS.IMPORT_CONVERTED;
+  state.import.prescriptionId = 100;
+  state.import.processingPlanId = 200;
+  state.prescription = {
+    id: 100,
+    storeId: 3,
+    status: 0,
+    doctor: { id: 9, name: "李医生" },
+  };
+  state.plan = {
+    id: 200,
+    deletedAt: new Date("2026-07-27T08:00:00Z"),
+    pickupCode: "123456",
+    planCode: "P-200",
+    scanToken: "scan-200",
+  };
+  state.import.processingPlan = state.plan;
+
+  const result = await confirmE6Import(prisma, storeAdmin, 81, {
+    processTypeId: 20,
+    scheduleType: 1,
+    processDate: "2026-07-27",
+    pickupMethod: 0,
+  });
+
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_CONVERTED);
+  assert.equal(result.prescriptionId, 100);
+  assert.equal(result.processingPlanId, 200);
+  assert.equal(state.plan.deletedAt, null);
+  assert.equal(state.plan.status, 0);
 });
 
 test("confirming an E6 import applies the reviewed customer, doctor, and dose", async () => {

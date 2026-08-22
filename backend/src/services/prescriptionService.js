@@ -63,7 +63,7 @@ function decimalOrNull(value, label) {
   return normalized;
 }
 
-function include() {
+function include({ withE6Imports = false } = {}) {
   return {
     doctor: true,
     source: true,
@@ -75,6 +75,26 @@ function include() {
       include: { processType: true, package: true },
       orderBy: [{ batchNo: "asc" }, { createdAt: "asc" }],
     },
+    ...(withE6Imports
+      ? {
+          e6Imports: {
+            select: {
+              id: true,
+              externalOrderNo: true,
+              cashierName: true,
+              totalPrice: true,
+              doseCount: true,
+              isPaid: true,
+              remark: true,
+              rawPayload: true,
+              sourceCreatedAt: true,
+              sourceUpdatedAt: true,
+              createdAt: true,
+            },
+            orderBy: [{ sourceCreatedAt: "desc" }, { id: "desc" }],
+          },
+        }
+      : {}),
   };
 }
 
@@ -201,7 +221,7 @@ export async function listPrescriptions(prisma, actor, query) {
 export async function getPrescription(prisma, actor, idValue) {
   const item = await prescriptionRepository.findFirst(prisma, {
     where: { id: Number(idValue), ...scope(actor) },
-    include: include(),
+    include: include({ withE6Imports: true }),
   });
   if (!item) throw new AppError("处方不存在", 404);
   return withTotals(item);
