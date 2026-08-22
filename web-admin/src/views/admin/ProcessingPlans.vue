@@ -595,10 +595,12 @@
       </template>
     </el-dialog>
 
-    <el-dialog
+    <el-drawer
       v-model="formVisible"
       :title="editingId ? '编辑加工计划' : '新建加工任务'"
-      width="min(1080px, 96vw)"
+      direction="rtl"
+      size="min(1180px, 96vw)"
+      destroy-on-close
     >
       <el-form v-if="editingId" :model="form" label-width="100px">
         <el-form-item label="处方" required>
@@ -891,15 +893,6 @@
                   :controls="false"
                   @change="generateBatchPlans"
                 />
-                <span class="batch-count-label">每剂袋数</span>
-                <el-input-number
-                  v-model="batchForm.bagsPerDose"
-                  :min="1"
-                  :max="9999"
-                  size="small"
-                  :controls="false"
-                  @change="syncAllBatchBags"
-                />
                 <el-button size="small" @click="generateBatchPlans">生成批次</el-button>
                 <el-button size="small" type="primary" plain :icon="Plus" @click="addBatchPlan">
                   添加批次
@@ -907,6 +900,78 @@
               </div>
             </div>
           </template>
+          <div class="batch-unified-settings">
+            <div class="batch-unified-grid">
+              <div class="batch-field">
+                <span class="batch-field-label required">加工方式</span>
+                <el-select
+                  v-model="batchForm.processTypeId"
+                  placeholder="请选择"
+                  @change="syncBatchSettings"
+                >
+                  <el-option
+                    v-for="item in processTypes"
+                    :key="item.id"
+                    :label="item.name"
+                    :value="item.id"
+                  />
+                </el-select>
+              </div>
+              <div class="batch-field">
+                <span class="batch-field-label required">取货方式</span>
+                <el-select
+                  v-model="batchForm.pickupMethod"
+                  placeholder="请选择取货方式"
+                  @change="syncBatchSettings"
+                >
+                  <el-option
+                    v-for="item in PICKUP_METHOD_OPTIONS"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+              </div>
+              <div v-if="batchFormIsDecoction" class="batch-field">
+                <span class="batch-field-label required">每剂袋数</span>
+                <el-input-number
+                  v-model="batchForm.bagsPerDose"
+                  :min="1"
+                  :max="9999"
+                  :controls="false"
+                  @change="syncAllBatchBags"
+                />
+              </div>
+              <div v-if="batchFormIsDecoction" class="batch-field">
+                <span class="batch-field-label required">每袋毫升</span>
+                <el-input-number
+                  v-model="batchForm.volumeMl"
+                  :min="1"
+                  :max="99999"
+                  :controls="false"
+                  @change="syncBatchSettings"
+                />
+              </div>
+            </div>
+            <div class="batch-unified-grid batch-unified-grid-secondary">
+              <div
+                v-if="[1, 2].includes(Number(batchForm.pickupMethod))"
+                class="batch-field"
+              >
+                <span class="batch-field-label">地址</span>
+                <el-input
+                  v-model.trim="batchForm.expressAddress"
+                  maxlength="500"
+                  placeholder="选填"
+                  @change="syncBatchSettings"
+                />
+              </div>
+              <div class="batch-field batch-field-wide">
+                <span class="batch-field-label">服用方法</span>
+                <UsageMethodInput v-model="batchForm.usageMethod" />
+              </div>
+            </div>
+          </div>
           <div class="batch-plan-list">
             <section
               v-for="(row, batchIndex) in batchForm.plans"
@@ -939,35 +1004,6 @@
                   <el-input-number v-model="row.batchNo" :min="1" :max="999" :controls="false" />
                 </div>
                 <div class="batch-field">
-                  <span class="batch-field-label required">加工方式</span>
-                  <el-select v-model="row.processTypeId" placeholder="请选择" @change="syncBatchPlan(row)">
-                    <el-option
-                      v-for="item in processTypes"
-                      :key="item.id"
-                      :label="item.name"
-                      :value="item.id"
-                    />
-                  </el-select>
-                </div>
-                <div
-                  v-if="[1, 2].includes(Number(row.pickupMethod))"
-                  class="batch-field batch-field-wide"
-                >
-                  <span class="batch-field-label">地址</span>
-                  <el-input v-model.trim="row.expressAddress" maxlength="500" placeholder="选填" />
-                </div>
-                <div class="batch-field">
-                  <span class="batch-field-label required">取货方式</span>
-                  <el-select v-model="row.pickupMethod" placeholder="请选择取货方式">
-                    <el-option
-                      v-for="item in PICKUP_METHOD_OPTIONS"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value"
-                    />
-                  </el-select>
-                </div>
-                <div class="batch-field">
                   <span class="batch-field-label required">剂数</span>
                   <el-input-number
                     v-model="row.totalDose"
@@ -986,14 +1022,6 @@
                     :controls="false"
                     disabled
                   />
-                </div>
-                <div class="batch-field batch-field-wide">
-                  <span class="batch-field-label">服用方法</span>
-                  <UsageMethodInput v-model="row.usageMethod" />
-                </div>
-                <div v-if="isDecoctionProcessType(row.processTypeId)" class="batch-field">
-                  <span class="batch-field-label required">毫升数</span>
-                  <el-input-number v-model="row.volumeMl" :min="1" :max="99999" :controls="false" />
                 </div>
                 <div class="batch-field">
                   <span class="batch-field-label">调度方式</span>
@@ -1064,7 +1092,7 @@
         <el-button @click="formVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="savePlan">保存</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <el-dialog v-model="delayVisible" :title="scheduleDialogTitle" width="480px">
       <el-form label-width="110px">
@@ -2061,6 +2089,7 @@ const form = reactive({
   remark: ''
 });
 const formIsDecoction = computed(() => isDecoctionProcessType(form.processTypeId));
+const batchFormIsDecoction = computed(() => isDecoctionProcessType(batchForm.processTypeId));
 const metadataOnlyEdit = computed(() =>
   [PROCESSING_STATUS.FINISHED, PROCESSING_STATUS.READY_PICKUP].includes(form.status)
 );
@@ -2069,7 +2098,12 @@ const batchForm = reactive({
   prescriptionId: null,
   totalDose: 1,
   batchCount: 1,
+  processTypeId: null,
+  pickupMethod: PICKUP_METHOD_OPTIONS[0].value,
+  expressAddress: '',
   bagsPerDose: 2,
+  volumeMl: 200,
+  usageMethod: '',
   prescription: {
     storeId: null,
     customerName: '',
@@ -2157,15 +2191,30 @@ function batchBagCount(plan) {
   return Number(plan?.totalDose || 0) * Number(batchForm.bagsPerDose || 0);
 }
 function syncBatchPlan(plan) {
-  if (!isDecoctionProcessType(plan.processTypeId)) {
+  if (!batchFormIsDecoction.value) {
     plan.bagCount = null;
     plan.volumeMl = null;
     return;
   }
+  plan.processTypeId = batchForm.processTypeId;
+  plan.pickupMethod = batchForm.pickupMethod;
+  plan.expressAddress = batchForm.expressAddress;
+  plan.usageMethod = batchForm.usageMethod;
+  plan.volumeMl = Number(batchForm.volumeMl) || null;
   plan.bagCount = batchBagCount(plan);
 }
 function syncAllBatchBags() {
   batchForm.plans.forEach((plan) => syncBatchPlan(plan));
+}
+function syncBatchSettings() {
+  batchForm.plans.forEach((plan) => {
+    plan.processTypeId = batchForm.processTypeId;
+    plan.pickupMethod = batchForm.pickupMethod;
+    plan.expressAddress = batchForm.expressAddress;
+    plan.usageMethod = batchForm.usageMethod;
+    plan.volumeMl = batchFormIsDecoction.value ? Number(batchForm.volumeMl) || null : null;
+    plan.bagCount = batchFormIsDecoction.value ? batchBagCount(plan) : null;
+  });
 }
 function decoctionFields(plan) {
   if (!isDecoctionProcessType(plan.processTypeId)) return { bagCount: null, volumeMl: null };
@@ -2208,7 +2257,12 @@ function resetBatchForm() {
     prescriptionId: null,
     totalDose: 1,
     batchCount: 1,
+    processTypeId: null,
+    pickupMethod: PICKUP_METHOD_OPTIONS[0].value,
+    expressAddress: '',
     bagsPerDose: 2,
+    volumeMl: 200,
+    usageMethod: '',
     prescription: {
       storeId: null,
       customerName: '',
@@ -2236,7 +2290,7 @@ function generateBatchPlans() {
     plan.scheduleType = SCHEDULE_TYPES.DATE;
     return plan;
   });
-  syncAllBatchBags();
+  syncBatchSettings();
 }
 function addBatchPlan() {
   batchForm.batchCount = Math.min(batchForm.plans.length + 1, 100);
@@ -2462,7 +2516,19 @@ async function saveBatchPlan() {
     if (!prescription.sourceId) return ElMessage.warning('请选择处方来源');
   }
   if (!batchForm.plans.length) return ElMessage.warning('请至少添加一个加工批次');
-  syncAllBatchBags();
+  if (!batchForm.processTypeId) return ElMessage.warning('请选择统一的加工方式');
+  if (batchForm.pickupMethod == null || batchForm.pickupMethod === '') {
+    return ElMessage.warning('请选择统一的取货方式');
+  }
+  syncBatchSettings();
+  if (batchFormIsDecoction.value) {
+    if (!Number.isInteger(Number(batchForm.bagsPerDose)) || Number(batchForm.bagsPerDose) <= 0) {
+      return ElMessage.warning('每剂袋数必须为正整数');
+    }
+    if (!Number.isInteger(Number(batchForm.volumeMl)) || Number(batchForm.volumeMl) <= 0) {
+      return ElMessage.warning('每袋毫升数必须为正整数');
+    }
+  }
   const totalDose = batchForm.plans.reduce((sum, plan) => sum + Number(plan.totalDose || 0), 0);
   if (totalDose !== Number(batchForm.totalDose)) {
     return ElMessage.warning(`批次剂数合计必须等于 ${batchForm.totalDose} 剂`);
@@ -2474,7 +2540,6 @@ async function saveBatchPlan() {
     if (!Number.isInteger(batchNo) || batchNo <= 0) return ElMessage.warning('批次号必须为正整数');
     if (batchNos.has(batchNo)) return ElMessage.warning(`第 ${batchNo} 批重复，请调整批次号`);
     batchNos.add(batchNo);
-    if (!plan.processTypeId) return ElMessage.warning(`请选择第 ${batchNo} 批加工方式`);
     if (!Number.isInteger(Number(plan.totalDose)) || Number(plan.totalDose) <= 0) {
       return ElMessage.warning(`请填写第 ${batchNo} 批剂数`);
     }
@@ -2500,8 +2565,12 @@ async function saveBatchPlan() {
           : undefined,
       plans: batchForm.plans.map((plan) => ({
         ...plan,
-        ...(isDecoctionProcessType(plan.processTypeId)
-          ? { bagCount: batchBagCount(plan), volumeMl: Number(plan.volumeMl) }
+        processTypeId: batchForm.processTypeId,
+        pickupMethod: batchForm.pickupMethod,
+        expressAddress: batchForm.expressAddress,
+        usageMethod: batchForm.usageMethod,
+        ...(batchFormIsDecoction.value
+          ? { bagCount: batchBagCount(plan), volumeMl: Number(batchForm.volumeMl) }
           : { bagCount: null, volumeMl: null }),
         batchNo: Number(plan.batchNo),
         totalDose: Number(plan.totalDose),
@@ -3119,6 +3188,24 @@ onMounted(async () => {
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+.batch-unified-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+.batch-unified-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.batch-unified-grid-secondary {
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, 2fr));
+}
 .batch-count-label {
   color: var(--app-muted);
   font-size: 13px;
@@ -3208,6 +3295,10 @@ onMounted(async () => {
   .batch-plan-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .batch-unified-grid,
+  .batch-unified-grid-secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 768px) {
   .page-actions,
@@ -3219,6 +3310,10 @@ onMounted(async () => {
     flex-direction: column;
   }
   .batch-plan-grid {
+    grid-template-columns: 1fr;
+  }
+  .batch-unified-grid,
+  .batch-unified-grid-secondary {
     grid-template-columns: 1fr;
   }
   .batch-field-wide {

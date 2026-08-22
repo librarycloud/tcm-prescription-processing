@@ -383,7 +383,9 @@
               :max="9999"
               style="width: 100%"
           /></el-form-item>
-          <el-form-item label="服用方法"><UsageMethodInput v-model="confirmForm.usageMethod" /></el-form-item>
+          <el-form-item label="服用方法" class="confirm-form-wide">
+            <UsageMethodInput v-model="confirmForm.usageMethod" />
+          </el-form-item>
         </template>
         <el-form-item label="加工备注"
           ><el-input
@@ -875,6 +877,7 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .confirm-form > :deep(.el-divider),
 .confirm-form > .batch-section,
+.confirm-form > .confirm-form-wide,
 .confirm-form > :deep(.el-form-item:last-child) {
   grid-column: 1 / -1;
 }
