@@ -89,16 +89,16 @@
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
         </el-table-column>
-        <el-table-column label="批号数" width="90" align="center">
+        <el-table-column label="批号数" width="64" align="center">
           <template #default="{ row }">{{ row.batchCount }}</template>
         </el-table-column>
-        <el-table-column label="总库存" width="110" align="right">
+        <el-table-column label="总库存" width="78" align="right">
           <template #default="{ row }">{{ quantityText(row.totalQuantity) }}</template>
         </el-table-column>
         <el-table-column prop="barcode" label="条形码" min-width="140">
           <template #default="{ row }">{{ row.barcode || '-' }}</template>
         </el-table-column>
-        <el-table-column label="规格" min-width="120">
+        <el-table-column label="规格" width="98">
           <template #default="{ row }">
             <el-tooltip v-if="isLongText(row.specification)" :content="row.specification" placement="top">
               <span>{{ shortText(row.specification) }}</span>
@@ -106,7 +106,7 @@
             <span v-else>{{ row.specification || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="dosageForm" label="剂型" min-width="100">
+        <el-table-column prop="dosageForm" label="剂型" width="98">
           <template #default="{ row }">{{ row.dosageForm || '-' }}</template>
         </el-table-column>
         <el-table-column label="生产厂商" min-width="150">
@@ -249,6 +249,7 @@ onMounted(async () => {
   min-width: 0;
   padding-right: 4px;
   padding-left: 4px;
+  white-space: nowrap;
 }
 
 .batch-panel {

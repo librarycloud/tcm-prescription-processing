@@ -75,7 +75,6 @@
         <el-table-column label="订单时间">
           <template #default="{ row }">{{ formatDateSeconds(row.sourceCreatedAt) }}</template>
         </el-table-column>
-        <el-table-column prop="externalOrderNo" label="E6订单号" />
         <el-table-column v-if="userStore.isSuperAdmin" prop="store.name" label="门店" />
         <el-table-column prop="customerName" label="顾客" />
         <el-table-column label="电话"
@@ -115,9 +114,6 @@
             <el-tag v-else :type="statusMeta(row.status).type" effect="plain">{{ statusMeta(row.status).label }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="同步时间">
-          <template #default="{ row }">{{ formatDate(row.lastSyncedAt) }}</template>
-        </el-table-column>
         <el-table-column label="操作">
           <template #default="{ row }">
             <div class="table-actions">
@@ -137,6 +133,12 @@
               >
             </div>
           </template>
+        </el-table-column>
+        <el-table-column label="E6订单号">
+          <template #default="{ row }">{{ row.externalOrderNo || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="同步时间">
+          <template #default="{ row }">{{ formatDate(row.lastSyncedAt) }}</template>
         </el-table-column>
       </el-table>
       <div class="merge-actions">
@@ -844,6 +846,11 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .search-form > :deep(.el-button) {
   flex-basis: auto;
+}
+.e6-import-table :deep(.cell) {
+  padding-right: 4px;
+  padding-left: 4px;
+  white-space: nowrap;
 }
 .mapping-missing,
 .error-text {
