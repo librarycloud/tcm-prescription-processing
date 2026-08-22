@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace E6Sync.Models
 {
     public sealed class E6PharmacyProductUpload
