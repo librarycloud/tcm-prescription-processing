@@ -3,17 +3,19 @@ import test from "node:test";
 import { listE6PharmacyProducts } from "../src/services/e6PharmacyService.js";
 import { mergeBatches } from "../src/services/e6PharmacySyncService.js";
 
-test("E6 pharmacy batches merge by product and batch across locations", () => {
+test("E6 pharmacy batches keep locations separate", () => {
   const result = mergeBatches([
     { e6ProductId: 99052, batchNo: "2411061", locationName: "A货位", quantity: "2.000", amount: "12.34" },
     { e6ProductId: 99052, batchNo: "2411061", locationName: "B货位", quantity: "3.000", amount: "12.34" },
     { e6ProductId: 99052, batchNo: "2411061", locationName: "A货位", quantity: "1.000", amount: "12.34" },
   ]);
 
-  assert.equal(result.length, 1);
-  assert.equal(result[0].quantity, "6.000");
+  assert.equal(result.length, 2);
+  assert.equal(result[0].quantity, "3.000");
   assert.equal(result[0].amount, "12.34");
-  assert.equal(result[0].locationName, "A货位, B货位");
+  assert.equal(result[0].locationName, "A货位");
+  assert.equal(result[1].quantity, "3.000");
+  assert.equal(result[1].locationName, "B货位");
 });
 
 test("E6 pharmacy query scopes store admins and searches product fields", async () => {

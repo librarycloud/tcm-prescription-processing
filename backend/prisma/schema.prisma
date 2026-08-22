@@ -192,7 +192,7 @@ model E6PharmacyInventoryBatch {
   productionDate DateTime? @map("production_date") @db.Date
   expiryDate     DateTime? @map("expiry_date") @db.Date
   inboundDate    DateTime? @map("inbound_date") @db.Date
-  locationName   String?   @map("location_name") @db.VarChar(120)
+  locationName   String    @default("") @map("location_name") @db.VarChar(120)
   quantity       Decimal   @db.Decimal(14, 3)
   amount         Decimal   @db.Decimal(14, 2)
   receivedAt     DateTime  @default(now()) @map("received_at")
@@ -201,7 +201,7 @@ model E6PharmacyInventoryBatch {
   store   Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
   product E6PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([storeId, productId, batchNo])
+  @@unique([storeId, productId, batchNo, locationName])
   @@index([storeId, productId])
   @@index([storeId, expiryDate])
   @@map("e6_pharmacy_inventory_batches")

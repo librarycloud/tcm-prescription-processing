@@ -54,7 +54,7 @@ function normalizeBatch(item) {
     productionDate: date(item?.productionDate, "生产日期"),
     expiryDate: date(item?.expiryDate, "有效期至"),
     inboundDate: date(item?.inboundDate, "入库时间"),
-    locationName: text(item?.locationName, 120, "货位名称"),
+    locationName: text(item?.locationName, 120, "货位名称") || "",
     quantity,
     amount: decimal(item?.amount, "库存金额", 2),
   };
@@ -63,18 +63,14 @@ function normalizeBatch(item) {
 export function mergeBatches(items) {
   const merged = new Map();
   for (const item of items) {
-    const key = `${item.e6ProductId}\u0000${item.batchNo}`;
+    const key = `${item.e6ProductId}\u0000${item.batchNo}\u0000${item.locationName}`;
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, { ...item });
       continue;
     }
-    const locations = [existing.locationName, item.locationName]
-      .filter(Boolean)
-      .flatMap((value) => String(value).split(", "));
     existing.quantity = (Number(existing.quantity) + Number(item.quantity)).toFixed(3);
-    // 金额字段按 E6 原值作为单价保存；跨货位合并时只汇总库存数量。
-    existing.locationName = [...new Set(locations)].join(", ").slice(0, 120) || null;
+    // 金额字段按 E6 原值作为单价保存；同一货位的重复行只汇总库存数量。
   }
   return [...merged.values()];
 }
@@ -126,14 +122,14 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   let updated = 0;
   for (const item of normalized) {
     const productId = productMap.get(item.e6ProductId);
-    const key = `${productId}\u0000${item.batchNo}`;
+    const key = `${productId}\u0000${item.batchNo}\u0000${item.locationName}`;
     seen.add(key);
     const existing = await prisma.e6PharmacyInventoryBatch.findUnique({
-      where: { storeId_productId_batchNo: { storeId: store.id, productId, batchNo: item.batchNo } },
+      where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
       select: { id: true },
     });
     await prisma.e6PharmacyInventoryBatch.upsert({
-      where: { storeId_productId_batchNo: { storeId: store.id, productId, batchNo: item.batchNo } },
+      where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
       create: {
         storeId: store.id,
         productId,
@@ -155,10 +151,10 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   if (payload?.fullSync === true) {
     const existing = await prisma.e6PharmacyInventoryBatch.findMany({
       where: { storeId: store.id },
-      select: { id: true, productId: true, batchNo: true },
+      select: { id: true, productId: true, batchNo: true, locationName: true },
     });
     const removeIds = existing
-      .filter((item) => !seen.has(`${item.productId}\u0000${item.batchNo}`))
+      .filter((item) => !seen.has(`${item.productId}\u0000${item.batchNo}\u0000${item.locationName || ""}`))
       .map((item) => item.id);
     if (removeIds.length) await prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } });
   }
