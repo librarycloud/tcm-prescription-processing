@@ -39,6 +39,7 @@ namespace E6Sync.Services
                 totalPrice = order.TotalPrice.ToString("0.00", CultureInfo.InvariantCulture),
                 doseCount = order.DoseCount > 0 ? order.DoseCount : 1,
                 paymentStatus = order.IsPaid ? "PAID" : "UNPAID",
+                sourceStatus = order.IsCancelled ? "CANCELLED" : "ACTIVE",
                 items = order.Items.Select(item => new E6PrescriptionItemRequest
                 {
                     sequence = item.Sequence,

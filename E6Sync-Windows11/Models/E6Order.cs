@@ -14,6 +14,7 @@ namespace E6Sync.Models
         public string DoctorName { get; set; }
         public string PrescriptionRemark { get; set; }
         public bool IsPaid { get; set; }
+        public bool IsCancelled { get; set; }
         public int DoseCount { get; set; }
         public string ValidationError { get; set; }
         public List<E6PrescriptionItem> Items { get; set; } = new List<E6PrescriptionItem>();

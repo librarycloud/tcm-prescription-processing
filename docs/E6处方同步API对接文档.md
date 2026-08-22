@@ -53,6 +53,8 @@ Content-Type: application/json; charset=utf-8
 | `phone` | string | 否 | 中国大陆手机号 | 顾客手机号；没有时可省略或传空字符串 |
 | `e6DoctorCode` | string | 否* | 1-100 字符 | E6 医师编码；系统按门店配置医生映射 |
 | `totalPrice` | string/number | 是 | 非负金额，最多 2 位小数 | 订单总价；推荐使用字符串，例如 `"268.00"` |
+| `paymentStatus` | string | 否 | `PAID`/`UNPAID` | 付款状态；由 E6 新零售收款台 `_proofstate` 判断 |
+| `sourceStatus` | string | 否 | `ACTIVE`/`CANCELLED` | E6 单据状态；作废单传 `CANCELLED` |
 | `doseCount` | integer | 是 | 大于 0 | 剂数 |
 | `items` | array | 是 | 至少一条明细 | 处方明细，见下表 |
 | `remark` | string | 否 | 最多 500 字符 | 处方或订单备注 |

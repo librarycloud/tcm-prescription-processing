@@ -55,19 +55,9 @@ namespace E6Sync.Services
                 builder.Password = e6.Password;
             }
 
-            const string sql = @"WITH receipt_summary AS (
-SELECT
-    receipt.[单据id],
-    MAX(CONVERT(datetime, LEFT(CONVERT(varchar(23), receipt.[操作日期], 121), 19), 120)) AS [订单日期],
-    SUM(ISNULL(receipt.[收款金额], 0)) AS [收款金额]
-FROM dbo.[AC款台_零售收款记录] receipt
-INNER JOIN (SELECT DISTINCT [PID] FROM dbo.[PF新零售收款台_处方明细]) detail_ids
-    ON detail_ids.[PID] = receipt.[单据id]
-GROUP BY receipt.[单据id]
-)
-SELECT
+            const string sql = @"SELECT
     counter.[id] AS [单据id],
-    receipt.[订单日期],
+    CONVERT(datetime, LEFT(CONVERT(varchar(23), counter.[检测日期], 121), 19), 120) AS [订单日期],
     ISNULL(counter.[收款金额], 0) AS [收款金额],
     counter.[购药人],
     counter.[购药人电话],
@@ -83,17 +73,15 @@ SELECT
     detail.[ri]
 FROM dbo.[PF新零售收款台_处方明细] detail
 INNER JOIN dbo.[PF新零售收款台] counter ON counter.[id] = detail.[PID]
-INNER JOIN receipt_summary receipt ON receipt.[单据id] = counter.[id]
 OUTER APPLY (
     SELECT TOP 1 CONVERT(nvarchar(200), source_receipt.[操作员]) AS [操作员]
     FROM dbo.[AC款台_零售收款记录] source_receipt
     WHERE source_receipt.[单据id] = counter.[id]
     ORDER BY source_receipt.[操作日期] DESC
 ) cashier
-WHERE ISNULL(CONVERT(nvarchar(50), counter.[_proofstate]), N'') <> N'作废'
-  AND receipt.[订单日期] >= @start
-  AND receipt.[订单日期] < @end
-ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
+WHERE CONVERT(datetime, LEFT(CONVERT(varchar(23), counter.[检测日期], 121), 19), 120) >= @start
+  AND CONVERT(datetime, LEFT(CONVERT(varchar(23), counter.[检测日期], 121), 19), 120) < @end
+ORDER BY [订单日期], counter.[id], detail.[ri];";
 
             try
             {
@@ -140,7 +128,8 @@ ORDER BY receipt.[订单日期], counter.[id], detail.[ri];";
                                     CashierName = reader.IsDBNull(cashierOrdinal) ? "" : Convert.ToString(reader.GetValue(cashierOrdinal)),
                                     DoctorName = reader.IsDBNull(doctorOrdinal) ? "" : Convert.ToString(reader.GetValue(doctorOrdinal)),
                                     PrescriptionRemark = reader.IsDBNull(remarkOrdinal) ? "" : Convert.ToString(reader.GetValue(remarkOrdinal)),
-                                    IsPaid = proofState == "结单"
+                                    IsPaid = proofState == "结单",
+                                    IsCancelled = proofState == "作废"
                                 };
                                 byOrderNo.Add(externalOrderNo, order);
                                 result.Add(order);

@@ -71,6 +71,13 @@ function normalizePaymentStatus(value) {
   return status;
 }
 
+function normalizeSourceStatus(value) {
+  const status = String(value ?? "ACTIVE").trim().toUpperCase();
+  if (status !== "ACTIVE" && status !== "CANCELLED")
+    throw new AppError("E6订单状态不正确", 400);
+  return status;
+}
+
 function itemQuantity(value) {
   const normalized = String(value ?? "").trim();
   if (!/^\d{1,11}(\.\d{1,3})?$/.test(normalized) || Number(normalized) <= 0)
@@ -421,6 +428,7 @@ export async function deleteE6OperatorMapping(prisma, actor, idValue) {
 function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode) {
   const storeCode = clean(payload.storeCode, 50, "门店编码").toUpperCase();
   const paymentStatus = normalizePaymentStatus(payload.paymentStatus);
+  const sourceStatus = normalizeSourceStatus(payload.sourceStatus);
   const normalized = {
     storeCode,
     externalOrderNo: clean(payload.externalOrderNo, 100, "E6原始订单号"),
@@ -431,6 +439,7 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
     isPaid: paymentStatus === "PAID" ? 1 : 0,
+    isCancelled: sourceStatus === "CANCELLED",
     items: normalizeImportItems(payload.items),
     remark: clean(payload.remark, 500, "备注", false),
     sourceCreatedAt: dateOrNull(payload.sourceCreatedAt, "E6创建时间"),
@@ -438,6 +447,7 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
   };
   const canonical = {
     ...normalized,
+    sourceStatus,
     sourceCreatedAt: normalized.sourceCreatedAt?.toISOString() || null,
     sourceUpdatedAt: normalized.sourceUpdatedAt?.toISOString() || null,
   };
@@ -514,10 +524,14 @@ async function persistImport(prisma, store, normalized, actor) {
     store.id,
     normalized.e6DoctorCode,
   );
-  const desiredStatus = mapping
-    ? E6_IMPORT_STATUS.IMPORT_PENDING
-    : E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED;
-  const desiredError = mapping
+  const desiredStatus = normalized.isCancelled
+    ? E6_IMPORT_STATUS.IMPORT_CANCELLED
+    : mapping
+      ? E6_IMPORT_STATUS.IMPORT_PENDING
+      : E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED;
+  const desiredError = normalized.isCancelled
+    ? { errorCode: null, errorMessage: null }
+    : mapping
     ? { errorCode: null, errorMessage: null }
     : {
         errorCode: E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
@@ -569,15 +583,19 @@ async function persistImport(prisma, store, normalized, actor) {
       ].includes(existing.status);
       const status = converted && changed
         ? E6_IMPORT_STATUS.IMPORT_CONFLICT
-        : converted || terminal
+        : converted
           ? existing.status
-          : desiredStatus;
+          : normalized.isCancelled
+            ? E6_IMPORT_STATUS.IMPORT_CANCELLED
+            : terminal
+              ? existing.status
+              : desiredStatus;
       const error = converted && changed
         ? {
             errorCode: E6_ERROR_CODE.DATA_CHANGED_AFTER_CONVERSION,
             errorMessage: "E6订单在生成处方后发生变化，请人工核对",
           }
-        : converted || terminal
+        : converted || (terminal && !normalized.isCancelled)
           ? { errorCode: existing.errorCode, errorMessage: existing.errorMessage }
           : desiredError;
       record = await tx.e6Import.update({

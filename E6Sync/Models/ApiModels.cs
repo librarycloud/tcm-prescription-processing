@@ -11,6 +11,7 @@ namespace E6Sync.Models
         public string totalPrice { get; set; }
         public int doseCount { get; set; }
         public string paymentStatus { get; set; }
+        public string sourceStatus { get; set; }
         public E6PrescriptionItemRequest[] items { get; set; }
         public string remark { get; set; }
         public string sourceCreatedAt { get; set; }

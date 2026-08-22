@@ -151,6 +151,17 @@ test("E6 synchronization only creates an import and deduplicates the original or
   );
 });
 
+test("a cancelled E6 order is retained as cancelled", async () => {
+  const { apiKey, prisma, state } = await syncFixture();
+  const result = await receiveE6Prescription(
+    prisma,
+    { ...payload, sourceStatus: "CANCELLED", paymentStatus: "UNPAID" },
+    apiKey,
+  );
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_CANCELLED);
+  assert.equal(state.import.status, E6_IMPORT_STATUS.IMPORT_CANCELLED);
+});
+
 test("E6 synchronization rejects an API key from another store", async () => {
   const { prisma, state } = await syncFixture();
   await assert.rejects(
