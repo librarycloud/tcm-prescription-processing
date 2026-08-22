@@ -58,7 +58,7 @@ namespace E6Sync.Services
             const string sql = @"SELECT
     counter.[id] AS [单据id],
     CONVERT(datetime, LEFT(CONVERT(varchar(23), counter.[检测日期], 121), 19), 120) AS [订单日期],
-    ISNULL(counter.[收款金额], 0) AS [收款金额],
+    counter.[总额] AS [收款金额],
     counter.[购药人],
     counter.[购药人电话],
     counter.[处方药师],
