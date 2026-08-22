@@ -482,7 +482,7 @@ async function resolveImportDoctorCode(prisma, storeId, value) {
   return "";
 }
 
-async function authenticateStore(prisma, storeCode, apiKey) {
+export async function authenticateStore(prisma, storeCode, apiKey) {
   const store = await prisma.store.findFirst({
     where: {
       code: storeCode,

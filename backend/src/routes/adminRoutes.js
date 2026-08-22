@@ -175,6 +175,7 @@ import {
   createOperatorMappingController as createE6OperatorMappingController,
   updateOperatorMappingController as updateE6OperatorMappingController,
 } from "../controllers/e6IntegrationController.js";
+import { listE6PharmacyProductsController } from "../controllers/e6PharmacyController.js";
 
 export default async function adminRoutes(fastify) {
   fastify.addHook("preHandler", fastify.rateLimit());
@@ -224,6 +225,7 @@ export default async function adminRoutes(fastify) {
   fastify.post("/e6/operator-mappings", createE6OperatorMappingController);
   fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
   fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
+  fastify.get("/e6-pharmacy/products", listE6PharmacyProductsController);
   fastify.get("/products/import-template", productImportTemplateController);
   fastify.post("/products/import-preview", previewProductImportController);
   fastify.post("/products/import", importProductsController);

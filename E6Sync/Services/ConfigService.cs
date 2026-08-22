@@ -66,6 +66,8 @@ namespace E6Sync.Services
                 if (config.E6.DefaultDoctorCode != null && config.E6.DefaultDoctorCode.Trim().Length > 100)
                     errors.Add("E6 defaultDoctorCode 不能超过 100 个字符");
             }
+            if (config.PharmacyE6 == null) errors.Add("缺少 pharmacyE6 配置");
+            else if (string.IsNullOrWhiteSpace(config.PharmacyE6.Server) || string.IsNullOrWhiteSpace(config.PharmacyE6.Database)) errors.Add("药店 E6 server/database 未配置");
             if (config.Api == null) errors.Add("缺少 api 配置");
             else
             {
@@ -181,6 +183,9 @@ namespace E6Sync.Services
                 sync[lastSyncKey] = config.Sync.LastSyncTime ?? "";
                 var autoSyncEnabledKey = FindKey(sync, "autoSyncEnabled") ?? "autoSyncEnabled";
                 sync[autoSyncEnabledKey] = config.Sync.AutoSyncEnabled;
+                sync[FindKey(sync, "pharmacySyncEnabled") ?? "pharmacySyncEnabled"] = config.Sync.PharmacySyncEnabled;
+                sync[FindKey(sync, "lastPharmacyProductModifiedAt") ?? "lastPharmacyProductModifiedAt"] = config.Sync.LastPharmacyProductModifiedAt ?? "";
+                sync[FindKey(sync, "lastPharmacyInventoryCursor") ?? "lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? "";
                 return serializer.Serialize(root);
             }
             catch
@@ -202,6 +207,14 @@ namespace E6Sync.Services
                     ["password"] = config.E6.Password,
                     ["defaultDoctorCode"] = config.E6.DefaultDoctorCode
                 },
+                ["pharmacyE6"] = new Dictionary<string, object>
+                {
+                    ["server"] = config.PharmacyE6.Server,
+                    ["database"] = config.PharmacyE6.Database,
+                    ["windowsAuthentication"] = config.PharmacyE6.WindowsAuthentication,
+                    ["username"] = config.PharmacyE6.Username,
+                    ["password"] = config.PharmacyE6.Password
+                },
                 ["api"] = new Dictionary<string, object>
                 {
                     ["baseUrl"] = config.Api.BaseUrl,
@@ -211,8 +224,11 @@ namespace E6Sync.Services
                 ["sync"] = new Dictionary<string, object>
                 {
                     ["autoSyncEnabled"] = config.Sync.AutoSyncEnabled,
+                    ["pharmacySyncEnabled"] = config.Sync.PharmacySyncEnabled,
                     ["intervalSeconds"] = config.Sync.IntervalSeconds,
-                    ["lastSyncTime"] = config.Sync.LastSyncTime ?? ""
+                    ["lastSyncTime"] = config.Sync.LastSyncTime ?? "",
+                    ["lastPharmacyProductModifiedAt"] = config.Sync.LastPharmacyProductModifiedAt ?? "",
+                    ["lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? ""
                 }
             };
             return serializer.Serialize(root);
@@ -232,6 +248,7 @@ namespace E6Sync.Services
             return new AppConfig
             {
                 E6 = new E6Config(),
+                PharmacyE6 = new E6PharmacyConfig(),
                 Api = new ApiConfig(),
                 Sync = new SyncConfig()
             };
@@ -240,6 +257,7 @@ namespace E6Sync.Services
         private static void Normalize(AppConfig config)
         {
             if (config.E6 == null) config.E6 = new E6Config();
+            if (config.PharmacyE6 == null) config.PharmacyE6 = new E6PharmacyConfig();
             if (config.Api == null) config.Api = new ApiConfig();
             if (config.Sync == null) config.Sync = new SyncConfig();
             if (config.Sync.IntervalSeconds < 1) config.Sync.IntervalSeconds = 60;

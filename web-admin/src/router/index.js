@@ -67,7 +67,13 @@ const routes = [
         path: 'e6-imports',
         name: 'E6Imports',
         component: () => import('@/views/admin/E6Imports.vue'),
-        meta: { title: 'E6导入', icon: 'Download' }
+        meta: { title: 'E6诊所处方导入', icon: 'Download' }
+      },
+      {
+        path: 'e6-pharmacy-products',
+        name: 'E6PharmacyProducts',
+        component: () => import('@/views/admin/E6PharmacyProducts.vue'),
+        meta: { title: 'E6药店库存', icon: 'Goods', allowedRoles: [0, 2] }
       },
       {
         path: 'prescriptions/:id',

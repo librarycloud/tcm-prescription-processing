@@ -38,6 +38,11 @@ namespace E6Sync.Services
             }
         }
 
+        public void TestPharmacyConnection()
+        {
+            using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6))) connection.Open();
+        }
+
         public List<E6Order> QueryOrders(DateTime start, DateTime end)
         {
             var result = new List<E6Order>();
@@ -207,6 +212,100 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
                 log.Error("SQL 查询异常：" + ex.Message);
                 throw;
             }
+        }
+
+        public List<E6PharmacyProductUpload> QueryPharmacyProducts(DateTime? modifiedAfter)
+        {
+            var result = new List<E6PharmacyProductUpload>();
+            const string sql = @"SELECT p.[ID], p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[创建日期], p.[修改日期]
+FROM dbo.[商品] p
+WHERE EXISTS (SELECT 1 FROM dbo.[AC门店库存日报] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0 AND i.[日期] >= @dayStart AND i.[日期] < @dayEnd)
+  AND (@modifiedAfter IS NULL OR p.[修改日期] > @modifiedAfter)
+ORDER BY p.[修改日期], p.[ID];";
+            var dayStart = DateTime.Today;
+            var dayEnd = dayStart.AddDays(1);
+            using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.Parameters.Add("@dayStart", SqlDbType.DateTime).Value = dayStart;
+                command.Parameters.Add("@dayEnd", SqlDbType.DateTime).Value = dayEnd;
+                command.Parameters.Add("@modifiedAfter", SqlDbType.DateTime).Value = (object)modifiedAfter ?? DBNull.Value;
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        result.Add(new E6PharmacyProductUpload
+                        {
+                            e6ProductId = Convert.ToInt32(reader["ID"]),
+                            productCode = Convert.ToString(reader["编号"])?.Trim(),
+                            name = Convert.ToString(reader["名称"])?.Trim(),
+                            category = ToNullableText(reader["分类"]),
+                            categoryCode = ToNullableText(reader["分类编号"]),
+                            barcode = ToNullableText(reader["条形码"]),
+                            specification = ToNullableText(reader["规格"]),
+                            dosageForm = ToNullableText(reader["剂型"]),
+                            manufacturer = ToNullableText(reader["生产厂商"]),
+                            categoryAttribute = ToNullableText(reader["商品类别属性"]),
+                            e6CreatedAt = ToIso(reader["创建日期"]),
+                            e6ModifiedAt = ToIso(reader["修改日期"])
+                        });
+                    }
+                }
+            }
+            return result;
+        }
+
+        public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor)
+        {
+            var result = new E6PharmacyInventorySnapshot();
+            var cursorBytes = DecodeCursor(cursor);
+            var cursorClause = cursorBytes == null ? "" : " AND [_c_] > @cursor ";
+            var sql = @"SELECT [商品id], [批号], [生产日期], [有效期至], [数量], [金额], [_c_]
+FROM dbo.[AC门店库存日报]
+WHERE [日期] >= @dayStart AND [日期] < @dayEnd AND [数量] > 0 " + cursorClause + "ORDER BY [_c_];";
+            using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.Parameters.Add("@dayStart", SqlDbType.DateTime).Value = inventoryDate.Date;
+                command.Parameters.Add("@dayEnd", SqlDbType.DateTime).Value = inventoryDate.Date.AddDays(1);
+                if (cursorBytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = cursorBytes;
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        result.Batches.Add(new E6PharmacyBatchUpload
+                        {
+                            e6ProductId = Convert.ToInt32(reader["商品id"]),
+                            batchNo = ToNullableText(reader["批号"]) ?? "",
+                            productionDate = ToDate(reader["生产日期"]),
+                            expiryDate = ToDate(reader["有效期至"]),
+                            quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                        });
+                        result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]);
+                    }
+                }
+            }
+            return result;
+        }
+
+        private static string BuildConnectionString(E6PharmacyConfig e6)
+        {
+            var builder = new SqlConnectionStringBuilder { DataSource = e6.Server, InitialCatalog = e6.Database, ConnectTimeout = 5, IntegratedSecurity = e6.WindowsAuthentication };
+            if (!builder.IntegratedSecurity) { builder.UserID = e6.Username; builder.Password = e6.Password; }
+            return builder.ConnectionString;
+        }
+
+        private static string ToNullableText(object value) => value == null || value == DBNull.Value ? null : Convert.ToString(value)?.Trim();
+        private static string ToIso(object value) => value == null || value == DBNull.Value ? null : Convert.ToDateTime(value).ToString("o");
+        private static string ToDate(object value) => value == null || value == DBNull.Value ? null : Convert.ToDateTime(value).ToString("yyyy-MM-dd");
+        private static byte[] DecodeCursor(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            try { var bytes = Convert.FromBase64String(value); return bytes.Length == 8 ? bytes : null; }
+            catch { return null; }
         }
     }
 }

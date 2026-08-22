@@ -1,6 +1,6 @@
 # E6Sync - Windows 11 版
 
-`E6Sync.exe` 是面向浪潮佳软 E6 的 Windows WinForms 处方同步工具。它只读 SQL Server 2008 中的 E6 新零售收款台和处方明细数据，并逐张发送到 E6 同步 API；不会写入、修改或删除 E6 数据库内容。
+`E6Sync.exe` 是面向浪潮佳软 E6 的 Windows WinForms 同步工具。它只读诊所处方库和药店商品/库存库，并发送到同步 API；不会写入、修改或删除 E6 数据库内容。
 
 ## 编译
 
@@ -19,7 +19,7 @@
 - `E6Sync.exe.config`（若生成）
 - `config.json`
 
-程序首次启动会自动创建 `logs\\sync.log`。请确保运行帐户对应用目录有创建/写入文件的权限。
+程序首次启动会自动创建 `logs\\sync-yyyy-MM-dd.log`，日志按天分割。请确保运行帐户对应用目录有创建/写入文件的权限。
 
 目标框架是 `.NET Framework 4.8`，适用于 Windows 11。Windows 11 已内置兼容的 .NET Framework 4.x 运行时；部署时无需安装 Node.js、IIS 或额外的数据库客户端。此版本不面向 Windows Server 2008 部署，请使用同级目录的 `E6Sync` 项目作为 Server 2008 版。
 
@@ -37,6 +37,13 @@
     "password": "",
     "defaultDoctorCode": "D001"
   },
+  "pharmacyE6": {
+    "server": "127.0.0.1",
+    "database": "E6苏州药店",
+    "windowsAuthentication": true,
+    "username": "",
+    "password": ""
+  },
   "api": {
     "baseUrl": "https://example.com/api",
     "apiKey": "e6_实际密钥",
@@ -45,7 +52,10 @@
   "sync": {
     "intervalSeconds": 60,
     "autoSyncEnabled": true,
-    "lastSyncTime": ""
+    "lastSyncTime": "",
+    "pharmacySyncEnabled": false,
+    "lastPharmacyProductModifiedAt": "",
+    "lastPharmacyInventoryCursor": ""
   }
 }
 ```
@@ -56,14 +66,14 @@ SQL Server 2008 使用 Windows 身份验证：请将 `windowsAuthentication` 设
 
 ## 运行与测试
 
-启动程序后先点击“测试 SQL 连接”。该操作只打开和关闭 SQL 连接，不执行任何 SQL 写操作。
+启动程序后可分别点击“测试 SQL 连接”和“测试药店 SQL”。前者测试 `e6` 诊所库，后者测试 `pharmacyE6` 药店库；两者只打开和关闭 SQL 连接，不执行写操作。启用“启用药店同步”后，自动同步按商品 `修改日期` 和库存表 `_c_` 增量上传；手动同步会上传当天库存全量并清理服务器中已不存在的批次。库存请求不上传 `_c_`、日期和零售价。
 
 API 文档未定义健康检查或测试接口，因此程序不会构造虚假订单测试 API。选择一段包含已知订单的日期，点击“开始同步”进行实际联调：
 
 1. 开始和结束日期均按自然日处理。选择同一天会查询当天 `00:00:00` 至次日 `00:00:00`。
 2. 每张订单单独 POST 到 `/integrations/e6/v1/prescriptions`，请求包含 `X-API-Key`。
 3. 只有 HTTP `200` 且 JSON `code` 为 `0` 计为成功。`duplicate=true` 计为“重复”而不是失败。
-4. GUI 与 `logs\\sync.log` 会记录 API 导入状态：待确认、待映射、导入异常、已生成处方、已驳回、已取消、数据冲突或处理中。
+4. GUI 与当天的 `logs\\sync-yyyy-MM-dd.log` 会记录 API 导入状态：待确认、待映射、导入异常、已生成处方、已驳回、已取消、数据冲突或处理中。
 
 程序启动后自动定时器运行。首次 `lastSyncTime` 为空时，程序不会自动全量查询，只会提示先执行一次手动同步。手动同步整轮没有失败时，程序会将 `lastSyncTime` 更新为同步完成时刻；存在失败或任务取消时不会更新。正常自动同步会查询 `lastSyncTime - 2 分钟` 到当前时间；只有整轮没有失败，才会将 `lastSyncTime` 前移。失败后会在下一轮重新查询，API 的 `storeCode + externalOrderNo` 幂等规则可处理边界重复。
 

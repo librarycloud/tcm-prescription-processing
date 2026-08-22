@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">E6数据导入</h1>
+        <h1 class="page-title">E6诊所处方导入</h1>
         <p class="page-subtitle">核对E6订单并确认生成处方与加工计划</p>
       </div>
       <el-button :icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
@@ -70,7 +70,7 @@
         row-key="id"
         table-layout="auto"
       >
-        <template #empty><EmptyView description="暂无E6导入数据" /></template>
+        <template #empty><EmptyView description="暂无E6诊所处方导入数据" /></template>
         <el-table-column type="selection" width="44" :selectable="canMerge" />
         <el-table-column label="订单时间">
           <template #default="{ row }">{{ formatDateSeconds(row.sourceCreatedAt) }}</template>
@@ -152,7 +152,7 @@
       />
     </el-card>
 
-    <el-drawer v-model="detailVisible" title="E6导入详情" direction="rtl" size="min(1180px, 96vw)" destroy-on-close>
+    <el-drawer v-model="detailVisible" title="E6诊所处方导入详情" direction="rtl" size="min(1180px, 96vw)" destroy-on-close>
       <div class="e6-import-detail">
         <div v-if="detail" class="detail-grid">
           <div class="detail-item">

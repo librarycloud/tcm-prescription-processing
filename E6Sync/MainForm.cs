@@ -22,12 +22,14 @@ namespace E6Sync
 
         private Label automaticValue;
         private CheckBox automaticEnabledCheckBox;
+        private CheckBox pharmacySyncCheckBox;
         private Label lastSyncValue;
         private Label nextSyncValue;
         private DateTimePicker startDatePicker;
         private DateTimePicker endDatePicker;
         private Button manualSyncButton;
         private Button testSqlButton;
+        private Button testPharmacySqlButton;
         private ToolStripMenuItem toggleAutomaticMenuItem;
         private Label queryCountValue;
         private Label successCountValue;
@@ -83,10 +85,13 @@ namespace E6Sync
             statusLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
             automaticEnabledCheckBox = new CheckBox { Text = "启用自动同步", AutoSize = true, Anchor = AnchorStyles.Right, Checked = true };
             automaticEnabledCheckBox.CheckedChanged += AutomaticEnabledCheckBox_CheckedChanged;
+            pharmacySyncCheckBox = new CheckBox { Text = "启用药店同步", AutoSize = true, Anchor = AnchorStyles.Right, Checked = false };
+            pharmacySyncCheckBox.CheckedChanged += PharmacySyncCheckBox_CheckedChanged;
             automaticValue = AddStatusRow(statusLayout, "状态：", "启动中", 0);
             lastSyncValue = AddStatusRow(statusLayout, "上次自动同步：", "未执行", 1);
             nextSyncValue = AddStatusRow(statusLayout, "下一次同步：", "--", 2);
             statusLayout.Controls.Add(automaticEnabledCheckBox, 2, 0);
+            statusLayout.Controls.Add(pharmacySyncCheckBox, 2, 1);
             statusGroup.Controls.Add(statusLayout);
 
             var manualGroup = new GroupBox { Text = "手动全量同步", Dock = DockStyle.Fill, Padding = new Padding(12) };
@@ -106,7 +111,9 @@ namespace E6Sync
             manualSyncButton.Click += ManualSyncButton_Click;
             testSqlButton = new Button { Text = "测试 SQL 连接", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 3, 3) };
             testSqlButton.Click += TestSqlButton_Click;
-            manualLayout.Controls.AddRange(new Control[] { startLabel, startDatePicker, endLabel, endDatePicker, manualSyncButton, testSqlButton });
+            testPharmacySqlButton = new Button { Text = "测试药店 SQL", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 3, 3) };
+            testPharmacySqlButton.Click += TestPharmacySqlButton_Click;
+            manualLayout.Controls.AddRange(new Control[] { startLabel, startDatePicker, endLabel, endDatePicker, manualSyncButton, testSqlButton, testPharmacySqlButton });
             manualGroup.Controls.Add(manualLayout);
 
             var statsGroup = new GroupBox { Text = "本轮统计", Dock = DockStyle.Fill, Padding = new Padding(12) };
@@ -176,6 +183,7 @@ namespace E6Sync
                 config = configService.LoadOrCreate(out created);
                 loadingConfiguration = true;
                 automaticEnabled = config.Sync.AutoSyncEnabled;
+                pharmacySyncCheckBox.Checked = config.Sync.PharmacySyncEnabled;
                 automaticEnabledCheckBox.Checked = automaticEnabled;
                 loadingConfiguration = false;
                 if (created) log.Warn("未找到 config.json，已创建模板：" + configService.ConfigPath);
@@ -286,6 +294,15 @@ namespace E6Sync
             finally { testSqlButton.Enabled = true; }
         }
 
+        private async void TestPharmacySqlButton_Click(object sender, EventArgs e)
+        {
+            if (syncService == null || syncService.IsBusy) return;
+            testPharmacySqlButton.Enabled = false;
+            try { await Task.Run(() => new E6DatabaseService(config, log).TestPharmacyConnection()); log.Info("药店 SQL Server 连接测试成功"); MessageBox.Show(this, "药店 SQL Server 连接成功。", "E6同步", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+            catch (Exception ex) { log.Error("药店 SQL Server 连接测试失败：" + ex.Message); MessageBox.Show(this, "药店 SQL Server 连接失败，请查看日志并检查 pharmacyE6 配置。", "E6同步", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            finally { testPharmacySqlButton.Enabled = true; }
+        }
+
         private void OnSyncProgress(SyncProgress progress)
         {
             if (InvokeRequired) { BeginInvoke(new Action<SyncProgress>(OnSyncProgress), progress); return; }
@@ -337,6 +354,13 @@ namespace E6Sync
         {
             if (loadingConfiguration) return;
             SetAutomaticEnabled(automaticEnabledCheckBox.Checked, true);
+        }
+
+        private void PharmacySyncCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (loadingConfiguration || config == null) return;
+            config.Sync.PharmacySyncEnabled = pharmacySyncCheckBox.Checked;
+            try { configService.Save(config); } catch (Exception ex) { log.Error("保存药店同步设置失败：" + ex.Message); }
         }
 
         private void SetAutomaticEnabled(bool enabled, bool save)

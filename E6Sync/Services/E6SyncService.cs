@@ -103,6 +103,11 @@ namespace E6Sync.Services
                     var resultText = await ProcessOrderAsync(order, stats, cancellationToken).ConfigureAwait(false);
                     RaiseProgress(new SyncProgress { Order = order, Current = current, Total = orders.Count, Result = resultText, Stats = stats });
                 }
+                if (config.Sync.PharmacySyncEnabled)
+                {
+                    try { await SyncPharmacyAsync(!automatic, cancellationToken).ConfigureAwait(false); }
+                    catch (Exception ex) { stats.FailureCount++; log.Error("药店商品库存同步失败：" + ex.Message); }
+                }
                 log.Info(string.Format("{0}同步完成：查询 {1}，成功 {2}，重复 {3}，失败 {4}", automatic ? "自动" : "手动", stats.QueryCount, stats.SuccessCount, stats.DuplicateCount, stats.FailureCount));
                 return stats;
             }
@@ -111,6 +116,27 @@ namespace E6Sync.Services
                 IsBusy = false;
                 gate.Release();
             }
+        }
+
+        private async Task SyncPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
+        {
+            DateTime? modifiedAfter = null;
+            DateTime parsed;
+            if (!fullSync && DateTime.TryParse(config.Sync.LastPharmacyProductModifiedAt, out parsed)) modifiedAfter = parsed;
+            var products = await Task.Run(() => database.QueryPharmacyProducts(modifiedAfter), cancellationToken).ConfigureAwait(false);
+            if (products.Count > 0)
+            {
+                var productResult = await api.SendPharmacyProductsAsync(products, cancellationToken).ConfigureAwait(false);
+                if (!productResult.Success) throw new InvalidOperationException(productResult.Message);
+                var latest = products[products.Count - 1].e6ModifiedAt;
+                if (!string.IsNullOrWhiteSpace(latest)) config.Sync.LastPharmacyProductModifiedAt = latest;
+            }
+            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor), cancellationToken).ConfigureAwait(false);
+            var inventoryResult = await api.SendPharmacyInventoryAsync(snapshot.Batches, fullSync, cancellationToken).ConfigureAwait(false);
+            if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
+            if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
+            configService.Save(config);
+            log.Info(string.Format("药店同步完成：商品 {0}，库存批次 {1}{2}", products.Count, snapshot.Batches.Count, fullSync ? "（今日全量）" : "（增量）"));
         }
 
         private async Task<string> ProcessOrderAsync(E6Order order, SyncStats stats, CancellationToken cancellationToken)

@@ -7,6 +7,13 @@
     "password": "",
     "defaultDoctorCode": ""
   },
+  "pharmacyE6": {
+    "server": "127.0.0.1",
+    "database": "E6苏州药店",
+    "windowsAuthentication": true,
+    "username": "",
+    "password": ""
+  },
   "api": {
     "baseUrl": "https://你的域名/api",
     "apiKey": "e6_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -14,7 +21,10 @@
   },
   "sync": {
     "autoSyncEnabled": true,
+    "pharmacySyncEnabled": false,
     "intervalSeconds": 60,
-    "lastSyncTime": ""
+    "lastSyncTime": "",
+    "lastPharmacyProductModifiedAt": "",
+    "lastPharmacyInventoryCursor": ""
   }
 }

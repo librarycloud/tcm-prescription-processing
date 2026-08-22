@@ -98,6 +98,8 @@ model Store {
   e6DoctorMappings    E6DoctorMapping[]
   e6OperatorMappings  E6OperatorMapping[]
   e6Imports           E6Import[]
+  e6PharmacyProducts  E6PharmacyProduct[]
+  e6PharmacyInventory E6PharmacyInventoryBatch[]
   processingEquipment ProcessingEquipment[]
 
   @@index([status])
@@ -150,6 +152,56 @@ model Product {
   @@index([storeId, status])
   @@index([storeId, diffQuantity])
   @@map("products")
+}
+
+model E6PharmacyProduct {
+  id                  Int       @id @default(autoincrement())
+  storeId             Int       @map("store_id")
+  e6ProductId         Int       @map("e6_product_id")
+  productCode         String    @map("product_code") @db.VarChar(64)
+  name                String    @db.VarChar(120)
+  category            String?   @db.VarChar(100)
+  categoryCode        String?   @map("category_code") @db.VarChar(64)
+  barcode             String?   @db.VarChar(64)
+  specification       String?   @db.VarChar(120)
+  dosageForm          String?   @map("dosage_form") @db.VarChar(64)
+  manufacturer        String?   @db.VarChar(200)
+  categoryAttribute   String?   @map("category_attribute") @db.VarChar(100)
+  e6CreatedAt         DateTime? @map("e6_created_at")
+  e6ModifiedAt        DateTime? @map("e6_modified_at")
+  lastInventorySeenAt DateTime? @map("last_inventory_seen_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  store       Store                      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  inventories E6PharmacyInventoryBatch[]
+
+  @@unique([storeId, e6ProductId])
+  @@index([storeId, productCode])
+  @@index([storeId, barcode])
+  @@index([storeId, e6ModifiedAt])
+  @@map("e6_pharmacy_products")
+}
+
+model E6PharmacyInventoryBatch {
+  id             Int       @id @default(autoincrement())
+  storeId        Int       @map("store_id")
+  productId      Int       @map("product_id")
+  batchNo        String    @default("") @map("batch_no") @db.VarChar(100)
+  productionDate DateTime? @map("production_date") @db.Date
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  quantity       Decimal   @db.Decimal(14, 3)
+  amount         Decimal   @db.Decimal(14, 2)
+  receivedAt     DateTime  @default(now()) @map("received_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  store   Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product E6PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, productId, batchNo])
+  @@index([storeId, productId])
+  @@index([storeId, expiryDate])
+  @@map("e6_pharmacy_inventory_batches")
 }
 
 model ProductsDiffLog {

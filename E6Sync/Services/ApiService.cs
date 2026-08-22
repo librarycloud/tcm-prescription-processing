@@ -117,6 +117,44 @@ namespace E6Sync.Services
             }
         }
 
+        public Task<ApiResult> SendPharmacyProductsAsync(System.Collections.Generic.IList<E6PharmacyProductUpload> products, CancellationToken cancellationToken)
+        {
+            return PostPharmacyAsync("/integrations/e6/v1/pharmacy/products", new { storeCode = config.StoreCode, products = products }, cancellationToken);
+        }
+
+        public Task<ApiResult> SendPharmacyInventoryAsync(System.Collections.Generic.IList<E6PharmacyBatchUpload> batches, bool fullSync, CancellationToken cancellationToken)
+        {
+            return PostPharmacyAsync("/integrations/e6/v1/pharmacy/inventory", new { storeCode = config.StoreCode, fullSync = fullSync, batches = batches }, cancellationToken);
+        }
+
+        private async Task<ApiResult> PostPharmacyAsync(string path, object body, CancellationToken cancellationToken)
+        {
+            var endpoint = config.BaseUrl.TrimEnd('/') + path;
+            using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
+            {
+                request.Headers.Add("X-API-Key", config.ApiKey);
+                request.Content = new StringContent(serializer.Serialize(body), Encoding.UTF8, "application/json");
+                try
+                {
+                    using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false))
+                    {
+                        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        ApiResponse payload = null;
+                        try { payload = serializer.Deserialize<ApiResponse>(responseText); } catch { }
+                        if (!response.IsSuccessStatusCode || payload == null || payload.code != 0)
+                            return new ApiResult { HttpStatus = (int)response.StatusCode, Retryable = (int)response.StatusCode == 429 || (int)response.StatusCode >= 500, Message = payload == null ? "API 响应无效" : payload.message ?? "上传失败" };
+                        return new ApiResult { Success = true, HttpStatus = (int)response.StatusCode, Message = payload.message ?? "上传成功" };
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    if (cancellationToken.IsCancellationRequested) throw;
+                    return new ApiResult { Retryable = true, Message = "网络超时" };
+                }
+                catch (HttpRequestException ex) { return new ApiResult { Retryable = true, Message = "网络异常：" + ex.Message }; }
+            }
+        }
+
         private static string ToIso8601(DateTime value)
         {
             var local = DateTime.SpecifyKind(value, DateTimeKind.Local);

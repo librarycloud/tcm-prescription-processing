@@ -1,5 +1,37 @@
 namespace E6Sync.Models
 {
+    public sealed class E6PharmacyProductUpload
+    {
+        public int e6ProductId { get; set; }
+        public string productCode { get; set; }
+        public string name { get; set; }
+        public string category { get; set; }
+        public string categoryCode { get; set; }
+        public string barcode { get; set; }
+        public string specification { get; set; }
+        public string dosageForm { get; set; }
+        public string manufacturer { get; set; }
+        public string categoryAttribute { get; set; }
+        public string e6CreatedAt { get; set; }
+        public string e6ModifiedAt { get; set; }
+    }
+
+    public sealed class E6PharmacyBatchUpload
+    {
+        public int e6ProductId { get; set; }
+        public string batchNo { get; set; }
+        public string productionDate { get; set; }
+        public string expiryDate { get; set; }
+        public string quantity { get; set; }
+        public string amount { get; set; }
+    }
+
+    public sealed class E6PharmacyInventorySnapshot
+    {
+        public List<E6PharmacyBatchUpload> Batches { get; set; } = new List<E6PharmacyBatchUpload>();
+        public string Cursor { get; set; }
+    }
+
     public sealed class PrescriptionRequest
     {
         public string externalOrderNo { get; set; }
