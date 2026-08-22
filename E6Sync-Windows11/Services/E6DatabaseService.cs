@@ -215,7 +215,7 @@ ORDER BY p.[修改日期], p.[ID];";
             {
                 if (bytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = bytes;
                 connection.Open();
-                using (var reader = command.ExecuteReader()) while (reader.Read()) { result.Batches.Add(new E6PharmacyBatchUpload { e6ProductId = Convert.ToInt32(reader["商品id"]), locationName = ToNullableText(reader["货位名称"]), batchNo = ToNullableText(reader["批号"]) ?? "", productionDate = ToDate(reader["生产日期"]), expiryDate = ToDate(reader["有效期至"]), inboundDate = ToIso(reader["入库时间"]), quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) }); result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]); }
+                using (var reader = command.ExecuteReader()) while (reader.Read()) { result.Batches.Add(new E6PharmacyBatchUpload { e6ProductId = Convert.ToInt32(reader["商品id"]), locationName = ToNullableText(reader["货位名称"]), batchNo = ToNullableText(reader["批号"]) ?? "", productionDate = ToDate(reader["生产日期"]), expiryDate = ToDate(reader["有效期至"]), inboundDate = ToDate(reader["入库时间"]), quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) }); result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]); }
             }
             return result;
         }

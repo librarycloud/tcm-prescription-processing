@@ -47,8 +47,8 @@
                 <el-table-column label="生产日期" width="130">
                   <template #default="{ row: batch }">{{ dateText(batch.productionDate) }}</template>
                 </el-table-column>
-                <el-table-column label="入库时间" width="170">
-                  <template #default="{ row: batch }">{{ dateTimeText(batch.inboundDate) }}</template>
+                <el-table-column label="入库日期" width="130">
+                  <template #default="{ row: batch }">{{ dateText(batch.inboundDate) }}</template>
                 </el-table-column>
                 <el-table-column label="有效期至" width="130">
                   <template #default="{ row: batch }">{{ dateText(batch.expiryDate) }}</template>

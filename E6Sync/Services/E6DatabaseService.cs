@@ -278,7 +278,7 @@ WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
                             batchNo = ToNullableText(reader["批号"]) ?? "",
                             productionDate = ToDate(reader["生产日期"]),
                             expiryDate = ToDate(reader["有效期至"]),
-                            inboundDate = ToIso(reader["入库时间"]),
+                            inboundDate = ToDate(reader["入库时间"]),
                             quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
                             amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
                         });
