@@ -679,6 +679,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     doctorId: payload.doctorId,
     doseCount: first.doseCount,
     batches: payload.batches,
+    bagsPerDose: payload.bagsPerDose,
     processTypeId: payload.processTypeId,
     scheduleType: payload.scheduleType,
     processDate: payload.processDate,
@@ -733,7 +734,9 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
         batchNo: index + 1,
         processTypeId: mergedPayload.processTypeId,
         totalDose: batch.totalDose,
-        bagCount: batch.bagCount ?? (batches.length > 1 ? batch.totalDose * 2 : mergedPayload.bagCount),
+        bagCount: batch.bagCount ?? (mergedPayload.bagsPerDose
+          ? batch.totalDose * Number(mergedPayload.bagsPerDose)
+          : (batches.length > 1 ? batch.totalDose * 2 : mergedPayload.bagCount)),
         volumeMl: batch.volumeMl ?? mergedPayload.volumeMl,
         usageMethod: batch.usageMethod ?? mergedPayload.usageMethod,
         scheduleType: batch.scheduleType,
@@ -1057,7 +1060,9 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
             batchNo: index + 1,
             processTypeId: payload.processTypeId,
             totalDose: batch.totalDose,
-            bagCount: batch.bagCount ?? (batches.length > 1 ? batch.totalDose * 2 : payload.bagCount),
+            bagCount: batch.bagCount ?? (payload.bagsPerDose
+              ? batch.totalDose * Number(payload.bagsPerDose)
+              : (batches.length > 1 ? batch.totalDose * 2 : payload.bagCount)),
             volumeMl: batch.volumeMl ?? payload.volumeMl,
             usageMethod: batch.usageMethod ?? payload.usageMethod,
             scheduleType: batch.scheduleType,

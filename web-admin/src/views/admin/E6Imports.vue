@@ -344,6 +344,7 @@
                   value-format="YYYY-MM-DD"
                   @change="handleBatchDateChange(batch)"
                 />
+                <span v-if="isDecoction" class="batch-bag-hint">本批 {{ batchBagCount(batch) }} 袋</span>
               </div>
             </div>
             <div class="batch-editor-footer">
@@ -368,9 +369,9 @@
           />
         </el-form-item>
         <template v-if="isDecoction">
-          <el-form-item label="代煎袋数" prop="bagCount"
+          <el-form-item label="每剂袋数" prop="bagsPerDose"
             ><el-input-number
-              v-model="confirmForm.bagCount"
+              v-model="confirmForm.bagsPerDose"
               :min="1"
               :max="9999"
               style="width: 100%"
@@ -472,6 +473,7 @@ const confirmForm = reactive({
   pickupMethod: 0,
   expressAddress: '',
   bagCount: null,
+  bagsPerDose: 2,
   volumeMl: null,
   usageMethod: '',
   processRemark: ''
@@ -491,10 +493,10 @@ const confirmRules = {
   doseCount: [{ required: true, message: '请输入剂数', trigger: 'change' }],
   processTypeId: [{ required: true, message: '请选择加工方式', trigger: 'change' }],
   pickupMethod: [{ required: true, message: '请选择取货方式', trigger: 'change' }],
-  bagCount: [
+  bagsPerDose: [
     {
       validator: (_rule, value, callback) =>
-        isDecoction.value && !value ? callback(new Error('请输入代煎袋数')) : callback(),
+        isDecoction.value && !value ? callback(new Error('请输入每剂袋数')) : callback(),
       trigger: 'change'
     }
   ],
@@ -576,6 +578,9 @@ function createBatch(totalDose, processDate = todayText(), scheduleType = 1) {
     processDate: scheduleType === 1 ? processDate : null,
     autoDate: true
   };
+}
+function batchBagCount(batch) {
+  return Number(batch?.totalDose || 0) * Number(confirmForm.bagsPerDose || 0);
 }
 function setBatchCount(value = confirmForm.batchCount) {
   const count = Math.max(1, Math.min(Number(value) || 1, Number(confirmForm.doseCount) || 1));
@@ -720,7 +725,8 @@ function openConfirm(row) {
     batches: [createBatch(Number(row.doseCount) || 1)],
     pickupMethod: 0,
     expressAddress: '',
-    bagCount: Number(row.doseCount) * 2,
+    bagCount: null,
+    bagsPerDose: 2,
     volumeMl: 200,
     usageMethod: '',
     processRemark: ''
@@ -753,7 +759,8 @@ function openMergeConfirm() {
     batches: [createBatch(doseCount)],
     pickupMethod: 0,
     expressAddress: '',
-    bagCount: doseCount * 2,
+    bagCount: null,
+    bagsPerDose: 2,
     volumeMl: 200,
     usageMethod: '',
     processRemark: ''
@@ -785,10 +792,14 @@ async function submitConfirm() {
       scheduleType: Number(batch.scheduleType),
       processDate: Number(batch.scheduleType) === 2 ? null : batch.processDate
     }));
+    payload.batches = payload.batches.map((batch) => ({
+      ...batch,
+      bagCount: isDecoction.value ? Number(batch.totalDose) * Number(payload.bagsPerDose || 0) : null
+    }));
     payload.scheduleType = payload.batches[0]?.scheduleType;
     payload.processDate = payload.batches[0]?.processDate || null;
     if (!isDecoction.value)
-      Object.assign(payload, { bagCount: null, volumeMl: null, usageMethod: null });
+      Object.assign(payload, { bagCount: null, bagsPerDose: null, volumeMl: null, usageMethod: null });
     if (isMerging.value) {
       await mergeE6Imports({ ...payload, ids: selectedRows.value.map((row) => row.id) });
       ElMessage.success('已合并生成处方并进入加工工作台');
@@ -945,6 +956,11 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 }
 .batch-unit {
   color: var(--el-text-color-secondary);
+}
+.batch-bag-hint {
+  grid-column: 1 / -1;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 .batch-total-error {
   color: var(--el-color-danger);
