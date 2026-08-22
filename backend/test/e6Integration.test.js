@@ -438,6 +438,57 @@ test("an E6 import can regenerate a processing plan after the plan was deleted",
   assert.equal(state.plan.status, 0);
 });
 
+test("a conflicting E6 import can regenerate after its prescription was deleted", async () => {
+  const { prisma, state } = confirmFixture();
+  state.import.status = E6_IMPORT_STATUS.IMPORT_CONFLICT;
+  state.import.prescriptionId = null;
+  state.import.processingPlanId = null;
+
+  const result = await confirmE6Import(prisma, storeAdmin, 81, {
+    processTypeId: 20,
+    scheduleType: 1,
+    processDate: "2026-07-27",
+    pickupMethod: 0,
+  });
+
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_CONVERTED);
+  assert.equal(result.prescriptionId, 100);
+  assert.equal(result.processingPlanId, 200);
+});
+
+test("a conflicting E6 import can regenerate its plan after the plan was deleted", async () => {
+  const { prisma, state } = confirmFixture();
+  state.import.status = E6_IMPORT_STATUS.IMPORT_CONFLICT;
+  state.import.prescriptionId = 100;
+  state.import.processingPlanId = 200;
+  state.prescription = {
+    id: 100,
+    storeId: 3,
+    status: 0,
+    doctor: { id: 9, name: "李医生" },
+  };
+  state.plan = {
+    id: 200,
+    deletedAt: new Date("2026-07-27T08:00:00Z"),
+    pickupCode: "123456",
+    planCode: "P-200",
+    scanToken: "scan-200",
+  };
+  state.import.processingPlan = state.plan;
+
+  const result = await confirmE6Import(prisma, storeAdmin, 81, {
+    processTypeId: 20,
+    scheduleType: 1,
+    processDate: "2026-07-27",
+    pickupMethod: 0,
+  });
+
+  assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_CONVERTED);
+  assert.equal(result.prescriptionId, 100);
+  assert.equal(result.processingPlanId, 200);
+  assert.equal(state.plan.deletedAt, null);
+});
+
 test("confirming an E6 import applies the reviewed customer, doctor, and dose", async () => {
   const { prisma, state } = confirmFixture({ mapped: false });
 

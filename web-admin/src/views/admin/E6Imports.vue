@@ -204,6 +204,15 @@
             <div class="detail-value error-text">{{ detail.errorMessage }}</div>
           </div>
         </div>
+        <el-alert
+          v-if="detail && Number(detail.status) === E6_IMPORT_STATUS.IMPORT_CONFLICT"
+          class="conflict-alert"
+          type="error"
+          :closable="false"
+          title="数据冲突"
+          :description="conflictSummary(detail)"
+          show-icon
+        />
         <div v-if="detailItems.length" class="raw-section">
           <div class="detail-label">处方明细</div>
           <el-table :data="detailItems" border size="small">
@@ -460,6 +469,29 @@ function statusMeta(status) {
 function money(value) {
   return Number(value || 0).toFixed(2);
 }
+function sameText(left, right) {
+  return String(left ?? '').trim() === String(right ?? '').trim();
+}
+function sameMoney(left, right) {
+  if (left == null && right == null) return true;
+  return Number(left || 0).toFixed(2) === Number(right || 0).toFixed(2);
+}
+function conflictSummary(row) {
+  const fields = [];
+  const prescription = row.prescription;
+  const plan = row.processingPlan;
+  if (!prescription) return '关联处方已删除，无法比对原处方数据；请按最新 E6 数据重新生成。';
+  if (!sameText(row.customerName, prescription.customerName)) fields.push('顾客姓名');
+  if (!sameText(row.phone, prescription.phone)) fields.push('电话');
+  if (!sameMoney(row.totalPrice, prescription.totalPrice)) fields.push('总价');
+  if (!sameText(row.remark, prescription.remark)) fields.push('处方备注');
+  if (plan && Number(row.doseCount) !== Number(plan.totalDose)) fields.push('剂数');
+  if (plan && Number(row.isPaid) !== Number(plan.paymentStatus)) fields.push('付款状态');
+  if (plan && !sameText(row.remark, plan.processRemark) && sameText(row.remark, prescription.remark)) {
+    fields.push('加工备注');
+  }
+  return fields.length ? `发生变化：${fields.join('、')}` : '可能是 E6 药材明细或其他字段发生变化，请打开详情核对。';
+}
 function todayText() {
   const date = new Date();
   const pad = (value) => String(value).padStart(2, '0');
@@ -468,13 +500,13 @@ function todayText() {
 function canConfirm(row) {
   return (
     ([0, 1, 2].includes(Number(row.status)) && !row.prescriptionId) ||
-    (Number(row.status) === E6_IMPORT_STATUS.IMPORT_CONVERTED &&
+    ([E6_IMPORT_STATUS.IMPORT_CONVERTED, E6_IMPORT_STATUS.IMPORT_CONFLICT].includes(Number(row.status)) &&
       (!row.prescriptionId || !row.processingPlanId || row.processingPlan?.deletedAt))
   );
 }
 function isPlanRegeneration(row) {
   return (
-    Number(row.status) === E6_IMPORT_STATUS.IMPORT_CONVERTED &&
+    [E6_IMPORT_STATUS.IMPORT_CONVERTED, E6_IMPORT_STATUS.IMPORT_CONFLICT].includes(Number(row.status)) &&
     Boolean(row.prescriptionId) &&
     (!row.processingPlanId || row.processingPlan?.deletedAt)
   );

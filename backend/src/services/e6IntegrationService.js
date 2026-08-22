@@ -31,6 +31,7 @@ const CONVERTIBLE_STATUSES = [
 const RECONVERTIBLE_STATUSES = [
   ...CONVERTIBLE_STATUSES,
   E6_IMPORT_STATUS.IMPORT_CONVERTED,
+  E6_IMPORT_STATUS.IMPORT_CONFLICT,
 ];
 
 function clean(value, max, label, required = true) {
@@ -764,10 +765,23 @@ function importInclude(includeRaw = false) {
         id: true,
         prescriptionNo: true,
         status: true,
+        customerName: true,
+        phone: true,
+        totalPrice: true,
+        remark: true,
         doctor: { select: { id: true, name: true } },
       },
     },
-    processingPlan: { select: { id: true, status: true, deletedAt: true } },
+    processingPlan: {
+      select: {
+        id: true,
+        status: true,
+        deletedAt: true,
+        totalDose: true,
+        paymentStatus: true,
+        processRemark: true,
+      },
+    },
     ...(includeRaw ? {} : {}),
   };
 }
