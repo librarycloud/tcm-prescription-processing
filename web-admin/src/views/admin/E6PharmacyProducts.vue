@@ -89,10 +89,10 @@
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
         </el-table-column>
-        <el-table-column label="批号数" width="64" align="center">
+        <el-table-column label="批号数" align="center">
           <template #default="{ row }">{{ row.batchCount }}</template>
         </el-table-column>
-        <el-table-column label="总库存" width="78" align="right">
+        <el-table-column label="总库存" align="right">
           <template #default="{ row }">{{ quantityText(row.totalQuantity) }}</template>
         </el-table-column>
         <el-table-column prop="barcode" label="条形码" min-width="140">
