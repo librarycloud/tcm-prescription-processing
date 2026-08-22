@@ -167,6 +167,7 @@ model E6PharmacyProduct {
   dosageForm          String?   @map("dosage_form") @db.VarChar(64)
   manufacturer        String?   @db.VarChar(200)
   categoryAttribute   String?   @map("category_attribute") @db.VarChar(100)
+  unit                String?   @db.VarChar(30)
   e6CreatedAt         DateTime? @map("e6_created_at")
   e6ModifiedAt        DateTime? @map("e6_modified_at")
   lastInventorySeenAt DateTime? @map("last_inventory_seen_at")
@@ -190,6 +191,8 @@ model E6PharmacyInventoryBatch {
   batchNo        String    @default("") @map("batch_no") @db.VarChar(100)
   productionDate DateTime? @map("production_date") @db.Date
   expiryDate     DateTime? @map("expiry_date") @db.Date
+  inboundDate    DateTime? @map("inbound_date")
+  locationName   String?   @map("location_name") @db.VarChar(120)
   quantity       Decimal   @db.Decimal(14, 3)
   amount         Decimal   @db.Decimal(14, 2)
   receivedAt     DateTime  @default(now()) @map("received_at")

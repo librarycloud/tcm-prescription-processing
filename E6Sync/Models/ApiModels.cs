@@ -14,6 +14,7 @@ namespace E6Sync.Models
         public string dosageForm { get; set; }
         public string manufacturer { get; set; }
         public string categoryAttribute { get; set; }
+        public string unit { get; set; }
         public string e6CreatedAt { get; set; }
         public string e6ModifiedAt { get; set; }
     }
@@ -21,9 +22,11 @@ namespace E6Sync.Models
     public sealed class E6PharmacyBatchUpload
     {
         public int e6ProductId { get; set; }
+        public string locationName { get; set; }
         public string batchNo { get; set; }
         public string productionDate { get; set; }
         public string expiryDate { get; set; }
+        public string inboundDate { get; set; }
         public string quantity { get; set; }
         public string amount { get; set; }
     }

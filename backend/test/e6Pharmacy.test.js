@@ -17,6 +17,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
     dosageForm: "糖浆剂",
     manufacturer: "厂商",
     categoryAttribute: "化学药制剂",
+    unit: "盒",
     e6CreatedAt: null,
     e6ModifiedAt: null,
     lastInventorySeenAt: null,
@@ -25,8 +26,10 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
       {
         id: 20,
         batchNo: "G011226",
+        locationName: "一号货位",
         productionDate: new Date("2026-01-23T00:00:00.000Z"),
         expiryDate: new Date("2029-01-22T00:00:00.000Z"),
+        inboundDate: new Date("2026-08-20T00:00:00.000Z"),
         quantity: "3.000",
         amount: "121.04",
         receivedAt: new Date("2026-08-22T01:00:00.000Z"),
@@ -63,4 +66,6 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
   assert.equal(result.pagination.total, 1);
   assert.equal(result.list[0].totalQuantity, 3);
   assert.equal(result.list[0].inventories[0].batchNo, "G011226");
+  assert.equal(result.list[0].unit, "盒");
+  assert.equal(result.list[0].inventories[0].locationName, "一号货位");
 });

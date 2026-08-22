@@ -5,8 +5,10 @@ function normalizeBatch(batch) {
   return {
     id: batch.id,
     batchNo: batch.batchNo || "-",
+    locationName: batch.locationName || "-",
     productionDate: batch.productionDate,
     expiryDate: batch.expiryDate,
+    inboundDate: batch.inboundDate,
     quantity: Number(batch.quantity || 0),
     amount: Number(batch.amount || 0),
     receivedAt: batch.receivedAt,
@@ -28,6 +30,7 @@ function normalizeProduct(product) {
     dosageForm: product.dosageForm,
     manufacturer: product.manufacturer,
     categoryAttribute: product.categoryAttribute,
+    unit: product.unit,
     e6CreatedAt: product.e6CreatedAt,
     e6ModifiedAt: product.e6ModifiedAt,
     lastInventorySeenAt: product.lastInventorySeenAt,

@@ -39,6 +39,7 @@ function normalizeProduct(item) {
     dosageForm: text(item?.dosageForm, 64, "剂型"),
     manufacturer: text(item?.manufacturer, 200, "生产厂商"),
     categoryAttribute: text(item?.categoryAttribute, 100, "商品类别属性"),
+    unit: text(item?.unit, 30, "单位"),
     e6CreatedAt: date(item?.e6CreatedAt, "创建日期"),
     e6ModifiedAt: date(item?.e6ModifiedAt, "修改日期"),
   };
@@ -52,6 +53,8 @@ function normalizeBatch(item) {
     batchNo: text(item?.batchNo, 100, "批号") || "",
     productionDate: date(item?.productionDate, "生产日期"),
     expiryDate: date(item?.expiryDate, "有效期至"),
+    inboundDate: date(item?.inboundDate, "入库时间"),
+    locationName: text(item?.locationName, 120, "货位名称"),
     quantity,
     amount: decimal(item?.amount, "库存金额", 2),
   };
@@ -113,8 +116,19 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     });
     await prisma.e6PharmacyInventoryBatch.upsert({
       where: { storeId_productId_batchNo: { storeId: store.id, productId, batchNo: item.batchNo } },
-      create: { storeId: store.id, productId, ...item, receivedAt: new Date() },
-      update: { productionDate: item.productionDate, expiryDate: item.expiryDate, quantity: item.quantity, amount: item.amount, receivedAt: new Date() },
+      create: {
+        storeId: store.id,
+        productId,
+        batchNo: item.batchNo,
+        productionDate: item.productionDate,
+        expiryDate: item.expiryDate,
+        inboundDate: item.inboundDate,
+        locationName: item.locationName,
+        quantity: item.quantity,
+        amount: item.amount,
+        receivedAt: new Date(),
+      },
+      update: { productionDate: item.productionDate, expiryDate: item.expiryDate, inboundDate: item.inboundDate, locationName: item.locationName, quantity: item.quantity, amount: item.amount, receivedAt: new Date() },
     });
     if (existing) updated++;
     else created++;

@@ -126,7 +126,7 @@ namespace E6Sync
             endDatePicker = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 132, Value = DateTime.Today, Margin = new Padding(2, 3, 12, 3) };
             manualSyncButton = new Button { Text = "开始同步", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 8, 3) };
             manualSyncButton.Click += ManualSyncButton_Click;
-            manualPharmacySyncButton = new Button { Text = "药店今日全量同步", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 8, 3) };
+            manualPharmacySyncButton = new Button { Text = "药店全量同步", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 8, 3) };
             manualPharmacySyncButton.Click += ManualPharmacySyncButton_Click;
             testSqlButton = new Button { Text = "测试 SQL 连接", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 3, 3) };
             testSqlButton.Click += TestSqlButton_Click;

@@ -190,20 +190,17 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
         public List<E6PharmacyProductUpload> QueryPharmacyProducts(DateTime? modifiedAfter)
         {
             var result = new List<E6PharmacyProductUpload>();
-            const string sql = @"SELECT p.[ID], p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[创建日期], p.[修改日期]
-FROM dbo.[商品] p
-WHERE EXISTS (SELECT 1 FROM dbo.[AC门店库存日报] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0 AND i.[日期] >= @dayStart AND i.[日期] < @dayEnd)
+            const string sql = @"SELECT p.[ID], p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[创建日期], p.[修改日期]
+FROM dbo.[DC商品] p
+WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0)
   AND (@modifiedAfter IS NULL OR p.[修改日期] > @modifiedAfter)
 ORDER BY p.[修改日期], p.[ID];";
-            var dayStart = DateTime.Today;
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
             {
-                command.Parameters.Add("@dayStart", SqlDbType.DateTime).Value = dayStart;
-                command.Parameters.Add("@dayEnd", SqlDbType.DateTime).Value = dayStart.AddDays(1);
                 command.Parameters.Add("@modifiedAfter", SqlDbType.DateTime).Value = (object)modifiedAfter ?? DBNull.Value;
                 connection.Open();
-                using (var reader = command.ExecuteReader()) while (reader.Read()) result.Add(new E6PharmacyProductUpload { e6ProductId = Convert.ToInt32(reader["ID"]), productCode = Convert.ToString(reader["编号"])?.Trim(), name = Convert.ToString(reader["名称"])?.Trim(), category = ToNullableText(reader["分类"]), categoryCode = ToNullableText(reader["分类编号"]), barcode = ToNullableText(reader["条形码"]), specification = ToNullableText(reader["规格"]), dosageForm = ToNullableText(reader["剂型"]), manufacturer = ToNullableText(reader["生产厂商"]), categoryAttribute = ToNullableText(reader["商品类别属性"]), e6CreatedAt = ToIso(reader["创建日期"]), e6ModifiedAt = ToIso(reader["修改日期"]) });
+                using (var reader = command.ExecuteReader()) while (reader.Read()) result.Add(new E6PharmacyProductUpload { e6ProductId = Convert.ToInt32(reader["ID"]), productCode = Convert.ToString(reader["编号"])?.Trim(), name = Convert.ToString(reader["名称"])?.Trim(), category = ToNullableText(reader["分类"]), categoryCode = ToNullableText(reader["分类编号"]), barcode = ToNullableText(reader["条形码"]), specification = ToNullableText(reader["规格"]), dosageForm = ToNullableText(reader["剂型"]), manufacturer = ToNullableText(reader["生产厂商"]), categoryAttribute = ToNullableText(reader["商品类别属性"]), unit = ToNullableText(reader["单位"]), e6CreatedAt = ToIso(reader["创建日期"]), e6ModifiedAt = ToIso(reader["修改日期"]) });
             }
             return result;
         }
@@ -212,15 +209,13 @@ ORDER BY p.[修改日期], p.[ID];";
         {
             var result = new E6PharmacyInventorySnapshot();
             var bytes = DecodeCursor(cursor);
-            var sql = @"SELECT [商品id], [批号], [生产日期], [有效期至], [数量], [金额], [_c_] FROM dbo.[AC门店库存日报] WHERE [日期] >= @dayStart AND [日期] < @dayEnd AND [数量] > 0 " + (bytes == null ? "" : "AND [_c_] > @cursor ") + "ORDER BY [_c_];";
+            var sql = @"SELECT i.[商品id], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[金额], i.[_c_] FROM dbo.[AC货位商品帐] i LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id] WHERE i.[数量] > 0 " + (bytes == null ? "" : "AND i.[_c_] > @cursor ") + "ORDER BY i.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
             {
-                command.Parameters.Add("@dayStart", SqlDbType.DateTime).Value = inventoryDate.Date;
-                command.Parameters.Add("@dayEnd", SqlDbType.DateTime).Value = inventoryDate.Date.AddDays(1);
                 if (bytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = bytes;
                 connection.Open();
-                using (var reader = command.ExecuteReader()) while (reader.Read()) { result.Batches.Add(new E6PharmacyBatchUpload { e6ProductId = Convert.ToInt32(reader["商品id"]), batchNo = ToNullableText(reader["批号"]) ?? "", productionDate = ToDate(reader["生产日期"]), expiryDate = ToDate(reader["有效期至"]), quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) }); result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]); }
+                using (var reader = command.ExecuteReader()) while (reader.Read()) { result.Batches.Add(new E6PharmacyBatchUpload { e6ProductId = Convert.ToInt32(reader["商品id"]), locationName = ToNullableText(reader["货位名称"]), batchNo = ToNullableText(reader["批号"]) ?? "", productionDate = ToDate(reader["生产日期"]), expiryDate = ToDate(reader["有效期至"]), inboundDate = ToIso(reader["入库时间"]), quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) }); result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]); }
             }
             return result;
         }

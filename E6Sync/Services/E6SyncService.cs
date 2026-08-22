@@ -107,7 +107,7 @@ namespace E6Sync.Services
 
         public async Task<SyncStats> RunPharmacyManualAsync(CancellationToken cancellationToken)
         {
-            log.Info("开始药店手动同步：当天库存全量");
+            log.Info("开始药店手动同步：全部货位库存全量");
             var stats = await RunPharmacyAsync(true, cancellationToken).ConfigureAwait(false);
             if (stats.FailureCount == 0 && !cancellationToken.IsCancellationRequested)
             {
@@ -192,15 +192,15 @@ namespace E6Sync.Services
             }
             var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor), cancellationToken).ConfigureAwait(false);
             stats.QueryCount += snapshot.Batches.Count;
-            log.Info(string.Format("药店本地查询：日期 {0:yyyy-MM-dd}，商品 {1}，库存批次 {2}，模式 {3}", DateTime.Today, products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
+            log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，模式 {2}", products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
             if (fullSync && snapshot.Batches.Count == 0)
-                throw new InvalidOperationException(string.Format("药店当天库存查询为 0（日期 {0:yyyy-MM-dd}），已停止全量上传；请检查库存日报日期、药店数据库和系统日期", DateTime.Today));
+                throw new InvalidOperationException("药店货位库存查询为 0，已停止全量上传；请检查药店数据库和库存表");
             var inventoryResult = await api.SendPharmacyInventoryAsync(snapshot.Batches, fullSync, cancellationToken).ConfigureAwait(false);
             if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
             stats.SuccessCount++;
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
             SaveConfig();
-            log.Info(string.Format("药店同步完成：商品 {0}，库存批次 {1}{2}", products.Count, snapshot.Batches.Count, fullSync ? "（今日全量）" : "（增量）"));
+            log.Info(string.Format("药店同步完成：商品 {0}，库存批次 {1}{2}", products.Count, snapshot.Batches.Count, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
             return stats;
         }
 

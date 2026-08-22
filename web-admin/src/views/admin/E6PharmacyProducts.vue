@@ -43,8 +43,12 @@
               <div class="batch-title">批号库存（{{ row.batchCount }}）</div>
               <el-table :data="row.inventories" border size="small" table-layout="auto">
                 <el-table-column prop="batchNo" label="批号" min-width="140" />
+                <el-table-column prop="locationName" label="货位" min-width="140" />
                 <el-table-column label="生产日期" width="130">
                   <template #default="{ row: batch }">{{ dateText(batch.productionDate) }}</template>
+                </el-table-column>
+                <el-table-column label="入库时间" width="170">
+                  <template #default="{ row: batch }">{{ dateTimeText(batch.inboundDate) }}</template>
                 </el-table-column>
                 <el-table-column label="有效期至" width="130">
                   <template #default="{ row: batch }">{{ dateText(batch.expiryDate) }}</template>
@@ -67,6 +71,9 @@
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
         <el-table-column prop="name" label="商品名称" min-width="180" />
+        <el-table-column prop="unit" label="单位" min-width="80">
+          <template #default="{ row }">{{ row.unit || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="barcode" label="条形码" min-width="140">
           <template #default="{ row }">{{ row.barcode || '-' }}</template>
         </el-table-column>
