@@ -32,9 +32,7 @@
         <el-select v-model="query.expiryWithinMonths" placeholder="有效期小于" clearable @change="handleExpiryChange">
           <el-option label="有效期小于1个月" :value="1" />
           <el-option label="有效期小于3个月" :value="3" />
-          <el-option label="有效期小于4个月" :value="4" />
           <el-option label="有效期小于6个月" :value="6" />
-          <el-option label="有效期小于12个月" :value="12" />
           <el-option label="自定义月份" value="custom" />
         </el-select>
         <el-input-number
