@@ -138,6 +138,7 @@ import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { getProductStores } from '@/api/productDifference';
 import { getE6PharmacyProducts } from '@/api/e6Pharmacy';
+import { formatDateSeconds } from '@/utils/date';
 
 const userStore = useUserStore();
 const tableRef = ref();
@@ -153,8 +154,7 @@ function dateText(value) {
 }
 
 function dateTimeText(value) {
-  if (!value) return '-';
-  return String(value).replace('T', ' ').slice(0, 19);
+  return formatDateSeconds(value);
 }
 
 function quantityText(value) {
