@@ -3,7 +3,8 @@ import {
   createGoodsCheck,
   getGoodsCheckCandidates,
   getGoodsChecks,
-  getStores
+  getStores,
+  recountGoodsCheckItem
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
@@ -63,7 +64,7 @@ Page({
     selectedProduct: null,
     selectedInventories: [],
     countVisible: false,
-    countForm: { product: null, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: false },
+    countForm: { mode: 'initial', itemId: null, product: null, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: false },
     saving: false
   },
 
@@ -216,16 +217,24 @@ Page({
 
   openCount(e) {
     const row = this.data.selectedInventories[Number(e.currentTarget.dataset.index)];
-    if (!row || row.counted) return;
+    if (!row) return;
+    const status = Number(row.checkStatus || 0);
+    const isRecount = status === 2 && row.checkItemId;
+    if (row.counted && !isRecount) return;
+    const systemQty = isRecount && row.recountSystemQty !== null && row.recountSystemQty !== undefined
+      ? row.recountSystemQty
+      : row.quantity;
     this.setData({
       countVisible: true,
       countForm: {
+        mode: isRecount ? 'recount' : 'initial',
+        itemId: isRecount ? row.checkItemId : null,
         product: row.product,
         batchNo: row.batchNo || '',
-        locationName: row.locationName || '',
+        locationName: row.countLocationName || row.locationName || '',
         locationEditing: false,
-        systemQty: numberText(row.quantity),
-        countQty: numberText(row.quantity),
+        systemQty: numberText(systemQty),
+        countQty: numberText(isRecount && row.recountQty !== null && row.recountQty !== undefined ? row.recountQty : (isRecount ? row.firstCountQty : row.quantity)),
         manualBatch: false
       }
     });
@@ -234,7 +243,7 @@ Page({
   openManualCount() {
     const product = this.data.selectedProduct;
     if (!product) return;
-    this.setData({ countVisible: true, countForm: { product, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: true } });
+    this.setData({ countVisible: true, countForm: { mode: 'initial', itemId: null, product, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: true } });
   },
 
   closeCount() {
@@ -257,16 +266,20 @@ Page({
     if (form.countQty === '' || Number(form.countQty) < 0 || !Number.isFinite(Number(form.countQty))) return wx.showToast({ title: '请输入有效盘点数量', icon: 'none' });
     this.setData({ saving: true });
     try {
-      await addInitialGoodsCheckCount(this.data.selectedCheck.id, {
-        productId: form.product.id,
-        batchNo: form.batchNo,
-        locationName: form.locationName || undefined,
-        firstCountQty: Number(form.countQty)
-      });
+      if (form.mode === 'recount') {
+        await recountGoodsCheckItem(form.itemId, { recountQty: Number(form.countQty) });
+      } else {
+        await addInitialGoodsCheckCount(this.data.selectedCheck.id, {
+          productId: form.product.id,
+          batchNo: form.batchNo,
+          locationName: form.locationName || undefined,
+          firstCountQty: Number(form.countQty)
+        });
+      }
       this.closeCount();
       await this.searchCandidates(true);
       await this.loadChecks();
-      wx.showToast({ title: '盘点已保存', icon: 'success' });
+      wx.showToast({ title: form.mode === 'recount' ? '复盘已保存' : '盘点已保存', icon: 'success' });
     } finally {
       this.setData({ saving: false });
     }

@@ -295,9 +295,31 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   const check = await getCheck(prisma, actor, checkId);
   const keyword = text(query.keyword);
   const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(keyword ? { product: { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] } } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { locationName: "asc" }] });
-  const rows = await prisma.ydGoodsCheckItem.findMany({ where: { checkId: check.id }, select: { productId: true, batchNo: true, systemLocationName: true } });
-  const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationName)));
-  const result = inventories.map((row) => ({ ...row, quantity: Number(row.quantity || 0), counted: counted.has(itemKey(row.productId, row.batchNo, row.locationName)) }));
+  const rows = await prisma.ydGoodsCheckItem.findMany({
+    where: { checkId: check.id },
+    select: {
+      id: true, productId: true, batchNo: true, systemLocationName: true,
+      countLocationName: true, systemQty: true, firstCountQty: true,
+      recountQty: true, recountSystemQty: true, checkStatus: true, reviewStatus: true,
+    },
+  });
+  const itemsByKey = new Map(rows.map((row) => [itemKey(row.productId, row.batchNo, row.systemLocationName), row]));
+  const result = inventories.map((row) => {
+    const item = itemsByKey.get(itemKey(row.productId, row.batchNo, row.locationName));
+    return {
+      ...row,
+      quantity: Number(row.quantity || 0),
+      counted: Boolean(item && item.firstCountQty !== null && item.firstCountQty !== undefined),
+      checkItemId: item?.id || null,
+      countLocationName: item?.countLocationName || null,
+      systemQty: item ? Number(item.systemQty || 0) : Number(row.quantity || 0),
+      firstCountQty: item?.firstCountQty === null || item?.firstCountQty === undefined ? null : Number(item.firstCountQty),
+      recountQty: item?.recountQty === null || item?.recountQty === undefined ? null : Number(item.recountQty),
+      recountSystemQty: item?.recountSystemQty === null || item?.recountSystemQty === undefined ? null : Number(item.recountSystemQty),
+      checkStatus: item ? Number(item.checkStatus || 0) : CHECK_STATUS.UNCOUNTED,
+      reviewStatus: item ? Number(item.reviewStatus || 0) : 0,
+    };
+  });
   if (keyword) {
     const products = await prisma.e6PharmacyProduct.findMany({
       where: { storeId: check.storeId, OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] },

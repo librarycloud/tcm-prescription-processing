@@ -374,3 +374,7 @@ export function getGoodsCheckCandidates(id, params = {}) {
 export function addInitialGoodsCheckCount(id, data) {
   return request({ url: `/admin/yd-goods-check/${id}/items`, method: 'POST', data });
 }
+
+export function recountGoodsCheckItem(id, data) {
+  return request({ url: `/admin/yd-goods-check/items/${id}/recount`, method: 'PUT', data });
+}
