@@ -230,6 +230,10 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
   if (keyword) where.product = { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] };
   if (query.batchNo) where.batchNo = { contains: text(query.batchNo) };
   if (query.locationName) where.OR = [{ systemLocationName: { contains: text(query.locationName) } }, { countLocationName: { contains: text(query.locationName) } }];
+  const checkStatus = query.checkStatus ?? query.check_status;
+  if (checkStatus !== undefined && checkStatus !== "") where.checkStatus = Number(checkStatus);
+  const locationStatus = query.locationStatus ?? query.location_status;
+  if (locationStatus !== undefined && locationStatus !== "") where.locationStatus = Number(locationStatus);
   const rows = await prisma.ydGoodsCheckItem.findMany({ where, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }] });
   let list = rows.map(normalizeItem);
   const status = text(query.status);
