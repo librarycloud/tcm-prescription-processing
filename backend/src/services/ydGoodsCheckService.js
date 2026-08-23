@@ -260,14 +260,13 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationName)));
   const result = inventories.map((row) => ({ ...row, quantity: Number(row.quantity || 0), counted: counted.has(itemKey(row.productId, row.batchNo, row.locationName)) }));
   if (keyword) {
-    const representedProducts = new Set(result.map((row) => row.productId));
     const products = await prisma.e6PharmacyProduct.findMany({
       where: { storeId: check.storeId, OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] },
       select: productInclude.select,
       orderBy: { name: "asc" },
       take: 100,
     });
-    products.filter((product) => !representedProducts.has(product.id)).forEach((product) => {
+    products.forEach((product) => {
       result.push({ productId: product.id, product, batchNo: "", locationName: "", quantity: 0, counted: false, manualBatch: true });
     });
   }
