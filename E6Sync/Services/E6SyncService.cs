@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using E6Sync.Models;
@@ -180,26 +182,51 @@ namespace E6Sync.Services
             var productSnapshot = await Task.Run(() => database.QueryPharmacyProducts(fullSync ? "" : config.Sync.LastPharmacyProductCursor), cancellationToken).ConfigureAwait(false);
             var products = productSnapshot.Products;
             stats.QueryCount += products.Count;
-            if (products.Count > 0)
+            var productBatchCount = 0;
+            foreach (var productBatch in SplitBatches(products, 1000))
             {
-                var productResult = await api.SendPharmacyProductsAsync(products, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var productResult = await api.SendPharmacyProductsAsync(productBatch, cancellationToken).ConfigureAwait(false);
                 if (!productResult.Success) throw new InvalidOperationException(productResult.Message);
                 stats.SuccessCount++;
+                productBatchCount++;
             }
             var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor), cancellationToken).ConfigureAwait(false);
             stats.QueryCount += snapshot.Batches.Count;
             log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，模式 {2}", products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
             if (fullSync && snapshot.Batches.Count == 0)
                 throw new InvalidOperationException("药店货位库存查询为 0，已停止全量上传；请检查药店数据库和库存表");
-            var inventoryResult = await api.SendPharmacyInventoryAsync(snapshot.Batches, fullSync, cancellationToken).ConfigureAwait(false);
-            if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
-            stats.SuccessCount++;
+            var fullSyncStartedAt = fullSync ? DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture) : null;
+            var inventoryBatchCount = 0;
+            var inventoryBatches = SplitBatches(snapshot.Batches, 1000);
+            for (var index = 0; index < inventoryBatches.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var lastBatch = index == inventoryBatches.Count - 1;
+                var inventoryResult = await api.SendPharmacyInventoryAsync(inventoryBatches[index], fullSync, fullSync && lastBatch, fullSyncStartedAt, cancellationToken).ConfigureAwait(false);
+                if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
+                stats.SuccessCount++;
+                inventoryBatchCount++;
+                log.Info(string.Format("药店库存上传批次 {0}/{1}：{2} 条", index + 1, inventoryBatches.Count, inventoryBatches[index].Count));
+            }
             if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor)) config.Sync.LastPharmacyProductCursor = productSnapshot.Cursor;
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
             if (!string.IsNullOrWhiteSpace(snapshot.LocationCursor)) config.Sync.LastPharmacyLocationCursor = snapshot.LocationCursor;
             SaveConfig();
-            log.Info(string.Format("药店同步完成：商品 {0}，库存批次 {1}{2}", products.Count, snapshot.Batches.Count, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
+            log.Info(string.Format("药店同步完成：商品 {0}（{1} 批），库存批次 {2}（{3} 批）{4}", products.Count, productBatchCount, snapshot.Batches.Count, inventoryBatchCount, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
             return stats;
+        }
+
+        private static List<List<T>> SplitBatches<T>(IList<T> items, int size)
+        {
+            var result = new List<List<T>>();
+            for (var offset = 0; offset < items.Count; offset += size)
+            {
+                var batch = new List<T>(Math.Min(size, items.Count - offset));
+                for (var index = offset; index < Math.Min(offset + size, items.Count); index++) batch.Add(items[index]);
+                result.Add(batch);
+            }
+            return result;
         }
 
         private async Task<string> ProcessOrderAsync(E6Order order, SyncStats stats, CancellationToken cancellationToken)

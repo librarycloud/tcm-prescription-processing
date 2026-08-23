@@ -101,17 +101,15 @@ namespace E6Sync
             pharmacyAutomaticValue = AddStatusRow(statusLayout, "药店状态：", "已停止", 3);
             pharmacyLastSyncValue = AddStatusRow(statusLayout, "上次药店同步：", "未执行", 4);
             pharmacyNextSyncValue = AddStatusRow(statusLayout, "下次药店同步：", "--", 5);
-            statusLayout.Controls.Add(automaticEnabledCheckBox, 2, 0);
-            statusLayout.Controls.Add(pharmacySyncCheckBox, 2, 3);
             intervalNumeric = CreateIntervalControl();
             pharmacyIntervalNumeric = CreateIntervalControl();
-            statusLayout.Controls.Add(CreateIntervalPanel("间隔(秒)：", intervalNumeric), 2, 2);
-            statusLayout.Controls.Add(CreateIntervalPanel("间隔(秒)：", pharmacyIntervalNumeric), 2, 5);
+            statusLayout.Controls.Add(CreateSyncOptionsPanel(automaticEnabledCheckBox, intervalNumeric), 2, 0);
+            statusLayout.Controls.Add(CreateSyncOptionsPanel(pharmacySyncCheckBox, pharmacyIntervalNumeric), 2, 3);
             intervalNumeric.ValueChanged += IntervalNumeric_ValueChanged;
             pharmacyIntervalNumeric.ValueChanged += PharmacyIntervalNumeric_ValueChanged;
             statusGroup.Controls.Add(statusLayout);
 
-            var manualGroup = new GroupBox { Text = "手动全量同步", Dock = DockStyle.Fill, Padding = new Padding(12) };
+            var manualGroup = new GroupBox { Text = "手动同步", Dock = DockStyle.Fill, Padding = new Padding(12) };
             var manualLayout = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -124,7 +122,7 @@ namespace E6Sync
             startDatePicker = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 132, Value = DateTime.Today, Margin = new Padding(2, 3, 12, 3) };
             var endLabel = new Label { Text = "结束日期：", AutoSize = true, Margin = new Padding(3, 7, 2, 3) };
             endDatePicker = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 132, Value = DateTime.Today, Margin = new Padding(2, 3, 12, 3) };
-            manualSyncButton = new Button { Text = "开始同步", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 8, 3) };
+            manualSyncButton = new Button { Text = "诊所处方同步", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 8, 3) };
             manualSyncButton.Click += ManualSyncButton_Click;
             manualPharmacySyncButton = new Button { Text = "药店全量同步", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10, 2, 10, 2), Margin = new Padding(2, 3, 8, 3) };
             manualPharmacySyncButton.Click += ManualPharmacySyncButton_Click;
@@ -197,6 +195,15 @@ namespace E6Sync
             var panel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
             panel.Controls.Add(new Label { Text = caption, AutoSize = true, Margin = new Padding(0, 4, 4, 0) });
             panel.Controls.Add(input);
+            return panel;
+        }
+
+        private static Control CreateSyncOptionsPanel(CheckBox enabled, NumericUpDown interval)
+        {
+            var panel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
+            enabled.Margin = new Padding(0, 3, 8, 0);
+            panel.Controls.Add(enabled);
+            panel.Controls.Add(CreateIntervalPanel("间隔(秒)：", interval));
             return panel;
         }
 

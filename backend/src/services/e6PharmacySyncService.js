@@ -108,6 +108,10 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   const items = Array.isArray(payload?.batches) ? payload.batches : [];
   if (items.length > 10000) throw new AppError("单次库存上传不能超过10000条", 400);
   const normalized = mergeBatches(items.map(normalizeBatch));
+  const fullSyncStartedAt = payload?.fullSyncStartedAt
+    ? date(payload.fullSyncStartedAt, "全量同步开始时间")
+    : null;
+  const fullSyncComplete = payload?.fullSyncComplete === true;
   const productIds = [...new Set(normalized.map((item) => item.e6ProductId))];
   const products = await prisma.e6PharmacyProduct.findMany({
     where: { storeId: store.id, e6ProductId: { in: productIds } },
@@ -148,13 +152,15 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     else created++;
   }
 
-  if (payload?.fullSync === true) {
+  if (payload?.fullSync === true && (fullSyncComplete || !fullSyncStartedAt)) {
     const existing = await prisma.e6PharmacyInventoryBatch.findMany({
       where: { storeId: store.id },
-      select: { id: true, productId: true, batchNo: true, locationName: true },
+      select: { id: true, productId: true, batchNo: true, locationName: true, receivedAt: true },
     });
     const removeIds = existing
-      .filter((item) => !seen.has(`${item.productId}\u0000${item.batchNo}\u0000${item.locationName || ""}`))
+      .filter((item) => fullSyncStartedAt
+        ? item.receivedAt < fullSyncStartedAt
+        : !seen.has(`${item.productId}\u0000${item.batchNo}\u0000${item.locationName || ""}`))
       .map((item) => item.id);
     if (removeIds.length) await prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } });
   }
