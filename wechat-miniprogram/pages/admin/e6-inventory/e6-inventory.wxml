@@ -1,0 +1,51 @@
+<view class="page inventory-page">
+  <view class="page-heading">
+    <view class="page-title">E6药店商品库存</view>
+    <view class="muted">先搜索并选择商品，再查看库存</view>
+  </view>
+
+  <view class="search-panel">
+    <t-input value="{{keyword}}" placeholder="名称、编码或条码" bind:change="onKeywordChange" bind:enter="search" />
+    <view class="search-actions">
+      <t-button variant="outline" bind:tap="scan">扫码</t-button>
+      <t-button theme="primary" loading="{{searchLoading}}" bind:tap="search">查询商品</t-button>
+    </view>
+  </view>
+
+  <view wx:if="{{searched}}" class="section-title">匹配商品</view>
+  <view wx:for="{{products}}" wx:key="id" class="app-card product-option" data-index="{{index}}" bind:tap="selectProduct">
+    <view class="product-title">{{item.productCode}} · {{item.name}}</view>
+    <view class="muted">{{item.specification || '无规格'}} · {{item.unit || '-'}} · 条码 {{item.barcode || '-'}}</view>
+  </view>
+  <t-empty wx:if="{{searched && !searchLoading && !products.length}}" description="暂无匹配商品" />
+
+  <t-loading wx:if="{{detailLoading}}" text="正在加载库存" />
+  <view wx:if="{{selectedProduct}}" class="product-detail">
+    <view class="section-title">商品信息</view>
+    <view class="app-card">
+      <view class="product-title">{{selectedProduct.name}}</view>
+      <view class="muted">编码：{{selectedProduct.productCode}}　条码：{{selectedProduct.barcode || '-'}}</view>
+      <view class="muted">规格：{{selectedProduct.specification || '-'}}　单位：{{selectedProduct.unit || '-'}}</view>
+      <view class="muted">生产厂商：{{selectedProduct.manufacturer || '-'}}</view>
+      <view class="inventory-total">总库存 <text>{{selectedProduct.totalQuantityText}}</text> {{selectedProduct.unit || ''}}　共 {{selectedProduct.batchCount}} 个库存批次</view>
+    </view>
+
+    <view class="section-title">库存信息</view>
+    <view wx:for="{{selectedProduct.inventories}}" wx:key="id" class="app-card inventory-card">
+      <view class="inventory-row"><text>批号</text><text>{{item.batchNo}}</text></view>
+      <view class="inventory-row"><text>货位</text><text>{{item.locationName}}</text></view>
+      <view class="inventory-row strong"><text>库存数量</text><text>{{item.quantityText}} {{selectedProduct.unit || ''}}</text></view>
+      <view class="inventory-row"><text>价格</text><text>¥ {{item.amountText}}</text></view>
+      <view class="muted inventory-dates">生产：{{item.productionDateText}}　有效期：{{item.expiryDateText}}　入库：{{item.inboundDateText}}</view>
+    </view>
+    <t-empty wx:if="{{!selectedProduct.inventories.length}}" description="该商品暂无库存" />
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">概览</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

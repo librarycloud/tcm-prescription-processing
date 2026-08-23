@@ -321,9 +321,24 @@ export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   let list = rows.map(normalizeItem);
   if (type === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
   if (type === "adjustment") list = list.filter((row) => row.needsAdjustment);
+  const userIds = [...new Set(list.flatMap((row) => [row.firstCountedBy, row.recountedBy, row.reviewedBy]).filter(Boolean))];
+  const users = userIds.length
+    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, nickname: true, phone: true } })
+    : [];
+  const userNames = new Map(users.map((user) => [user.id, user.name || user.nickname || user.phone || "-"]));
+  const checkStatusText = (row) => row.needsAdjustment ? "需调整库存" : ({
+    [CHECK_STATUS.UNCOUNTED]: "未盘",
+    [CHECK_STATUS.MATCH_PENDING_REVIEW]: "待复核",
+    [CHECK_STATUS.PENDING_RECOUNT]: "待复盘",
+    [CHECK_STATUS.RECOUNT_MATCH_PENDING_REVIEW]: "复盘待复核",
+    [CHECK_STATUS.PENDING_ADJUSTMENT]: "需调整库存",
+    [CHECK_STATUS.NEW_BATCH]: "新增批号",
+    [CHECK_STATUS.CONFIRMED]: "已确认",
+  }[row.checkStatus] || "-");
+  const reviewStatusText = (value) => ({ 0: "未复核", 1: "已确认", 2: "未通过" }[Number(value)] || "-");
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("盘点记录");
-  sheet.columns = ["商品编号", "商品名称", "条形码", "规格", "单位", "批号", "系统货位", "盘点货位", "初盘系统数量", "初盘数量", "复盘系统数量", "复盘数量", "差异", "状态", "复核状态"].map((header) => ({ header, width: 16 }));
-  list.forEach((row) => sheet.addRow([row.product?.productCode || "", row.product?.name || "", row.product?.barcode || "", row.product?.specification || "", row.product?.unit || "", row.batchNo, row.systemLocationName, row.countLocationName || "", row.systemQty, row.firstCountQty, row.recountSystemQty, row.recountQty, row.difference, row.checkStatus, row.reviewStatus]));
+  sheet.columns = ["商品编号", "商品名称", "条形码", "规格", "单位", "批号", "系统货位", "盘点货位", "初盘系统数量", "初盘数量", "初盘人", "复盘系统数量", "复盘数量", "复盘人", "差异", "状态", "复核状态", "复核人"].map((header) => ({ header, width: 16 }));
+  list.forEach((row) => sheet.addRow([row.product?.productCode || "", row.product?.name || "", row.product?.barcode || "", row.product?.specification || "", row.product?.unit || "", row.batchNo, row.systemLocationName, row.countLocationName || "", row.systemQty, row.firstCountQty, userNames.get(row.firstCountedBy) || "", row.recountSystemQty, row.recountQty, userNames.get(row.recountedBy) || "", row.difference, checkStatusText(row), reviewStatusText(row.reviewStatus), userNames.get(row.reviewedBy) || ""]));
   return { buffer: await workbook.xlsx.writeBuffer(), filename: `${check.checkName}-盘点${type === "adjustment" ? "需调整库存" : type === "recount" ? "待复盘" : "全部"}.xlsx` };
 }

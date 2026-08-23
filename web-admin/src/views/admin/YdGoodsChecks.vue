@@ -40,7 +40,7 @@
         </div>
       </div>
       <el-form class="filters detail-filters" inline @submit.prevent="loadItems">
-        <el-input v-model.trim="itemQuery.keyword" clearable placeholder="商品编号、名称或条形码" @keyup.enter="loadItems" />
+        <el-input v-model.trim="itemQuery.keyword" clearable placeholder="商品编号、名称、条码" @keyup.enter="loadItems" />
         <el-input v-model.trim="itemQuery.locationName" clearable placeholder="系统货位或盘点货位" @keyup.enter="loadItems" />
         <el-select v-model="itemQuery.checkStatus" clearable placeholder="全部盘点状态" @change="loadItems">
           <el-option label="漏盘" value="missing" /><el-option label="待复核" :value="1" /><el-option label="待复盘" :value="2" /><el-option label="复盘待复核" :value="3" /><el-option label="需调整库存" :value="4" /><el-option label="新增批号" :value="5" /><el-option label="已确认" :value="6" />
@@ -76,13 +76,41 @@
       <template #footer><el-button @click="createDialog = false">取消</el-button><el-button type="primary" @click="create">创建</el-button></template>
     </el-dialog>
     <el-dialog v-model="countDialog" :title="countForm.mode === 'recount' ? '复盘' : '初盘'" width="420px"><el-form label-width="90px"><el-form-item label="商品">{{ countForm.product?.productCode }} {{ countForm.product?.name }}</el-form-item><el-form-item label="批号"><el-input v-if="countForm.manualBatch" v-model="countForm.batchNo" placeholder="输入新增批号" /><span v-else>{{ countForm.batchNo || '-' }}</span></el-form-item><el-form-item label="系统数量">{{ qty(countForm.systemQty) }}</el-form-item><el-form-item v-if="countForm.mode === 'initial'" label="盘点货位"><el-input v-model="countForm.location" placeholder="没有变化可留空" /></el-form-item><el-form-item :label="countForm.mode === 'recount' ? '复盘数量' : '初盘数量'"><el-input-number v-model="countForm.qty" :min="0" :precision="3" controls-position="right" /></el-form-item></el-form><template #footer><el-button @click="countDialog = false">取消</el-button><el-button type="primary" @click="saveCount">保存</el-button></template></el-dialog>
-    <el-dialog v-model="candidateDialog" title="选择 E6 商品或库存批次" width="820px"><el-form class="filters" inline @submit.prevent="loadCandidates"><el-input v-model.trim="candidateKeyword" clearable placeholder="条形码、商品编码或商品名称" @keyup.enter="loadCandidates" /><el-button type="primary" :icon="Search" @click="loadCandidates">查询</el-button></el-form><el-table ref="candidateTableRef" class="candidate-table" v-loading="candidateLoading" :data="candidates" border max-height="420" scrollbar-always-on table-layout="auto" style="width: 100%" @row-click="chooseCandidate"><template #empty>{{ candidateSearched ? '暂无匹配商品' : '请输入搜索内容后查询' }}</template><el-table-column label="商品编号" min-width="120"><template #default="{ row }">{{ row.product?.productCode }}</template></el-table-column><el-table-column label="商品名称" min-width="160"><template #default="{ row }"><el-tooltip v-if="isLongText(row.product?.name)" :content="row.product.name" placement="top"><span class="ellipsis-text">{{ shortText(row.product.name) }}</span></el-tooltip><span v-else>{{ row.product?.name || '-' }}</span></template></el-table-column><el-table-column label="批号" min-width="110"><template #default="{ row }">{{ row.manualBatch ? '新增批号' : (row.batchNo || '-') }}</template></el-table-column><el-table-column label="货位" min-width="110"><template #default="{ row }">{{ row.manualBatch ? '-' : (row.locationName || '-') }}</template></el-table-column><el-table-column label="系统数量" min-width="95" align="right"><template #default="{ row }">{{ qty(row.quantity) }}</template></el-table-column><el-table-column label="状态" min-width="95"><template #default="{ row }">{{ row.manualBatch ? '手动新增' : (row.counted ? '已盘' : '未盘') }}</template></el-table-column></el-table></el-dialog>
+    <el-drawer v-model="candidateDialog" class="candidate-drawer" title="新增盘点记录" direction="rtl" size="760px">
+      <el-form class="filters candidate-filters" inline @submit.prevent="loadCandidates">
+        <el-input v-model.trim="candidateKeyword" clearable placeholder="商品编号、名称、条码" @keyup.enter="loadCandidates" />
+        <el-button type="primary" :icon="Search" @click="loadCandidates">查询商品</el-button>
+      </el-form>
+      <div class="drawer-section-title">商品</div>
+      <el-table ref="candidateProductTableRef" v-loading="candidateLoading" :data="candidateProducts" border max-height="230" scrollbar-always-on table-layout="auto" style="width: 100%" highlight-current-row @row-click="selectCandidateProduct">
+        <template #empty>{{ candidateSearched ? '暂无匹配商品' : '请输入搜索内容后查询' }}</template>
+        <el-table-column label="商品编号" min-width="120"><template #default="{ row }">{{ row.productCode || '-' }}</template></el-table-column>
+        <el-table-column label="商品名称" min-width="160"><template #default="{ row }"><el-tooltip v-if="isLongText(row.name)" :content="row.name" placement="top"><span class="ellipsis-text">{{ shortText(row.name) }}</span></el-tooltip><span v-else>{{ row.name || '-' }}</span></template></el-table-column>
+        <el-table-column label="规格"><template #default="{ row }">{{ row.specification || '-' }}</template></el-table-column>
+        <el-table-column label="单位"><template #default="{ row }">{{ row.unit || '-' }}</template></el-table-column>
+        <el-table-column label="库存批次" align="right"><template #default="{ row }">{{ row.inventoryCount }}</template></el-table-column>
+      </el-table>
+      <template v-if="selectedCandidateProduct">
+        <div class="drawer-section-heading">
+          <div><strong>{{ selectedCandidateProduct.name }}</strong><span class="muted">{{ selectedCandidateProduct.productCode }}</span></div>
+          <el-button link type="primary" @click="openManualBatch">新增批号</el-button>
+        </div>
+        <el-table ref="candidateInventoryTableRef" :data="selectedCandidateInventories" border max-height="300" scrollbar-always-on table-layout="auto" style="width: 100%">
+          <template #empty>该商品暂无库存批次，可新增批号后盘点</template>
+          <el-table-column label="批号" min-width="130"><template #default="{ row }">{{ row.batchNo || '-' }}</template></el-table-column>
+          <el-table-column label="系统货位" min-width="130"><template #default="{ row }">{{ row.locationName || '-' }}</template></el-table-column>
+          <el-table-column label="系统数量" min-width="100" align="right"><template #default="{ row }">{{ qty(row.quantity) }}</template></el-table-column>
+          <el-table-column label="状态" min-width="90"><template #default="{ row }">{{ row.counted ? '已盘' : '未盘' }}</template></el-table-column>
+          <el-table-column label="操作" min-width="75" fixed="right"><template #default="{ row }"><el-button link type="primary" :disabled="row.counted" @click="chooseCandidate(row)">盘点</el-button></template></el-table-column>
+        </el-table>
+      </template>
+    </el-drawer>
     <el-dialog v-model="locationDialog" title="修改盘点货位" width="400px"><el-form label-width="90px"><el-form-item label="原货位">{{ locationForm.systemLocationName || '-' }}</el-form-item><el-form-item label="盘点货位"><el-input v-model="locationForm.location" placeholder="留空表示未变化" /></el-form-item></el-form><template #footer><el-button @click="locationDialog = false">取消</el-button><el-button type="primary" @click="saveLocation">保存</el-button></template></el-dialog>
   </div>
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { Download, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
@@ -94,7 +122,17 @@ import { formatDateSeconds } from '@/utils/date';
 
 const userStore = useUserStore(); const stores = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const checksLoading = ref(false); const itemsLoading = ref(false);
 const checkQuery = reactive({ storeId: undefined, status: undefined }); const checkPagination = reactive({ page: 1, pageSize: 20, total: 0 }); const itemQuery = reactive({ keyword: '', locationName: '', checkStatus: undefined, locationStatus: undefined }); const itemPagination = reactive({ page: 1, pageSize: 50, total: 0 });
-const createDialog = ref(false); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1 }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateTableRef = ref(); const candidates = ref([]); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
+const createDialog = ref(false); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1 }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
+const candidateProducts = computed(() => {
+  const products = new Map();
+  candidates.value.forEach((row) => {
+    const product = row.product;
+    if (!product || products.has(product.id)) return;
+    products.set(product.id, { ...product, inventoryCount: candidates.value.filter((item) => item.productId === product.id && !item.manualBatch).length });
+  });
+  return [...products.values()];
+});
+const selectedCandidateInventories = computed(() => candidates.value.filter((row) => row.productId === selectedCandidateProduct.value?.id && !row.manualBatch));
 const typeText = (value) => ({ 1: '临时', 2: '季度', 3: '年度' }[Number(value)] || '-'); const dateTime = (value) => formatDateSeconds(value); const qty = (value) => { const n = Number(value || 0); return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/, '').replace(/\.$/, ''); };
 const statusText = (value, adjustment) => adjustment ? '需调整库存' : ({ 0: '未盘', 1: '待复核', 2: '待复盘', 3: '复盘待复核', 4: '需调整库存', 5: '新增批号', 6: '已确认' }[Number(value)] || '-');
 const price = (value) => value === null || value === undefined ? '-' : `¥ ${Number(value).toFixed(2)}`;
@@ -108,9 +146,11 @@ async function loadItems() { if (!selectedCheck.value) return; itemsLoading.valu
 async function create() { if (!createForm.checkName.trim() || !createForm.storeId) return ElMessage.warning('请填写盘点名称并选择门店'); const result = await createGoodsCheck(createForm); createDialog.value = false; await loadChecks(); await selectCheck(result); ElMessage.success('盘点单已创建'); }
 function openCount(row) { Object.assign(countForm, { mode: row.firstCountQty !== null && row.recountQty === null ? 'recount' : 'initial', id: row.id, product: row.product, batchNo: row.batchNo, location: row.countLocationName || row.systemLocationName || '', manualBatch: false, systemQty: row.recountQty !== null ? row.recountSystemQty : row.systemQty, qty: row.recountQty !== null ? row.recountQty : row.firstCountQty ?? 0 }); countDialog.value = true; }
 async function saveCount() { if (countForm.mode === 'recount') await recountGoodsCheckItem(countForm.id, { recountQty: countForm.qty }); else { if (countForm.manualBatch && !countForm.batchNo.trim()) return ElMessage.warning('请输入新增批号'); await addInitialCount(selectedCheck.value.id, { productId: countForm.product.id, batchNo: countForm.batchNo, locationName: countForm.location || undefined, firstCountQty: countForm.qty }); } countDialog.value = false; await loadItems(); await loadChecks(); ElMessage.success('盘点数量已保存'); }
-function openCandidateDialog() { candidateKeyword.value = ''; candidateSearched.value = false; candidates.value = []; candidateDialog.value = true; }
-async function loadCandidates() { const keyword = candidateKeyword.value.trim(); if (!selectedCheck.value || !keyword) { candidates.value = []; candidateSearched.value = false; return; } candidateSearched.value = true; candidateLoading.value = true; try { candidates.value = await getGoodsCheckCandidates(selectedCheck.value.id, { keyword }); await nextTick(); candidateTableRef.value?.doLayout(); } finally { candidateLoading.value = false; } }
-function chooseCandidate(row) { Object.assign(countForm, { mode: 'initial', id: null, product: row.product, batchNo: row.batchNo, location: row.locationName || '', manualBatch: Boolean(row.manualBatch), systemQty: row.quantity, qty: row.quantity }); candidateDialog.value = false; countDialog.value = true; }
+function openCandidateDialog() { candidateKeyword.value = ''; candidateSearched.value = false; candidates.value = []; selectedCandidateProduct.value = null; candidateDialog.value = true; }
+async function loadCandidates() { const keyword = candidateKeyword.value.trim(); if (!selectedCheck.value || !keyword) { candidates.value = []; selectedCandidateProduct.value = null; candidateSearched.value = false; return; } candidateSearched.value = true; candidateLoading.value = true; try { candidates.value = await getGoodsCheckCandidates(selectedCheck.value.id, { keyword }); selectedCandidateProduct.value = null; await nextTick(); candidateProductTableRef.value?.doLayout(); } finally { candidateLoading.value = false; } }
+async function selectCandidateProduct(product) { selectedCandidateProduct.value = product; await nextTick(); candidateInventoryTableRef.value?.doLayout(); }
+function chooseCandidate(row) { Object.assign(countForm, { mode: 'initial', id: null, product: row.product, batchNo: row.batchNo, location: row.locationName || '', manualBatch: false, systemQty: row.quantity, qty: row.quantity }); candidateDialog.value = false; countDialog.value = true; }
+function openManualBatch() { if (!selectedCandidateProduct.value) return; Object.assign(countForm, { mode: 'initial', id: null, product: selectedCandidateProduct.value, batchNo: '', location: '', manualBatch: true, systemQty: 0, qty: 0 }); candidateDialog.value = false; countDialog.value = true; }
 function openLocation(row) { Object.assign(locationForm, { id: row.id, systemLocationName: row.systemLocationName, location: row.countLocationName || row.systemLocationName }); locationDialog.value = true; }
 async function saveLocation() { await updateGoodsCheckLocation(locationForm.id, { countLocationName: locationForm.location }); locationDialog.value = false; await loadItems(); ElMessage.success('货位已保存'); }
 async function review(row) { await ElMessageBox.confirm('确认由当前账号完成第二人复核？', '二次确认', { type: 'warning' }); await reviewGoodsCheckItem(row.id, { approved: true }); await loadItems(); await loadChecks(); ElMessage.success('已确认'); }
@@ -135,8 +175,20 @@ watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch
 .detail-filters :deep(.el-input) { width: 190px; }
 .detail-filters :deep(.el-select) { width: 145px; flex: 0 0 145px; }
 .detail-filters :deep(.el-button) { flex: 0 0 auto; }
+.candidate-filters { margin-bottom: 18px; }
+.candidate-filters :deep(.el-input) { width: 260px; }
+.drawer-section-title { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 13px; }
+.drawer-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 20px 0 8px; }
+.drawer-section-heading strong { display: inline-block; max-width: 30em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.drawer-section-heading .muted { margin-left: 10px; color: var(--el-text-color-secondary); }
+.candidate-drawer :deep(.el-drawer__body) { padding-top: 16px; }
 .danger { color: var(--el-color-danger); }
 .yd-check-page :deep(.el-table .cell) { min-width: 0; white-space: nowrap; }
 .yd-check-page :deep(.el-table__cell) { white-space: nowrap; }
 .ellipsis-text { display: inline-block; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+@media (max-width: 768px) {
+  .candidate-drawer { width: 100% !important; }
+  .candidate-filters :deep(.el-input) { width: min(260px, calc(100vw - 76px)); }
+  .drawer-section-heading strong { max-width: 15em; }
+}
 </style>

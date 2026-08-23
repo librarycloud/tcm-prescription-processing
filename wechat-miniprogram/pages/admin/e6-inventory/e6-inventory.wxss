@@ -1,0 +1,16 @@
+.inventory-page { padding-bottom: 180rpx; }
+.page-heading { margin-bottom: 20rpx; }
+.page-title { font-size: 36rpx; font-weight: 700; }
+.search-panel { padding: 20rpx; margin-bottom: 28rpx; border: 1rpx solid #e5e6eb; border-radius: 8rpx; background: #fff; }
+.search-actions { display: flex; justify-content: flex-end; gap: 16rpx; margin-top: 18rpx; }
+.section-title { margin: 28rpx 0 14rpx; color: #4e5969; font-size: 28rpx; font-weight: 600; }
+.product-option { margin-bottom: 14rpx; }
+.product-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
+.product-option .muted, .product-detail .muted { margin-top: 10rpx; line-height: 1.5; }
+.inventory-total { margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid #eef0f5; color: #4e5969; }
+.inventory-total text { color: #0052d9; font-size: 34rpx; font-weight: 700; }
+.inventory-card { margin-bottom: 14rpx; }
+.inventory-row { display: flex; justify-content: space-between; gap: 24rpx; margin-bottom: 12rpx; color: #4e5969; }
+.inventory-row text:last-child { min-width: 0; color: #1f2329; text-align: right; word-break: break-all; }
+.inventory-row.strong { font-size: 30rpx; font-weight: 600; }
+.inventory-dates { padding-top: 14rpx; border-top: 1rpx solid #eef0f5; line-height: 1.6; }

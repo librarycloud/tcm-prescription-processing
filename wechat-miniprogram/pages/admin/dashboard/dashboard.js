@@ -64,6 +64,14 @@ Page({
     wx.navigateTo({ url: '/pages/admin/product-differences/product-differences' });
   },
 
+  goE6Inventory() {
+    wx.navigateTo({ url: '/pages/admin/e6-inventory/e6-inventory' });
+  },
+
+  goGoodsChecks() {
+    wx.navigateTo({ url: '/pages/admin/yd-goods-checks/yd-goods-checks' });
+  },
+
   goPackageList(e) {
     const { status, dateScope, sortBy, disabled } = e.currentTarget.dataset;
     if (disabled) return;

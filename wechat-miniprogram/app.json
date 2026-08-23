@@ -17,6 +17,8 @@
     "pages/admin/store-transfers/store-transfers",
     "pages/admin/herb-locations/herb-locations",
     "pages/admin/product-differences/product-differences",
+    "pages/admin/e6-inventory/e6-inventory",
+    "pages/admin/yd-goods-checks/yd-goods-checks",
     "pages/admin/profile/profile",
     "pages/agreement/service/service",
     "pages/agreement/privacy/privacy",

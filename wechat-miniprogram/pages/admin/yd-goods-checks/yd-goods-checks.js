@@ -1,0 +1,251 @@
+import {
+  addInitialGoodsCheckCount,
+  createGoodsCheck,
+  getGoodsCheckCandidates,
+  getGoodsChecks,
+  getStores
+} from '../../../api/admin';
+import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { getUser } from '../../../utils/auth';
+
+let candidateSearchTimer;
+
+function canSearchKeyword(value) {
+  const keyword = String(value || '').trim();
+  return (keyword.match(/[\u4e00-\u9fff]/g) || []).length >= 2 || /\d{4}/.test(keyword);
+}
+
+function numberText(value) {
+  const number = Number(value || 0);
+  return Number.isInteger(number) ? String(number) : number.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function candidateProducts(rows) {
+  const products = new Map();
+  rows.forEach((row) => {
+    if (!row.product || products.has(row.product.id)) return;
+    products.set(row.product.id, {
+      ...row.product,
+      inventoryCount: rows.filter((item) => item.productId === row.product.id && !item.manualBatch).length
+    });
+  });
+  return [...products.values()];
+}
+
+Page({
+  data: {
+    activeTab: 'overview',
+    checksLoading: false,
+    checks: [],
+    selectedCheck: null,
+    isSuperAdmin: false,
+    stores: [],
+    createStoreIndex: 0,
+    createStoreId: null,
+    createStoreName: '请选择门店',
+    createVisible: false,
+    checkName: '',
+    creating: false,
+    keyword: '',
+    candidateSearched: false,
+    candidateLoading: false,
+    candidates: [],
+    candidateProducts: [],
+    selectedProduct: null,
+    selectedInventories: [],
+    countVisible: false,
+    countForm: { product: null, batchNo: '', locationName: '', systemQty: '0', countQty: '', manualBatch: false },
+    saving: false
+  },
+
+  onTabChange: onAdminTabChange,
+
+  async onShow() {
+    const user = getUser() || {};
+    const isSuperAdmin = Number(user.role) === 0;
+    this.setData({ isSuperAdmin });
+    if (isSuperAdmin && !this.data.stores.length) {
+      const data = await getStores({ page: 1, pageSize: 100, status: 1 });
+      this.setData({ stores: data?.list || [] });
+    }
+    await this.loadChecks();
+  },
+
+  async loadChecks() {
+    this.setData({ checksLoading: true });
+    try {
+      const data = await getGoodsChecks({ page: 1, pageSize: 50 });
+      const checks = (data?.list || []).filter((item) => Number(item.status) !== 2);
+      this.setData({ checks });
+    } finally {
+      this.setData({ checksLoading: false });
+    }
+  },
+
+  selectCheck(e) {
+    const selectedCheck = this.data.checks[Number(e.currentTarget.dataset.index)];
+    if (!selectedCheck) return;
+    this.setData({
+      selectedCheck,
+      keyword: '',
+      candidateSearched: false,
+      candidates: [],
+      candidateProducts: [],
+      selectedProduct: null,
+      selectedInventories: []
+    });
+  },
+
+  backToChecks() {
+    this.setData({ selectedCheck: null, candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
+  },
+
+  openCreate() {
+    this.setData({ createVisible: true, checkName: '', createStoreIndex: 0, createStoreId: null, createStoreName: '请选择门店' });
+  },
+
+  closeCreate() {
+    this.setData({ createVisible: false });
+  },
+
+  onCheckNameChange(e) {
+    this.setData({ checkName: e.detail.value || '' });
+  },
+
+  onCreateStoreChange(e) {
+    const createStoreIndex = Number(e.detail.value);
+    const store = this.data.stores[createStoreIndex];
+    this.setData({ createStoreIndex, createStoreId: store?.id || null, createStoreName: store?.name || '请选择门店' });
+  },
+
+  async createCheck() {
+    const checkName = this.data.checkName.trim();
+    if (!checkName) return wx.showToast({ title: '请输入盘点名称', icon: 'none' });
+    const storeId = this.data.isSuperAdmin ? this.data.createStoreId : undefined;
+    if (this.data.isSuperAdmin && !storeId) return wx.showToast({ title: '请选择门店', icon: 'none' });
+    this.setData({ creating: true });
+    try {
+      const selectedCheck = await createGoodsCheck({ checkName, checkType: 1, ...(storeId ? { storeId } : {}) });
+      this.closeCreate();
+      this.setData({ selectedCheck });
+      await this.loadChecks();
+      wx.showToast({ title: '盘点单已创建', icon: 'success' });
+    } finally {
+      this.setData({ creating: false });
+    }
+  },
+
+  onKeywordChange(e) {
+    const keyword = e.detail.value || '';
+    this.setData({ keyword }, () => {
+      clearTimeout(candidateSearchTimer);
+      if (!canSearchKeyword(keyword)) {
+        this.setData({ candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
+        return;
+      }
+      candidateSearchTimer = setTimeout(() => this.searchCandidates(), 300);
+    });
+  },
+
+  async searchCandidates(preserveProduct = false, force = false) {
+    const keyword = this.data.keyword.trim();
+    if (!keyword) {
+      this.setData({ candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
+      return;
+    }
+    if (!force && !canSearchKeyword(keyword)) {
+      wx.showToast({ title: '请输入至少2个中文或4位数字', icon: 'none' });
+      return;
+    }
+    const productId = preserveProduct ? this.data.selectedProduct?.id : null;
+    this.setData({ candidateLoading: true, candidateSearched: true, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
+    try {
+      const candidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, { keyword });
+      const products = candidateProducts(candidates || []);
+      const selectedProduct = productId ? products.find((item) => item.id === productId) || null : null;
+      this.setData({
+        candidates: candidates || [],
+        candidateProducts: products,
+        selectedProduct,
+        selectedInventories: selectedProduct ? (candidates || []).filter((item) => item.productId === selectedProduct.id && !item.manualBatch) : []
+      });
+    } finally {
+      this.setData({ candidateLoading: false });
+    }
+  },
+
+  search() {
+    this.searchCandidates();
+  },
+
+  scan() {
+    wx.scanCode({
+      scanType: ['barCode'],
+      success: (res) => {
+        this.setData({ keyword: String(res.result || '').trim() }, () => this.searchCandidates(false, true));
+      }
+    });
+  },
+
+  selectProduct(e) {
+    const selectedProduct = this.data.candidateProducts[Number(e.currentTarget.dataset.index)];
+    if (!selectedProduct) return;
+    this.setData({
+      selectedProduct,
+      selectedInventories: this.data.candidates.filter((item) => item.productId === selectedProduct.id && !item.manualBatch)
+    });
+  },
+
+  openCount(e) {
+    const row = this.data.selectedInventories[Number(e.currentTarget.dataset.index)];
+    if (!row || row.counted) return;
+    this.setData({
+      countVisible: true,
+      countForm: {
+        product: row.product,
+        batchNo: row.batchNo || '',
+        locationName: row.locationName || '',
+        systemQty: numberText(row.quantity),
+        countQty: numberText(row.quantity),
+        manualBatch: false
+      }
+    });
+  },
+
+  openManualCount() {
+    const product = this.data.selectedProduct;
+    if (!product) return;
+    this.setData({ countVisible: true, countForm: { product, batchNo: '', locationName: '', systemQty: '0', countQty: '', manualBatch: true } });
+  },
+
+  closeCount() {
+    this.setData({ countVisible: false });
+  },
+
+  noop() {},
+
+  onCountFieldChange(e) {
+    this.setData({ [`countForm.${e.currentTarget.dataset.field}`]: e.detail.value || '' });
+  },
+
+  async saveCount() {
+    const form = this.data.countForm;
+    if (form.manualBatch && !form.batchNo.trim()) return wx.showToast({ title: '请输入批号', icon: 'none' });
+    if (form.countQty === '' || Number(form.countQty) < 0 || !Number.isFinite(Number(form.countQty))) return wx.showToast({ title: '请输入有效盘点数量', icon: 'none' });
+    this.setData({ saving: true });
+    try {
+      await addInitialGoodsCheckCount(this.data.selectedCheck.id, {
+        productId: form.product.id,
+        batchNo: form.batchNo,
+        locationName: form.locationName || undefined,
+        firstCountQty: Number(form.countQty)
+      });
+      this.closeCount();
+      await this.searchCandidates(true);
+      await this.loadChecks();
+      wx.showToast({ title: '盘点已保存', icon: 'success' });
+    } finally {
+      this.setData({ saving: false });
+    }
+  }
+});

@@ -354,3 +354,23 @@ export function reverseProductDifference(id, data) {
     data
   });
 }
+
+export function getE6PharmacyProducts(params = {}) {
+  return request({ url: '/admin/e6-pharmacy/products', data: params });
+}
+
+export function getGoodsChecks(params = {}) {
+  return request({ url: '/admin/yd-goods-check', data: params });
+}
+
+export function createGoodsCheck(data) {
+  return request({ url: '/admin/yd-goods-check', method: 'POST', data });
+}
+
+export function getGoodsCheckCandidates(id, params = {}) {
+  return request({ url: `/admin/yd-goods-check/${id}/candidates`, data: params });
+}
+
+export function addInitialGoodsCheckCount(id, data) {
+  return request({ url: `/admin/yd-goods-check/${id}/items`, method: 'POST', data });
+}
