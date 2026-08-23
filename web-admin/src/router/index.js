@@ -76,6 +76,12 @@ const routes = [
         meta: { title: 'E6药店库存', icon: 'Goods', allowedRoles: [0, 2] }
       },
       {
+        path: 'yd-goods-checks',
+        name: 'YdGoodsChecks',
+        component: () => import('@/views/admin/YdGoodsChecks.vue'),
+        meta: { title: '药店商品盘点', icon: 'Finished', allowedRoles: [0, 2] }
+      },
+      {
         path: 'prescriptions/:id',
         name: 'PrescriptionDetail',
         component: () => import('@/views/admin/PrescriptionDetail.vue'),

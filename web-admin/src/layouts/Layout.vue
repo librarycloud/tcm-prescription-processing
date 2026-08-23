@@ -182,6 +182,7 @@ const primaryMenuItems = computed(() => {
     'e6-imports',
     'processing-plans',
     'product-differences',
+    'yd-goods-checks',
     'e6-pharmacy-products',
     'store-transfers',
     'herb-locations',

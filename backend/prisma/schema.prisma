@@ -100,6 +100,8 @@ model Store {
   e6Imports           E6Import[]
   e6PharmacyProducts  E6PharmacyProduct[]
   e6PharmacyInventory E6PharmacyInventoryBatch[]
+  ydGoodsChecks       YdGoodsCheck[]
+  ydGoodsCheckItems   YdGoodsCheckItem[]
   processingEquipment ProcessingEquipment[]
 
   @@index([status])
@@ -176,6 +178,7 @@ model E6PharmacyProduct {
 
   store       Store                      @relation(fields: [storeId], references: [id], onDelete: Restrict)
   inventories E6PharmacyInventoryBatch[]
+  checkItems  YdGoodsCheckItem[]
 
   @@unique([storeId, e6ProductId])
   @@index([storeId, productCode])
@@ -205,6 +208,61 @@ model E6PharmacyInventoryBatch {
   @@index([storeId, productId])
   @@index([storeId, expiryDate])
   @@map("e6_pharmacy_inventory_batches")
+}
+
+model YdGoodsCheck {
+  id        Int       @id @default(autoincrement())
+  storeId   Int       @map("store_id")
+  checkName String    @map("check_name") @db.VarChar(150)
+  checkType Int       @default(1) @map("check_type") @db.TinyInt
+  status    Int       @default(0) @db.TinyInt
+  createdBy Int       @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  store Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  items YdGoodsCheckItem[]
+
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+  @@map("yd_goods_check")
+}
+
+model YdGoodsCheckItem {
+  id                 Int       @id @default(autoincrement())
+  checkId            Int       @map("check_id")
+  storeId            Int       @map("store_id")
+  productId          Int       @map("product_id")
+  batchNo            String    @default("") @map("batch_no") @db.VarChar(100)
+  systemLocationName String    @default("") @map("system_location_name") @db.VarChar(120)
+  countLocationName  String?   @map("count_location_name") @db.VarChar(120)
+  systemQty          Decimal   @default(0) @map("system_qty") @db.Decimal(14, 3)
+  firstCountQty      Decimal?  @map("first_count_qty") @db.Decimal(14, 3)
+  firstCountedAt     DateTime? @map("first_counted_at")
+  firstCountedBy     Int?      @map("first_counted_by")
+  recountQty         Decimal?  @map("recount_qty") @db.Decimal(14, 3)
+  recountSystemQty   Decimal?  @map("recount_system_qty") @db.Decimal(14, 3)
+  recountedAt        DateTime? @map("recounted_at")
+  recountedBy        Int?      @map("recounted_by")
+  locationStatus     Int       @default(0) @map("location_status") @db.TinyInt
+  checkStatus        Int       @default(0) @map("check_status") @db.TinyInt
+  reviewStatus       Int       @default(0) @map("review_status") @db.TinyInt
+  reviewedBy         Int?      @map("reviewed_by")
+  reviewedAt         DateTime? @map("reviewed_at")
+  remark             String?   @db.VarChar(500)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  check   YdGoodsCheck       @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  store   Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product E6PharmacyProduct  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, checkId])
+  @@index([storeId, checkStatus])
+  @@index([storeId, productId, batchNo])
+  @@map("yd_goods_check_item")
 }
 
 model ProductsDiffLog {

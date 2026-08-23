@@ -176,6 +176,19 @@ import {
   updateOperatorMappingController as updateE6OperatorMappingController,
 } from "../controllers/e6IntegrationController.js";
 import { listE6PharmacyProductsController } from "../controllers/e6PharmacyController.js";
+import {
+  addInitialCountController,
+  createGoodsCheckController,
+  exportGoodsCheckController,
+  finishGoodsCheckController,
+  goodsCheckCandidatesController,
+  goodsCheckDetailController,
+  goodsCheckItemsController,
+  listGoodsChecksController,
+  recountGoodsCheckItemController,
+  reviewGoodsCheckItemController,
+  updateGoodsCheckLocationController,
+} from "../controllers/ydGoodsCheckController.js";
 
 export default async function adminRoutes(fastify) {
   fastify.addHook("preHandler", fastify.rateLimit());
@@ -226,6 +239,17 @@ export default async function adminRoutes(fastify) {
   fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
   fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
   fastify.get("/e6-pharmacy/products", listE6PharmacyProductsController);
+  fastify.get("/yd-goods-check", listGoodsChecksController);
+  fastify.post("/yd-goods-check", createGoodsCheckController);
+  fastify.get("/yd-goods-check/:id", goodsCheckDetailController);
+  fastify.get("/yd-goods-check/:id/items", goodsCheckItemsController);
+  fastify.get("/yd-goods-check/:id/candidates", goodsCheckCandidatesController);
+  fastify.post("/yd-goods-check/:id/items", addInitialCountController);
+  fastify.post("/yd-goods-check/:id/finish", finishGoodsCheckController);
+  fastify.get("/yd-goods-check/:id/export", exportGoodsCheckController);
+  fastify.put("/yd-goods-check/items/:itemId/recount", recountGoodsCheckItemController);
+  fastify.put("/yd-goods-check/items/:itemId/location", updateGoodsCheckLocationController);
+  fastify.post("/yd-goods-check/items/:itemId/review", reviewGoodsCheckItemController);
   fastify.get("/products/import-template", productImportTemplateController);
   fastify.post("/products/import-preview", previewProductImportController);
   fastify.post("/products/import", importProductsController);
