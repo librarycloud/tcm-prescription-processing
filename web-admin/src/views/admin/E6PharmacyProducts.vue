@@ -29,6 +29,24 @@
           placeholder="编号、商品名称或条形码"
           @keyup.enter="search"
         />
+        <el-select v-model="query.expiryWithinMonths" placeholder="有效期小于" clearable @change="handleExpiryChange">
+          <el-option label="有效期小于1个月" :value="1" />
+          <el-option label="有效期小于3个月" :value="3" />
+          <el-option label="有效期小于4个月" :value="4" />
+          <el-option label="有效期小于6个月" :value="6" />
+          <el-option label="有效期小于12个月" :value="12" />
+          <el-option label="自定义月份" value="custom" />
+        </el-select>
+        <el-input-number
+          v-if="query.expiryWithinMonths === 'custom'"
+          v-model="query.customExpiryMonths"
+          :min="1"
+          :max="120"
+          :step="1"
+          controls-position="right"
+          placeholder="月数"
+          @change="search"
+        />
         <el-button type="primary" :icon="Search" @click="search">查询</el-button>
         <el-button :icon="Refresh" @click="resetSearch">重置</el-button>
       </el-form>
@@ -64,7 +82,7 @@
                 <el-table-column label="库存数量" width="120" align="right">
                   <template #default="{ row: batch }">{{ quantityText(batch.quantity) }}</template>
                 </el-table-column>
-                <el-table-column label="库存金额" width="130" align="right">
+                <el-table-column label="金额" width="130" align="right">
                   <template #default="{ row: batch }">{{ moneyText(batch.amount) }}</template>
                 </el-table-column>
                 <el-table-column label="更新时间" min-width="170">
@@ -145,7 +163,7 @@ const tableRef = ref();
 const loading = ref(false);
 const list = ref([]);
 const stores = ref([]);
-const query = reactive({ keyword: '', storeId: undefined });
+const query = reactive({ keyword: '', storeId: undefined, expiryWithinMonths: undefined, customExpiryMonths: 1 });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 
 function dateText(value) {
@@ -185,6 +203,7 @@ async function load() {
     const data = await getE6PharmacyProducts({
       keyword: query.keyword || undefined,
       storeId: query.storeId || undefined,
+      expiryWithinMonths: expiryFilterValue(),
       page: pagination.page,
       pageSize: pagination.pageSize
     });
@@ -195,6 +214,15 @@ async function load() {
   }
 }
 
+function expiryFilterValue() {
+  if (query.expiryWithinMonths === 'custom') return query.customExpiryMonths || undefined;
+  return query.expiryWithinMonths || undefined;
+}
+
+function handleExpiryChange(value) {
+  if (value !== 'custom') search();
+}
+
 function search() {
   pagination.page = 1;
   load();
@@ -203,6 +231,8 @@ function search() {
 function resetSearch() {
   query.keyword = '';
   query.storeId = undefined;
+  query.expiryWithinMonths = undefined;
+  query.customExpiryMonths = 1;
   pagination.page = 1;
   load();
 }

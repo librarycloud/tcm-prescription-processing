@@ -85,3 +85,35 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
   assert.equal(result.list[0].unit, "盒");
   assert.equal(result.list[0].inventories[0].locationName, "一号货位");
 });
+
+test("E6 pharmacy expiry filter applies to products and inventory details", async () => {
+  const calls = [];
+  const prisma = {
+    e6PharmacyProduct: {
+      findMany: async (args) => {
+        calls.push({ type: "findMany", args });
+        return [];
+      },
+      count: async (args) => {
+        calls.push({ type: "count", args });
+        return 0;
+      },
+    },
+  };
+
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 8, role: 2, storeId: 3 },
+    { expiryWithinMonths: "3" },
+  );
+
+  const findArgs = calls.find((item) => item.type === "findMany").args;
+  assert.equal(findArgs.where.inventories.some.quantity.gt, 0);
+  assert.ok(findArgs.where.inventories.some.expiryDate.lt instanceof Date);
+  assert.equal(findArgs.include.inventories.where.quantity.gt, 0);
+  assert.ok(findArgs.include.inventories.where.expiryDate.lt instanceof Date);
+  assert.equal(
+    findArgs.where.inventories.some.expiryDate.lt.getMonth(),
+    (new Date().getMonth() + 3) % 12,
+  );
+});

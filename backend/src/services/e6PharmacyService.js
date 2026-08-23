@@ -46,9 +46,24 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);
   const scope = businessScope(actor, query.storeId);
   const keyword = String(query.keyword || "").trim();
+  const expiryWithinMonths = query.expiryWithinMonths === undefined || query.expiryWithinMonths === ""
+    ? null
+    : toPositiveInt(query.expiryWithinMonths, 0);
+  const expiryBefore = expiryWithinMonths
+    ? (() => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setMonth(date.getMonth() + expiryWithinMonths);
+      return date;
+    })()
+    : null;
+  const inventoryWhere = {
+    quantity: { gt: 0 },
+    ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
+  };
   const where = {
     ...scope,
-    inventories: { some: { quantity: { gt: 0 } } },
+    inventories: { some: inventoryWhere },
   };
 
   if (keyword) {
@@ -65,7 +80,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
       include: {
         store: { select: { id: true, name: true, code: true } },
         inventories: {
-          where: { quantity: { gt: 0 } },
+          where: inventoryWhere,
           orderBy: [{ expiryDate: "asc" }, { batchNo: "asc" }],
         },
       },
