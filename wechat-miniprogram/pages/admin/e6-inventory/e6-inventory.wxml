@@ -1,7 +1,7 @@
 <view class="page inventory-page">
   <view class="page-heading">
     <view class="page-title">E6药店商品库存</view>
-    <view class="muted">先搜索并选择商品，再查看库存</view>
+    <view class="muted">搜索或扫码查看商品库存</view>
   </view>
 
   <view class="search-panel">

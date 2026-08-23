@@ -27,7 +27,22 @@ function dateText(value) {
 }
 
 function decorateInventory(row) {
-  return { ...row, productionDateText: dateText(row.productionDate), expiryDateText: dateText(row.expiryDate), amountText: Number(row.amount || 0).toFixed(2) };
+  const firstCountQty = row.firstCountQty === null || row.firstCountQty === undefined ? null : Number(row.firstCountQty);
+  const recountQty = row.recountQty === null || row.recountQty === undefined ? null : Number(row.recountQty);
+  const systemQty = recountQty === null
+    ? Number(row.systemQty ?? row.quantity ?? 0)
+    : Number(row.recountSystemQty ?? row.quantity ?? 0);
+  const effectiveCountQty = recountQty === null ? firstCountQty : recountQty;
+  const difference = effectiveCountQty === null ? null : effectiveCountQty - systemQty;
+  return {
+    ...row,
+    productionDateText: dateText(row.productionDate),
+    expiryDateText: dateText(row.expiryDate),
+    amountText: Number(row.amount || 0).toFixed(2),
+    firstCountText: firstCountQty === null ? '-' : numberText(firstCountQty),
+    recountText: recountQty === null ? '-' : numberText(recountQty),
+    differenceText: difference === null ? '-' : numberText(difference),
+  };
 }
 
 function candidateProducts(rows) {
@@ -158,7 +173,7 @@ Page({
     });
   },
 
-  async searchCandidates(preserveProduct = false, force = false) {
+  async searchCandidates(preserveProduct = false, force = false, autoSelect = false) {
     const keyword = this.data.keyword.trim();
     if (!keyword) {
       candidateRequestId += 1;
@@ -176,13 +191,16 @@ Page({
       const candidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, { keyword });
       if (requestId !== candidateRequestId) return;
       const products = candidateProducts(candidates || []);
-      const selectedProduct = productId ? products.find((item) => item.id === productId) || null : null;
+      const selectedProduct = autoSelect
+        ? products.find((item) => String(item.barcode || '').trim() === keyword) || (products.length === 1 ? products[0] : null)
+        : (productId ? products.find((item) => item.id === productId) || null : null);
+      const shouldShowInventories = Boolean(selectedProduct);
       this.setData({
         candidates: candidates || [],
-        candidateProducts: preserveProduct && selectedProduct ? [] : products,
-        candidateSearched: !(preserveProduct && selectedProduct),
+        candidateProducts: shouldShowInventories ? [] : products,
+        candidateSearched: !shouldShowInventories,
         selectedProduct,
-        selectedInventories: selectedProduct ? (candidates || []).filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory) : []
+        selectedInventories: shouldShowInventories ? (candidates || []).filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory) : []
       });
     } finally {
       if (requestId === candidateRequestId) this.setData({ candidateLoading: false });
@@ -197,7 +215,7 @@ Page({
     wx.scanCode({
       scanType: ['barCode'],
       success: (res) => {
-        this.setData({ keyword: String(res.result || '').trim() }, () => this.searchCandidates(false, true));
+        this.setData({ keyword: String(res.result || '').trim() }, () => this.searchCandidates(false, true, true));
       }
     });
   },

@@ -59,7 +59,7 @@ Page({
     });
   },
 
-  async search(force = false) {
+  async search(force = false, autoSelect = false) {
     const keyword = this.data.keyword.trim();
     if (!keyword) {
       searchRequestId += 1;
@@ -75,7 +75,15 @@ Page({
     try {
       const data = await getE6PharmacyProducts({ keyword, page: 1, pageSize: 50 });
       if (requestId !== searchRequestId) return;
-      this.setData({ products: data?.list || [] });
+      const products = data?.list || [];
+      const selectedProduct = autoSelect
+        ? products.find((item) => String(item.barcode || '').trim() === keyword) || (products.length === 1 ? products[0] : null)
+        : null;
+      this.setData({
+        products: selectedProduct ? [] : products,
+        searched: selectedProduct ? false : true,
+        selectedProduct: selectedProduct ? decorateProduct(selectedProduct) : null
+      });
     } finally {
       if (requestId === searchRequestId) this.setData({ searchLoading: false });
     }
@@ -85,7 +93,7 @@ Page({
     wx.scanCode({
       scanType: ['barCode'],
       success: (res) => {
-        this.setData({ keyword: String(res.result || '').trim() }, () => this.search(true));
+        this.setData({ keyword: String(res.result || '').trim() }, () => this.search(true, true));
       }
     });
   },
