@@ -9,6 +9,7 @@ import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 
 let candidateSearchTimer;
+let candidateRequestId = 0;
 
 function canSearchKeyword(value) {
   const keyword = String(value || '').trim();
@@ -18,6 +19,14 @@ function canSearchKeyword(value) {
 function numberText(value) {
   const number = Number(value || 0);
   return Number.isInteger(number) ? String(number) : number.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function dateText(value) {
+  return value ? String(value).slice(0, 10) : '-';
+}
+
+function decorateInventory(row) {
+  return { ...row, productionDateText: dateText(row.productionDate), expiryDateText: dateText(row.expiryDate), amountText: Number(row.amount || 0).toFixed(2) };
 }
 
 function candidateProducts(rows) {
@@ -54,7 +63,7 @@ Page({
     selectedProduct: null,
     selectedInventories: [],
     countVisible: false,
-    countForm: { product: null, batchNo: '', locationName: '', systemQty: '0', countQty: '', manualBatch: false },
+    countForm: { product: null, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: false },
     saving: false
   },
 
@@ -140,6 +149,7 @@ Page({
     this.setData({ keyword }, () => {
       clearTimeout(candidateSearchTimer);
       if (!canSearchKeyword(keyword)) {
+        candidateRequestId += 1;
         this.setData({ candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
         return;
       }
@@ -150,6 +160,7 @@ Page({
   async searchCandidates(preserveProduct = false, force = false) {
     const keyword = this.data.keyword.trim();
     if (!keyword) {
+      candidateRequestId += 1;
       this.setData({ candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
       return;
     }
@@ -158,19 +169,22 @@ Page({
       return;
     }
     const productId = preserveProduct ? this.data.selectedProduct?.id : null;
+    const requestId = ++candidateRequestId;
     this.setData({ candidateLoading: true, candidateSearched: true, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
     try {
       const candidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, { keyword });
+      if (requestId !== candidateRequestId) return;
       const products = candidateProducts(candidates || []);
       const selectedProduct = productId ? products.find((item) => item.id === productId) || null : null;
       this.setData({
         candidates: candidates || [],
-        candidateProducts: products,
+        candidateProducts: preserveProduct && selectedProduct ? [] : products,
+        candidateSearched: !(preserveProduct && selectedProduct),
         selectedProduct,
-        selectedInventories: selectedProduct ? (candidates || []).filter((item) => item.productId === selectedProduct.id && !item.manualBatch) : []
+        selectedInventories: selectedProduct ? (candidates || []).filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory) : []
       });
     } finally {
-      this.setData({ candidateLoading: false });
+      if (requestId === candidateRequestId) this.setData({ candidateLoading: false });
     }
   },
 
@@ -190,9 +204,13 @@ Page({
   selectProduct(e) {
     const selectedProduct = this.data.candidateProducts[Number(e.currentTarget.dataset.index)];
     if (!selectedProduct) return;
+    clearTimeout(candidateSearchTimer);
+    candidateRequestId += 1;
     this.setData({
+      candidateProducts: [],
+      candidateSearched: false,
       selectedProduct,
-      selectedInventories: this.data.candidates.filter((item) => item.productId === selectedProduct.id && !item.manualBatch)
+      selectedInventories: this.data.candidates.filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory)
     });
   },
 
@@ -205,6 +223,7 @@ Page({
         product: row.product,
         batchNo: row.batchNo || '',
         locationName: row.locationName || '',
+        locationEditing: false,
         systemQty: numberText(row.quantity),
         countQty: numberText(row.quantity),
         manualBatch: false
@@ -215,7 +234,7 @@ Page({
   openManualCount() {
     const product = this.data.selectedProduct;
     if (!product) return;
-    this.setData({ countVisible: true, countForm: { product, batchNo: '', locationName: '', systemQty: '0', countQty: '', manualBatch: true } });
+    this.setData({ countVisible: true, countForm: { product, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: true } });
   },
 
   closeCount() {
@@ -223,6 +242,10 @@ Page({
   },
 
   noop() {},
+
+  editLocation() {
+    this.setData({ 'countForm.locationEditing': true });
+  },
 
   onCountFieldChange(e) {
     this.setData({ [`countForm.${e.currentTarget.dataset.field}`]: e.detail.value || '' });

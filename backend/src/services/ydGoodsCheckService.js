@@ -203,10 +203,13 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   const existing = await prisma.ydGoodsCheckItem.findFirst({ where: { checkId: check.id, productId, batchNo, systemLocationName } });
   if (existing?.firstCountQty !== null && existing?.firstCountQty !== undefined) throw new AppError("该批次已经完成初盘", 409);
   const firstCountQty = quantity(payload.firstCountQty ?? payload.countQty);
+  const systemQty = payload.systemQty === undefined || payload.systemQty === null || payload.systemQty === ""
+    ? snapshot.quantity
+    : quantity(payload.systemQty);
   const countLocationName = requestedLocation !== undefined && requestedLocation !== "" ? requestedLocation : null;
   const data = {
     checkId: check.id, storeId: check.storeId, productId, batchNo, systemLocationName,
-    countLocationName, systemQty: snapshot.quantity, firstCountQty,
+    countLocationName, systemQty, firstCountQty,
     firstCountedAt: new Date(), firstCountedBy: Number(actor.id),
     locationStatus: countLocationName && countLocationName !== systemLocationName ? 1 : 0, checkStatus: checkStatusForInitial(snapshot.quantity, firstCountQty), reviewStatus: 0,
   };
@@ -318,7 +321,8 @@ export async function finishGoodsCheck(prisma, actor, checkId) {
 export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   const check = await getCheck(prisma, actor, checkId);
   const rows = await prisma.ydGoodsCheckItem.findMany({ where: { checkId: check.id }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
-  let list = rows.map(normalizeItem);
+  const pricedRows = await addInventoryPrices(prisma, rows, check.storeId);
+  let list = pricedRows.map(normalizeItem);
   if (type === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
   if (type === "adjustment") list = list.filter((row) => row.needsAdjustment);
   const userIds = [...new Set(list.flatMap((row) => [row.firstCountedBy, row.recountedBy, row.reviewedBy]).filter(Boolean))];
@@ -338,7 +342,9 @@ export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   const reviewStatusText = (value) => ({ 0: "未复核", 1: "已确认", 2: "未通过" }[Number(value)] || "-");
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("盘点记录");
-  sheet.columns = ["商品编号", "商品名称", "条形码", "规格", "单位", "批号", "系统货位", "盘点货位", "初盘系统数量", "初盘数量", "初盘人", "复盘系统数量", "复盘数量", "复盘人", "差异", "状态", "复核状态", "复核人"].map((header) => ({ header, width: 16 }));
-  list.forEach((row) => sheet.addRow([row.product?.productCode || "", row.product?.name || "", row.product?.barcode || "", row.product?.specification || "", row.product?.unit || "", row.batchNo, row.systemLocationName, row.countLocationName || "", row.systemQty, row.firstCountQty, userNames.get(row.firstCountedBy) || "", row.recountSystemQty, row.recountQty, userNames.get(row.recountedBy) || "", row.difference, checkStatusText(row), reviewStatusText(row.reviewStatus), userNames.get(row.reviewedBy) || ""]));
+  sheet.columns = ["商品编号", "商品名称", "条形码", "规格", "单位", "价格", "批号", "系统货位", "盘点货位", "初盘系统数量", "初盘数量", "初盘人", "复盘系统数量", "复盘数量", "复盘人", "差异", "状态", "复核状态", "复核人"].map((header) => ({ header, width: 16 }));
+  list.forEach((row) => sheet.addRow([row.product?.productCode || "", row.product?.name || "", row.product?.barcode || "", row.product?.specification || "", row.product?.unit || "", row.price, row.batchNo, row.systemLocationName, row.countLocationName || "", row.systemQty, row.firstCountQty, userNames.get(row.firstCountedBy) || "", row.recountSystemQty, row.recountQty, userNames.get(row.recountedBy) || "", row.difference, checkStatusText(row), reviewStatusText(row.reviewStatus), userNames.get(row.reviewedBy) || ""]));
+  const priceColumn = sheet.getColumn(6);
+  priceColumn.numFmt = '0.00';
   return { buffer: await workbook.xlsx.writeBuffer(), filename: `${check.checkName}-盘点${type === "adjustment" ? "需调整库存" : type === "recount" ? "待复盘" : "全部"}.xlsx` };
 }

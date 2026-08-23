@@ -5,18 +5,11 @@
   </view>
 
   <view class="search-panel">
-    <t-input value="{{keyword}}" placeholder="名称、编码或条码" bind:change="onKeywordChange" bind:enter="search" />
-    <view class="search-actions">
-      <t-button variant="outline" bind:tap="scan">扫码</t-button>
-      <t-button theme="primary" loading="{{searchLoading}}" bind:tap="search">查询商品</t-button>
-    </view>
+    <view class="search-row"><t-icon class="search-scan-icon" name="scan" size="44rpx" color="#0052d9" bind:tap="scan" /><t-input class="search-input" borderless suffix="查询商品" value="{{keyword}}" placeholder="名称、编码或条码" bind:change="onKeywordChange" bind:click="search" bind:enter="search" /></view>
   </view>
 
-  <view wx:if="{{searched}}" class="section-title">匹配商品</view>
-  <view wx:for="{{products}}" wx:key="id" class="app-card product-option" data-index="{{index}}" bind:tap="selectProduct">
-    <view class="product-title">{{item.productCode}} · {{item.name}}</view>
-    <view class="muted">{{item.specification || '无规格'}} · {{item.unit || '-'}} · 条码 {{item.barcode || '-'}}</view>
-  </view>
+  <view wx:if="{{products.length}}" class="product-results"><view class="section-title">匹配商品</view><view wx:for="{{products}}" wx:key="id" class="app-card product-option" data-index="{{index}}" bind:tap="selectProduct"><view class="product-title">{{item.productCode}} · {{item.name}}</view><view class="muted">单位：{{item.unit || '-'}}　规格：{{item.specification || '-'}}</view><view class="muted">生产厂商：{{item.manufacturer || '-'}}　条码：{{item.barcode || '无条码'}}</view></view></view>
+
   <t-empty wx:if="{{searched && !searchLoading && !products.length}}" description="暂无匹配商品" />
 
   <t-loading wx:if="{{detailLoading}}" text="正在加载库存" />

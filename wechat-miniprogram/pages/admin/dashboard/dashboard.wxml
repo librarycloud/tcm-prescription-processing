@@ -47,7 +47,7 @@
       <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goE6Inventory">E6药店库存</t-button>
     </view>
     <view class="section-action-item">
-      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goGoodsChecks">商品盘点</t-button>
+      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goGoodsChecks">药店商品盘点</t-button>
     </view>
   </view>
 

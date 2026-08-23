@@ -2,6 +2,7 @@ import { getE6PharmacyProducts } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 
 let searchTimer;
+let searchRequestId = 0;
 
 function canSearchKeyword(value) {
   const keyword = String(value || '').trim();
@@ -50,6 +51,7 @@ Page({
     this.setData({ keyword }, () => {
       clearTimeout(searchTimer);
       if (!canSearchKeyword(keyword)) {
+        searchRequestId += 1;
         this.setData({ searched: false, products: [], selectedProduct: null });
         return;
       }
@@ -60,6 +62,7 @@ Page({
   async search(force = false) {
     const keyword = this.data.keyword.trim();
     if (!keyword) {
+      searchRequestId += 1;
       this.setData({ searched: false, products: [], selectedProduct: null });
       return;
     }
@@ -67,12 +70,14 @@ Page({
       wx.showToast({ title: '请输入至少2个中文或4位数字', icon: 'none' });
       return;
     }
+    const requestId = ++searchRequestId;
     this.setData({ searchLoading: true, searched: true, products: [], selectedProduct: null });
     try {
       const data = await getE6PharmacyProducts({ keyword, page: 1, pageSize: 50 });
+      if (requestId !== searchRequestId) return;
       this.setData({ products: data?.list || [] });
     } finally {
-      this.setData({ searchLoading: false });
+      if (requestId === searchRequestId) this.setData({ searchLoading: false });
     }
   },
 
@@ -88,12 +93,14 @@ Page({
   async selectProduct(e) {
     const product = this.data.products[Number(e.currentTarget.dataset.index)];
     if (!product) return;
-    this.setData({ detailLoading: true, selectedProduct: null });
+    clearTimeout(searchTimer);
+    searchRequestId += 1;
+    this.setData({ detailLoading: true, searched: false, products: [], selectedProduct: null });
     try {
       const data = await getE6PharmacyProducts({ keyword: product.productCode, page: 1, pageSize: 50 });
       const detail = (data?.list || []).find((item) => item.id === product.id);
       if (!detail) return wx.showToast({ title: '商品库存已更新，请重新查询', icon: 'none' });
-      this.setData({ selectedProduct: decorateProduct(detail) });
+      this.setData({ products: [], searched: false, selectedProduct: decorateProduct(detail) });
     } finally {
       this.setData({ detailLoading: false });
     }
