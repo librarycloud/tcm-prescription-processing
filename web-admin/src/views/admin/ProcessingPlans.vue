@@ -227,8 +227,8 @@
       </template>
       <PackageDetail
         v-if="pickupDrawerMode === 'detail'"
-        :key="`pickup-detail-${pickupPackageId}`"
         :id="pickupPackageId"
+        :key="`pickup-detail-${pickupPackageId}`"
         ref="pickupPackageDetailRef"
         embedded
         @edit="openPickupPackageDrawer('edit', $event)"
@@ -236,8 +236,8 @@
       />
       <PackageEdit
         v-else-if="pickupDrawerMode === 'edit'"
-        :key="`pickup-edit-${pickupPackageId}`"
         :id="pickupPackageId"
+        :key="`pickup-edit-${pickupPackageId}`"
         embedded
         @saved="handlePickupDrawerSaved"
         @cancel="closePickupPackageDrawer"

@@ -233,8 +233,8 @@
     >
       <PrescriptionDetail
         v-if="detailPrescriptionId"
-        :key="detailPrescriptionId"
         :id="detailPrescriptionId"
+        :key="detailPrescriptionId"
         embedded
         @package-detail="openPackageDrawer('detail', $event)"
       />
@@ -261,8 +261,8 @@
       </template>
       <PackageDetail
         v-if="packageDrawerMode === 'detail' && packageDrawerId"
-        :key="`detail-${packageDrawerId}`"
         :id="packageDrawerId"
+        :key="`detail-${packageDrawerId}`"
         ref="packageDetailRef"
         embedded
         @edit="openPackageDrawer('edit', $event)"
@@ -270,8 +270,8 @@
       />
       <PackageEdit
         v-else-if="packageDrawerMode === 'edit' && packageDrawerId"
-        :key="`edit-${packageDrawerId}`"
         :id="packageDrawerId"
+        :key="`edit-${packageDrawerId}`"
         embedded
         @saved="handlePackageDrawerSaved"
         @cancel="closePackageDrawer"

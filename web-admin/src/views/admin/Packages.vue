@@ -30,7 +30,7 @@
         :data="list"
         row-key="id"
         border
-        @sort-change="handleSortChange" table-layout="auto">
+        table-layout="auto" @sort-change="handleSortChange">
         <template #empty>
           <EmptyView description="暂无包裹" />
         </template>
@@ -161,8 +161,8 @@
       </template>
       <PackageDetail
         v-if="packageDrawerMode === 'detail'"
-        :key="`detail-${selectedPackageId}`"
         :id="selectedPackageId"
+        :key="`detail-${selectedPackageId}`"
         ref="packageDetailRef"
         embedded
         @edit="openPackageDrawer('edit', $event)"
@@ -170,8 +170,8 @@
       />
       <PackageEdit
         v-else-if="packageDrawerMode === 'edit'"
-        :key="`edit-${selectedPackageId}`"
         :id="selectedPackageId"
+        :key="`edit-${selectedPackageId}`"
         embedded
         @saved="handlePackageDrawerSaved"
         @cancel="closePackageDrawer"

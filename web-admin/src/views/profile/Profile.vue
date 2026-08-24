@@ -8,7 +8,7 @@
       <el-button v-if="!editing" type="primary" @click="startEdit">修改资料</el-button>
     </div>
 
-    <el-card class="form-card" shadow="never" v-loading="loading">
+    <el-card v-loading="loading" class="form-card" shadow="never">
       <div v-if="!editing" class="profile-view">
         <el-avatar :size="72" :src="avatar" />
         <div class="profile-info">

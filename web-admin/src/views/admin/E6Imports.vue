@@ -63,12 +63,12 @@
       <el-table
         v-loading="loading"
         :data="list"
-        @selection-change="handleSelectionChange"
         :fit="true"
         border
         class="e6-import-table"
         row-key="id"
         table-layout="auto"
+        @selection-change="handleSelectionChange"
       >
         <template #empty><EmptyView description="暂无E6诊所处方导入数据" /></template>
         <el-table-column type="selection" width="44" :selectable="canMerge" />

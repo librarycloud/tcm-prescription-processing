@@ -472,10 +472,6 @@ function getLocation(code) {
   return locationMap.value.get(code) || null;
 }
 
-function herbText(location) {
-  return location?.herbs?.map((herb) => herb.name).join(' / ') || '';
-}
-
 function typeName(type) {
   return { D: '药斗', G: '柜', F: '冰箱', C: '仓库' }[type] || type;
 }
