@@ -5,6 +5,10 @@
         <h1 class="page-title">E6药店商品库存</h1>
         <p class="page-subtitle">查询 E6 当前库存中存在的商品及批号库存</p>
       </div>
+      <div class="header-actions">
+        <el-button :icon="Download" @click="downloadBarcodeTemplate">条形码模板</el-button>
+        <el-button type="primary" :icon="Upload" @click="openBarcodeImport">上传条形码</el-button>
+      </div>
     </div>
 
     <el-card shadow="never">
@@ -143,17 +147,54 @@
         :total="pagination.total"
       />
     </el-card>
+
+    <el-dialog v-model="barcodeImportVisible" title="上传商品条形码" width="520px" destroy-on-close>
+      <el-alert
+        title="按商品编号匹配，只补充没有条形码的商品；已有条形码会跳过，不会覆盖。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <el-upload
+        class="barcode-upload"
+        drag
+        :auto-upload="false"
+        accept=".xlsx"
+        :limit="1"
+        :show-file-list="true"
+        :on-change="handleBarcodeFileChange"
+        :on-remove="clearBarcodeFile"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">拖放或点击选择 .xlsx 文件</div>
+      </el-upload>
+      <div v-if="barcodeResult" class="barcode-result">
+        <el-tag type="success" effect="plain">更新 {{ barcodeResult.updated }}</el-tag>
+        <el-tag type="info" effect="plain">已有条形码跳过 {{ barcodeResult.skippedExisting }}</el-tag>
+        <el-tag type="warning" effect="plain">未找到商品 {{ barcodeResult.notFound }}</el-tag>
+        <el-tag v-if="barcodeResult.invalid" type="danger" effect="plain">无效行 {{ barcodeResult.invalid }}</el-tag>
+      </div>
+      <template #footer>
+        <el-button @click="barcodeImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="barcodeImporting" :disabled="!barcodeFile" @click="submitBarcodeImport">开始上传</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { Refresh, Search } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus/es/components/message/index.mjs';
+import { Download, Refresh, Search, Upload, UploadFilled } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { getProductStores } from '@/api/productDifference';
-import { getE6PharmacyProducts } from '@/api/e6Pharmacy';
+import {
+  downloadE6PharmacyBarcodeTemplate,
+  getE6PharmacyProducts,
+  importE6PharmacyBarcodes
+} from '@/api/e6Pharmacy';
 import { formatDateSeconds } from '@/utils/date';
 
 const userStore = useUserStore();
@@ -161,6 +202,10 @@ const tableRef = ref();
 const loading = ref(false);
 const list = ref([]);
 const stores = ref([]);
+const barcodeImportVisible = ref(false);
+const barcodeImporting = ref(false);
+const barcodeFile = ref(null);
+const barcodeResult = ref(null);
 const query = reactive({ keyword: '', storeId: undefined, expiryWithinMonths: undefined, customExpiryMonths: 1 });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 
@@ -247,6 +292,44 @@ function toggleRow(row) {
   tableRef.value?.toggleRowExpansion(row);
 }
 
+async function downloadBarcodeTemplate() {
+  const blob = await downloadE6PharmacyBarcodeTemplate();
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = 'E6药店条形码模板.xlsx';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function openBarcodeImport() {
+  barcodeFile.value = null;
+  barcodeResult.value = null;
+  barcodeImportVisible.value = true;
+}
+
+function handleBarcodeFileChange(uploadFile) {
+  barcodeFile.value = uploadFile.raw;
+  barcodeResult.value = null;
+}
+
+function clearBarcodeFile() {
+  barcodeFile.value = null;
+  barcodeResult.value = null;
+}
+
+async function submitBarcodeImport() {
+  if (!barcodeFile.value) return ElMessage.warning('请选择 Excel 文件');
+  barcodeImporting.value = true;
+  try {
+    barcodeResult.value = await importE6PharmacyBarcodes(barcodeFile.value);
+    ElMessage.success('条形码上传完成');
+    await load();
+  } finally {
+    barcodeImporting.value = false;
+  }
+}
+
 watch(() => [pagination.page, pagination.pageSize], load);
 
 onMounted(async () => {
@@ -261,6 +344,22 @@ onMounted(async () => {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.barcode-upload {
+  margin-top: 16px;
+}
+
+.barcode-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .search-form :deep(.el-input) {
