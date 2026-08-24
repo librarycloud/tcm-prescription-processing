@@ -1,6 +1,24 @@
 import { AppError } from "../utils/appError.js";
 import { authenticateStore } from "./e6IntegrationService.js";
 
+const PRODUCT_FIELDS = [
+  "productCode", "name", "category", "categoryCode", "barcode", "specification",
+  "dosageForm", "manufacturer", "categoryAttribute", "unit", "e6CreatedAt", "e6ModifiedAt",
+];
+
+function sameValue(left, right) {
+  if (left instanceof Date || right instanceof Date) {
+    const leftTime = left == null ? null : new Date(left).getTime();
+    const rightTime = right == null ? null : new Date(right).getTime();
+    return leftTime === rightTime;
+  }
+  return (left ?? null) === (right ?? null);
+}
+
+function productChanged(existing, incoming) {
+  return PRODUCT_FIELDS.some((field) => !sameValue(existing[field], incoming[field]));
+}
+
 function text(value, max, field, required = false) {
   const result = String(value ?? "").trim();
   if (required && !result) throw new AppError(`${field}不能为空`, 400);
@@ -83,15 +101,15 @@ export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
   for (const item of normalized) {
     const existing = await prisma.e6PharmacyProduct.findUnique({
       where: { productCode: item.productCode },
-      select: { id: true },
+      select: Object.fromEntries(PRODUCT_FIELDS.map((field) => [field, true])),
     });
-    await prisma.e6PharmacyProduct.upsert({
-      where: { productCode: item.productCode },
-      create: item,
-      update: item,
-    });
-    if (existing) updated++;
-    else created++;
+    if (!existing) {
+      await prisma.e6PharmacyProduct.create({ data: item });
+      created++;
+    } else if (productChanged(existing, item)) {
+      await prisma.e6PharmacyProduct.update({ where: { productCode: item.productCode }, data: item });
+      updated++;
+    }
   }
   return { received: normalized.length, created, updated };
 }
@@ -158,9 +176,15 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     if (removeIds.length) await prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } });
   }
 
-  await prisma.e6PharmacyProduct.updateMany({
-    where: { productCode: { in: productCodes } },
-    data: { lastInventorySeenAt: new Date() },
-  });
+  // 仅记录库存同步时间，不触发商品表 updated_at（Prisma @updatedAt）。
+  if (productCodes.length) {
+    const seenAt = new Date();
+    for (const productCode of productCodes) {
+      await prisma.$executeRaw`
+        UPDATE e6_pharmacy_products
+        SET last_inventory_seen_at = ${seenAt}
+        WHERE product_code = ${productCode}`;
+    }
+  }
   return { received: normalized.length, created, updated, fullSync: payload?.fullSync === true };
 }
