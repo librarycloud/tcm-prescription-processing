@@ -18,13 +18,13 @@ export function clearSession() {
 
 export function redirectByRole(user) {
   const role = Number(user?.role);
-  if (![0, 1, 2].includes(role)) {
+  if (![0, 1, 2, 3].includes(role)) {
     clearSession();
     wx.reLaunch({ url: '/pages/login/login' });
     return;
   }
 
-  const url = role === 0 || role === 2
+  const url = role === 0 || role === 2 || role === 3
     ? '/pages/admin/dashboard/dashboard'
     : '/pages/user/packages/packages';
   wx.reLaunch({ url });

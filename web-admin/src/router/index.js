@@ -187,7 +187,7 @@ const routes = [
         path: 'store-admins',
         name: 'StoreAdmins',
         component: () => import('@/views/admin/StoreAdmins.vue'),
-        meta: { title: '门店管理员', icon: 'Avatar', group: 'system', allowedRoles: [0] }
+        meta: { title: '门店账号', icon: 'Avatar', group: 'system', allowedRoles: [0, 2] }
       },
       {
         path: 'users',

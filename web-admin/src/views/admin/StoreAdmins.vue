@@ -2,10 +2,10 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">门店管理员</h1>
-        <p class="page-subtitle">创建管理员、绑定门店并维护账号状态</p>
+        <h1 class="page-title">门店账号</h1>
+        <p class="page-subtitle">维护本门店管理员与员工账号，并可双向调整权限</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreate">新增管理员</el-button>
+      <el-button type="primary" :icon="Plus" @click="openCreate">新增账号</el-button>
     </div>
 
     <el-card shadow="never">
@@ -29,7 +29,7 @@
 
     <el-card shadow="never">
       <el-table v-loading="loading" :data="list" row-key="id" border table-layout="auto">
-        <template #empty><EmptyView description="暂无门店管理员" /></template>
+        <template #empty><EmptyView description="暂无门店账号" /></template>
         <el-table-column prop="nickname" label="昵称" align="center">
           <template #default="{ row }">{{ row.nickname || '-' }}</template>
         </el-table-column>
@@ -43,7 +43,11 @@
           <template #default="{ row }">{{ row.store?.name || '-' }}</template>
         </el-table-column>
         <el-table-column label="角色" align="center">
-          <template #default><el-tag effect="plain">门店管理员</el-tag></template>
+          <template #default="{ row }">
+            <el-tag :type="Number(row.role) === ROLES.STORE_ADMIN ? 'primary' : 'info'" effect="plain">
+              {{ roleLabel(row.role) }}
+            </el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="账号状态" align="center">
           <template #default="{ row }">
@@ -66,7 +70,14 @@
               >
                 {{ Number(row.status) === 1 ? '禁用' : '启用' }}
               </el-button>
-              <el-button link type="danger" @click="openDelete(row)">删除</el-button>
+              <el-button
+                v-if="userStore.isSuperAdmin && Number(row.role) === ROLES.STORE_ADMIN"
+                link
+                type="danger"
+                @click="openDelete(row)"
+              >
+                删除
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -113,6 +124,12 @@
             <el-option v-for="item in stores" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="账号权限" prop="role">
+          <el-radio-group v-model="form.role">
+            <el-radio-button :value="ROLES.STORE_ADMIN">门店管理员</el-radio-button>
+            <el-radio-button :value="ROLES.STORE_STAFF">门店员工</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item :label="editingId ? '重置密码' : '登录密码'" prop="password">
           <el-input
             v-model="form.password"
@@ -146,8 +163,8 @@
 
     <ConfirmDialog
       v-model="deleteVisible"
-      title="确认删除管理员"
-      :content="`确认删除门店管理员 ${selectedAdmin?.nickname || selectedAdmin?.phone || ''} 吗？存在包裹审计记录时请改为禁用账号。`"
+      title="确认删除账号"
+      :content="`确认删除门店账号 ${selectedAdmin?.nickname || selectedAdmin?.phone || ''} 吗？存在包裹审计记录时请改为禁用账号。`"
       confirm-type="danger"
       :loading="deleting"
       @confirm="handleDelete"
@@ -174,7 +191,9 @@ import {
 import { formatDate } from '@/utils/date';
 import { isValidPhone, maskPhone } from '@/utils/phone';
 import { ROLES } from '@/utils/permission';
+import { useUserStore } from '@/stores/user';
 
+const userStore = useUserStore();
 const formRef = ref(null);
 const loading = ref(false);
 const saving = ref(false);
@@ -194,12 +213,13 @@ const form = reactive({
   nickname: '',
   name: '',
   storeId: null,
+  role: ROLES.STORE_ADMIN,
   password: '',
   confirmPassword: '',
   status: 1
 });
 const dialogTitle = computed(() =>
-  editingId.value ? '编辑门店管理员' : form.userId ? '设置为门店管理员' : '新增门店管理员'
+  editingId.value ? '编辑门店账号' : form.userId ? '设置门店账号权限' : '新增门店账号'
 );
 
 const rules = {
@@ -263,6 +283,7 @@ function resetForm() {
     nickname: '',
     name: '',
     storeId: null,
+    role: ROLES.STORE_ADMIN,
     password: '',
     confirmPassword: '',
     status: 1
@@ -285,6 +306,7 @@ function openEdit(row) {
     nickname: row.nickname || '',
     name: row.name || '',
     storeId: row.storeId,
+    role: Number(row.role),
     password: '',
     confirmPassword: '',
     status: Number(row.status)
@@ -303,13 +325,14 @@ async function handleSave() {
       nickname: form.nickname,
       name: form.name,
       storeId: form.storeId,
+      role: form.role,
       status: form.status
     };
     if (form.userId) payload.userId = form.userId;
     if (form.password) payload.password = form.password;
     if (editingId.value) await updateStoreAdmin(editingId.value, payload);
     else await createStoreAdminApi(payload);
-    ElMessage.success(editingId.value ? '管理员已更新' : '管理员已创建');
+    ElMessage.success(editingId.value ? '账号权限已更新' : '账号已创建');
     dialogVisible.value = false;
     await loadData();
   } finally {
@@ -354,7 +377,8 @@ function roleLabel(role) {
     {
       [ROLES.SUPER_ADMIN]: '全局管理员',
       [ROLES.USER]: '普通用户',
-      [ROLES.STORE_ADMIN]: '门店管理员'
+      [ROLES.STORE_ADMIN]: '门店管理员',
+      [ROLES.STORE_STAFF]: '门店员工'
     }[Number(role)] || '未知角色'
   );
 }
@@ -378,7 +402,7 @@ async function handleDelete() {
   deleting.value = true;
   try {
     await deleteStoreAdmin(selectedAdmin.value.id);
-    ElMessage.success('管理员已删除');
+    ElMessage.success('账号已删除');
     deleteVisible.value = false;
     await loadData();
   } finally {

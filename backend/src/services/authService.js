@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import { config } from "../config.js";
 import { AppError } from "../utils/appError.js";
 import { validatePhone, required } from "../utils/validators.js";
-import { ROLES, isManager } from "../constants/roles.js";
+import { ROLES, isAdmin, isStoreMember } from "../constants/roles.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
 
 export function publicUser(user) {
@@ -53,11 +53,11 @@ export async function login(prisma, jwt, payload) {
     where: { phone },
     include: { store: true },
   });
-  if (!user || !isManager(user) || user.status !== RECORD_STATUS.ENABLED) {
+  if (!user || !isAdmin(user) || user.status !== RECORD_STATUS.ENABLED) {
     throw new AppError("手机号或密码错误", 401);
   }
   if (
-    user.role === ROLES.STORE_ADMIN &&
+    isStoreMember(user) &&
     (!user.storeId ||
       user.store?.status !== RECORD_STATUS.ENABLED ||
       user.store?.deletedAt)
@@ -128,7 +128,7 @@ async function assertEnabledAccount(account) {
     throw new AppError("账号已停用", 403);
   }
   if (
-    account.role === ROLES.STORE_ADMIN &&
+    isStoreMember(account) &&
     (!account.storeId || account.store?.status !== RECORD_STATUS.ENABLED || account.store?.deletedAt)
   ) {
     throw new AppError("账号所属门店已停用", 403);

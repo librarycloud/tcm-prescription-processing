@@ -1,5 +1,5 @@
 import { AppError } from '../utils/appError.js';
-import { isManager, isStoreAdmin, isSuperAdmin } from '../constants/roles.js';
+import { isAdmin, isManager, isStoreMember, isStoreStaff, isSuperAdmin } from '../constants/roles.js';
 
 export async function verifyToken(request) {
   try {
@@ -13,7 +13,7 @@ export async function verifyToken(request) {
   const storeId = request.user.storeId == null ? null : Number(request.user.storeId);
   if (
     !['admin', 'user'].includes(accountType) ||
-    ![0, 1, 2].includes(role) ||
+    ![0, 1, 2, 3].includes(role) ||
     !Number.isInteger(Number(request.user.id)) ||
     (accountType === 'user' && role !== 1) ||
     (accountType === 'admin' && role === 1)
@@ -29,9 +29,21 @@ export async function verifyToken(request) {
     ip: request.ip || null,
     userAgent: request.headers?.['user-agent'] || null
   };
-  if (isStoreAdmin(request.user) && (!Number.isInteger(storeId) || storeId <= 0)) {
-    throw new AppError('门店管理员未绑定门店', 403);
+  if (isStoreMember(request.user) && (!Number.isInteger(storeId) || storeId <= 0)) {
+    throw new AppError('门店账号未绑定门店', 403);
   }
+}
+
+export async function verifyAdmin(request) {
+  if (request.user.accountType !== 'admin' || !isAdmin(request.user)) {
+    throw new AppError('无后台账号权限', 403);
+  }
+}
+
+export async function verifyStoreStaffRoute(request) {
+  if (!isStoreStaff(request.user)) return;
+  if (request.routeOptions?.config?.storeStaff === true) return;
+  throw new AppError('门店员工无权执行此操作', 403);
 }
 
 export async function verifyManager(request) {

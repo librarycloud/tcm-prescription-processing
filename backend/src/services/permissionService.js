@@ -1,5 +1,5 @@
 import { AppError } from "../utils/appError.js";
-import { isManager, isSuperAdmin } from "../constants/roles.js";
+import { isManager, isStoreMember, isSuperAdmin } from "../constants/roles.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
 import { TRANSFER_OUTBOUND_STATUS } from "../constants/storeTransfer.js";
 
@@ -7,8 +7,14 @@ export function assertManager(actor) {
   if (!isManager(actor)) throw new AppError("无管理员权限", 403);
 }
 
+export function assertStoreMember(actor) {
+  if (!isSuperAdmin(actor) && !isStoreMember(actor)) {
+    throw new AppError("无门店业务权限", 403);
+  }
+}
+
 export function businessScope(actor, requestedStoreId) {
-  assertManager(actor);
+  assertStoreMember(actor);
   if (isSuperAdmin(actor)) {
     if (
       requestedStoreId !== undefined &&
@@ -24,11 +30,12 @@ export function businessScope(actor, requestedStoreId) {
   }
   const storeId = Number(actor.storeId);
   if (!Number.isInteger(storeId) || storeId <= 0)
-    throw new AppError("门店管理员未绑定门店", 403);
+    throw new AppError("门店账号未绑定门店", 403);
   return { storeId };
 }
 
 export async function resolveBusinessStoreId(prisma, actor, requestedStoreId) {
+  assertStoreMember(actor);
   const storeId = Number(
     isSuperAdmin(actor) ? requestedStoreId : actor.storeId,
   );
@@ -55,7 +62,7 @@ export async function assertBusinessStore(prisma, actor, storeId) {
 function actorStoreId(actor) {
   const storeId = Number(actor?.storeId);
   if (!Number.isInteger(storeId) || storeId <= 0)
-    throw new AppError("门店管理员未绑定门店", 403);
+    throw new AppError("门店账号未绑定门店", 403);
   return storeId;
 }
 

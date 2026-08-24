@@ -1,7 +1,9 @@
 import {
+  verifyAdmin,
   verifyManager,
   verifySuperAdmin,
   verifyToken,
+  verifyStoreStaffRoute,
 } from "../middlewares/auth.js";
 import {
   createController,
@@ -195,14 +197,16 @@ import {
 } from "../controllers/ydGoodsCheckController.js";
 
 export default async function adminRoutes(fastify) {
+  const storeStaffRoute = { config: { storeStaff: true } };
   fastify.addHook("preHandler", fastify.rateLimit());
   fastify.addHook("preHandler", verifyToken);
-  fastify.addHook("preHandler", verifyManager);
+  fastify.addHook("preHandler", verifyAdmin);
+  fastify.addHook("preHandler", verifyStoreStaffRoute);
 
-  fastify.get("/stats", statsController);
-  fastify.get("/herb-locations/stores", listHerbLocationStoresController);
-  fastify.get("/herb-locations", listHerbLocationsController);
-  fastify.get("/herb-locations/layout", getHerbLocationLayoutController);
+  fastify.get("/stats", storeStaffRoute, statsController);
+  fastify.get("/herb-locations/stores", storeStaffRoute, listHerbLocationStoresController);
+  fastify.get("/herb-locations", storeStaffRoute, listHerbLocationsController);
+  fastify.get("/herb-locations/layout", storeStaffRoute, getHerbLocationLayoutController);
   fastify.get("/herb-locations/export", exportHerbLocationsController);
   fastify.get("/herb-locations/template", herbLocationTemplateController);
   fastify.get(
@@ -294,21 +298,22 @@ export default async function adminRoutes(fastify) {
     confirmTransferReturnController,
   );
   fastify.post("/store-transfers/:id/cancel", cancelTransferController);
-  fastify.get("/packages", listController);
-  fastify.get("/packages/by-code/:pickupCode", pickupCodeDetailController);
+  fastify.get("/packages", storeStaffRoute, listController);
+  fastify.get("/packages/by-code/:pickupCode", storeStaffRoute, pickupCodeDetailController);
   fastify.get("/packages/:id/notifications", packageNotificationsController);
-  fastify.get("/packages/:id", detailController);
+  fastify.get("/packages/:id", storeStaffRoute, detailController);
   fastify.post("/packages", createController);
   fastify.put("/packages/:id", updateController);
   fastify.delete("/packages/:id", deleteController);
   fastify.post(
     "/packages/verify",
-    { preHandler: fastify.rateLimit() },
+    { config: { storeStaff: true }, preHandler: fastify.rateLimit() },
     verifyController,
   );
-  fastify.get("/prescriptions", listPrescriptionController);
+  fastify.get("/prescriptions", storeStaffRoute, listPrescriptionController);
   fastify.get(
     "/prescriptions/:id/attachment",
+    storeStaffRoute,
     prescriptionAttachmentController,
   );
   fastify.post(
@@ -319,29 +324,31 @@ export default async function adminRoutes(fastify) {
     "/prescriptions/:id/attachment",
     deletePrescriptionAttachmentController,
   );
-  fastify.get("/prescriptions/:id", prescriptionDetailController);
-  fastify.post("/prescriptions", createPrescriptionController);
-  fastify.put("/prescriptions/:id", updatePrescriptionController);
+  fastify.get("/prescriptions/:id", storeStaffRoute, prescriptionDetailController);
+  fastify.post("/prescriptions", storeStaffRoute, createPrescriptionController);
+  fastify.put("/prescriptions/:id", storeStaffRoute, updatePrescriptionController);
   fastify.delete("/prescriptions/:id", deletePrescriptionController);
   fastify.put(
     "/prescriptions/:prescriptionId/processing-plans/order",
     reorderPrescriptionPlansController,
   );
-  fastify.get("/processing-plans", listPlanController);
-  fastify.get("/processing-plans/calendar", processingCalendarController);
-  fastify.get("/processing-plans/by-scan", scanProcessingPlanController);
-  fastify.post("/processing-plans", createPlanController);
+  fastify.get("/processing-plans", storeStaffRoute, listPlanController);
+  fastify.get("/processing-plans/calendar", storeStaffRoute, processingCalendarController);
+  fastify.get("/processing-plans/by-scan", storeStaffRoute, scanProcessingPlanController);
+  fastify.post("/processing-plans", storeStaffRoute, createPlanController);
   fastify.post("/processing-plans/batch", createPlanBatchController);
   fastify.put("/processing-plans/queue", reorderQueueController);
   fastify.post("/processing-plans/queue/restore", restoreQueueController);
-  fastify.put("/processing-plans/:id", updatePlanController);
-  fastify.get("/processing-plans/:id/workflow", processingWorkflowController);
+  fastify.put("/processing-plans/:id", storeStaffRoute, updatePlanController);
+  fastify.get("/processing-plans/:id/workflow", storeStaffRoute, processingWorkflowController);
   fastify.post(
     "/processing-plans/:id/dispensing-complete",
+    storeStaffRoute,
     completeDispensingController,
   );
   fastify.get(
     "/processing-plans/:id/photos/:photoId",
+    storeStaffRoute,
     processingPhotoController,
   );
   fastify.delete(
@@ -350,6 +357,7 @@ export default async function adminRoutes(fastify) {
   );
   fastify.post(
     "/processing-plans/:id/equipment-usages",
+    storeStaffRoute,
     startEquipmentUsageController,
   );
   fastify.post(
@@ -358,14 +366,17 @@ export default async function adminRoutes(fastify) {
   );
   fastify.post(
     "/processing-plans/:id/equipment-usages/:usageId/start-packaging",
+    storeStaffRoute,
     startPackagingUsageController,
   );
   fastify.post(
     "/processing-plans/:id/equipment-usages/:usageId/finish",
+    storeStaffRoute,
     finishEquipmentUsageController,
   );
   fastify.post(
     "/processing-plans/:id/equipment-usages/:usageId/void",
+    storeStaffRoute,
     voidEquipmentUsageController,
   );
   fastify.post(
@@ -385,7 +396,7 @@ export default async function adminRoutes(fastify) {
   fastify.post("/processing-equipment", createEquipmentController);
   fastify.put("/processing-equipment/:id", updateEquipmentController);
   fastify.delete("/processing-equipment/:id", deleteEquipmentController);
-  fastify.get("/dictionaries", listDictionariesController);
+  fastify.get("/dictionaries", storeStaffRoute, listDictionariesController);
   fastify.post(
     "/dictionaries",
     { preHandler: verifySuperAdmin },
@@ -401,7 +412,7 @@ export default async function adminRoutes(fastify) {
     { preHandler: verifySuperAdmin },
     deleteDictionaryController,
   );
-  fastify.get("/doctors", listDoctorsController);
+  fastify.get("/doctors", storeStaffRoute, listDoctorsController);
   fastify.post(
     "/doctors",
     { preHandler: verifySuperAdmin },
@@ -480,17 +491,17 @@ export default async function adminRoutes(fastify) {
   );
   fastify.get(
     "/store-admins",
-    { preHandler: verifySuperAdmin },
+    { preHandler: verifyManager },
     listStoreAdminsController,
   );
   fastify.post(
     "/store-admins",
-    { preHandler: verifySuperAdmin },
+    { preHandler: verifyManager },
     createStoreAdminController,
   );
   fastify.put(
     "/store-admins/:id",
-    { preHandler: verifySuperAdmin },
+    { preHandler: verifyManager },
     updateStoreAdminController,
   );
   fastify.delete(

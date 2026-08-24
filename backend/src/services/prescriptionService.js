@@ -1,5 +1,5 @@
 import { AppError } from "../utils/appError.js";
-import { isSuperAdmin } from "../constants/roles.js";
+import { isStoreStaff, isSuperAdmin } from "../constants/roles.js";
 import {
   DICTIONARY_TYPES,
   PLAN_STATUS,
@@ -221,7 +221,7 @@ export async function listPrescriptions(prisma, actor, query) {
 export async function getPrescription(prisma, actor, idValue) {
   const item = await prescriptionRepository.findFirst(prisma, {
     where: { id: Number(idValue), ...scope(actor) },
-    include: include({ withE6Imports: true }),
+    include: include({ withE6Imports: !isStoreStaff(actor) }),
   });
   if (!item) throw new AppError("处方不存在", 404);
   return withTotals(item);

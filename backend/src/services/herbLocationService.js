@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { AppError } from "../utils/appError.js";
 import { isSuperAdmin } from "../constants/roles.js";
-import { assertManager, resolveBusinessStoreId } from "./permissionService.js";
+import { assertStoreMember, resolveBusinessStoreId } from "./permissionService.js";
 import { recordOperation } from "./operationLogService.js";
 
 const LOCATION_TYPES = new Set(["D", "G", "F", "C"]);
@@ -349,7 +349,7 @@ export async function getHerbLocationLayout(prisma, actor, query = {}) {
 }
 
 export async function listHerbLocationStores(prisma, actor) {
-  assertManager(actor);
+  assertStoreMember(actor);
   const where = {
     deletedAt: null,
     status: 1,

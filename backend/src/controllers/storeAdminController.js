@@ -7,7 +7,7 @@ import {
 import { ok } from '../utils/response.js';
 
 export async function listStoreAdminsController(request, reply) {
-  return ok(reply, await listStoreAdmins(request.server.prisma, request.query || {}));
+  return ok(reply, await listStoreAdmins(request.server.prisma, request.query || {}, request.user));
 }
 
 export async function createStoreAdminController(request, reply) {

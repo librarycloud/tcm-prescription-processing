@@ -3,7 +3,7 @@
     <view class="avatar">{{avatarText}}</view>
     <view class="profile-main">
       <view class="profile-name">{{user.nickname || user.phone || '未设置昵称'}}</view>
-      <view class="muted">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : '用户')}}</view>
+      <view class="muted">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}</view>
     </view>
   </view>
 
@@ -39,9 +39,9 @@
         </view>
         <text class="info-label-colon">：</text>
       </view>
-      <view class="info-value">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : '用户')}}</view>
+      <view class="info-value">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}</view>
     </view>
-    <view class="info-row" wx:if="{{user.role === 2}}">
+    <view class="info-row" wx:if="{{user.role === 2 || user.role === 3}}">
       <view class="info-label">
         <view class="info-label-text"><text>所</text><text>属</text><text>门</text><text>店</text></view>
         <text class="info-label-colon">：</text>
