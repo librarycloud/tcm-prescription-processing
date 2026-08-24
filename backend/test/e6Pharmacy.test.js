@@ -5,9 +5,9 @@ import { mergeBatches } from "../src/services/e6PharmacySyncService.js";
 
 test("E6 pharmacy batches keep locations separate", () => {
   const result = mergeBatches([
-    { e6ProductId: 99052, batchNo: "2411061", locationName: "A货位", quantity: "2.000", amount: "12.34" },
-    { e6ProductId: 99052, batchNo: "2411061", locationName: "B货位", quantity: "3.000", amount: "12.34" },
-    { e6ProductId: 99052, batchNo: "2411061", locationName: "A货位", quantity: "1.000", amount: "12.34" },
+    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "2.000", amount: "12.34" },
+    { productCode: "99052", batchNo: "2411061", locationName: "B货位", quantity: "3.000", amount: "12.34" },
+    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "1.000", amount: "12.34" },
   ]);
 
   assert.equal(result.length, 2);
@@ -23,7 +23,6 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
   const product = {
     id: 10,
     storeId: 3,
-    e6ProductId: 107889,
     productCode: "671012158",
     name: "氯雷他定糖浆",
     category: "西药",

@@ -83,7 +83,7 @@ function normalizeItem(item, counted = true) {
 
 const productInclude = {
   select: {
-    id: true, e6ProductId: true, productCode: true, name: true, barcode: true,
+    id: true, productCode: true, name: true, barcode: true,
     specification: true, dosageForm: true, manufacturer: true, categoryAttribute: true, unit: true,
   },
 };

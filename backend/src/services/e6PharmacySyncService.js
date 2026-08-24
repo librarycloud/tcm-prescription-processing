@@ -8,12 +8,6 @@ function text(value, max, field, required = false) {
   return result || null;
 }
 
-function integer(value, field) {
-  const result = Number(value);
-  if (!Number.isInteger(result) || result <= 0) throw new AppError(`${field}不正确`, 400);
-  return result;
-}
-
 function decimal(value, field, scale) {
   const result = Number(value);
   if (!Number.isFinite(result) || result < 0) throw new AppError(`${field}不正确`, 400);
@@ -29,7 +23,6 @@ function date(value, field) {
 
 function normalizeProduct(item) {
   return {
-    e6ProductId: integer(item?.e6ProductId, "E6商品ID"),
     productCode: text(item?.productCode, 64, "商品编号", true),
     name: text(item?.name, 120, "商品名称", true),
     category: text(item?.category, 100, "分类"),
@@ -49,7 +42,7 @@ function normalizeBatch(item) {
   const quantity = decimal(item?.quantity, "库存数量", 3);
   if (Number(quantity) <= 0) throw new AppError("库存数量必须大于零", 400);
   return {
-    e6ProductId: integer(item?.e6ProductId, "E6商品ID"),
+    productCode: text(item?.productCode, 64, "商品编号", true),
     batchNo: text(item?.batchNo, 100, "批号") || "",
     productionDate: date(item?.productionDate, "生产日期"),
     expiryDate: date(item?.expiryDate, "有效期至"),
@@ -63,7 +56,7 @@ function normalizeBatch(item) {
 export function mergeBatches(items) {
   const merged = new Map();
   for (const item of items) {
-    const key = `${item.e6ProductId}\u0000${item.batchNo}\u0000${item.locationName}`;
+    const key = `${item.productCode}\u0000${item.batchNo}\u0000${item.locationName}`;
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, { ...item });
@@ -89,11 +82,11 @@ export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
   let updated = 0;
   for (const item of normalized) {
     const existing = await prisma.e6PharmacyProduct.findUnique({
-      where: { e6ProductId: item.e6ProductId },
+      where: { productCode: item.productCode },
       select: { id: true },
     });
     await prisma.e6PharmacyProduct.upsert({
-      where: { e6ProductId: item.e6ProductId },
+      where: { productCode: item.productCode },
       create: item,
       update: item,
     });
@@ -112,20 +105,20 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     ? date(payload.fullSyncStartedAt, "全量同步开始时间")
     : null;
   const fullSyncComplete = payload?.fullSyncComplete === true;
-  const productIds = [...new Set(normalized.map((item) => item.e6ProductId))];
+  const productCodes = [...new Set(normalized.map((item) => item.productCode))];
   const products = await prisma.e6PharmacyProduct.findMany({
-    where: { e6ProductId: { in: productIds } },
-    select: { id: true, e6ProductId: true },
+    where: { productCode: { in: productCodes } },
+    select: { id: true, productCode: true },
   });
-  const productMap = new Map(products.map((item) => [item.e6ProductId, item.id]));
-  const missing = productIds.filter((id) => !productMap.has(id));
+  const productMap = new Map(products.map((item) => [item.productCode, item.id]));
+  const missing = productCodes.filter((code) => !productMap.has(code));
   if (missing.length) throw new AppError(`库存对应商品尚未上传：${missing.join(",")}`, 400);
 
   const seen = new Set();
   let created = 0;
   let updated = 0;
   for (const item of normalized) {
-    const productId = productMap.get(item.e6ProductId);
+    const productId = productMap.get(item.productCode);
     const key = `${productId}\u0000${item.batchNo}\u0000${item.locationName}`;
     seen.add(key);
     const existing = await prisma.e6PharmacyInventoryBatch.findUnique({
@@ -166,7 +159,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   }
 
   await prisma.e6PharmacyProduct.updateMany({
-    where: { e6ProductId: { in: productIds } },
+    where: { productCode: { in: productCodes } },
     data: { lastInventorySeenAt: new Date() },
   });
   return { received: normalized.length, created, updated, fullSync: payload?.fullSync === true };

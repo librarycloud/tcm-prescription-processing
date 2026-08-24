@@ -4,7 +4,6 @@ namespace E6Sync.Models
 {
     public sealed class E6PharmacyProductUpload
     {
-        public int e6ProductId { get; set; }
         public string productCode { get; set; }
         public string name { get; set; }
         public string category { get; set; }
@@ -21,7 +20,7 @@ namespace E6Sync.Models
 
     public sealed class E6PharmacyBatchUpload
     {
-        public int e6ProductId { get; set; }
+        public string productCode { get; set; }
         public string locationName { get; set; }
         public string batchNo { get; set; }
         public string productionDate { get; set; }

@@ -157,7 +157,6 @@ model Product {
 
 model E6PharmacyProduct {
   id                  Int       @id @default(autoincrement())
-  e6ProductId         Int       @map("e6_product_id")
   productCode         String    @map("product_code") @db.VarChar(64)
   name                String    @db.VarChar(120)
   category            String?   @db.VarChar(100)
@@ -177,8 +176,7 @@ model E6PharmacyProduct {
   inventories E6PharmacyInventoryBatch[]
   checkItems  YdGoodsCheckItem[]
 
-  @@unique([e6ProductId])
-  @@index([productCode])
+  @@unique([productCode])
   @@index([barcode])
   @@index([e6ModifiedAt])
   @@map("e6_pharmacy_products")

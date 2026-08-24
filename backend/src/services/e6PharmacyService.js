@@ -26,7 +26,6 @@ function normalizeProduct(product) {
   ).values()];
   return {
     id: product.id,
-    e6ProductId: product.e6ProductId,
     productCode: product.productCode,
     name: product.name,
     category: product.category,
