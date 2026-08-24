@@ -82,9 +82,10 @@ Page({
       const data = await getE6PharmacyProducts({ keyword, storeId: this.data.storeId || undefined, page: 1, pageSize: 50 });
       if (requestId !== searchRequestId) return;
       const products = data?.list || [];
-      const selectedProduct = autoSelect
-        ? products.find((item) => String(item.barcode || '').trim() === keyword) || (products.length === 1 ? products[0] : null)
-        : null;
+      const exactMatches = products.filter((item) =>
+        String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
+      );
+      const selectedProduct = exactMatches.length === 1 ? exactMatches[0] : null;
       this.setData({
         products: selectedProduct ? [] : products,
         searched: selectedProduct ? false : true,

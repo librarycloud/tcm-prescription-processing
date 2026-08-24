@@ -49,9 +49,14 @@ function candidateProducts(rows) {
   const products = new Map();
   rows.forEach((row) => {
     if (!row.product || products.has(row.product.id)) return;
+    const inventories = rows.filter((item) => item.productId === row.product.id && !item.manualBatch);
+    const totalQuantity = inventories.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     products.set(row.product.id, {
       ...row.product,
-      inventoryCount: rows.filter((item) => item.productId === row.product.id && !item.manualBatch).length
+      inventoryCount: inventories.length,
+      batchCount: inventories.length,
+      totalQuantity,
+      totalQuantityText: numberText(totalQuantity)
     });
   });
   return [...products.values()];
@@ -191,9 +196,12 @@ Page({
       const candidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, { keyword });
       if (requestId !== candidateRequestId) return;
       const products = candidateProducts(candidates || []);
-      const selectedProduct = autoSelect
-        ? products.find((item) => String(item.barcode || '').trim() === keyword) || (products.length === 1 ? products[0] : null)
-        : (productId ? products.find((item) => item.id === productId) || null : null);
+      const exactMatches = products.filter((item) =>
+        String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
+      );
+      const selectedProduct = productId
+        ? products.find((item) => item.id === productId) || null
+        : exactMatches.length === 1 ? exactMatches[0] : null;
       const shouldShowInventories = Boolean(selectedProduct);
       this.setData({
         candidates: candidates || [],

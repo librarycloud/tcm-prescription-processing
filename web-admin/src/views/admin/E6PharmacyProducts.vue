@@ -147,7 +147,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { Refresh, Search } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
 import EmptyView from '@/components/EmptyView.vue';
@@ -207,6 +207,14 @@ async function load() {
     });
     list.value = data.list || [];
     Object.assign(pagination, data.pagination || {});
+    const keyword = String(query.keyword || '').trim();
+    const exactMatches = list.value.filter((item) =>
+      String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
+    );
+    if (exactMatches.length === 1) {
+      await nextTick();
+      tableRef.value?.toggleRowExpansion(exactMatches[0], true);
+    }
   } finally {
     loading.value = false;
   }
