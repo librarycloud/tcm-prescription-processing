@@ -104,7 +104,12 @@
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
         <el-table-column prop="categoryName" label="分类" min-width="120">
-          <template #default="{ row }">{{ row.categoryName || '-' }}</template>
+          <template #default="{ row }">
+            <el-tooltip v-if="isLongCategory(row.categoryName)" :content="row.categoryName" placement="top">
+              <span>{{ shortCategory(row.categoryName) }}</span>
+            </el-tooltip>
+            <span v-else>{{ row.categoryName || '-' }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="商品名称" min-width="150">
           <template #default="{ row }">
@@ -127,7 +132,12 @@
           <template #default="{ row }">{{ quantityText(row.totalQuantity) }}</template>
         </el-table-column>
         <el-table-column prop="barcode" label="条形码" min-width="140">
-          <template #default="{ row }">{{ row.barcode || '-' }}</template>
+          <template #default="{ row }">
+            <el-tooltip v-if="isLongBarcode(row.barcode)" :content="String(row.barcode)" placement="top">
+              <span>{{ shortBarcode(row.barcode) }}</span>
+            </el-tooltip>
+            <span v-else>{{ row.barcode || '-' }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="规格" width="98">
           <template #default="{ row }">
@@ -242,6 +252,23 @@ function isLongText(value) {
 
 function shortText(value) {
   return `${String(value).slice(0, 12)}…`;
+}
+
+function isLongCategory(value) {
+  return String(value || '').length > 6;
+}
+
+function shortCategory(value) {
+  return `${String(value).slice(0, 6)}…`;
+}
+
+function isLongBarcode(value) {
+  return String(value || '').length > 8;
+}
+
+function shortBarcode(value) {
+  const barcode = String(value || '');
+  return `${barcode.slice(0, 4)}…${barcode.slice(-4)}`;
 }
 
 async function loadStores() {
