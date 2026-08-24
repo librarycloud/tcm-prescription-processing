@@ -1,5 +1,6 @@
-import { getE6PharmacyProducts } from '../../../api/admin';
+import { getE6PharmacyProducts, getStores } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { getUser } from '../../../utils/auth';
 
 let searchTimer;
 let searchRequestId = 0;
@@ -36,6 +37,11 @@ function decorateProduct(product) {
 Page({
   data: {
     activeTab: 'overview',
+    isSuperAdmin: false,
+    stores: [],
+    storeIndex: 0,
+    storeId: '',
+    storeName: '全部门店',
     keyword: '',
     searchLoading: false,
     detailLoading: false,
@@ -73,7 +79,7 @@ Page({
     const requestId = ++searchRequestId;
     this.setData({ searchLoading: true, searched: true, products: [], selectedProduct: null });
     try {
-      const data = await getE6PharmacyProducts({ keyword, page: 1, pageSize: 50 });
+      const data = await getE6PharmacyProducts({ keyword, storeId: this.data.storeId || undefined, page: 1, pageSize: 50 });
       if (requestId !== searchRequestId) return;
       const products = data?.list || [];
       const selectedProduct = autoSelect
@@ -87,6 +93,23 @@ Page({
     } finally {
       if (requestId === searchRequestId) this.setData({ searchLoading: false });
     }
+  },
+
+  async onShow() {
+    const user = getUser();
+    const isSuperAdmin = Number(user?.role) === 0;
+    this.setData({ isSuperAdmin });
+    if (isSuperAdmin && !this.data.stores.length) {
+      const data = await getStores({ page: 1, pageSize: 100 });
+      this.setData({ stores: [{ id: '', name: '全部门店' }, ...(data.list || [])], storeName: '全部门店' });
+    }
+  },
+
+  onStoreChange(e) {
+    const storeIndex = Number(e.detail.value || 0);
+    const store = this.data.stores[storeIndex] || {};
+    this.setData({ storeIndex, storeId: store.id || '', storeName: store.name || '全部门店', products: [], selectedProduct: null, searched: false });
+    if (this.data.keyword.trim()) this.search(true);
   },
 
   scan() {
@@ -105,7 +128,7 @@ Page({
     searchRequestId += 1;
     this.setData({ detailLoading: true, searched: false, products: [], selectedProduct: null });
     try {
-      const data = await getE6PharmacyProducts({ keyword: product.productCode, page: 1, pageSize: 50 });
+      const data = await getE6PharmacyProducts({ keyword: product.productCode, storeId: this.data.storeId || undefined, page: 1, pageSize: 50 });
       const detail = (data?.list || []).find((item) => item.id === product.id);
       if (!detail) return wx.showToast({ title: '商品库存已更新，请重新查询', icon: 'none' });
       this.setData({ products: [], searched: false, selectedProduct: decorateProduct(detail) });

@@ -5,6 +5,7 @@
   </view>
 
   <view class="search-panel">
+    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange"><view class="filter-picker">门店：{{storeName}}</view></picker>
     <view class="search-row"><t-icon class="search-scan-icon" name="scan" size="44rpx" color="#0052d9" bind:tap="scan" /><t-input class="search-input" borderless suffix="查询商品" value="{{keyword}}" placeholder="名称、编码或条码" bind:change="onKeywordChange" bind:click="search" bind:enter="search" /></view>
   </view>
 
@@ -25,10 +26,11 @@
 
     <view class="section-title">库存信息</view>
     <view wx:for="{{selectedProduct.inventories}}" wx:key="id" class="app-card inventory-card">
+      <view wx:if="{{isSuperAdmin}}" class="inventory-row"><text>门店</text><text>{{item.store.name || '-'}}</text></view>
       <view class="inventory-row"><text>批号</text><text>{{item.batchNo}}</text></view>
       <view class="inventory-row"><text>货位</text><text>{{item.locationName}}</text></view>
       <view class="inventory-row strong"><text>库存数量</text><text>{{item.quantityText}} {{selectedProduct.unit || ''}}</text></view>
-      <view class="inventory-row"><text>价格</text><text>¥ {{item.amountText}}</text></view>
+      <view class="inventory-row"><text>金额</text><text>¥ {{item.amountText}}</text></view>
       <view class="muted inventory-dates">生产：{{item.productionDateText}}　有效期：{{item.expiryDateText}}　入库：{{item.inboundDateText}}</view>
     </view>
     <t-empty wx:if="{{!selectedProduct.inventories.length}}" description="该商品暂无库存" />

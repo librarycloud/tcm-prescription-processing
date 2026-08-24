@@ -2,6 +2,7 @@
 .page-heading { margin-bottom: 20rpx; }
 .page-title { font-size: 36rpx; font-weight: 700; }
 .search-panel { position: relative; margin-bottom: 18rpx; }
+.filter-picker { margin-bottom: 14rpx; padding: 18rpx 24rpx; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; color: #1f2329; }
 .search-row { display: flex; align-items: center; gap: 12rpx; overflow: hidden; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; --td-input-bg-color: transparent; --td-input-vertical-padding: 16rpx 24rpx; --td-input-suffix-text-color: #0052d9; }
 .search-scan-icon { flex: 0 0 auto; padding: 8rpx; }
 .search-input { min-width: 0; flex: 1; }
