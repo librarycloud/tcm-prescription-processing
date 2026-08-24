@@ -11,7 +11,10 @@
 .search-input { min-width: 0; flex: 1; }
 .section-title { margin: 28rpx 0 14rpx; color: #4e5969; font-size: 28rpx; font-weight: 600; }
 .inventory-heading { display: flex; align-items: center; justify-content: space-between; }
-.selected-product { margin-bottom: 14rpx; color: #4e5969; font-size: 26rpx; }
+.selected-product-card { margin-bottom: 14rpx; }
+.selected-product-card .muted { margin-top: 10rpx; line-height: 1.5; }
+.inventory-total { padding-top: 16rpx; margin-top: 18rpx; border-top: 1rpx solid #eef0f5; color: #4e5969; }
+.inventory-total text { color: #0052d9; font-size: 34rpx; font-weight: 700; }
 .inventory-row, .inventory-action, .confirm-row { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; }
 .inventory-row { margin-bottom: 12rpx; color: #4e5969; }
 .inventory-row text:last-child, .confirm-row text:last-child { min-width: 0; color: #1f2329; text-align: right; word-break: break-all; }

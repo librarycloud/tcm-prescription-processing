@@ -8,6 +8,14 @@
       },
       {
         "type": "folder",
+        "value": "node_modules/pinyin-pro"
+      },
+      {
+        "type": "folder",
+        "value": "miniprogram_npm/pinyin-pro"
+      },
+      {
+        "type": "folder",
         "value": "node_modules/pinyin-pro/types"
       },
       {
