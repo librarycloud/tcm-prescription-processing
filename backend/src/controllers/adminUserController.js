@@ -18,7 +18,7 @@ export async function lookupUsersController(request, reply) {
 }
 
 export async function updateUserController(request, reply) {
-  const data = await updateUser(request.server.prisma, request.params.id, request.body || {}, request.user);
+  const data = await updateUser(request.server.prisma, request.params.id, request.body || {}, request.user, request.server.authSessions);
   return ok(reply, data, '更新成功');
 }
 
@@ -27,6 +27,6 @@ export async function createUserController(request, reply) {
 }
 
 export async function deleteUserController(request, reply) {
-  const data = await deleteUser(request.server.prisma, request.params.id, request.user);
+  const data = await deleteUser(request.server.prisma, request.params.id, request.user, request.server.authSessions);
   return ok(reply, data, '删除成功');
 }

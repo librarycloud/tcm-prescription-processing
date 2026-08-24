@@ -11,13 +11,13 @@ export async function listStoreAdminsController(request, reply) {
 }
 
 export async function createStoreAdminController(request, reply) {
-  return ok(reply, await createStoreAdmin(request.server.prisma, request.body || {}, request.user), '创建成功');
+  return ok(reply, await createStoreAdmin(request.server.prisma, request.body || {}, request.user, request.server.authSessions), '创建成功');
 }
 
 export async function updateStoreAdminController(request, reply) {
   return ok(
     reply,
-    await updateStoreAdmin(request.server.prisma, request.params.id, request.body || {}, request.user),
+    await updateStoreAdmin(request.server.prisma, request.params.id, request.body || {}, request.user, request.server.authSessions),
     '更新成功'
   );
 }
@@ -25,7 +25,7 @@ export async function updateStoreAdminController(request, reply) {
 export async function deleteStoreAdminController(request, reply) {
   return ok(
     reply,
-    await deleteStoreAdmin(request.server.prisma, request.params.id, request.user),
+    await deleteStoreAdmin(request.server.prisma, request.params.id, request.user, request.server.authSessions),
     '删除成功'
   );
 }

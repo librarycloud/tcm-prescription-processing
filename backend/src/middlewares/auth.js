@@ -11,21 +11,34 @@ export async function verifyToken(request) {
   const role = Number(request.user.role);
   const accountType = String(request.user.accountType || (role === 1 ? 'user' : 'admin'));
   const storeId = request.user.storeId == null ? null : Number(request.user.storeId);
+  const jti = String(request.user.jti || '');
   if (
     !['admin', 'user'].includes(accountType) ||
     ![0, 1, 2, 3].includes(role) ||
     !Number.isInteger(Number(request.user.id)) ||
+    !jti ||
     (accountType === 'user' && role !== 1) ||
     (accountType === 'admin' && role === 1)
   ) {
     throw new AppError('登录凭证无效，请重新登录', 401);
   }
+
+  const active = await request.server.authSessions.has({
+    accountType,
+    accountId: Number(request.user.id),
+    jti
+  });
+  if (!active) {
+    throw new AppError('登录已失效，请重新登录', 401);
+  }
+
   request.user = {
     id: Number(request.user.id),
     phone: String(request.user.phone || ''),
     accountType,
     role,
     storeId,
+    jti,
     ip: request.ip || null,
     userAgent: request.headers?.['user-agent'] || null
   };

@@ -21,7 +21,7 @@ export async function verifyEmailCodeController(request, reply) {
   );
   return ok(
     reply,
-    { user, token: signLoginToken(request.server.jwt, user) },
+    { user, token: await signLoginToken(request.server.jwt, request.server.authSessions, user) },
     '邮箱绑定成功'
   );
 }

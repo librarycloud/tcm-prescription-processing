@@ -99,7 +99,7 @@ export async function listUsers(prisma, ipLookup, query, actor) {
   };
 }
 
-export async function updateUser(prisma, id, payload, actor) {
+export async function updateUser(prisma, id, payload, actor, authSessions = null) {
   assertManager(actor);
   const userId = Number(id);
   if (!Number.isInteger(userId) || userId <= 0)
@@ -157,6 +157,9 @@ export async function updateUser(prisma, id, payload, actor) {
   }
 
   if (!Object.keys(data).length) throw new AppError("没有可更新的内容", 400);
+  if (data.password || phoneChanged || (data.status !== undefined && Number(data.status) !== Number(current.status))) {
+    if (authSessions) await authSessions.revokeAccount({ accountType: 'user', accountId: userId });
+  }
   data.updatedBy = actor?.id ? Number(actor.id) : null;
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -196,7 +199,7 @@ export async function updateUser(prisma, id, payload, actor) {
   return updated;
 }
 
-export async function deleteUser(prisma, id, actor) {
+export async function deleteUser(prisma, id, actor, authSessions = null) {
   if (!isSuperAdmin(actor))
     throw new AppError("仅全局管理员可以删除用户", 403);
   const userId = Number(id);
@@ -208,6 +211,7 @@ export async function deleteUser(prisma, id, actor) {
   });
   if (!current) throw new AppError("用户不存在", 404);
 
+  if (authSessions) await authSessions.revokeAccount({ accountType: 'user', accountId: userId });
   await prisma.user.delete({ where: { id: userId } });
   await recordOperation(prisma, actor, {
     module: "user",

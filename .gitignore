@@ -32,3 +32,6 @@ E6Sync-Windows11/obj/
 Thumbs.db
 .idea/
 .vscode/
+
+# WeChat Developer Tools local settings
+wechat-miniprogram/project.private.config.json

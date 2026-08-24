@@ -52,21 +52,21 @@ async function runLoggedLogin(request, loginType, operation) {
 
 export async function loginController(request, reply) {
   const data = await runLoggedLogin(request, 'admin', () =>
-    login(request.server.prisma, request.server.jwt, request.body || {})
+    login(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
   );
   return ok(reply, data);
 }
 
 export async function userLoginController(request, reply) {
   const data = await runLoggedLogin(request, 'user', () =>
-    userLogin(request.server.prisma, request.server.jwt, request.body || {})
+    userLogin(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
   );
   return ok(reply, data);
 }
 
 export async function wechatLoginController(request, reply) {
   const data = await runLoggedLogin(request, 'wechat', () =>
-    wechatLogin(request.server.prisma, request.server.jwt, request.body || {})
+    wechatLogin(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
   );
   return ok(reply, data);
 }
@@ -95,7 +95,7 @@ export async function rebindWechatController(request, reply) {
 
 export async function bindWechatByPickupCodeController(request, reply) {
   const data = await runLoggedLogin(request, 'wechat-bind-pickup', () =>
-    bindWechatByPickupCode(request.server.prisma, request.server.jwt, request.body || {})
+    bindWechatByPickupCode(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
   );
   return ok(reply, data, '绑定成功');
 }
@@ -116,6 +116,11 @@ export async function unbindWechatController(request, reply) {
 }
 
 export async function logoutController(request, reply) {
+  await request.server.authSessions.revoke({
+    accountType: request.user.accountType,
+    accountId: request.user.id,
+    jti: request.user.jti
+  });
   await recordOperation(request.server.prisma, request.user, {
     module: 'auth',
     action: 'logout',

@@ -5,6 +5,7 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import prismaPlugin from './plugins/prisma.js';
+import authSessionsPlugin from './plugins/authSessions.js';
 import { config } from './config.js';
 import { AppError } from './utils/appError.js';
 import { fail, ok } from './utils/response.js';
@@ -36,6 +37,7 @@ export async function buildApp() {
   await fastify.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
   await fastify.register(jwt, { secret: config.jwtSecret });
   await fastify.register(prismaPlugin);
+  await fastify.register(authSessionsPlugin);
   const ipLookup = initializeIpLookup(config.ipDatabasePath);
   fastify.decorate('ipLookup', ipLookup);
   fastify.log.info(

@@ -98,6 +98,7 @@ cp .env.example .env
 ```env
 DATABASE_URL="mysql://tcm_user:replace-with-a-strong-password@127.0.0.1:3306/tcm"
 JWT_SECRET="replace-with-a-long-random-secret"
+REDIS_URL="redis://127.0.0.1:6379"
 SETTINGS_ENCRYPTION_KEY="replace-with-a-32-byte-base64-key"
 PORT=3000
 HOST="0.0.0.0"
@@ -117,6 +118,7 @@ npm run dev
 健康检查地址：`http://localhost:3000/health`
 
 > MariaDB 使用 Prisma 的 `mysql` provider，因此 `DATABASE_URL` 以 `mysql://` 开头。
+> Redis 用于保存有效登录会话；后端启动和已登录接口校验都需要连接 `REDIS_URL`。
 
 ### 3. 启动管理端
 
@@ -213,6 +215,7 @@ cp .env.example .env
 ```env
 DATABASE_URL="mysql://tcm_user:strong-db-password@127.0.0.1:3306/tcm"
 JWT_SECRET="use-a-long-random-secret-at-least-32-characters"
+REDIS_URL="redis://127.0.0.1:6379"
 SETTINGS_ENCRYPTION_KEY="use-a-32-byte-base64-key"
 PORT=3000
 HOST="127.0.0.1"
@@ -444,7 +447,7 @@ sudo systemctl status nginx
 - API 返回 502：检查 `pm2 status`、后端日志和 `PORT=3000` 是否正常监听。
 - 前端刷新后 404：检查 Nginx 的 `try_files $uri $uri/ /index.html` 是否保留。
 - 接口路径 404：确认前端生产环境 `VITE_API_BASE_URL=/api`，并确认 Nginx 的 `location /api/` 使用了带结尾 `/` 的 `proxy_pass`。
-- 登录或通知配置重启后不可用：检查 `JWT_SECRET` 和 `SETTINGS_ENCRYPTION_KEY` 是否固定保存，发布时不要更换已有生产密钥。
+- 登录或通知配置重启后不可用：检查 `JWT_SECRET`、`REDIS_URL` 和 `SETTINGS_ENCRYPTION_KEY` 是否固定保存；Redis 必须可用，发布时不要更换已有生产密钥。
 - 数据库迁移失败：停止发布，保留错误日志，从备份和 [Prisma 迁移说明](backend/prisma/README.md) 核对当前状态后再处理。
 
 ## 主要接口

@@ -7,9 +7,7 @@ CREATE TABLE `users` (
     `openid` VARCHAR(64) NULL,
     `unionid` VARCHAR(64) NULL,
     `wechat_bound_at` DATETIME(3) NULL,
-    `role` TINYINT NOT NULL DEFAULT 1,
     `status` TINYINT NOT NULL DEFAULT 1,
-    `store_id` INTEGER NULL,
     `nickname` VARCHAR(64) NULL,
     `name` VARCHAR(64) NULL,
     `email` VARCHAR(191) NULL,
@@ -24,9 +22,39 @@ CREATE TABLE `users` (
     UNIQUE INDEX `users_openid_key`(`openid`),
     UNIQUE INDEX `users_unionid_key`(`unionid`),
     UNIQUE INDEX `users_email_key`(`email`),
-    INDEX `users_role_idx`(`role`),
     INDEX `users_status_idx`(`status`),
-    INDEX `users_store_id_idx`(`store_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `admins` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `username` VARCHAR(64) NOT NULL,
+    `password` VARCHAR(255) NOT NULL,
+    `phone` VARCHAR(20) NOT NULL,
+    `openid` VARCHAR(64) NULL,
+    `unionid` VARCHAR(64) NULL,
+    `wechat_bound_at` DATETIME(3) NULL,
+    `role` TINYINT NOT NULL DEFAULT 2,
+    `status` TINYINT NOT NULL DEFAULT 1,
+    `store_id` INTEGER NULL,
+    `nickname` VARCHAR(64) NULL,
+    `name` VARCHAR(64) NULL,
+    `email` VARCHAR(191) NULL,
+    `email_verified_at` DATETIME(3) NULL,
+    `remark` VARCHAR(500) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+    `created_by` INTEGER NULL,
+    `updated_by` INTEGER NULL,
+
+    UNIQUE INDEX `admins_phone_key`(`phone`),
+    UNIQUE INDEX `admins_openid_key`(`openid`),
+    UNIQUE INDEX `admins_unionid_key`(`unionid`),
+    UNIQUE INDEX `admins_email_key`(`email`),
+    INDEX `admins_role_idx`(`role`),
+    INDEX `admins_status_idx`(`status`),
+    INDEX `admins_store_id_idx`(`store_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -107,6 +135,102 @@ CREATE TABLE `products` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `e6_pharmacy_products` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `product_code` VARCHAR(64) NOT NULL,
+    `name` VARCHAR(120) NOT NULL,
+    `category` VARCHAR(100) NULL,
+    `category_code` VARCHAR(64) NULL,
+    `barcode` VARCHAR(64) NULL,
+    `specification` VARCHAR(120) NULL,
+    `dosage_form` VARCHAR(64) NULL,
+    `manufacturer` VARCHAR(200) NULL,
+    `category_attribute` VARCHAR(100) NULL,
+    `unit` VARCHAR(30) NULL,
+    `e6_created_at` DATETIME(3) NULL,
+    `e6_modified_at` DATETIME(3) NULL,
+    `last_inventory_seen_at` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `e6_pharmacy_products_barcode_idx`(`barcode`),
+    INDEX `e6_pharmacy_products_e6_modified_at_idx`(`e6_modified_at`),
+    UNIQUE INDEX `e6_pharmacy_products_product_code_key`(`product_code`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `e6_pharmacy_inventory_batches` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `store_id` INTEGER NOT NULL,
+    `product_id` INTEGER NOT NULL,
+    `batch_no` VARCHAR(100) NOT NULL DEFAULT '',
+    `production_date` DATE NULL,
+    `expiry_date` DATE NULL,
+    `inbound_date` DATE NULL,
+    `location_name` VARCHAR(120) NOT NULL DEFAULT '',
+    `quantity` DECIMAL(14, 3) NOT NULL,
+    `amount` DECIMAL(14, 2) NOT NULL,
+    `received_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `e6_pharmacy_inventory_batches_store_id_product_id_idx`(`store_id`, `product_id`),
+    INDEX `e6_pharmacy_inventory_batches_store_id_expiry_date_idx`(`store_id`, `expiry_date`),
+    UNIQUE INDEX `e6_pharmacy_inventory_batches_store_id_product_id_batch_no_l_key`(`store_id`, `product_id`, `batch_no`, `location_name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `yd_goods_check` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `store_id` INTEGER NOT NULL,
+    `check_name` VARCHAR(150) NOT NULL,
+    `check_type` TINYINT NOT NULL DEFAULT 1,
+    `status` TINYINT NOT NULL DEFAULT 0,
+    `created_by` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `started_at` DATETIME(3) NULL,
+    `finished_at` DATETIME(3) NULL,
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `yd_goods_check_store_id_status_idx`(`store_id`, `status`),
+    INDEX `yd_goods_check_store_id_created_at_idx`(`store_id`, `created_at`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `yd_goods_check_item` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `check_id` INTEGER NOT NULL,
+    `store_id` INTEGER NOT NULL,
+    `product_id` INTEGER NOT NULL,
+    `batch_no` VARCHAR(100) NOT NULL DEFAULT '',
+    `system_location_name` VARCHAR(120) NOT NULL DEFAULT '',
+    `count_location_name` VARCHAR(120) NULL,
+    `system_qty` DECIMAL(14, 3) NOT NULL DEFAULT 0,
+    `first_count_qty` DECIMAL(14, 3) NULL,
+    `first_counted_at` DATETIME(3) NULL,
+    `first_counted_by` INTEGER NULL,
+    `recount_qty` DECIMAL(14, 3) NULL,
+    `recount_system_qty` DECIMAL(14, 3) NULL,
+    `recounted_at` DATETIME(3) NULL,
+    `recounted_by` INTEGER NULL,
+    `location_status` TINYINT NOT NULL DEFAULT 0,
+    `check_status` TINYINT NOT NULL DEFAULT 0,
+    `review_status` TINYINT NOT NULL DEFAULT 0,
+    `reviewed_by` INTEGER NULL,
+    `reviewed_at` DATETIME(3) NULL,
+    `remark` VARCHAR(500) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `yd_goods_check_item_store_id_check_id_idx`(`store_id`, `check_id`),
+    INDEX `yd_goods_check_item_store_id_check_status_idx`(`store_id`, `check_status`),
+    INDEX `yd_goods_check_item_store_id_product_id_batch_no_idx`(`store_id`, `product_id`, `batch_no`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `products_diff_logs` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `operation_no` VARCHAR(32) NOT NULL,
@@ -140,7 +264,7 @@ CREATE TABLE `herb_locations` (
     `location_code` VARCHAR(20) NOT NULL,
     `location_type` CHAR(1) NOT NULL,
     `unit_no` TINYINT NOT NULL,
-    `layer_no` TINYINT NOT NULL,
+    `layer_no` SMALLINT NOT NULL,
     `column_no` TINYINT NULL,
     `medicine_capacity` TINYINT NULL,
     `status` TINYINT NOT NULL DEFAULT 1,
@@ -279,6 +403,24 @@ CREATE TABLE `prescriptions` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `prescription_attachments` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `prescription_id` INTEGER NOT NULL,
+    `original_name` VARCHAR(255) NOT NULL,
+    `mime_type` VARCHAR(100) NOT NULL,
+    `file_size` INTEGER NOT NULL,
+    `storage_path` VARCHAR(500) NULL,
+    `data` LONGBLOB NULL,
+    `created_by` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `prescription_attachments_prescription_id_key`(`prescription_id`),
+    INDEX `prescription_attachments_created_by_idx`(`created_by`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `processing_plans` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `prescription_id` INTEGER NOT NULL,
@@ -313,12 +455,112 @@ CREATE TABLE `processing_plans` (
     `deleted_at` DATETIME(3) NULL,
     `deleted_by` INTEGER NULL,
     `store_id` INTEGER NOT NULL,
+    `plan_code` VARCHAR(24) NULL,
+    `scan_token` VARCHAR(64) NULL,
+    `current_stage` TINYINT NULL,
+    `dispensing_completed_at` DATETIME(3) NULL,
+    `dispensing_completed_by` INTEGER NULL,
 
     UNIQUE INDEX `processing_plans_pickup_code_key`(`pickup_code`),
+    UNIQUE INDEX `processing_plans_plan_code_key`(`plan_code`),
+    UNIQUE INDEX `processing_plans_scan_token_key`(`scan_token`),
     INDEX `processing_plans_store_id_status_schedule_type_process_date_idx`(`store_id`, `status`, `schedule_type`, `process_date`),
     INDEX `processing_plans_priority_process_date_queue_order_idx`(`priority`, `process_date`, `queue_order`),
     INDEX `processing_plans_process_type_id_idx`(`process_type_id`),
+    INDEX `processing_plans_store_id_current_stage_idx`(`store_id`, `current_stage`),
     UNIQUE INDEX `processing_plans_prescription_id_batch_no_key`(`prescription_id`, `batch_no`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `processing_photos` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `processing_plan_id` INTEGER NOT NULL,
+    `kind` VARCHAR(32) NOT NULL,
+    `original_name` VARCHAR(255) NOT NULL,
+    `mime_type` VARCHAR(100) NOT NULL,
+    `file_size` INTEGER NOT NULL,
+    `storage_path` VARCHAR(500) NULL,
+    `data` LONGBLOB NULL,
+    `created_by` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `deleted_at` DATETIME(3) NULL,
+
+    INDEX `processing_photos_processing_plan_id_kind_deleted_at_idx`(`processing_plan_id`, `kind`, `deleted_at`),
+    INDEX `processing_photos_created_by_idx`(`created_by`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `processing_equipment` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `store_id` INTEGER NOT NULL,
+    `equipment_no` VARCHAR(32) NOT NULL,
+    `name` VARCHAR(100) NOT NULL,
+    `type` VARCHAR(32) NOT NULL,
+    `status` TINYINT NOT NULL DEFAULT 1,
+    `scan_token` VARCHAR(64) NOT NULL,
+    `current_usage_id` INTEGER NULL,
+    `remark` VARCHAR(500) NULL,
+    `created_by` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_by` INTEGER NULL,
+    `updated_at` DATETIME(3) NOT NULL,
+    `deleted_at` DATETIME(3) NULL,
+    `deleted_by` INTEGER NULL,
+
+    UNIQUE INDEX `processing_equipment_scan_token_key`(`scan_token`),
+    UNIQUE INDEX `processing_equipment_current_usage_id_key`(`current_usage_id`),
+    INDEX `processing_equipment_store_id_type_status_deleted_at_idx`(`store_id`, `type`, `status`, `deleted_at`),
+    UNIQUE INDEX `processing_equipment_store_id_equipment_no_key`(`store_id`, `equipment_no`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `processing_equipment_usages` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `processing_plan_id` INTEGER NOT NULL,
+    `equipment_id` INTEGER NOT NULL,
+    `stage` TINYINT NOT NULL,
+    `portion_no` INTEGER NOT NULL,
+    `status` TINYINT NOT NULL DEFAULT 1,
+    `source` TINYINT NOT NULL DEFAULT 1,
+    `request_id` VARCHAR(64) NULL,
+    `started_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `ended_at` DATETIME(3) NULL,
+    `started_by` INTEGER NOT NULL,
+    `ended_by` INTEGER NULL,
+    `end_reason` VARCHAR(255) NULL,
+    `voided_at` DATETIME(3) NULL,
+    `voided_by` INTEGER NULL,
+    `void_reason` VARCHAR(255) NULL,
+    `transferred_from_usage_id` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `processing_equipment_usages_request_id_key`(`request_id`),
+    INDEX `proc_equip_usage_plan_stage_portion_idx`(`processing_plan_id`, `stage`, `portion_no`),
+    INDEX `processing_equipment_usages_equipment_id_status_started_at_idx`(`equipment_id`, `status`, `started_at`),
+    INDEX `processing_equipment_usages_transferred_from_usage_id_idx`(`transferred_from_usage_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `processing_workflow_exceptions` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `processing_plan_id` INTEGER NOT NULL,
+    `usage_id` INTEGER NULL,
+    `related_usage_id` INTEGER NULL,
+    `type` TINYINT NOT NULL,
+    `status` TINYINT NOT NULL DEFAULT 2,
+    `reason` VARCHAR(255) NOT NULL,
+    `details` JSON NULL,
+    `created_by` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `processing_workflow_exceptions_processing_plan_id_created_at_idx`(`processing_plan_id`, `created_at`),
+    INDEX `processing_workflow_exceptions_usage_id_idx`(`usage_id`),
+    INDEX `processing_workflow_exceptions_type_status_idx`(`type`, `status`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -341,15 +583,34 @@ CREATE TABLE `e6_doctor_mappings` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `e6_operator_mappings` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `store_id` INTEGER NOT NULL,
+    `e6_operator_name` VARCHAR(100) NOT NULL,
+    `operator_name` VARCHAR(100) NOT NULL,
+    `status` TINYINT NOT NULL DEFAULT 1,
+    `created_by` INTEGER NULL,
+    `updated_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `e6_operator_mappings_store_id_status_idx`(`store_id`, `status`),
+    UNIQUE INDEX `e6_operator_mappings_store_id_e6_operator_name_key`(`store_id`, `e6_operator_name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `e6_imports` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `store_id` INTEGER NOT NULL,
     `external_order_no` VARCHAR(100) NOT NULL,
     `customer_name` VARCHAR(64) NOT NULL,
     `phone` VARCHAR(20) NULL,
+    `cashier_name` VARCHAR(200) NULL,
     `e6_doctor_code` VARCHAR(100) NOT NULL,
     `total_price` DECIMAL(14, 2) NOT NULL,
     `dose_count` INTEGER NOT NULL,
+    `is_paid` TINYINT NOT NULL DEFAULT 0,
     `remark` VARCHAR(500) NULL,
     `raw_payload` LONGTEXT NOT NULL,
     `payload_hash` CHAR(64) NOT NULL,
@@ -371,11 +632,10 @@ CREATE TABLE `e6_imports` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `e6_imports_prescription_id_key`(`prescription_id`),
-    UNIQUE INDEX `e6_imports_processing_plan_id_key`(`processing_plan_id`),
     INDEX `e6_imports_store_id_status_synced_at_idx`(`store_id`, `status`, `synced_at`),
     INDEX `e6_imports_e6_doctor_code_idx`(`e6_doctor_code`),
     INDEX `e6_imports_last_synced_at_idx`(`last_synced_at`),
+    INDEX `e6_imports_is_paid_idx`(`is_paid`),
     UNIQUE INDEX `e6_imports_store_id_external_order_no_key`(`store_id`, `external_order_no`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -449,6 +709,7 @@ CREATE TABLE `notification_logs` (
 CREATE TABLE `login_logs` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `user_id` INTEGER NULL,
+    `account_type` VARCHAR(10) NOT NULL DEFAULT 'user',
     `phone` VARCHAR(20) NULL,
     `login_type` VARCHAR(20) NOT NULL,
     `success` TINYINT NOT NULL,
@@ -716,6 +977,7 @@ CREATE TABLE `store_transfer_daily_sequences` (
 CREATE TABLE `operation_logs` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `actor_id` INTEGER NULL,
+    `actor_type` VARCHAR(10) NULL,
     `actor_role` INTEGER NULL,
     `actor_name` VARCHAR(100) NULL,
     `store_id` INTEGER NULL,
@@ -734,7 +996,7 @@ CREATE TABLE `operation_logs` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `users` ADD CONSTRAINT `users_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `admins` ADD CONSTRAINT `admins_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `herbs` ADD CONSTRAINT `herbs_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -743,13 +1005,31 @@ ALTER TABLE `herbs` ADD CONSTRAINT `herbs_store_id_fkey` FOREIGN KEY (`store_id`
 ALTER TABLE `products` ADD CONSTRAINT `products_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `e6_pharmacy_inventory_batches` ADD CONSTRAINT `e6_pharmacy_inventory_batches_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `e6_pharmacy_inventory_batches` ADD CONSTRAINT `e6_pharmacy_inventory_batches_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `e6_pharmacy_products`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `yd_goods_check` ADD CONSTRAINT `yd_goods_check_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `yd_goods_check_item` ADD CONSTRAINT `yd_goods_check_item_check_id_fkey` FOREIGN KEY (`check_id`) REFERENCES `yd_goods_check`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `yd_goods_check_item` ADD CONSTRAINT `yd_goods_check_item_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `yd_goods_check_item` ADD CONSTRAINT `yd_goods_check_item_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `e6_pharmacy_products`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `products_diff_logs` ADD CONSTRAINT `products_diff_logs_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `products_diff_logs` ADD CONSTRAINT `products_diff_logs_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `products_diff_logs` ADD CONSTRAINT `products_diff_logs_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `products_diff_logs` ADD CONSTRAINT `products_diff_logs_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `products_diff_logs` ADD CONSTRAINT `products_diff_logs_related_log_id_fkey` FOREIGN KEY (`related_log_id`) REFERENCES `products_diff_logs`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -764,13 +1044,13 @@ ALTER TABLE `herb_location_assignments` ADD CONSTRAINT `herb_location_assignment
 ALTER TABLE `herb_location_assignments` ADD CONSTRAINT `herb_location_assignments_herb_id_fkey` FOREIGN KEY (`herb_id`) REFERENCES `herbs`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `packages` ADD CONSTRAINT `packages_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `packages` ADD CONSTRAINT `packages_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `packages` ADD CONSTRAINT `packages_verified_by_fkey` FOREIGN KEY (`verified_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `packages` ADD CONSTRAINT `packages_verified_by_fkey` FOREIGN KEY (`verified_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `packages` ADD CONSTRAINT `packages_modified_by_fkey` FOREIGN KEY (`modified_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `packages` ADD CONSTRAINT `packages_modified_by_fkey` FOREIGN KEY (`modified_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `packages` ADD CONSTRAINT `packages_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -788,7 +1068,13 @@ ALTER TABLE `prescriptions` ADD CONSTRAINT `prescriptions_source_id_fkey` FOREIG
 ALTER TABLE `prescriptions` ADD CONSTRAINT `prescriptions_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `prescriptions` ADD CONSTRAINT `prescriptions_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `prescriptions` ADD CONSTRAINT `prescriptions_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `prescription_attachments` ADD CONSTRAINT `prescription_attachments_prescription_id_fkey` FOREIGN KEY (`prescription_id`) REFERENCES `prescriptions`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `prescription_attachments` ADD CONSTRAINT `prescription_attachments_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `processing_plans` ADD CONSTRAINT `processing_plans_prescription_id_fkey` FOREIGN KEY (`prescription_id`) REFERENCES `prescriptions`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -800,16 +1086,46 @@ ALTER TABLE `processing_plans` ADD CONSTRAINT `processing_plans_process_type_id_
 ALTER TABLE `processing_plans` ADD CONSTRAINT `processing_plans_notify_type_fkey` FOREIGN KEY (`notify_type`) REFERENCES `dictionaries`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `processing_plans` ADD CONSTRAINT `processing_plans_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `processing_plans` ADD CONSTRAINT `processing_plans_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `processing_plans` ADD CONSTRAINT `processing_plans_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_photos` ADD CONSTRAINT `processing_photos_processing_plan_id_fkey` FOREIGN KEY (`processing_plan_id`) REFERENCES `processing_plans`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_photos` ADD CONSTRAINT `processing_photos_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_equipment` ADD CONSTRAINT `processing_equipment_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_equipment` ADD CONSTRAINT `processing_equipment_current_usage_id_fkey` FOREIGN KEY (`current_usage_id`) REFERENCES `processing_equipment_usages`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_equipment_usages` ADD CONSTRAINT `processing_equipment_usages_processing_plan_id_fkey` FOREIGN KEY (`processing_plan_id`) REFERENCES `processing_plans`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_equipment_usages` ADD CONSTRAINT `processing_equipment_usages_equipment_id_fkey` FOREIGN KEY (`equipment_id`) REFERENCES `processing_equipment`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_workflow_exceptions` ADD CONSTRAINT `processing_workflow_exceptions_processing_plan_id_fkey` FOREIGN KEY (`processing_plan_id`) REFERENCES `processing_plans`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_workflow_exceptions` ADD CONSTRAINT `processing_workflow_exceptions_usage_id_fkey` FOREIGN KEY (`usage_id`) REFERENCES `processing_equipment_usages`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `processing_workflow_exceptions` ADD CONSTRAINT `processing_workflow_exceptions_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `e6_doctor_mappings` ADD CONSTRAINT `e6_doctor_mappings_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `e6_doctor_mappings` ADD CONSTRAINT `e6_doctor_mappings_doctor_id_fkey` FOREIGN KEY (`doctor_id`) REFERENCES `doctors`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `e6_operator_mappings` ADD CONSTRAINT `e6_operator_mappings_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `e6_imports` ADD CONSTRAINT `e6_imports_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -830,22 +1146,22 @@ ALTER TABLE `email_verification_codes` ADD CONSTRAINT `email_verification_codes_
 ALTER TABLE `robot_configs` ADD CONSTRAINT `robot_configs_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `robot_configs` ADD CONSTRAINT `robot_configs_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `robot_configs` ADD CONSTRAINT `robot_configs_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `robot_configs` ADD CONSTRAINT `robot_configs_updated_by_fkey` FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `robot_configs` ADD CONSTRAINT `robot_configs_updated_by_fkey` FOREIGN KEY (`updated_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `robot_event_configs` ADD CONSTRAINT `robot_event_configs_robot_id_fkey` FOREIGN KEY (`robot_id`) REFERENCES `robot_configs`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `robot_event_configs` ADD CONSTRAINT `robot_event_configs_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `robot_event_configs` ADD CONSTRAINT `robot_event_configs_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `robot_event_configs` ADD CONSTRAINT `robot_event_configs_updated_by_fkey` FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `robot_event_configs` ADD CONSTRAINT `robot_event_configs_updated_by_fkey` FOREIGN KEY (`updated_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `robot_notification_events` ADD CONSTRAINT `robot_notification_events_operator_id_fkey` FOREIGN KEY (`operator_id`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `robot_notification_events` ADD CONSTRAINT `robot_notification_events_operator_id_fkey` FOREIGN KEY (`operator_id`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `robot_delivery_logs` ADD CONSTRAINT `robot_delivery_logs_event_id_fkey` FOREIGN KEY (`event_id`) REFERENCES `robot_notification_events`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -854,7 +1170,7 @@ ALTER TABLE `robot_delivery_logs` ADD CONSTRAINT `robot_delivery_logs_event_id_f
 ALTER TABLE `robot_delivery_logs` ADD CONSTRAINT `robot_delivery_logs_robot_id_fkey` FOREIGN KEY (`robot_id`) REFERENCES `robot_configs`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `print_templates` ADD CONSTRAINT `print_templates_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `print_templates` ADD CONSTRAINT `print_templates_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `print_templates` ADD CONSTRAINT `print_templates_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -866,10 +1182,10 @@ ALTER TABLE `store_transfers` ADD CONSTRAINT `store_transfers_from_store_id_fkey
 ALTER TABLE `store_transfers` ADD CONSTRAINT `store_transfers_to_store_id_fkey` FOREIGN KEY (`to_store_id`) REFERENCES `stores`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `store_transfers` ADD CONSTRAINT `store_transfers_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `store_transfers` ADD CONSTRAINT `store_transfers_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `store_transfers` ADD CONSTRAINT `store_transfers_outbound_confirmed_by_fkey` FOREIGN KEY (`outbound_confirmed_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `store_transfers` ADD CONSTRAINT `store_transfers_outbound_confirmed_by_fkey` FOREIGN KEY (`outbound_confirmed_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `store_transfer_items` ADD CONSTRAINT `store_transfer_items_transfer_id_fkey` FOREIGN KEY (`transfer_id`) REFERENCES `store_transfers`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -878,10 +1194,10 @@ ALTER TABLE `store_transfer_items` ADD CONSTRAINT `store_transfer_items_transfer
 ALTER TABLE `store_transfer_returns` ADD CONSTRAINT `store_transfer_returns_transfer_item_id_fkey` FOREIGN KEY (`transfer_item_id`) REFERENCES `store_transfer_items`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `store_transfer_returns` ADD CONSTRAINT `store_transfer_returns_operator_id_fkey` FOREIGN KEY (`operator_id`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `store_transfer_returns` ADD CONSTRAINT `store_transfer_returns_operator_id_fkey` FOREIGN KEY (`operator_id`) REFERENCES `admins`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `store_transfer_returns` ADD CONSTRAINT `store_transfer_returns_confirmed_by_fkey` FOREIGN KEY (`confirmed_by`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `store_transfer_returns` ADD CONSTRAINT `store_transfer_returns_confirmed_by_fkey` FOREIGN KEY (`confirmed_by`) REFERENCES `admins`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `operation_logs` ADD CONSTRAINT `operation_logs_store_id_fkey` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

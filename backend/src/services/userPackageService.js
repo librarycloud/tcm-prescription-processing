@@ -43,7 +43,7 @@ export async function getCurrentUser(prisma, currentUser) {
   return publicUser(user);
 }
 
-export async function updateCurrentUser(prisma, jwt, currentUser, payload) {
+export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, payload) {
   if (payload.email !== undefined) {
     throw new AppError('邮箱必须通过验证码绑定', 400);
   }
@@ -80,7 +80,14 @@ export async function updateCurrentUser(prisma, jwt, currentUser, payload) {
   }
 
   if (!Object.keys(data).length) {
-    return { token: signLoginToken(jwt, current), user: publicUser(current) };
+    return { token: await signLoginToken(jwt, authSessions, current), user: publicUser(current) };
+  }
+
+  if (phoneChanged || data.password) {
+    await authSessions.revokeAccount({
+      accountType: isAdmin ? 'admin' : 'user',
+      accountId: Number(current.id)
+    });
   }
 
   const user = await prisma.$transaction(async (tx) => {
@@ -101,7 +108,7 @@ export async function updateCurrentUser(prisma, jwt, currentUser, payload) {
   });
 
   return {
-    token: signLoginToken(jwt, user),
+    token: await signLoginToken(jwt, authSessions, user),
     user: publicUser(user)
   };
 }

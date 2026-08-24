@@ -22,6 +22,7 @@ export async function updateMeController(request, reply) {
   const data = await updateCurrentUser(
     request.server.prisma,
     request.server.jwt,
+    request.server.authSessions,
     request.user,
     request.body || {}
   );

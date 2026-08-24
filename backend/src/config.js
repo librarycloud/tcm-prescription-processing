@@ -35,5 +35,6 @@ export const config = {
   ipDatabasePath: process.env.IPDB_PATH || '',
   uploadDir: path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads'),
   settingsEncryptionKey: process.env.SETTINGS_ENCRYPTION_KEY || '',
+  redisUrl: process.env.REDIS_URL || '',
   nodeEnv
 };

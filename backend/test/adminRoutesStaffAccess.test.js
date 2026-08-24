@@ -9,13 +9,20 @@ async function appWithStoreStaff() {
   const app = Fastify();
   await app.register(rateLimit, { global: false, max: 100, timeWindow: '1 minute' });
   await app.register(jwt, { secret: 'test-secret' });
+  app.decorate('authSessions', { has: async () => true });
   await app.register(adminRoutes, { prefix: '/admin' });
   return app;
 }
 
 test('admin route registration only admits staff to explicitly marked routes', async () => {
   const app = await appWithStoreStaff();
-  const token = app.jwt.sign({ id: 13, role: 3, storeId: 5, phone: '13200000000' });
+  const token = app.jwt.sign({
+    id: 13,
+    role: 3,
+    storeId: 5,
+    phone: '13200000000',
+    jti: 'staff-session'
+  });
 
   const denied = await app.inject({
     method: 'GET', url: '/admin/store-transfers', headers: { authorization: `Bearer ${token}` }

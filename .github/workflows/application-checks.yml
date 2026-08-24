@@ -1,0 +1,73 @@
+name: Application Checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - web-admin/**
+      - web-user/**
+      - wechat-miniprogram/**
+      - .github/workflows/application-checks.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - backend/**
+      - web-admin/**
+      - web-user/**
+      - wechat-miniprogram/**
+      - .github/workflows/application-checks.yml
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  web-admin:
+    name: Web admin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web-admin/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+
+  web-user:
+    name: Web user
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-user
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web-user/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint

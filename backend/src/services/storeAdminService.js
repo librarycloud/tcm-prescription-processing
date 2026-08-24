@@ -190,7 +190,7 @@ export async function listStoreAdmins(prisma, query, actor) {
   };
 }
 
-export async function createStoreAdmin(prisma, payload, actor) {
+export async function createStoreAdmin(prisma, payload, actor, authSessions = null) {
   assertStoreAccountManager(actor);
   if (
     payload.userId !== undefined &&
@@ -203,6 +203,9 @@ export async function createStoreAdmin(prisma, payload, actor) {
     const current = await prisma.user.findUnique({ where: { id: userId } });
     if (!current) throw new AppError("用户不存在", 404);
     const data = await normalizeData(prisma, actor, payload);
+    if (authSessions) {
+      await authSessions.revokeAccount({ accountType: 'user', accountId: userId });
+    }
     const updated = await prisma.$transaction(async (tx) => {
       const created = await tx.admin.create({
         data: {
@@ -244,7 +247,7 @@ export async function createStoreAdmin(prisma, payload, actor) {
   return created;
 }
 
-export async function updateStoreAdmin(prisma, id, payload, actor) {
+export async function updateStoreAdmin(prisma, id, payload, actor, authSessions = null) {
   assertStoreAccountManager(actor);
   const userId = Number(id);
   const current = await prisma.admin.findFirst({
@@ -257,6 +260,16 @@ export async function updateStoreAdmin(prisma, id, payload, actor) {
   if (Number(actor.id) === current.id && Number(data.role) !== Number(current.role))
     throw new AppError("不能修改当前登录账号的角色", 400);
   await assertStoreKeepsManager(prisma, current, data);
+  const shouldRevokeTokens = Boolean(
+    data.password ||
+    data.phone !== current.phone ||
+    Number(data.role) !== Number(current.role) ||
+    Number(data.status) !== Number(current.status) ||
+    Number(data.storeId) !== Number(current.storeId)
+  );
+  if (shouldRevokeTokens && authSessions) {
+    await authSessions.revokeAccount({ accountType: 'admin', accountId: userId });
+  }
   data.updatedBy = actor?.id ? Number(actor.id) : null;
   const updated = await prisma.admin.update({
     where: { id: userId },
@@ -294,7 +307,7 @@ export async function updateStoreAdmin(prisma, id, payload, actor) {
   return updated;
 }
 
-export async function deleteStoreAdmin(prisma, id, actor) {
+export async function deleteStoreAdmin(prisma, id, actor, authSessions = null) {
   if (!isSuperAdmin(actor)) throw new AppError("仅全局管理员可删除门店管理员", 403);
   const userId = Number(id);
   if (userId === Number(actor?.id))
@@ -315,6 +328,9 @@ export async function deleteStoreAdmin(prisma, id, actor) {
   });
   if (packageCount)
     throw new AppError("该管理员存在包裹审计记录，请改为禁用账号", 409);
+  if (authSessions) {
+    await authSessions.revokeAccount({ accountType: 'admin', accountId: userId });
+  }
   await prisma.admin.delete({ where: { id: userId } });
   await recordOperation(prisma, actor, {
     module: "store-admin",

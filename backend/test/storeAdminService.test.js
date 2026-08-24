@@ -59,6 +59,22 @@ test('store administrator can promote a same-store employee', async () => {
   assert.equal(calls.updated.role, ROLES.STORE_ADMIN);
 });
 
+test('changing a store account role revokes all of its Redis sessions', async () => {
+  const current = { id: 20, role: ROLES.STORE_STAFF, status: 1, storeId: 3, phone: '13800000001' };
+  const { prisma } = createPrisma(current);
+  let revoked;
+
+  await updateStoreAdmin(
+    prisma,
+    20,
+    { role: ROLES.STORE_ADMIN },
+    storeAdmin,
+    { revokeAccount: async (session) => { revoked = session; } }
+  );
+
+  assert.deepEqual(revoked, { accountType: 'admin', accountId: 20 });
+});
+
 test('store administrator cannot change an account in another store', async () => {
   const current = { id: 20, role: ROLES.STORE_STAFF, status: 1, storeId: 4, phone: '13800000001' };
   const { prisma } = createPrisma(current);

@@ -25,17 +25,19 @@
     "@fastify/jwt": "^10.1.0",
     "@fastify/multipart": "^10.1.0",
     "@fastify/rate-limit": "^10.2.2",
-    "@prisma/client": "^6.1.0",
+    "@prisma/adapter-mariadb": "^7.9.1",
+    "@prisma/client": "^7.9.1",
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
     "fastify": "^5.2.1",
     "ipdb": "^0.4.0",
     "nodemailer": "^9.0.3",
-    "pino-pretty": "^13.0.0"
+    "pino-pretty": "^13.0.0",
+    "redis": "^5.10.0"
   },
   "devDependencies": {
-    "prisma": "^6.1.0"
+    "prisma": "^7.9.1"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
