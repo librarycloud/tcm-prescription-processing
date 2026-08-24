@@ -9,13 +9,21 @@ export async function verifyToken(request) {
   }
 
   const role = Number(request.user.role);
+  const accountType = String(request.user.accountType || (role === 1 ? 'user' : 'admin'));
   const storeId = request.user.storeId == null ? null : Number(request.user.storeId);
-  if (![0, 1, 2].includes(role) || !Number.isInteger(Number(request.user.id))) {
+  if (
+    !['admin', 'user'].includes(accountType) ||
+    ![0, 1, 2].includes(role) ||
+    !Number.isInteger(Number(request.user.id)) ||
+    (accountType === 'user' && role !== 1) ||
+    (accountType === 'admin' && role === 1)
+  ) {
     throw new AppError('登录凭证无效，请重新登录', 401);
   }
   request.user = {
     id: Number(request.user.id),
     phone: String(request.user.phone || ''),
+    accountType,
     role,
     storeId,
     ip: request.ip || null,
@@ -27,13 +35,19 @@ export async function verifyToken(request) {
 }
 
 export async function verifyManager(request) {
-  if (!isManager(request.user)) {
+  if (request.user.accountType !== 'admin' || !isManager(request.user)) {
     throw new AppError('无管理员权限', 403);
   }
 }
 
 export async function verifySuperAdmin(request) {
-  if (!isSuperAdmin(request.user)) {
+  if (request.user.accountType !== 'admin' || !isSuperAdmin(request.user)) {
     throw new AppError('仅全局管理员可执行此操作', 403);
+  }
+}
+
+export async function verifyUser(request) {
+  if (request.user.accountType !== 'user') {
+    throw new AppError('无普通用户权限', 403);
   }
 }

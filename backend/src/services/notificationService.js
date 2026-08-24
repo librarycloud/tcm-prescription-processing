@@ -108,7 +108,7 @@ export async function getPackageNotifications(prisma, actor, packageIdValue) {
   });
   const operatorIds = [...new Set(logs.map((item) => item.operatorId).filter(Boolean))];
   const operators = operatorIds.length
-    ? await prisma.user.findMany({
+    ? await prisma.admin.findMany({
       where: { id: { in: operatorIds } },
       select: { id: true, nickname: true, phone: true }
     })

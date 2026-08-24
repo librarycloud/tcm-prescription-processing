@@ -8,7 +8,9 @@ export async function recordLoginLog(request, details) {
     const ip = request.server.ipLookup.normalize(request.ip) || 'unknown';
     let storeId = details.storeId ? Number(details.storeId) : null;
     if (!storeId && details.phone) {
-      const account = await request.server.prisma.user.findUnique({
+      const account = await (details.accountType === 'admin'
+        ? request.server.prisma.admin
+        : request.server.prisma.user).findUnique({
         where: { phone: String(details.phone).trim() },
         select: { storeId: true }
       });
@@ -17,6 +19,7 @@ export async function recordLoginLog(request, details) {
     await request.server.prisma.loginLog.create({
       data: {
         userId: details.userId ? Number(details.userId) : null,
+        accountType: details.accountType === 'admin' ? 'admin' : 'user',
         phone: truncate(details.phone, 20),
         loginType: truncate(details.loginType, 20) || 'unknown',
         success: details.success ? 1 : 0,

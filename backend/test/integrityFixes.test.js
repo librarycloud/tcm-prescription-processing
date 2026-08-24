@@ -474,8 +474,8 @@ test("store admins only list ordinary users", async () => {
 
   await listUsers(prisma, { lookup: () => null }, {}, actor);
 
-  assert.equal(listWhere.role, 1);
-  assert.equal(countWhere.role, 1);
+  assert.deepEqual(listWhere, {});
+  assert.deepEqual(countWhere, {});
 });
 
 test("store admins cannot update administrator accounts", async () => {

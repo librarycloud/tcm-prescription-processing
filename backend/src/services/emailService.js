@@ -73,7 +73,6 @@ export async function verifyEmailCode(prisma, userId, emailValue, codeValue, pub
     return tx.user.update({
       where: { id: Number(userId) },
       data: { email, emailVerifiedAt: new Date() },
-      include: { store: true }
     });
   });
   return publicUser(user);

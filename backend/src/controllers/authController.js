@@ -19,6 +19,7 @@ async function runLoggedLogin(request, loginType, operation) {
     const completed = Boolean(data?.token && data?.user);
     await recordLoginLog(request, {
       userId: data?.user?.id,
+      accountType: data?.user?.role === 1 ? 'user' : 'admin',
       storeId: data?.user?.storeId,
       phone: data?.user?.phone || attemptedPhone,
       loginType,
@@ -100,7 +101,7 @@ export async function bindWechatByPickupCodeController(request, reply) {
 }
 
 export async function wechatStatusController(request, reply) {
-  return ok(reply, await getWechatStatus(request.server.prisma, request.user.id));
+  return ok(reply, await getWechatStatus(request.server.prisma, request.user));
 }
 
 export async function unbindWechatController(request, reply) {

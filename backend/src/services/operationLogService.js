@@ -45,6 +45,7 @@ export async function recordOperation(prisma, actor, data = {}) {
   return prisma.operationLog.create({
     data: {
       actorId: actor?.id ? Number(actor.id) : null,
+      actorType: actor?.accountType === "admin" ? "admin" : actor?.accountType === "user" ? "user" : null,
       actorRole: actor?.role == null ? null : Number(actor.role),
       actorName: actor?.nickname || actor?.phone || null,
       storeId:
@@ -110,10 +111,13 @@ function formatTargetLabel(log, targets) {
       const item = targets.stores.get(id);
       return item ? `门店「${item.name}」` : "门店";
     }
-    case "user":
-    case "store-admin": {
+    case "user": {
       const item = targets.users.get(id);
       return item ? `用户「${formatUserName(item)}」` : "用户";
+    }
+    case "store-admin": {
+      const item = targets.admins.get(id);
+      return item ? `管理员「${formatUserName(item)}」` : "管理员";
     }
     case "store-transfer": {
       const item = targets.storeTransfers.get(id);
@@ -149,12 +153,19 @@ async function enrichOperationLogs(prisma, logs) {
         .map((log) => Number(log.targetId)),
     );
   const actorIds = uniqueIds(logs.map((log) => Number(log.actorId)));
-  const userIds = uniqueIds([...actorIds, ...idsFor("user"), ...idsFor("store-admin")]);
-  const [users, packages, processingPlans, prescriptions, doctors, dictionaries, stores, storeTransfers, products, productDiffLogs, e6Imports] =
+  const userIds = uniqueIds([...actorIds, ...idsFor("user")]);
+  const adminIds = uniqueIds([...actorIds, ...idsFor("store-admin")]);
+  const [users, admins, packages, processingPlans, prescriptions, doctors, dictionaries, stores, storeTransfers, products, productDiffLogs, e6Imports] =
     await Promise.all([
       userIds.length
         ? prisma.user.findMany({
             where: { id: { in: userIds } },
+            select: { id: true, name: true, nickname: true, phone: true },
+          })
+        : [],
+      adminIds.length && prisma.admin?.findMany
+        ? prisma.admin.findMany({
+            where: { id: { in: adminIds } },
             select: { id: true, name: true, nickname: true, phone: true },
           })
         : [],
@@ -234,6 +245,7 @@ async function enrichOperationLogs(prisma, logs) {
     ]);
   const targets = {
     users: new Map(users.map((item) => [item.id, item])),
+    admins: new Map(admins.map((item) => [item.id, item])),
     packages: new Map(packages.map((item) => [item.id, item])),
     processingPlans: new Map(processingPlans.map((item) => [item.id, item])),
     prescriptions: new Map(prescriptions.map((item) => [item.id, item])),
@@ -248,7 +260,10 @@ async function enrichOperationLogs(prisma, logs) {
 
   return logs.map((log) => {
     const targetLabel = formatTargetLabel(log, targets);
-    const actorName = formatUserName(targets.users.get(Number(log.actorId))) || log.actorName;
+    const actor = log.actorType === "admin"
+      ? targets.admins.get(Number(log.actorId))
+      : targets.users.get(Number(log.actorId));
+    const actorName = formatUserName(actor) || log.actorName;
     return {
       ...log,
       actorName,

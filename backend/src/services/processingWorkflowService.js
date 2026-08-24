@@ -199,9 +199,9 @@ async function decoratePlanWithOperators(prisma, plan) {
         .filter(Boolean),
     ),
   ];
-  if (!operatorIds.length || !prisma.user?.findMany) return decoratePlan(plan);
+  if (!operatorIds.length || !prisma.admin?.findMany) return decoratePlan(plan);
 
-  const operators = await prisma.user.findMany({
+  const operators = await prisma.admin.findMany({
     where: { id: { in: operatorIds } },
     select: { id: true, nickname: true, name: true, phone: true },
   });

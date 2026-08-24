@@ -349,7 +349,7 @@ export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   if (type === "adjustment") list = list.filter((row) => row.needsAdjustment);
   const userIds = [...new Set(list.flatMap((row) => [row.firstCountedBy, row.recountedBy, row.reviewedBy]).filter(Boolean))];
   const users = userIds.length
-    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, nickname: true, phone: true } })
+    ? await prisma.admin.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, nickname: true, phone: true } })
     : [];
   const userNames = new Map(users.map((user) => [user.id, user.name || user.nickname || user.phone || "-"]));
   const checkStatusText = (row) => row.needsAdjustment ? "需调整库存" : ({

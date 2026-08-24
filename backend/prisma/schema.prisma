@@ -15,7 +15,32 @@ model User {
   openid          String?   @unique @db.VarChar(64)
   unionid         String?   @unique @db.VarChar(64)
   wechatBoundAt   DateTime? @map("wechat_bound_at")
-  role            Int       @default(1) @db.TinyInt
+  status          Int       @default(1) @db.TinyInt
+  nickname        String?   @db.VarChar(64)
+  name            String?   @db.VarChar(64)
+  email           String?   @unique @db.VarChar(191)
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  remark          String?   @db.VarChar(500)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       Int?      @map("created_by")
+  updatedBy       Int?      @map("updated_by")
+
+  emailVerificationCodes         EmailVerificationCode[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model Admin {
+  id              Int       @id @default(autoincrement())
+  username        String    @db.VarChar(64)
+  password        String    @db.VarChar(255)
+  phone           String    @unique @db.VarChar(20)
+  openid          String?   @unique @db.VarChar(64)
+  unionid         String?   @unique @db.VarChar(64)
+  wechatBoundAt   DateTime? @map("wechat_bound_at")
+  role            Int       @default(2) @db.TinyInt
   status          Int       @default(1) @db.TinyInt
   storeId         Int?      @map("store_id")
   nickname        String?   @db.VarChar(64)
@@ -28,11 +53,10 @@ model User {
   createdBy       Int?      @map("created_by")
   updatedBy       Int?      @map("updated_by")
 
+  store                          Store?                        @relation(fields: [storeId], references: [id])
   createdPackages                Package[]                     @relation("PackageCreatedBy")
   verifiedPackages               Package[]                     @relation("PackageVerifiedBy")
   modifiedPackages               Package[]                     @relation("PackageModifiedBy")
-  store                          Store?                        @relation(fields: [storeId], references: [id])
-  emailVerificationCodes         EmailVerificationCode[]
   prescriptionsCreated           Prescription[]                @relation("PrescriptionCreatedBy")
   prescriptionAttachmentsCreated PrescriptionAttachment[]      @relation("PrescriptionAttachmentCreatedBy")
   processingPlansCreated         ProcessingPlan[]              @relation("ProcessingPlanCreatedBy")
@@ -53,7 +77,7 @@ model User {
   @@index([role])
   @@index([status])
   @@index([storeId])
-  @@map("users")
+  @@map("admins")
 }
 
 model Store {
@@ -81,7 +105,7 @@ model Store {
   e6LastUsedAt         DateTime? @map("e6_last_used_at")
   e6RotatedAt          DateTime? @map("e6_rotated_at")
 
-  users               User[]
+  admins              Admin[]
   packages            Package[]
   prescriptions       Prescription[]
   processingPlans     ProcessingPlan[]
@@ -280,7 +304,7 @@ model ProductsDiffLog {
 
   store      Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
   product    Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
-  creator    User              @relation("ProductsDiffLogCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  creator    Admin             @relation("ProductsDiffLogCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
   relatedLog ProductsDiffLog?  @relation("ProductsDiffLogRelated", fields: [relatedLogId], references: [id], onDelete: Restrict)
   childLogs  ProductsDiffLog[] @relation("ProductsDiffLogRelated")
 
@@ -359,9 +383,9 @@ model Package {
   lastNotificationAt DateTime? @map("last_notification_at")
   processingPlanId   Int?      @unique @map("processing_plan_id")
 
-  creator        User            @relation("PackageCreatedBy", fields: [createdBy], references: [id])
-  verifier       User?           @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
-  modifier       User?           @relation("PackageModifiedBy", fields: [modifiedBy], references: [id])
+  creator        Admin           @relation("PackageCreatedBy", fields: [createdBy], references: [id])
+  verifier       Admin?          @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
+  modifier       Admin?          @relation("PackageModifiedBy", fields: [modifiedBy], references: [id])
   store          Store           @relation(fields: [storeId], references: [id])
   processingPlan ProcessingPlan? @relation(fields: [processingPlanId], references: [id])
 
@@ -443,7 +467,7 @@ model Prescription {
   doctor     Doctor                  @relation(fields: [doctorId], references: [id])
   source     Dictionary              @relation("PrescriptionSource", fields: [sourceId], references: [id])
   store      Store                   @relation(fields: [storeId], references: [id])
-  creator    User                    @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
+  creator    Admin                   @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
   plans      ProcessingPlan[]
   e6Imports  E6Import[]
   attachment PrescriptionAttachment?
@@ -468,7 +492,7 @@ model PrescriptionAttachment {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  creator      User         @relation("PrescriptionAttachmentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  creator      Admin        @relation("PrescriptionAttachmentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@index([createdBy])
   @@map("prescription_attachments")
@@ -517,7 +541,7 @@ model ProcessingPlan {
   prescription         Prescription                  @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
   processType          Dictionary                    @relation("ProcessingType", fields: [processTypeId], references: [id])
   notifyTypeDictionary Dictionary                    @relation("ProcessingPlanNotifyType", fields: [notifyType], references: [id], onDelete: Restrict)
-  creator              User                          @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
+  creator              Admin                         @relation("ProcessingPlanCreatedBy", fields: [createdBy], references: [id])
   store                Store                         @relation(fields: [storeId], references: [id])
   package              Package?
   e6Imports            E6Import[]
@@ -547,7 +571,7 @@ model ProcessingPhoto {
   deletedAt        DateTime? @map("deleted_at")
 
   processingPlan ProcessingPlan @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
-  creator        User           @relation("ProcessingPhotoCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  creator        Admin          @relation("ProcessingPhotoCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@index([processingPlanId, kind, deletedAt])
   @@index([createdBy])
@@ -626,7 +650,7 @@ model ProcessingWorkflowException {
 
   processingPlan ProcessingPlan            @relation(fields: [processingPlanId], references: [id], onDelete: Cascade)
   usage          ProcessingEquipmentUsage? @relation(fields: [usageId], references: [id], onDelete: SetNull)
-  creator        User                      @relation("ProcessingWorkflowExceptionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  creator        Admin                     @relation("ProcessingWorkflowExceptionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@index([processingPlanId, createdAt])
   @@index([usageId])
@@ -779,6 +803,7 @@ model NotificationLog {
 model LoginLog {
   id        Int      @id @default(autoincrement())
   userId    Int?     @map("user_id")
+  accountType String  @default("user") @map("account_type") @db.VarChar(10)
   phone     String?  @db.VarChar(20)
   loginType String   @map("login_type") @db.VarChar(20)
   success   Int      @db.TinyInt
@@ -864,8 +889,8 @@ model RobotConfig {
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   store        Store?             @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  creator      User?              @relation("RobotConfigCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
-  updater      User?              @relation("RobotConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  creator      Admin?             @relation("RobotConfigCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      Admin?             @relation("RobotConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
   eventConfigs RobotEventConfig[]
   deliveryLogs RobotDeliveryLog[]
 
@@ -886,8 +911,8 @@ model RobotEventConfig {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   robot   RobotConfig @relation(fields: [robotId], references: [id], onDelete: Cascade)
-  creator User?       @relation("RobotEventConfigCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
-  updater User?       @relation("RobotEventConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  creator Admin?      @relation("RobotEventConfigCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater Admin?      @relation("RobotEventConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([robotId, eventCode])
   @@index([eventCode, enabled])
@@ -907,7 +932,7 @@ model RobotNotificationEvent {
   occurredAt      DateTime @map("occurred_at")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  operator     User?              @relation("RobotNotificationEventOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  operator     Admin?             @relation("RobotNotificationEventOperator", fields: [operatorId], references: [id], onDelete: SetNull)
   deliveryLogs RobotDeliveryLog[]
 
   @@index([eventCode, occurredAt])
@@ -959,7 +984,7 @@ model PrintTemplate {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  creator User? @relation("PrintTemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  creator Admin? @relation("PrintTemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   store   Store @relation(fields: [storeId], references: [id])
 
   @@unique([storeId, templateType, name])
@@ -997,8 +1022,8 @@ model StoreTransfer {
 
   fromStore         Store               @relation("StoreTransferFromStore", fields: [fromStoreId], references: [id])
   toStore           Store               @relation("StoreTransferToStore", fields: [toStoreId], references: [id])
-  creator           User                @relation("StoreTransferCreatedBy", fields: [createdBy], references: [id])
-  outboundConfirmer User?               @relation("StoreTransferOutboundConfirmedBy", fields: [outboundConfirmedBy], references: [id])
+  creator           Admin               @relation("StoreTransferCreatedBy", fields: [createdBy], references: [id])
+  outboundConfirmer Admin?              @relation("StoreTransferOutboundConfirmedBy", fields: [outboundConfirmedBy], references: [id])
   items             StoreTransferItem[]
 
   @@index([fromStoreId, status, transferDate])
@@ -1042,8 +1067,8 @@ model StoreTransferReturn {
   createdAt      DateTime  @default(now()) @map("created_at")
 
   transferItem StoreTransferItem @relation(fields: [transferItemId], references: [id], onDelete: Restrict)
-  operator     User              @relation("StoreTransferReturnOperator", fields: [operatorId], references: [id])
-  confirmer    User?             @relation("StoreTransferReturnConfirmedBy", fields: [confirmedBy], references: [id])
+  operator     Admin             @relation("StoreTransferReturnOperator", fields: [operatorId], references: [id])
+  confirmer    Admin?            @relation("StoreTransferReturnConfirmedBy", fields: [confirmedBy], references: [id])
 
   @@index([transferItemId, createdAt])
   @@index([status])
@@ -1061,6 +1086,7 @@ model StoreTransferDailySequence {
 model OperationLog {
   id          Int      @id @default(autoincrement())
   actorId     Int?     @map("actor_id")
+  actorType   String?  @map("actor_type") @db.VarChar(10)
   actorRole   Int?     @map("actor_role")
   actorName   String?  @map("actor_name") @db.VarChar(100)
   storeId     Int?     @map("store_id")

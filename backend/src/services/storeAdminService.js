@@ -39,7 +39,7 @@ async function normalizeData(prisma, payload, currentId, creating = false) {
   if (creating || payload.phone !== undefined) {
     const phone = String(payload.phone || "").trim();
     validatePhone(phone);
-    const owner = await prisma.user.findFirst({
+    const owner = await prisma.admin.findFirst({
       where: { phone, ...(currentId ? { id: { not: currentId } } : {}) },
       select: { id: true },
     });
@@ -108,14 +108,14 @@ export async function listStoreAdmins(prisma, query) {
     ];
   }
   const [list, total] = await Promise.all([
-    prisma.user.findMany({
+    prisma.admin.findMany({
       where,
       select,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.user.count({ where }),
+    prisma.admin.count({ where }),
   ]);
   return {
     list,
@@ -134,16 +134,24 @@ export async function createStoreAdmin(prisma, payload, actor) {
       throw new AppError("用户 ID 不正确", 400);
     const current = await prisma.user.findUnique({ where: { id: userId } });
     if (!current) throw new AppError("用户不存在", 404);
-    if (current.role !== ROLES.USER)
-      throw new AppError("只能将普通用户设为门店管理员", 409);
     const data = await normalizeData(prisma, payload, userId);
-    delete data.username;
-    delete data.phone;
-    data.updatedBy = actor?.id ? Number(actor.id) : null;
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data,
-      select,
+    const updated = await prisma.$transaction(async (tx) => {
+      const created = await tx.admin.create({
+        data: {
+          ...data,
+          username: current.username,
+          phone: current.phone,
+          password: data.password || current.password,
+          email: current.email,
+          emailVerifiedAt: current.emailVerifiedAt,
+          createdAt: current.createdAt,
+          createdBy: actor?.id ? Number(actor.id) : null,
+          updatedBy: actor?.id ? Number(actor.id) : null,
+        },
+        select,
+      });
+      await tx.user.delete({ where: { id: userId } });
+      return created;
     });
     await recordOperation(prisma, actor, {
       module: "store-admin",
@@ -157,7 +165,7 @@ export async function createStoreAdmin(prisma, payload, actor) {
 
   const data = await normalizeData(prisma, payload, null, true);
   data.createdBy = actor?.id ? Number(actor.id) : null;
-  const created = await prisma.user.create({ data, select });
+  const created = await prisma.admin.create({ data, select });
   await recordOperation(prisma, actor, {
     module: "store-admin",
     action: "create",
@@ -170,14 +178,14 @@ export async function createStoreAdmin(prisma, payload, actor) {
 
 export async function updateStoreAdmin(prisma, id, payload, actor) {
   const userId = Number(id);
-  const current = await prisma.user.findFirst({
+  const current = await prisma.admin.findFirst({
     where: { id: userId, role: ROLES.STORE_ADMIN },
     select,
   });
   if (!current) throw new AppError("门店管理员不存在", 404);
   const data = await normalizeData(prisma, payload, userId);
   data.updatedBy = actor?.id ? Number(actor.id) : null;
-  const updated = await prisma.user.update({
+  const updated = await prisma.admin.update({
     where: { id: userId },
     data,
     select,
@@ -209,7 +217,7 @@ export async function deleteStoreAdmin(prisma, id, actor) {
   const userId = Number(id);
   if (userId === Number(actor?.id))
     throw new AppError("不能删除当前登录账号", 400);
-  const current = await prisma.user.findFirst({
+  const current = await prisma.admin.findFirst({
     where: { id: userId, role: ROLES.STORE_ADMIN },
     select: { id: true, storeId: true },
   });
@@ -225,7 +233,7 @@ export async function deleteStoreAdmin(prisma, id, actor) {
   });
   if (packageCount)
     throw new AppError("该管理员存在包裹审计记录，请改为禁用账号", 409);
-  await prisma.user.delete({ where: { id: userId } });
+  await prisma.admin.delete({ where: { id: userId } });
   await recordOperation(prisma, actor, {
     module: "store-admin",
     action: "delete",

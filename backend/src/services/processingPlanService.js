@@ -865,7 +865,6 @@ async function createPackageForPlan(prisma, actor, plan) {
           `processing-package:${normalizedPhone}:${Date.now()}`,
           10,
         ),
-        role: ROLES.USER,
         status: RECORD_STATUS.ENABLED,
         name: prescription.customerName,
         createdBy: actor.id,

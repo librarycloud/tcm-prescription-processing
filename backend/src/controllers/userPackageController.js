@@ -15,7 +15,7 @@ export async function detailController(request, reply) {
 }
 
 export async function meController(request, reply) {
-  return ok(reply, await getCurrentUser(request.server.prisma, request.user.id));
+  return ok(reply, await getCurrentUser(request.server.prisma, request.user));
 }
 
 export async function updateMeController(request, reply) {

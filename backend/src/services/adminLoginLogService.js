@@ -33,19 +33,27 @@ async function buildWhere(prisma, actor, query) {
 
   const keyword = String(query.keyword || '').trim();
   if (keyword) {
-    const users = await prisma.user.findMany({
+    const [users, admins] = await Promise.all([
+      prisma.user.findMany({
       where: {
         OR: [{ phone: { contains: keyword } }, { nickname: { contains: keyword } }]
       },
       select: { id: true }
-    });
+      }),
+      prisma.admin.findMany({
+        where: { OR: [{ phone: { contains: keyword } }, { nickname: { contains: keyword } }] },
+        select: { id: true }
+      })
+    ]);
     const userIds = users.map((user) => user.id);
+    const adminIds = admins.map((admin) => admin.id);
     where.OR = [
       { phone: { contains: keyword } },
       { ip: { contains: keyword } },
       { userAgent: { contains: keyword } },
       { message: { contains: keyword } },
-      ...(userIds.length ? [{ userId: { in: userIds } }] : [])
+      ...(userIds.length ? [{ userId: { in: userIds }, accountType: 'user' }] : []),
+      ...(adminIds.length ? [{ userId: { in: adminIds }, accountType: 'admin' }] : [])
     ];
   }
 
@@ -67,19 +75,27 @@ export async function listLoginLogs(prisma, ipLookup, actor, query) {
     prisma.loginLog.count({ where })
   ]);
 
-  const userIds = [...new Set(list.map((item) => item.userId).filter(Boolean))];
+  const userIds = [...new Set(list.filter((item) => item.accountType === 'user').map((item) => item.userId).filter(Boolean))];
+  const adminIds = [...new Set(list.filter((item) => item.accountType === 'admin').map((item) => item.userId).filter(Boolean))];
   const users = userIds.length
     ? await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: { id: true, phone: true, nickname: true }
     })
     : [];
+  const admins = adminIds.length
+    ? await prisma.admin.findMany({
+      where: { id: { in: adminIds } },
+      select: { id: true, phone: true, nickname: true }
+    })
+    : [];
   const userMap = new Map(users.map((user) => [user.id, user]));
+  const adminMap = new Map(admins.map((admin) => [admin.id, admin]));
 
   return {
     list: list.map((item) => ({
       ...item,
-      user: item.userId ? userMap.get(item.userId) || null : null,
+      user: item.userId ? (item.accountType === 'admin' ? adminMap : userMap).get(item.userId) || null : null,
       location: ipLookup.lookup(item.ip)
     })),
     pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) }

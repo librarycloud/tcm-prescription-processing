@@ -33,10 +33,11 @@ export async function getMyPackageDetail(prisma, user, id) {
   return data;
 }
 
-export async function getCurrentUser(prisma, userId) {
-  const user = await prisma.user.findUnique({
-    where: { id: Number(userId) },
-    include: { store: true }
+export async function getCurrentUser(prisma, currentUser) {
+  const isAdmin = currentUser.accountType === 'admin';
+  const user = await (isAdmin ? prisma.admin : prisma.user).findUnique({
+    where: { id: Number(currentUser.id) },
+    include: isAdmin ? { store: true } : undefined
   });
   if (!user) throw new AppError('用户不存在', 404);
   return publicUser(user);
@@ -46,9 +47,11 @@ export async function updateCurrentUser(prisma, jwt, currentUser, payload) {
   if (payload.email !== undefined) {
     throw new AppError('邮箱必须通过验证码绑定', 400);
   }
-  const current = await prisma.user.findUnique({
+  const isAdmin = currentUser.accountType === 'admin';
+  const repository = isAdmin ? prisma.admin : prisma.user;
+  const current = await repository.findUnique({
     where: { id: Number(currentUser.id) },
-    include: { store: true }
+    include: isAdmin ? { store: true } : undefined
   });
   if (!current) throw new AppError('用户不存在', 404);
 
@@ -59,7 +62,7 @@ export async function updateCurrentUser(prisma, jwt, currentUser, payload) {
     validatePhone(payload.phone);
     const phone = String(payload.phone).trim();
     if (phoneChanged) {
-      const owner = await prisma.user.findUnique({ where: { phone } });
+      const owner = await repository.findUnique({ where: { phone } });
       if (owner && owner.id !== current.id) throw new AppError('手机号已被使用', 400);
     }
     data.phone = phone;
@@ -81,13 +84,13 @@ export async function updateCurrentUser(prisma, jwt, currentUser, payload) {
   }
 
   const user = await prisma.$transaction(async (tx) => {
-    const updated = await tx.user.update({
+    const updated = await (isAdmin ? tx.admin : tx.user).update({
       where: { id: current.id },
       data,
-      include: { store: true }
+      include: isAdmin ? { store: true } : undefined
     });
 
-    if (phoneChanged && current.role === ROLES.USER) {
+    if (phoneChanged && !isAdmin) {
       await tx.package.updateMany({
         where: { receiverPhone: current.phone },
         data: { receiverPhone: data.phone }

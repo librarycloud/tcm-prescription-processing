@@ -10,15 +10,12 @@ const userSelect = {
   id: true,
   username: true,
   phone: true,
-  role: true,
   status: true,
   nickname: true,
   name: true,
   email: true,
   emailVerifiedAt: true,
   remark: true,
-  storeId: true,
-  store: { select: { id: true, name: true, code: true } },
   createdAt: true,
   updatedAt: true,
 };
@@ -42,31 +39,27 @@ function buildWhere(query) {
 export async function lookupUsers(prisma, phone) {
   const keyword = String(phone || "").trim();
   if (keyword.length < 7) return [];
-  return prisma.user.findMany({
-    where: { phone: { startsWith: keyword }, role: ROLES.USER },
+  const users = await prisma.user.findMany({
+    where: { phone: { startsWith: keyword } },
     select: {
       id: true,
       phone: true,
-      role: true,
       status: true,
       nickname: true,
       name: true,
       remark: true,
-      store: { select: { id: true, name: true } },
     },
     orderBy: { phone: "asc" },
     take: 10,
   });
+  return users.map((user) => ({ ...user, role: 1 }));
 }
 
 export async function listUsers(prisma, ipLookup, query, actor) {
   assertManager(actor);
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 10), 100);
-  const where = {
-    ...buildWhere(query),
-    ...(isStoreAdmin(actor) ? { role: ROLES.USER } : {}),
-  };
+  const where = buildWhere(query);
 
   const [list, total] = await Promise.all([
     prisma.user.findMany({
@@ -81,7 +74,7 @@ export async function listUsers(prisma, ipLookup, query, actor) {
 
   const recentLogs = list.length
     ? await prisma.loginLog.findMany({
-        where: { userId: { in: list.map((user) => user.id) }, success: 1 },
+        where: { userId: { in: list.map((user) => user.id) }, accountType: 'user', success: 1 },
         orderBy: { createdAt: "desc" },
         distinct: ["userId"],
       })
@@ -92,6 +85,7 @@ export async function listUsers(prisma, ipLookup, query, actor) {
     const loginLog = logMap.get(user.id);
     return {
       ...user,
+      role: 1,
       emailVerified: Boolean(user.emailVerifiedAt),
       lastLoginAt: loginLog?.createdAt || null,
       lastLoginIp: loginLog?.ip || null,
@@ -112,7 +106,8 @@ export async function updateUser(prisma, id, payload, actor) {
     throw new AppError("用户 ID 不正确", 400);
   const current = await prisma.user.findUnique({ where: { id: userId } });
   if (!current) throw new AppError("用户不存在", 404);
-  if (isStoreAdmin(actor) && current.role !== ROLES.USER) {
+  // Compatibility for legacy callers; persisted users no longer carry a role.
+  if (isStoreAdmin(actor) && current.role !== undefined && current.role !== ROLES.USER) {
     throw new AppError("门店管理员只能修改普通用户信息", 403);
   }
 
@@ -171,7 +166,7 @@ export async function updateUser(prisma, id, payload, actor) {
       select: userSelect,
     });
 
-    if (phoneChanged && current.role === ROLES.USER) {
+    if (phoneChanged) {
       await tx.package.updateMany({
         where: { receiverPhone: current.phone },
         data: { receiverPhone: data.phone },
@@ -207,35 +202,11 @@ export async function deleteUser(prisma, id, actor) {
   const userId = Number(id);
   if (!Number.isInteger(userId) || userId <= 0)
     throw new AppError("用户 ID 不正确", 400);
-  if (userId === Number(actor?.id))
-    throw new AppError("不能删除当前登录账号", 400);
-
   const current = await prisma.user.findFirst({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true },
   });
   if (!current) throw new AppError("用户不存在", 404);
-
-  if (current.role === ROLES.SUPER_ADMIN) {
-    const superAdminCount = await prisma.user.count({
-      where: { role: ROLES.SUPER_ADMIN },
-    });
-    if (superAdminCount <= 1)
-      throw new AppError("至少需要保留一个全局管理员", 409);
-  }
-
-  const relatedPackages = await prisma.package.count({
-    where: {
-      OR: [
-        { createdBy: userId },
-        { verifiedBy: userId },
-        { modifiedBy: userId },
-      ],
-    },
-  });
-  if (relatedPackages > 0) {
-    throw new AppError("该用户有关联的包裹审计记录，不能删除", 409);
-  }
 
   await prisma.user.delete({ where: { id: userId } });
   await recordOperation(prisma, actor, {
@@ -274,9 +245,7 @@ export async function createUser(prisma, payload, actor) {
       name: name || null,
       email: null,
       remark: remark || null,
-      role: ROLES.USER,
       status: RECORD_STATUS.ENABLED,
-      storeId: null,
       createdBy: actor?.id ? Number(actor.id) : null,
     },
     select: userSelect,

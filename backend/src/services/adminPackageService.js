@@ -380,7 +380,6 @@ export async function createPackage(prisma, actor, payload) {
             `admin-package:${normalizedPhone}:${Date.now()}`,
             10,
           ),
-          role: ROLES.USER,
           status: RECORD_STATUS.ENABLED,
           name: userName || null,
           remark: userRemark || null,

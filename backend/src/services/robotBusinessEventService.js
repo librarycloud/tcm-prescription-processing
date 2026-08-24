@@ -5,9 +5,10 @@ import { publishRobotNotificationEventSafely } from './robotNotificationService.
 
 async function resolveOperatorName(prisma, actor) {
   if (actor?.name || actor?.nickname) return actor.name || actor.nickname;
-  if (actor?.id && prisma?.user?.findUnique) {
+  if (actor?.id && (prisma?.admin?.findUnique || prisma?.user?.findUnique)) {
     try {
-      const user = await prisma.user.findUnique({
+      const repository = prisma.admin?.findUnique ? prisma.admin : prisma.user;
+      const user = await repository.findUnique({
         where: { id: Number(actor.id) },
         select: { name: true, nickname: true }
       });
