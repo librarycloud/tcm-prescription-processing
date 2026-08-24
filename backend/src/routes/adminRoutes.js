@@ -246,18 +246,18 @@ export default async function adminRoutes(fastify) {
   fastify.post("/e6/operator-mappings", createE6OperatorMappingController);
   fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
   fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
-  fastify.get("/e6-pharmacy/products", listE6PharmacyProductsController);
+  fastify.get("/e6-pharmacy/products", storeStaffRoute, listE6PharmacyProductsController);
   fastify.get("/e6-pharmacy/barcode-template", e6PharmacyBarcodeTemplateController);
   fastify.post("/e6-pharmacy/barcode-import", importE6PharmacyBarcodesController);
-  fastify.get("/yd-goods-check", listGoodsChecksController);
+  fastify.get("/yd-goods-check", storeStaffRoute, listGoodsChecksController);
   fastify.post("/yd-goods-check", createGoodsCheckController);
-  fastify.get("/yd-goods-check/:id", goodsCheckDetailController);
-  fastify.get("/yd-goods-check/:id/items", goodsCheckItemsController);
-  fastify.get("/yd-goods-check/:id/candidates", goodsCheckCandidatesController);
-  fastify.post("/yd-goods-check/:id/items", addInitialCountController);
+  fastify.get("/yd-goods-check/:id", storeStaffRoute, goodsCheckDetailController);
+  fastify.get("/yd-goods-check/:id/items", storeStaffRoute, goodsCheckItemsController);
+  fastify.get("/yd-goods-check/:id/candidates", storeStaffRoute, goodsCheckCandidatesController);
+  fastify.post("/yd-goods-check/:id/items", storeStaffRoute, addInitialCountController);
   fastify.post("/yd-goods-check/:id/finish", finishGoodsCheckController);
   fastify.get("/yd-goods-check/:id/export", exportGoodsCheckController);
-  fastify.put("/yd-goods-check/items/:itemId/recount", recountGoodsCheckItemController);
+  fastify.put("/yd-goods-check/items/:itemId/recount", storeStaffRoute, recountGoodsCheckItemController);
   fastify.put("/yd-goods-check/items/:itemId/location", updateGoodsCheckLocationController);
   fastify.post("/yd-goods-check/items/:itemId/review", reviewGoodsCheckItemController);
   fastify.get("/products/import-template", productImportTemplateController);
@@ -325,8 +325,8 @@ export default async function adminRoutes(fastify) {
     deletePrescriptionAttachmentController,
   );
   fastify.get("/prescriptions/:id", storeStaffRoute, prescriptionDetailController);
-  fastify.post("/prescriptions", storeStaffRoute, createPrescriptionController);
-  fastify.put("/prescriptions/:id", storeStaffRoute, updatePrescriptionController);
+  fastify.post("/prescriptions", createPrescriptionController);
+  fastify.put("/prescriptions/:id", updatePrescriptionController);
   fastify.delete("/prescriptions/:id", deletePrescriptionController);
   fastify.put(
     "/prescriptions/:prescriptionId/processing-plans/order",

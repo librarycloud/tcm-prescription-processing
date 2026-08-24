@@ -34,7 +34,7 @@
     <text>业务管理</text>
   </view>
   <view class="section-actions business-actions">
-    <view class="section-action-item" wx:if="{{user.role !== 3}}">
+    <view class="section-action-item">
       <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goPrescriptions">查看处方</t-button>
     </view>
     <view class="section-action-item" wx:if="{{user.role !== 3}}">
@@ -43,7 +43,7 @@
     <view class="section-action-item" wx:if="{{user.role !== 3}}">
       <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goProductDifferences">库存差异</t-button>
     </view>
-    <view class="section-action-item" wx:if="{{user.role !== 3}}">
+    <view class="section-action-item">
       <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goE6Inventory">E6药店库存</t-button>
     </view>
     <view class="section-action-item">

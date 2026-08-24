@@ -26,6 +26,7 @@
   <view class="section-title attachment-title">
     <text>处方原件</text>
     <t-button
+      wx:if="{{!isStoreStaff}}"
       size="small"
       theme="primary"
       variant="outline"
@@ -40,7 +41,7 @@
     </view>
     <view class="attachment-actions">
       <t-button size="small" variant="outline" loading="{{attachmentPreviewing}}" bind:tap="previewAttachment">预览</t-button>
-      <t-button size="small" theme="danger" variant="outline" loading="{{attachmentDeleting}}" bind:tap="removeAttachment">删除</t-button>
+      <t-button wx:if="{{!isStoreStaff}}" size="small" theme="danger" variant="outline" loading="{{attachmentDeleting}}" bind:tap="removeAttachment">删除</t-button>
     </view>
   </view>
   <view class="app-card empty-attachment" wx:else>暂无处方原件</view>

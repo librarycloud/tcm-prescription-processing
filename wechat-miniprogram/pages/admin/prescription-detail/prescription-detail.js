@@ -4,7 +4,7 @@ import {
   getPrescriptionDetail,
   uploadPrescriptionAttachment
 } from '../../../api/admin';
-import { getToken } from '../../../utils/auth';
+import { getToken, getUser } from '../../../utils/auth';
 import { getBaseUrl } from '../../../utils/config';
 import { formatDate, formatPickupCode } from '../../../utils/format';
 import {
@@ -32,6 +32,7 @@ Page({
     id: null,
     detail: null,
     plans: [],
+    isStoreStaff: false,
     attachmentDeleting: false,
     attachmentPreparing: false,
     attachmentUploading: false,
@@ -39,7 +40,7 @@ Page({
   },
 
   onLoad(options) {
-    this.setData({ id: options.id });
+    this.setData({ id: options.id, isStoreStaff: Number(getUser()?.role) === 3 });
   },
 
   onShow() {
@@ -68,8 +69,8 @@ Page({
               fileSizeText: formatAttachmentSize(item.attachment.fileSize)
             }
           : null,
-        canEdit: Number(item.status) !== 1,
-        canAddPlan: Number(item.status) === 0
+        canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
+        canAddPlan: !this.data.isStoreStaff && Number(item.status) === 0
       },
       plans: (item.plans || []).map((plan) => {
         const status = PLAN_STATUS[plan.status] || {
@@ -93,8 +94,8 @@ Page({
           finishDateText: formatDate(plan.finishDate),
           canViewWorkflow: [1, 2, 3, 4].includes(Number(plan.status)),
           workflowLabel: Number(plan.status) === 1 ? '工序操作' : '工序详情',
-          canEdit: [0, 1].includes(Number(plan.status)),
-          canDelete: Number(plan.status) === 0
+          canEdit: !this.data.isStoreStaff && [0, 1].includes(Number(plan.status)),
+          canDelete: !this.data.isStoreStaff && Number(plan.status) === 0
         };
       })
     });

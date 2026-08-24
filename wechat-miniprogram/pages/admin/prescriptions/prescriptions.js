@@ -20,6 +20,7 @@ Page({
     keyword: '',
     status: '',
     isSuperAdmin: false,
+    isStoreStaff: false,
     stores: [],
     storeIndex: 0,
     storeId: '',
@@ -35,7 +36,8 @@ Page({
   async onShow() {
     const user = getUser();
     const isSuperAdmin = Number(user.role) === 0;
-    this.setData({ isSuperAdmin });
+    const isStoreStaff = Number(user.role) === 3;
+    this.setData({ isSuperAdmin, isStoreStaff });
     if (isSuperAdmin && !this.data.stores.length) {
       const data = await getStores({ page: 1, pageSize: 100 });
       this.setData({
@@ -68,8 +70,8 @@ Page({
             doctorName: item.doctor ? item.doctor.name : '-',
             sourceName: item.source ? item.source.name : '-',
             plansCount: item.plans ? item.plans.length : 0,
-            canEdit: Number(item.status) !== 1,
-            canDelete: !(item.plans && item.plans.length)
+            canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
+            canDelete: !this.data.isStoreStaff && !(item.plans && item.plans.length)
           };
         }),
         pages: data.pagination?.pages || 1

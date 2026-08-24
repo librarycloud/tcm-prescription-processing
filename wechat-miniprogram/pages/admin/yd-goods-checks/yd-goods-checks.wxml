@@ -1,6 +1,6 @@
 <view class="page yd-check-page">
   <view wx:if="{{!selectedCheck}}">
-    <view class="page-heading"><view><view class="page-title">药店商品盘点</view><view class="muted">选择盘点单后，按商品和库存批号完成盘点</view></view><t-button size="small" theme="primary" bind:tap="openCreate">新建盘点</t-button></view>
+    <view class="page-heading"><view><view class="page-title">药店商品盘点</view><view class="muted">选择盘点单后，按商品和库存批号完成盘点</view></view><t-button wx:if="{{!isStoreStaff}}" size="small" theme="primary" bind:tap="openCreate">新建盘点</t-button></view>
     <view wx:for="{{checks}}" wx:key="id" class="app-card check-card" data-index="{{index}}" bind:tap="selectCheck">
       <view class="check-title">{{item.checkName}}</view>
       <view class="muted">{{item.store.name || '-'}}　{{item.summary.counted || 0}} / {{item.summary.total || 0}} 条已盘</view>

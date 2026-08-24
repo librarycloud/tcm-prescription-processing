@@ -28,5 +28,39 @@ test('admin route registration only admits staff to explicitly marked routes', a
   });
   assert.notEqual(admitted.statusCode, 403);
 
+  for (const url of [
+    '/admin/prescriptions',
+    '/admin/e6-pharmacy/products',
+    '/admin/yd-goods-check',
+    '/admin/yd-goods-check/1',
+    '/admin/yd-goods-check/1/items',
+    '/admin/yd-goods-check/1/candidates',
+  ]) {
+    const response = await app.inject({
+      method: 'GET', url, headers: { authorization: `Bearer ${token}` },
+    });
+    assert.notEqual(response.statusCode, 403, `${url} should permit staff read access`);
+  }
+
+  const initialCount = await app.inject({
+    method: 'POST',
+    url: '/admin/yd-goods-check/1/items',
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.notEqual(initialCount.statusCode, 403);
+
+  for (const [method, url] of [
+    ['POST', '/admin/prescriptions'],
+    ['POST', '/admin/yd-goods-check'],
+    ['POST', '/admin/yd-goods-check/1/finish'],
+    ['PUT', '/admin/yd-goods-check/items/1/location'],
+    ['POST', '/admin/yd-goods-check/items/1/review'],
+  ]) {
+    const response = await app.inject({
+      method, url, headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 403, `${method} ${url} should reject staff write access`);
+  }
+
   await app.close();
 });

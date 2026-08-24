@@ -69,6 +69,7 @@ Page({
     checks: [],
     selectedCheck: null,
     isSuperAdmin: false,
+    isStoreStaff: false,
     stores: [],
     createStoreIndex: 0,
     createStoreId: null,
@@ -93,7 +94,8 @@ Page({
   async onShow() {
     const user = getUser() || {};
     const isSuperAdmin = Number(user.role) === 0;
-    this.setData({ isSuperAdmin });
+    const isStoreStaff = Number(user.role) === 3;
+    this.setData({ isSuperAdmin, isStoreStaff });
     if (isSuperAdmin && !this.data.stores.length) {
       const data = await getStores({ page: 1, pageSize: 100, status: 1 });
       this.setData({ stores: data?.list || [] });
@@ -131,6 +133,7 @@ Page({
   },
 
   openCreate() {
+    if (this.data.isStoreStaff) return;
     this.setData({ createVisible: true, checkName: '', createStoreIndex: 0, createStoreId: null, createStoreName: '请选择门店' });
   },
 
@@ -242,6 +245,7 @@ Page({
   },
 
   openCount(e) {
+    if (this.data.isStoreStaff && !this.data.selectedCheck) return;
     const row = this.data.selectedInventories[Number(e.currentTarget.dataset.index)];
     if (!row) return;
     const status = Number(row.checkStatus || 0);
