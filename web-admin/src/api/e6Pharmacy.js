@@ -12,10 +12,8 @@ export const importE6PharmacyBarcodes = (file) => {
   return request.post('/admin/e6-pharmacy/barcode-import', formData);
 };
 
-export const getE6PharmacyCategoryMappings = (includeDisabled = false) =>
-  request.get('/admin/e6-pharmacy/category-mappings', {
-    params: includeDisabled ? { includeDisabled: '1' } : undefined
-  });
+export const getE6PharmacyCategoryMappings = () =>
+  request.get('/admin/e6-pharmacy/category-mappings');
 
 export const saveE6PharmacyCategoryMapping = (id, data) =>
   id

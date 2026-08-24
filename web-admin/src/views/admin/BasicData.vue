@@ -72,17 +72,6 @@
           <el-table v-loading="loading" :data="e6Categories" border row-key="id" table-layout="auto">
             <el-table-column prop="categoryCode" label="分类编号" min-width="180" />
             <el-table-column prop="categoryName" label="分类名称" min-width="180" />
-            <el-table-column prop="sort" label="排序" align="center" width="100" />
-            <el-table-column label="状态" align="center" width="100">
-              <template #default="{ row }">
-                <el-switch
-                  :model-value="row.status"
-                  :active-value="1"
-                  :inactive-value="0"
-                  @change="(status) => changeE6CategoryStatus(row, status)"
-                />
-              </template>
-            </el-table-column>
             <el-table-column label="操作" align="center" width="150">
               <template #default="{ row }">
                 <el-button link type="primary" :icon="Edit" @click="openE6Category(row)">编辑</el-button>
@@ -147,15 +136,6 @@
         <el-form-item label="分类名称" required>
           <el-input v-model.trim="e6CategoryForm.categoryName" maxlength="100" />
         </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="e6CategoryForm.sort" :min="0" :max="99999" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-radio-group v-model="e6CategoryForm.status">
-            <el-radio-button :value="1">启用</el-radio-button>
-            <el-radio-button :value="0">停用</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="e6CategoryDialog = false">取消</el-button>
@@ -201,7 +181,7 @@ const dictionaryDialog = ref(false);
 const e6CategoryDialog = ref(false);
 const doctorForm = reactive({ id: null, name: '', sort: 0, status: 1 });
 const dictionaryForm = reactive({ id: null, type: '', code: '', name: '', sort: 0, status: 1 });
-const e6CategoryForm = reactive({ id: null, categoryCode: '', categoryName: '', sort: 0, status: 1 });
+const e6CategoryForm = reactive({ id: null, categoryCode: '', categoryName: '' });
 
 async function loadDoctors() {
   loading.value = true;
@@ -230,7 +210,7 @@ function loadCurrent() {
 async function loadE6Categories() {
   loading.value = true;
   try {
-    e6Categories.value = await getE6PharmacyCategoryMappings(true);
+    e6Categories.value = await getE6PharmacyCategoryMappings();
   } finally {
     loading.value = false;
   }
@@ -300,8 +280,8 @@ async function removeDictionary(row) {
 
 function openE6Category(row) {
   Object.assign(e6CategoryForm, row
-    ? { id: row.id, categoryCode: row.categoryCode, categoryName: row.categoryName, sort: row.sort, status: row.status }
-    : { id: null, categoryCode: '', categoryName: '', sort: 0, status: 1 });
+    ? { id: row.id, categoryCode: row.categoryCode, categoryName: row.categoryName }
+    : { id: null, categoryCode: '', categoryName: '' });
   e6CategoryDialog.value = true;
 }
 
@@ -316,12 +296,6 @@ async function submitE6Category() {
   } finally {
     saving.value = false;
   }
-}
-
-async function changeE6CategoryStatus(row, status) {
-  await saveE6PharmacyCategoryMapping(row.id, { ...row, status });
-  ElMessage.success(status ? '已启用' : '已停用');
-  await loadE6Categories();
 }
 
 async function removeE6Category(row) {
