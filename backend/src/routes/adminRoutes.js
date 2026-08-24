@@ -178,9 +178,13 @@ import {
   updateOperatorMappingController as updateE6OperatorMappingController,
 } from "../controllers/e6IntegrationController.js";
 import {
+  createE6PharmacyCategoryMappingController,
+  deleteE6PharmacyCategoryMappingController,
   e6PharmacyBarcodeTemplateController,
   importE6PharmacyBarcodesController,
+  listE6PharmacyCategoryMappingsController,
   listE6PharmacyProductsController,
+  saveE6PharmacyCategoryMappingController,
 } from "../controllers/e6PharmacyController.js";
 import {
   addInitialCountController,
@@ -247,6 +251,10 @@ export default async function adminRoutes(fastify) {
   fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
   fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
   fastify.get("/e6-pharmacy/products", storeStaffRoute, listE6PharmacyProductsController);
+  fastify.get("/e6-pharmacy/category-mappings", storeStaffRoute, listE6PharmacyCategoryMappingsController);
+  fastify.post("/e6-pharmacy/category-mappings", createE6PharmacyCategoryMappingController);
+  fastify.put("/e6-pharmacy/category-mappings/:id", saveE6PharmacyCategoryMappingController);
+  fastify.delete("/e6-pharmacy/category-mappings/:id", deleteE6PharmacyCategoryMappingController);
   fastify.get("/e6-pharmacy/barcode-template", e6PharmacyBarcodeTemplateController);
   fastify.post("/e6-pharmacy/barcode-import", importE6PharmacyBarcodesController);
   fastify.get("/yd-goods-check", storeStaffRoute, listGoodsChecksController);

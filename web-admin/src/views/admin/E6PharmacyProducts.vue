@@ -33,6 +33,14 @@
           placeholder="编号、商品名称或条形码"
           @keyup.enter="search"
         />
+        <el-select v-model="query.categoryCode" clearable placeholder="全部分类" @change="search">
+          <el-option
+            v-for="item in categoryMappings"
+            :key="item.categoryCode"
+            :label="item.categoryName"
+            :value="item.categoryCode"
+          />
+        </el-select>
         <el-select v-model="query.expiryWithinMonths" placeholder="有效期小于" clearable @change="handleExpiryChange">
           <el-option label="有效期小于1个月" :value="1" />
           <el-option label="有效期小于3个月" :value="3" />
@@ -87,9 +95,6 @@
                 <el-table-column label="库存数量" width="120" align="right">
                   <template #default="{ row: batch }">{{ quantityText(batch.quantity) }}</template>
                 </el-table-column>
-                <el-table-column label="金额" width="130" align="right">
-                  <template #default="{ row: batch }">{{ moneyText(batch.amount) }}</template>
-                </el-table-column>
                 <el-table-column label="更新时间" min-width="170">
                   <template #default="{ row: batch }">{{ dateTimeText(batch.updatedAt) }}</template>
                 </el-table-column>
@@ -98,6 +103,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
+        <el-table-column prop="categoryName" label="分类" min-width="120">
+          <template #default="{ row }">{{ row.categoryName || '-' }}</template>
+        </el-table-column>
         <el-table-column label="商品名称" min-width="150">
           <template #default="{ row }">
             <el-tooltip v-if="isLongText(row.name)" :content="row.name" placement="top">
@@ -108,6 +116,9 @@
         </el-table-column>
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="零售价" width="100" align="right">
+          <template #default="{ row }">¥ {{ Number(row.retailPrice || 0).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="批号数" align="center">
           <template #default="{ row }">{{ row.batchCount }}</template>
@@ -192,6 +203,7 @@ import Pagination from '@/components/Pagination.vue';
 import { getProductStores } from '@/api/productDifference';
 import {
   downloadE6PharmacyBarcodeTemplate,
+  getE6PharmacyCategoryMappings,
   getE6PharmacyProducts,
   importE6PharmacyBarcodes
 } from '@/api/e6Pharmacy';
@@ -202,11 +214,12 @@ const tableRef = ref();
 const loading = ref(false);
 const list = ref([]);
 const stores = ref([]);
+const categoryMappings = ref([]);
 const barcodeImportVisible = ref(false);
 const barcodeImporting = ref(false);
 const barcodeFile = ref(null);
 const barcodeResult = ref(null);
-const query = reactive({ keyword: '', storeId: undefined, expiryWithinMonths: undefined, customExpiryMonths: 1 });
+const query = reactive({ keyword: '', storeId: undefined, categoryCode: undefined, expiryWithinMonths: undefined, customExpiryMonths: 1 });
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 
 function dateText(value) {
@@ -223,10 +236,6 @@ function quantityText(value) {
   return Number.isInteger(number) ? String(number) : number.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-function moneyText(value) {
-  return `¥ ${Number(value || 0).toFixed(2)}`;
-}
-
 function isLongText(value) {
   return String(value || '').length > 12;
 }
@@ -240,12 +249,17 @@ async function loadStores() {
   stores.value = await getProductStores();
 }
 
+async function loadCategoryMappings() {
+  categoryMappings.value = await getE6PharmacyCategoryMappings();
+}
+
 async function load() {
   loading.value = true;
   try {
     const data = await getE6PharmacyProducts({
       keyword: query.keyword || undefined,
       storeId: query.storeId || undefined,
+      categoryCode: query.categoryCode || undefined,
       expiryWithinMonths: expiryFilterValue(),
       page: pagination.page,
       pageSize: pagination.pageSize
@@ -282,6 +296,7 @@ function search() {
 function resetSearch() {
   query.keyword = '';
   query.storeId = undefined;
+  query.categoryCode = undefined;
   query.expiryWithinMonths = undefined;
   query.customExpiryMonths = 1;
   pagination.page = 1;
@@ -334,7 +349,7 @@ watch(() => [pagination.page, pagination.pageSize], load);
 
 onMounted(async () => {
   await loadStores();
-  await load();
+  await Promise.all([loadCategoryMappings(), load()]);
 });
 </script>
 

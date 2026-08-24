@@ -174,6 +174,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);
   const scope = businessScope(actor, query.storeId);
   const keyword = String(query.keyword || "").trim();
+  const categoryCode = String(query.categoryCode || "").trim();
   const expiryWithinMonths = query.expiryWithinMonths === undefined || query.expiryWithinMonths === ""
     ? null
     : toPositiveInt(query.expiryWithinMonths, 0);
@@ -192,6 +193,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   };
   const where = {
     inventories: { some: inventoryWhere },
+    ...(categoryCode ? { categoryCode } : {}),
   };
 
   if (keyword) {
@@ -202,7 +204,10 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
     ];
   }
 
-  const [list, total] = await Promise.all([
+  const categoryMappingQuery = prisma.e6PharmacyCategoryMapping?.findMany
+    ? prisma.e6PharmacyCategoryMapping.findMany({ where: { status: 1 } })
+    : Promise.resolve([]);
+  const [list, total, categoryMappings] = await Promise.all([
     prisma.e6PharmacyProduct.findMany({
       where,
       include: {
@@ -217,10 +222,16 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
       take: pageSize,
     }),
     prisma.e6PharmacyProduct.count({ where }),
+    categoryMappingQuery,
   ]);
 
+  const categoryMap = new Map(categoryMappings.map((item) => [item.categoryCode, item.categoryName]));
+
   return {
-    list: list.map(normalizeProduct),
+    list: list.map((product) => ({
+      ...normalizeProduct(product),
+      categoryName: categoryMap.get(product.categoryCode) || "-",
+    })),
     pagination: {
       page,
       pageSize,

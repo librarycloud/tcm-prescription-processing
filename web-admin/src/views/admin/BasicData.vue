@@ -63,6 +63,34 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
+
+        <el-tab-pane label="E6商品分类" name="e6-category">
+          <div class="toolbar">
+            <span class="tab-tip">全局映射，不区分门店；药店库存按分类编号显示映射后的分类名称。</span>
+            <el-button type="primary" :icon="Plus" @click="openE6Category()">新增分类映射</el-button>
+          </div>
+          <el-table v-loading="loading" :data="e6Categories" border row-key="id" table-layout="auto">
+            <el-table-column prop="categoryCode" label="分类编号" min-width="180" />
+            <el-table-column prop="categoryName" label="分类名称" min-width="180" />
+            <el-table-column prop="sort" label="排序" align="center" width="100" />
+            <el-table-column label="状态" align="center" width="100">
+              <template #default="{ row }">
+                <el-switch
+                  :model-value="row.status"
+                  :active-value="1"
+                  :inactive-value="0"
+                  @change="(status) => changeE6CategoryStatus(row, status)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" align="center" width="150">
+              <template #default="{ row }">
+                <el-button link type="primary" :icon="Edit" @click="openE6Category(row)">编辑</el-button>
+                <el-button link type="danger" :icon="Delete" @click="removeE6Category(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -110,6 +138,30 @@
         <el-button type="primary" :loading="saving" @click="submitDictionary">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="e6CategoryDialog" :title="e6CategoryForm.id ? '编辑 E6 商品分类映射' : '新增 E6 商品分类映射'" width="440px">
+      <el-form label-position="top">
+        <el-form-item label="分类编号" required>
+          <el-input v-model.trim="e6CategoryForm.categoryCode" maxlength="64" :disabled="Boolean(e6CategoryForm.id)" />
+        </el-form-item>
+        <el-form-item label="分类名称" required>
+          <el-input v-model.trim="e6CategoryForm.categoryName" maxlength="100" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="e6CategoryForm.sort" :min="0" :max="99999" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-radio-group v-model="e6CategoryForm.status">
+            <el-radio-button :value="1">启用</el-radio-button>
+            <el-radio-button :value="0">停用</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="e6CategoryDialog = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="submitE6Category">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -126,6 +178,11 @@ import {
   saveDictionary,
   saveDoctor
 } from '@/api/processing';
+import {
+  deleteE6PharmacyCategoryMapping,
+  getE6PharmacyCategoryMappings,
+  saveE6PharmacyCategoryMapping
+} from '@/api/e6Pharmacy';
 
 const dictionaryTypes = [
   { label: '处方来源', value: 'PrescriptionSource' },
@@ -136,12 +193,15 @@ const tab = ref('doctor');
 const type = ref('PrescriptionSource');
 const doctors = ref([]);
 const dictionaries = ref([]);
+const e6Categories = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const doctorDialog = ref(false);
 const dictionaryDialog = ref(false);
+const e6CategoryDialog = ref(false);
 const doctorForm = reactive({ id: null, name: '', sort: 0, status: 1 });
 const dictionaryForm = reactive({ id: null, type: '', code: '', name: '', sort: 0, status: 1 });
+const e6CategoryForm = reactive({ id: null, categoryCode: '', categoryName: '', sort: 0, status: 1 });
 
 async function loadDoctors() {
   loading.value = true;
@@ -162,7 +222,18 @@ async function loadDictionaries() {
 }
 
 function loadCurrent() {
-  return tab.value === 'doctor' ? loadDoctors() : loadDictionaries();
+  if (tab.value === 'doctor') return loadDoctors();
+  if (tab.value === 'dictionary') return loadDictionaries();
+  return loadE6Categories();
+}
+
+async function loadE6Categories() {
+  loading.value = true;
+  try {
+    e6Categories.value = await getE6PharmacyCategoryMappings(true);
+  } finally {
+    loading.value = false;
+  }
 }
 
 function openDoctor(row) {
@@ -227,7 +298,40 @@ async function removeDictionary(row) {
   await loadDictionaries();
 }
 
-onMounted(() => Promise.all([loadDoctors(), loadDictionaries()]));
+function openE6Category(row) {
+  Object.assign(e6CategoryForm, row
+    ? { id: row.id, categoryCode: row.categoryCode, categoryName: row.categoryName, sort: row.sort, status: row.status }
+    : { id: null, categoryCode: '', categoryName: '', sort: 0, status: 1 });
+  e6CategoryDialog.value = true;
+}
+
+async function submitE6Category() {
+  if (!e6CategoryForm.categoryCode || !e6CategoryForm.categoryName) return ElMessage.warning('请输入分类编号和分类名称');
+  saving.value = true;
+  try {
+    await saveE6PharmacyCategoryMapping(e6CategoryForm.id, e6CategoryForm);
+    e6CategoryDialog.value = false;
+    ElMessage.success('保存成功');
+    await loadE6Categories();
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function changeE6CategoryStatus(row, status) {
+  await saveE6PharmacyCategoryMapping(row.id, { ...row, status });
+  ElMessage.success(status ? '已启用' : '已停用');
+  await loadE6Categories();
+}
+
+async function removeE6Category(row) {
+  await ElMessageBox.confirm(`确认删除分类映射“${row.categoryCode} / ${row.categoryName}”？`, '删除确认', { type: 'warning' });
+  await deleteE6PharmacyCategoryMapping(row.id);
+  ElMessage.success('删除成功');
+  await loadE6Categories();
+}
+
+onMounted(() => Promise.all([loadDoctors(), loadDictionaries(), loadE6Categories()]));
 </script>
 
 <style scoped>
@@ -236,6 +340,11 @@ onMounted(() => Promise.all([loadDoctors(), loadDictionaries()]));
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.tab-tip {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 @media (max-width: 640px) {

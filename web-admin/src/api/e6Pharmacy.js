@@ -11,3 +11,16 @@ export const importE6PharmacyBarcodes = (file) => {
   formData.append('file', file);
   return request.post('/admin/e6-pharmacy/barcode-import', formData);
 };
+
+export const getE6PharmacyCategoryMappings = (includeDisabled = false) =>
+  request.get('/admin/e6-pharmacy/category-mappings', {
+    params: includeDisabled ? { includeDisabled: '1' } : undefined
+  });
+
+export const saveE6PharmacyCategoryMapping = (id, data) =>
+  id
+    ? request.put(`/admin/e6-pharmacy/category-mappings/${id}`, data)
+    : request.post('/admin/e6-pharmacy/category-mappings', data);
+
+export const deleteE6PharmacyCategoryMapping = (id) =>
+  request.delete(`/admin/e6-pharmacy/category-mappings/${id}`);

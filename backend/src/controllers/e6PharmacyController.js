@@ -5,6 +5,11 @@ import {
   importE6PharmacyBarcodes,
   listE6PharmacyProducts,
 } from "../services/e6PharmacyService.js";
+import {
+  deleteE6PharmacyCategoryMapping,
+  listE6PharmacyCategoryMappings,
+  saveE6PharmacyCategoryMapping,
+} from "../services/e6PharmacyCategoryService.js";
 
 export async function listE6PharmacyProductsController(request, reply) {
   return ok(
@@ -31,4 +36,37 @@ export async function importE6PharmacyBarcodesController(request, reply) {
   if (!String(file.filename || "").toLowerCase().endsWith(".xlsx"))
     throw new AppError("只支持 .xlsx 文件", 400);
   return ok(reply, await importE6PharmacyBarcodes(request.server.prisma, await file.toBuffer()), "条形码导入完成");
+}
+
+export async function listE6PharmacyCategoryMappingsController(request, reply) {
+  return ok(reply, await listE6PharmacyCategoryMappings(
+    request.server.prisma,
+    request.query?.includeDisabled === "1",
+  ));
+}
+
+export async function saveE6PharmacyCategoryMappingController(request, reply) {
+  return ok(reply, await saveE6PharmacyCategoryMapping(
+    request.server.prisma,
+    request.params.id,
+    request.body || {},
+    request.user,
+  ), "保存成功");
+}
+
+export async function createE6PharmacyCategoryMappingController(request, reply) {
+  return ok(reply, await saveE6PharmacyCategoryMapping(
+    request.server.prisma,
+    null,
+    request.body || {},
+    request.user,
+  ), "创建成功");
+}
+
+export async function deleteE6PharmacyCategoryMappingController(request, reply) {
+  return ok(reply, await deleteE6PharmacyCategoryMapping(
+    request.server.prisma,
+    request.params.id,
+    request.user,
+  ), "删除成功");
 }

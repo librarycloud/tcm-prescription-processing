@@ -205,6 +205,21 @@ model E6PharmacyProduct {
   @@map("e6_pharmacy_products")
 }
 
+model E6PharmacyCategoryMapping {
+  id           Int      @id @default(autoincrement())
+  categoryCode String   @unique @map("category_code") @db.VarChar(64)
+  categoryName String   @map("category_name") @db.VarChar(100)
+  sort         Int      @default(0)
+  status       Int      @default(1) @db.TinyInt
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdBy    Int?     @map("created_by")
+  updatedBy    Int?     @map("updated_by")
+
+  @@index([status, sort])
+  @@map("e6_pharmacy_category_mappings")
+}
+
 model E6PharmacyInventoryBatch {
   id             Int       @id @default(autoincrement())
   storeId        Int       @map("store_id")
