@@ -23,6 +23,22 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
+function normalizeCategoryCodes(value) {
+  const values = Array.isArray(value) ? value : (value === undefined || value === null || value === "" ? [] : [value]);
+  return [...new Set(values.map(text).filter(Boolean))].slice(0, 200);
+}
+
+function productFilter(categoryCodes, keyword = "") {
+  const filter = {};
+  if (categoryCodes.length) filter.categoryCode = { in: categoryCodes };
+  if (keyword) filter.OR = [
+    { productCode: { contains: keyword } },
+    { name: { contains: keyword } },
+    { barcode: { contains: keyword } },
+  ];
+  return filter;
+}
+
 function itemKey(productId, batchNo, locationName) {
   return `${productId}|${text(batchNo)}|${text(locationName)}`;
 }
@@ -143,8 +159,9 @@ export async function createGoodsCheck(prisma, actor, payload = {}) {
   if (!checkName) throw new AppError("盘点名称不能为空", 400);
   const checkType = Number(payload.checkType || 1);
   if (!Number.isInteger(checkType) || checkType < 1 || checkType > 3) throw new AppError("盘点类型不正确", 400);
+  const categoryCodes = normalizeCategoryCodes(payload.categoryCodes);
   return prisma.ydGoodsCheck.create({
-    data: { storeId, checkName, checkType, status: 0, createdBy: Number(actor.id) },
+    data: { storeId, checkName, checkType, categoryCodes: categoryCodes.length ? categoryCodes : null, status: 0, createdBy: Number(actor.id) },
     include: { store: { select: { id: true, name: true, code: true } } },
   });
 }
@@ -179,6 +196,8 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   if (!productId) throw new AppError("请选择商品", 400);
   const product = await prisma.e6PharmacyProduct.findUnique({ where: { id: productId } });
   if (!product) throw new AppError("商品不存在或不属于该门店", 404);
+  const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
+  if (categoryCodes.length && !categoryCodes.includes(text(product.categoryCode))) throw new AppError("该商品不在本盘点计划的分类范围内", 400);
   const batchNo = text(payload.batchNo);
   const requestedLocation = payload.locationName === undefined ? undefined : text(payload.locationName);
   const snapshot = await inventorySnapshot(prisma, check, productId, batchNo, requestedLocation);
@@ -269,7 +288,9 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
 }
 
 async function missingCandidates(prisma, check, rows, keyword) {
-  const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(keyword ? { product: { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] } } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
+  const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
+  const productWhere = productFilter(categoryCodes, keyword);
+  const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(Object.keys(productWhere).length ? { product: productWhere } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
   const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationName)));
   return inventories.filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationName))).map((row) => normalizeItem({ checkId: check.id, storeId: check.storeId, productId: row.productId, product: row.product, batchNo: row.batchNo, systemLocationName: row.locationName, systemQty: row.quantity, firstCountQty: null, checkStatus: 0 } , false));
 }
@@ -277,7 +298,9 @@ async function missingCandidates(prisma, check, rows, keyword) {
 export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {}) {
   const check = await getCheck(prisma, actor, checkId);
   const keyword = text(query.keyword);
-  const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(keyword ? { product: { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] } } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { locationName: "asc" }] });
+  const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
+  const productWhere = productFilter(categoryCodes, keyword);
+  const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(Object.keys(productWhere).length ? { product: productWhere } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { locationName: "asc" }] });
   const rows = await prisma.ydGoodsCheckItem.findMany({
     where: { checkId: check.id },
     select: {
@@ -305,7 +328,7 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   });
   if (keyword) {
     const products = await prisma.e6PharmacyProduct.findMany({
-      where: { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] },
+      where: productFilter(categoryCodes, keyword),
       select: productInclude.select,
       orderBy: { name: "asc" },
       take: 100,

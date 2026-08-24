@@ -20,6 +20,7 @@
         <el-table-column v-if="userStore.isSuperAdmin" label="门店"><template #default="{ row }">{{ row.store?.name || '-' }}</template></el-table-column>
         <el-table-column prop="checkName" label="盘点名称" min-width="180" />
         <el-table-column label="类型"><template #default="{ row }">{{ typeText(row.checkType) }}</template></el-table-column>
+        <el-table-column label="盘点范围" min-width="150"><template #default="{ row }">{{ checkScopeText(row) }}</template></el-table-column>
         <el-table-column label="状态"><template #default="{ row }"><el-tag :type="row.status === 2 ? 'success' : 'warning'">{{ row.status === 2 ? '已完成' : '进行中' }}</el-tag></template></el-table-column>
         <el-table-column label="记录数"><template #default="{ row }">{{ row.summary?.total || 0 }} / {{ row.summary?.counted || 0 }}</template></el-table-column>
         <el-table-column label="需调整"><template #default="{ row }">{{ row.summary?.adjustment || 0 }}</template></el-table-column>
@@ -71,8 +72,8 @@
       <Pagination v-model:page="itemPagination.page" v-model:page-size="itemPagination.pageSize" :total="itemPagination.total" />
     </el-card>
 
-    <el-dialog v-model="createDialog" title="新建药店盘点" width="420px">
-      <el-form label-width="90px"><el-form-item label="门店" required><el-select v-model="createForm.storeId" :disabled="!userStore.isSuperAdmin" placeholder="选择门店"><el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" /></el-select></el-form-item><el-form-item label="盘点名称" required><el-input v-model="createForm.checkName" placeholder="如：2026年7月临时盘点" /></el-form-item><el-form-item label="盘点类型"><el-select v-model="createForm.checkType"><el-option label="临时盘点" :value="1" /><el-option label="季度盘点" :value="2" /><el-option label="年度盘点" :value="3" /></el-select></el-form-item></el-form>
+    <el-dialog v-model="createDialog" title="新建药店盘点" width="460px">
+      <el-form label-width="90px"><el-form-item label="门店" required><el-select v-model="createForm.storeId" :disabled="!userStore.isSuperAdmin" placeholder="选择门店"><el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" /></el-select></el-form-item><el-form-item label="盘点名称" required><el-input v-model="createForm.checkName" placeholder="如：2026年7月临时盘点" /></el-form-item><el-form-item label="盘点类型"><el-select v-model="createForm.checkType"><el-option label="临时盘点" :value="1" /><el-option label="季度盘点" :value="2" /><el-option label="年度盘点" :value="3" /></el-select></el-form-item><el-form-item label="商品分类"><el-select v-model="createForm.categoryCodes" multiple filterable collapse-tags collapse-tags-tooltip clearable placeholder="不选择表示全部分类"><el-option v-for="item in categoryMappings" :key="item.categoryCode" :label="`${item.categoryCode} / ${item.categoryName}`" :value="item.categoryCode" /></el-select></el-form-item></el-form>
       <template #footer><el-button @click="createDialog = false">取消</el-button><el-button type="primary" @click="create">创建</el-button></template>
     </el-dialog>
     <el-dialog v-model="countDialog" :title="countForm.mode === 'recount' ? '复盘' : '初盘'" width="420px"><el-form label-width="90px"><el-form-item label="商品">{{ countForm.product?.productCode }} {{ countForm.product?.name }}</el-form-item><el-form-item label="批号"><el-input v-if="countForm.manualBatch" v-model="countForm.batchNo" placeholder="输入新增批号" /><span v-else>{{ countForm.batchNo || '-' }}</span></el-form-item><el-form-item label="系统数量">{{ qty(countForm.systemQty) }}</el-form-item><el-form-item v-if="countForm.mode === 'initial'" label="盘点货位"><el-input v-model="countForm.location" placeholder="没有变化可留空" /></el-form-item><el-form-item :label="countForm.mode === 'recount' ? '复盘数量' : '初盘数量'"><el-input-number v-model="countForm.qty" :min="0" :precision="3" controls-position="right" /></el-form-item></el-form><template #footer><el-button @click="countDialog = false">取消</el-button><el-button type="primary" @click="saveCount">保存</el-button></template></el-dialog>
@@ -125,14 +126,15 @@ import { Download, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { getProductStores } from '@/api/productDifference';
+import { getE6PharmacyCategoryMappings } from '@/api/e6Pharmacy';
 import { addInitialCount, createGoodsCheck, exportGoodsCheck, finishGoodsCheck, getGoodsCheckCandidates, getGoodsCheckItems, getGoodsChecks, recountGoodsCheckItem, reviewGoodsCheckItem, updateGoodsCheckLocation } from '@/api/ydGoodsCheck';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { formatDateSeconds } from '@/utils/date';
 
-const userStore = useUserStore(); const stores = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const checksLoading = ref(false); const itemsLoading = ref(false);
+const userStore = useUserStore(); const stores = ref([]); const categoryMappings = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const checksLoading = ref(false); const itemsLoading = ref(false);
 const checkQuery = reactive({ storeId: undefined, status: undefined }); const checkPagination = reactive({ page: 1, pageSize: 20, total: 0 }); const itemQuery = reactive({ keyword: '', locationName: '', checkStatus: undefined, locationStatus: undefined }); const itemPagination = reactive({ page: 1, pageSize: 50, total: 0 });
-const createDialog = ref(false); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1 }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
+const createDialog = ref(false); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1, categoryCodes: [] }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
 const candidateProducts = computed(() => {
   const products = new Map();
   candidates.value.forEach((row) => {
@@ -170,12 +172,15 @@ const selectedCandidateInventories = computed(() => candidates.value
     };
   }));
 const typeText = (value) => ({ 1: '临时', 2: '季度', 3: '年度' }[Number(value)] || '-'); const dateTime = (value) => formatDateSeconds(value); const qty = (value) => { const n = Number(value || 0); return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/, '').replace(/\.$/, ''); };
+const categoryName = (code) => categoryMappings.value.find((item) => item.categoryCode === code)?.categoryName || code;
+const checkScopeText = (row) => { const codes = Array.isArray(row.categoryCodes) ? row.categoryCodes : []; return codes.length ? codes.map(categoryName).join('、') : '全部分类'; };
 const dateOnly = (value) => value ? String(value).slice(0, 10) : '-';
 const statusText = (value, adjustment) => adjustment ? '需调整库存' : ({ 0: '未盘', 1: '待复核', 2: '待复盘', 3: '复盘待复核', 4: '需调整库存', 5: '新增批号', 6: '已确认' }[Number(value)] || '-');
 const price = (value) => value === null || value === undefined ? '-' : `¥ ${Number(value).toFixed(2)}`;
 const isLongText = (value) => Array.from(String(value || '')).length > 12;
 const shortText = (value) => `${Array.from(String(value || '')).slice(0, 12).join('')}…`;
 async function loadStores() { if (userStore.isSuperAdmin) stores.value = await getProductStores(); else createForm.storeId = userStore.user?.storeId; }
+async function loadCategoryMappings() { categoryMappings.value = await getE6PharmacyCategoryMappings(); }
 async function loadChecks() { checksLoading.value = true; try { const data = await getGoodsChecks({ ...checkQuery, page: checkPagination.page, pageSize: checkPagination.pageSize }); checks.value = data.list || []; Object.assign(checkPagination, data.pagination || {}); if (selectedCheck.value) { const fresh = checks.value.find((x) => x.id === selectedCheck.value.id); if (fresh) selectedCheck.value = fresh; } } finally { checksLoading.value = false; } }
 function resetChecks() { checkQuery.storeId = undefined; checkQuery.status = undefined; checkPagination.page = 1; loadChecks(); }
 async function selectCheck(row) { selectedCheck.value = row; itemPagination.page = 1; await loadItems(); }
@@ -192,7 +197,7 @@ async function saveLocation() { await updateGoodsCheckLocation(locationForm.id, 
 async function review(row) { await ElMessageBox.confirm('确认由当前账号完成第二人复核？', '二次确认', { type: 'warning' }); await reviewGoodsCheckItem(row.id, { approved: true }); await loadItems(); await loadChecks(); if (candidateDialog.value) await loadCandidates(true); ElMessage.success('已确认'); }
 async function finish() { await ElMessageBox.confirm('结束后将不能继续盘点，是否继续？', '结束盘点', { type: 'warning' }); await finishGoodsCheck(selectedCheck.value.id); await loadChecks(); selectedCheck.value = { ...selectedCheck.value, status: 2 }; ElMessage.success('盘点已结束'); }
 async function download(type) { const blob = await exportGoodsCheck(selectedCheck.value.id, type); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${selectedCheck.value.checkName}-${type}.xlsx`; link.click(); URL.revokeObjectURL(url); }
-watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch(() => [itemPagination.page, itemPagination.pageSize], loadItems); onMounted(async () => { await loadStores(); await loadChecks(); });
+watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch(() => [itemPagination.page, itemPagination.pageSize], loadItems); onMounted(async () => { await Promise.all([loadStores(), loadCategoryMappings()]); await loadChecks(); });
 </script>
 
 <style scoped>
