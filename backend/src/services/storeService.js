@@ -52,7 +52,7 @@ function normalizeStoreData(payload, partial = false) {
 }
 
 function storeInclude() {
-  return { _count: { select: { users: true, packages: true, herbs: true, herbLocations: true } } };
+  return { _count: { select: { admins: true, packages: true, herbs: true, herbLocations: true } } };
 }
 
 export async function listStores(prisma, query) {
@@ -158,7 +158,7 @@ export async function updateStore(prisma, id, payload, actor) {
 
 export async function deleteStore(prisma, id, actor) {
   const store = await getStore(prisma, id);
-  if (store._count.users > 0 || store._count.packages > 0 || store._count.herbs > 0) {
+  if (store._count.admins > 0 || store._count.packages > 0 || store._count.herbs > 0) {
     throw new AppError("门店存在管理员、业务数据或斗谱，不能删除，可改为停用", 409);
   }
   await prisma.store.update({

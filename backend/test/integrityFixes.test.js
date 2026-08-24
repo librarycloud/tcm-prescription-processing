@@ -35,9 +35,29 @@ import {
   listUsers,
   updateUser,
 } from "../src/services/adminUserService.js";
+import { listStores } from "../src/services/storeService.js";
 import { normalizeOptionalPhone } from "../src/utils/validators.js";
 
 const actor = { id: 12, role: 2, storeId: 3, phone: "13800000000" };
+
+test("store list counts administrators from the admins relation", async () => {
+  let include;
+  const prisma = {
+    store: {
+      findMany: async (args) => {
+        include = args.include;
+        return [];
+      },
+      count: async () => 0,
+    },
+  };
+
+  await listStores(prisma, {});
+
+  assert.deepEqual(include, {
+    _count: { select: { admins: true, packages: true, herbs: true, herbLocations: true } },
+  });
+});
 
 test("optional business phones normalize blanks and still reject malformed values", () => {
   assert.equal(normalizeOptionalPhone(undefined), null);
