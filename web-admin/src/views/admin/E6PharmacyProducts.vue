@@ -122,7 +122,7 @@
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
         </el-table-column>
-        <el-table-column label="零售价" width="100" align="right">
+        <el-table-column label="零售价" min-width="100" align="center">
           <template #default="{ row }">¥ {{ Number(row.retailPrice || 0).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="批号数" align="center">
