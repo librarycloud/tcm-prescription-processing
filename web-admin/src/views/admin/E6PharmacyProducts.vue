@@ -70,6 +70,9 @@
             <div class="batch-panel">
               <div class="batch-title">批号库存（{{ row.batchCount }}）</div>
               <el-table :data="row.inventories" border size="small" table-layout="auto">
+                <el-table-column v-if="userStore.isSuperAdmin" label="门店" min-width="120">
+                  <template #default="{ row: batch }">{{ batch.store?.name || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="batchNo" label="批号" min-width="140" />
                 <el-table-column prop="locationName" label="货位" min-width="140" />
                 <el-table-column label="生产日期" width="130">
@@ -93,9 +96,6 @@
               </el-table>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column v-if="userStore.isSuperAdmin" label="门店" min-width="120">
-          <template #default="{ row }">{{ row.stores?.map((store) => store.name).join('、') || row.store?.name || '-' }}</template>
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
         <el-table-column label="商品名称" min-width="150">
