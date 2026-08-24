@@ -194,7 +194,7 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   if (Number(check.status) === 2) throw new AppError("盘点单已完成", 400);
   const productId = toPositiveInt(payload.productId, 0);
   if (!productId) throw new AppError("请选择商品", 400);
-  const product = await prisma.e6PharmacyProduct.findFirst({ where: { id: productId, storeId: check.storeId } });
+  const product = await prisma.e6PharmacyProduct.findUnique({ where: { id: productId } });
   if (!product) throw new AppError("商品不存在或不属于该门店", 404);
   const batchNo = text(payload.batchNo);
   const requestedLocation = payload.locationName === undefined ? undefined : text(payload.locationName);
@@ -322,7 +322,7 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   });
   if (keyword) {
     const products = await prisma.e6PharmacyProduct.findMany({
-      where: { storeId: check.storeId, OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] },
+      where: { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] },
       select: productInclude.select,
       orderBy: { name: "asc" },
       take: 100,

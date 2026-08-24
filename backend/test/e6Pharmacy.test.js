@@ -73,7 +73,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
   );
 
   const findArgs = calls.find((item) => item.type === "findMany").args;
-  assert.equal(findArgs.where.storeId, 3);
+  assert.equal(findArgs.where.inventories.some.storeId, 3);
   assert.deepEqual(findArgs.where.OR, [
     { productCode: { contains: "690000" } },
     { name: { contains: "690000" } },

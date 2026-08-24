@@ -13,13 +13,19 @@ function normalizeBatch(batch) {
     amount: Number(batch.amount || 0),
     receivedAt: batch.receivedAt,
     updatedAt: batch.updatedAt,
+    store: batch.store,
   };
 }
 function normalizeProduct(product) {
   const inventories = (product.inventories || []).map(normalizeBatch);
+  const stores = [...new Map(
+    (product.inventories || [])
+      .map((item) => item.store)
+      .filter(Boolean)
+      .map((store) => [store.id, store]),
+  ).values()];
   return {
     id: product.id,
-    storeId: product.storeId,
     e6ProductId: product.e6ProductId,
     productCode: product.productCode,
     name: product.name,
@@ -37,7 +43,8 @@ function normalizeProduct(product) {
     totalQuantity: inventories.reduce((sum, item) => sum + item.quantity, 0),
     batchCount: inventories.length,
     inventories,
-    store: product.store,
+    store: product.store || stores[0] || null,
+    stores,
   };
 }
 
@@ -59,6 +66,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
     : null;
   const inventoryWhere = {
     quantity: { gt: 0 },
+    ...(scope.storeId ? { storeId: scope.storeId } : {}),
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
   const where = {
@@ -78,9 +86,9 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
     prisma.e6PharmacyProduct.findMany({
       where,
       include: {
-        store: { select: { id: true, name: true, code: true } },
         inventories: {
           where: inventoryWhere,
+          include: { store: { select: { id: true, name: true, code: true } } },
           orderBy: [{ expiryDate: "asc" }, { batchNo: "asc" }],
         },
       },

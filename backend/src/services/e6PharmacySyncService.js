@@ -89,12 +89,12 @@ export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
   let updated = 0;
   for (const item of normalized) {
     const existing = await prisma.e6PharmacyProduct.findUnique({
-      where: { storeId_e6ProductId: { storeId: store.id, e6ProductId: item.e6ProductId } },
+      where: { e6ProductId: item.e6ProductId },
       select: { id: true },
     });
     await prisma.e6PharmacyProduct.upsert({
-      where: { storeId_e6ProductId: { storeId: store.id, e6ProductId: item.e6ProductId } },
-      create: { storeId: store.id, ...item },
+      where: { e6ProductId: item.e6ProductId },
+      create: item,
       update: item,
     });
     if (existing) updated++;
@@ -114,7 +114,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   const fullSyncComplete = payload?.fullSyncComplete === true;
   const productIds = [...new Set(normalized.map((item) => item.e6ProductId))];
   const products = await prisma.e6PharmacyProduct.findMany({
-    where: { storeId: store.id, e6ProductId: { in: productIds } },
+    where: { e6ProductId: { in: productIds } },
     select: { id: true, e6ProductId: true },
   });
   const productMap = new Map(products.map((item) => [item.e6ProductId, item.id]));
@@ -166,7 +166,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   }
 
   await prisma.e6PharmacyProduct.updateMany({
-    where: { storeId: store.id, e6ProductId: { in: productIds } },
+    where: { e6ProductId: { in: productIds } },
     data: { lastInventorySeenAt: new Date() },
   });
   return { received: normalized.length, created, updated, fullSync: payload?.fullSync === true };

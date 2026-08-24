@@ -98,7 +98,6 @@ model Store {
   e6DoctorMappings    E6DoctorMapping[]
   e6OperatorMappings  E6OperatorMapping[]
   e6Imports           E6Import[]
-  e6PharmacyProducts  E6PharmacyProduct[]
   e6PharmacyInventory E6PharmacyInventoryBatch[]
   ydGoodsChecks       YdGoodsCheck[]
   ydGoodsCheckItems   YdGoodsCheckItem[]
@@ -158,7 +157,6 @@ model Product {
 
 model E6PharmacyProduct {
   id                  Int       @id @default(autoincrement())
-  storeId             Int       @map("store_id")
   e6ProductId         Int       @map("e6_product_id")
   productCode         String    @map("product_code") @db.VarChar(64)
   name                String    @db.VarChar(120)
@@ -176,14 +174,13 @@ model E6PharmacyProduct {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  store       Store                      @relation(fields: [storeId], references: [id], onDelete: Restrict)
   inventories E6PharmacyInventoryBatch[]
   checkItems  YdGoodsCheckItem[]
 
-  @@unique([storeId, e6ProductId])
-  @@index([storeId, productCode])
-  @@index([storeId, barcode])
-  @@index([storeId, e6ModifiedAt])
+  @@unique([e6ProductId])
+  @@index([productCode])
+  @@index([barcode])
+  @@index([e6ModifiedAt])
   @@map("e6_pharmacy_products")
 }
 

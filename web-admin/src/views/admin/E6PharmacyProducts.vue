@@ -91,7 +91,7 @@
           </template>
         </el-table-column>
         <el-table-column v-if="userStore.isSuperAdmin" label="门店" min-width="120">
-          <template #default="{ row }">{{ row.store?.name || '-' }}</template>
+          <template #default="{ row }">{{ row.stores?.map((store) => store.name).join('、') || row.store?.name || '-' }}</template>
         </el-table-column>
         <el-table-column prop="productCode" label="商品编号" min-width="130" />
         <el-table-column label="商品名称" min-width="150">
