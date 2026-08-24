@@ -70,7 +70,6 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
   const where = {
-    ...scope,
     inventories: { some: inventoryWhere },
   };
 
