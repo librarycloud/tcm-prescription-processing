@@ -38,7 +38,7 @@ function decorateInventory(row) {
     ...row,
     productionDateText: dateText(row.productionDate),
     expiryDateText: dateText(row.expiryDate),
-    amountText: Number(row.amount || 0).toFixed(2),
+    priceText: row.price === null || row.price === undefined ? '-' : Number(row.price).toFixed(2),
     firstCountText: firstCountQty === null ? '-' : numberText(firstCountQty),
     recountText: recountQty === null ? '-' : numberText(recountQty),
     differenceText: difference === null ? '-' : numberText(difference),

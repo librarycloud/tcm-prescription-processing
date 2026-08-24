@@ -190,6 +190,7 @@ model E6PharmacyProduct {
   manufacturer        String?   @db.VarChar(200)
   categoryAttribute   String?   @map("category_attribute") @db.VarChar(100)
   unit                String?   @db.VarChar(30)
+  retailPrice         Decimal   @default(0) @map("retail_price") @db.Decimal(14, 2)
   e6CreatedAt         DateTime? @map("e6_created_at")
   e6ModifiedAt        DateTime? @map("e6_modified_at")
   lastInventorySeenAt DateTime? @map("last_inventory_seen_at")
@@ -209,14 +210,11 @@ model E6PharmacyCategoryMapping {
   id           Int      @id @default(autoincrement())
   categoryCode String   @unique @map("category_code") @db.VarChar(64)
   categoryName String   @map("category_name") @db.VarChar(100)
-  sort         Int      @default(0)
-  status       Int      @default(1) @db.TinyInt
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   createdBy    Int?     @map("created_by")
   updatedBy    Int?     @map("updated_by")
 
-  @@index([status, sort])
   @@map("e6_pharmacy_category_mappings")
 }
 
@@ -230,7 +228,6 @@ model E6PharmacyInventoryBatch {
   inboundDate    DateTime? @map("inbound_date") @db.Date
   locationName   String    @default("") @map("location_name") @db.VarChar(120)
   quantity       Decimal   @db.Decimal(14, 3)
-  amount         Decimal   @db.Decimal(14, 2)
   receivedAt     DateTime  @default(now()) @map("received_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 

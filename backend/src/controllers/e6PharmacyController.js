@@ -41,7 +41,6 @@ export async function importE6PharmacyBarcodesController(request, reply) {
 export async function listE6PharmacyCategoryMappingsController(request, reply) {
   return ok(reply, await listE6PharmacyCategoryMappings(
     request.server.prisma,
-    request.query?.includeDisabled === "1",
   ));
 }
 

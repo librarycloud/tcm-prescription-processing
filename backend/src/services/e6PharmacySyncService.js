@@ -3,7 +3,7 @@ import { authenticateStore } from "./e6IntegrationService.js";
 
 const PRODUCT_FIELDS = [
   "productCode", "name", "category", "categoryCode", "barcode", "specification",
-  "dosageForm", "manufacturer", "categoryAttribute", "unit", "e6CreatedAt", "e6ModifiedAt",
+  "dosageForm", "manufacturer", "categoryAttribute", "unit", "retailPrice", "e6CreatedAt", "e6ModifiedAt",
 ];
 
 function sameValue(left, right) {
@@ -12,6 +12,7 @@ function sameValue(left, right) {
     const rightTime = right == null ? null : new Date(right).getTime();
     return leftTime === rightTime;
   }
+  if (left && typeof left === "object") return String(left) === String(right);
   return (left ?? null) === (right ?? null);
 }
 
@@ -51,6 +52,7 @@ function normalizeProduct(item) {
     manufacturer: text(item?.manufacturer, 200, "生产厂商"),
     categoryAttribute: text(item?.categoryAttribute, 100, "商品类别属性"),
     unit: text(item?.unit, 30, "单位"),
+    retailPrice: decimal(item?.retailPrice ?? 0, "零售价", 2),
     e6CreatedAt: date(item?.e6CreatedAt, "创建日期"),
     e6ModifiedAt: date(item?.e6ModifiedAt, "修改日期"),
   };
@@ -67,7 +69,6 @@ function normalizeBatch(item) {
     inboundDate: date(item?.inboundDate, "入库时间"),
     locationName: text(item?.locationName, 120, "货位名称") || "",
     quantity,
-    amount: decimal(item?.amount, "库存金额", 2),
   };
 }
 
@@ -81,7 +82,7 @@ export function mergeBatches(items) {
       continue;
     }
     existing.quantity = (Number(existing.quantity) + Number(item.quantity)).toFixed(3);
-    // 金额字段按 E6 原值作为单价保存；同一货位的重复行只汇总库存数量。
+    // 同一货位的重复行只汇总库存数量，商品零售价统一保存在商品表。
   }
   return [...merged.values()];
 }
@@ -154,10 +155,9 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         inboundDate: item.inboundDate,
         locationName: item.locationName,
         quantity: item.quantity,
-        amount: item.amount,
         receivedAt: new Date(),
       },
-      update: { productionDate: item.productionDate, expiryDate: item.expiryDate, inboundDate: item.inboundDate, locationName: item.locationName, quantity: item.quantity, amount: item.amount, receivedAt: new Date() },
+      update: { productionDate: item.productionDate, expiryDate: item.expiryDate, inboundDate: item.inboundDate, locationName: item.locationName, quantity: item.quantity, receivedAt: new Date() },
     });
     if (existing) updated++;
     else created++;

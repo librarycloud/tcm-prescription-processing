@@ -132,7 +132,6 @@ function normalizeBatch(batch) {
     expiryDate: batch.expiryDate,
     inboundDate: batch.inboundDate,
     quantity: Number(batch.quantity || 0),
-    amount: Number(batch.amount || 0),
     receivedAt: batch.receivedAt,
     updatedAt: batch.updatedAt,
     store: batch.store,
@@ -158,6 +157,7 @@ function normalizeProduct(product) {
     manufacturer: product.manufacturer,
     categoryAttribute: product.categoryAttribute,
     unit: product.unit,
+    retailPrice: Number(product.retailPrice || 0),
     e6CreatedAt: product.e6CreatedAt,
     e6ModifiedAt: product.e6ModifiedAt,
     lastInventorySeenAt: product.lastInventorySeenAt,
@@ -205,7 +205,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   }
 
   const categoryMappingQuery = prisma.e6PharmacyCategoryMapping?.findMany
-    ? prisma.e6PharmacyCategoryMapping.findMany({ where: { status: 1 } })
+    ? prisma.e6PharmacyCategoryMapping.findMany({ orderBy: [{ categoryCode: "asc" }] })
     : Promise.resolve([]);
   const [list, total, categoryMappings] = await Promise.all([
     prisma.e6PharmacyProduct.findMany({

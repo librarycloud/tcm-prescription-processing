@@ -5,14 +5,13 @@ import { mergeBatches } from "../src/services/e6PharmacySyncService.js";
 
 test("E6 pharmacy batches keep locations separate", () => {
   const result = mergeBatches([
-    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "2.000", amount: "12.34" },
-    { productCode: "99052", batchNo: "2411061", locationName: "B货位", quantity: "3.000", amount: "12.34" },
-    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "1.000", amount: "12.34" },
+    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "2.000" },
+    { productCode: "99052", batchNo: "2411061", locationName: "B货位", quantity: "3.000" },
+    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "1.000" },
   ]);
 
   assert.equal(result.length, 2);
   assert.equal(result[0].quantity, "3.000");
-  assert.equal(result[0].amount, "12.34");
   assert.equal(result[0].locationName, "A货位");
   assert.equal(result[1].quantity, "3.000");
   assert.equal(result[1].locationName, "B货位");
@@ -33,6 +32,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
     manufacturer: "厂商",
     categoryAttribute: "化学药制剂",
     unit: "盒",
+    retailPrice: "49.50",
     e6CreatedAt: null,
     e6ModifiedAt: null,
     lastInventorySeenAt: null,
@@ -46,7 +46,6 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
         expiryDate: new Date("2029-01-22T00:00:00.000Z"),
         inboundDate: new Date("2026-08-20T00:00:00.000Z"),
         quantity: "3.000",
-        amount: "121.04",
         receivedAt: new Date("2026-08-22T01:00:00.000Z"),
         updatedAt: new Date("2026-08-22T01:00:00.000Z"),
       },
@@ -83,6 +82,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
   assert.equal(result.list[0].totalQuantity, 3);
   assert.equal(result.list[0].inventories[0].batchNo, "G011226");
   assert.equal(result.list[0].unit, "盒");
+  assert.equal(result.list[0].retailPrice, 49.5);
   assert.equal(result.list[0].inventories[0].locationName, "一号货位");
 });
 

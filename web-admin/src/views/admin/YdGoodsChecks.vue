@@ -109,7 +109,7 @@
           <el-table-column label="差异" min-width="80" align="right"><template #default="{ row }"><strong :class="{ danger: row.difference }">{{ row.difference === null ? '-' : qty(row.difference) }}</strong></template></el-table-column>
           <el-table-column label="生产日期" min-width="105"><template #default="{ row }">{{ dateOnly(row.productionDate) }}</template></el-table-column>
           <el-table-column label="有效期" min-width="105"><template #default="{ row }">{{ dateOnly(row.expiryDate) }}</template></el-table-column>
-          <el-table-column label="金额" min-width="90" align="right"><template #default="{ row }">{{ price(row.amount) }}</template></el-table-column>
+          <el-table-column label="零售价" min-width="90" align="right"><template #default="{ row }">{{ price(row.price) }}</template></el-table-column>
           <el-table-column label="状态" min-width="90"><template #default="{ row }">{{ statusText(row.checkStatus, row.needsAdjustment) }}</template></el-table-column>
           <el-table-column label="操作" min-width="220" fixed="right"><template #default="{ row }"><el-button v-if="row.recountQty === null" link type="primary" :icon="Edit" :disabled="row.reviewStatus === 1" @click="openCount(row)">{{ row.firstCountQty !== null ? '复盘' : '盘点' }}</el-button><span v-else class="muted-action">已复盘</span><el-button v-if="row.id" link type="primary" @click="openLocation(row)">货位</el-button><el-button v-if="row.id" link type="success" :disabled="row.reviewStatus === 1 || row.firstCountQty === null" @click="review(row)">二次确认</el-button></template></el-table-column>
         </el-table>

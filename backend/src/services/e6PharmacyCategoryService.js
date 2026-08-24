@@ -19,10 +19,9 @@ function ensureSuperAdmin(actor) {
   if (!isSuperAdmin(actor)) throw new AppError("仅全局管理员可修改 E6 商品分类映射", 403);
 }
 
-export async function listE6PharmacyCategoryMappings(prisma, includeDisabled = false) {
+export async function listE6PharmacyCategoryMappings(prisma) {
   return prisma.e6PharmacyCategoryMapping.findMany({
-    where: includeDisabled ? {} : { status: 1 },
-    orderBy: [{ sort: "asc" }, { categoryCode: "asc" }],
+    orderBy: [{ categoryCode: "asc" }],
   });
 }
 
@@ -43,8 +42,6 @@ export async function saveE6PharmacyCategoryMapping(prisma, idValueOrNull, paylo
   const data = {
     categoryCode,
     categoryName,
-    sort: Number.isInteger(Number(payload.sort ?? current?.sort)) ? Number(payload.sort ?? current?.sort) : 0,
-    status: Number(payload.status ?? current?.status) === 0 ? 0 : 1,
     ...(id ? { updatedBy: Number(actor.id) } : { createdBy: Number(actor.id) }),
   };
   const result = id
@@ -58,8 +55,6 @@ export async function saveE6PharmacyCategoryMapping(prisma, idValueOrNull, paylo
       ? describeChanges(current, result, [
           { key: "categoryCode", label: "分类编号" },
           { key: "categoryName", label: "分类名称" },
-          { key: "sort", label: "排序" },
-          { key: "status", label: "状态", values: { 0: "停用", 1: "启用" } },
         ])
       : "新增 E6 商品分类映射",
   });

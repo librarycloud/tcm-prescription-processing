@@ -23,10 +23,10 @@ function decorateProduct(product) {
   return {
     ...product,
     totalQuantityText: numberText(product.totalQuantity),
+    retailPriceText: Number(product.retailPrice || 0).toFixed(2),
     inventories: (product.inventories || []).map((item) => ({
       ...item,
       quantityText: numberText(item.quantity),
-      amountText: Number(item.amount || 0).toFixed(2),
       productionDateText: dateText(item.productionDate),
       expiryDateText: dateText(item.expiryDate),
       inboundDateText: dateText(item.inboundDate)

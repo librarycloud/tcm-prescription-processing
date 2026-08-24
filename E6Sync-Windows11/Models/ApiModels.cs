@@ -14,6 +14,7 @@ namespace E6Sync.Models
         public string manufacturer { get; set; }
         public string categoryAttribute { get; set; }
         public string unit { get; set; }
+        public string retailPrice { get; set; }
         public string e6CreatedAt { get; set; }
         public string e6ModifiedAt { get; set; }
     }
@@ -27,7 +28,6 @@ namespace E6Sync.Models
         public string expiryDate { get; set; }
         public string inboundDate { get; set; }
         public string quantity { get; set; }
-        public string amount { get; set; }
     }
 
     public sealed class E6PharmacyInventorySnapshot

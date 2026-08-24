@@ -55,7 +55,7 @@ function normalizeItem(item, counted = true) {
     productId: item.productId,
     product: item.product || null,
     price: item.price === null || item.price === undefined
-      ? (item.amount === null || item.amount === undefined ? null : Number(item.amount))
+      ? (item.product?.retailPrice === null || item.product?.retailPrice === undefined ? null : Number(item.product.retailPrice))
       : Number(item.price),
     batchNo: item.batchNo || "",
     systemLocationName: item.systemLocationName || "",
@@ -84,33 +84,16 @@ function normalizeItem(item, counted = true) {
 const productInclude = {
   select: {
     id: true, productCode: true, name: true, barcode: true,
-    specification: true, dosageForm: true, manufacturer: true, categoryAttribute: true, unit: true,
+    specification: true, dosageForm: true, manufacturer: true, categoryAttribute: true, unit: true, retailPrice: true,
   },
 };
 
-function inventoryPriceKey(productId, batchNo, locationName) {
-  return `${productId}|${text(batchNo)}|${text(locationName)}`;
-}
-
-async function addInventoryPrices(prisma, rows, storeId) {
-  const productIds = [...new Set(rows.map((row) => Number(row.productId)).filter(Boolean))];
-  if (!productIds.length) return rows;
-  const inventories = await prisma.e6PharmacyInventoryBatch.findMany({
-    where: { storeId, productId: { in: productIds } },
-    select: { productId: true, batchNo: true, locationName: true, amount: true },
-  });
-  const exact = new Map();
-  const byBatch = new Map();
-  inventories.forEach((inventory) => {
-    const price = Number(inventory.amount || 0);
-    exact.set(inventoryPriceKey(inventory.productId, inventory.batchNo, inventory.locationName), price);
-    if (!byBatch.has(inventoryPriceKey(inventory.productId, inventory.batchNo, ""))) byBatch.set(inventoryPriceKey(inventory.productId, inventory.batchNo, ""), price);
-  });
+function addInventoryPrices(rows) {
   return rows.map((row) => ({
     ...row,
-    price: exact.get(inventoryPriceKey(row.productId, row.batchNo, row.systemLocationName))
-      ?? byBatch.get(inventoryPriceKey(row.productId, row.batchNo, ""))
-      ?? null,
+    price: row.product?.retailPrice === null || row.product?.retailPrice === undefined
+      ? null
+      : Number(row.product.retailPrice),
   }));
 }
 
@@ -171,7 +154,7 @@ export async function getGoodsCheck(prisma, actor, id) {
   const items = await prisma.ydGoodsCheckItem.findMany({
     where: { checkId: check.id }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }],
   });
-  const pricedItems = await addInventoryPrices(prisma, items, check.storeId);
+  const pricedItems = addInventoryPrices(items);
   return { ...check, items: pricedItems.map(normalizeItem) };
 }
 
@@ -179,9 +162,9 @@ async function inventorySnapshot(prisma, check, productId, batchNo, locationName
   const where = { storeId: check.storeId, productId, batchNo };
   if (locationName !== undefined && locationName !== null) where.locationName = text(locationName);
   const rows = await prisma.e6PharmacyInventoryBatch.findMany({ where, orderBy: { id: "asc" } });
-  if (!rows.length) return { quantity: 0, locationName: text(locationName), amount: 0 };
-  if (rows.length === 1) return { quantity: Number(rows[0].quantity || 0), locationName: rows[0].locationName || "", amount: Number(rows[0].amount || 0) };
-  return { quantity: rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0), locationName: "", amount: rows.reduce((sum, row) => sum + Number(row.amount || 0), 0) };
+  if (!rows.length) return { quantity: 0, locationName: text(locationName) };
+  if (rows.length === 1) return { quantity: Number(rows[0].quantity || 0), locationName: rows[0].locationName || "" };
+  return { quantity: rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0), locationName: "" };
 }
 
 function checkStatusForInitial(systemQty, countedQty) {
@@ -269,7 +252,7 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
   const locationStatus = query.locationStatus ?? query.location_status;
   if (locationStatus !== undefined && locationStatus !== "") where.locationStatus = Number(locationStatus);
   const rows = await prisma.ydGoodsCheckItem.findMany({ where, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }] });
-  const pricedRows = missingRequested ? rows : await addInventoryPrices(prisma, rows, check.storeId);
+  const pricedRows = missingRequested ? rows : addInventoryPrices(rows);
   let list = pricedRows.map(normalizeItem);
   const status = missingRequested ? "missing" : text(query.status);
   if (status === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
@@ -288,7 +271,7 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
 async function missingCandidates(prisma, check, rows, keyword) {
   const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(keyword ? { product: { OR: [{ productCode: { contains: keyword } }, { name: { contains: keyword } }, { barcode: { contains: keyword } }] } } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
   const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationName)));
-  return inventories.filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationName))).map((row) => normalizeItem({ checkId: check.id, storeId: check.storeId, productId: row.productId, product: row.product, batchNo: row.batchNo, systemLocationName: row.locationName, systemQty: row.quantity, amount: row.amount, firstCountQty: null, checkStatus: 0 } , false));
+  return inventories.filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationName))).map((row) => normalizeItem({ checkId: check.id, storeId: check.storeId, productId: row.productId, product: row.product, batchNo: row.batchNo, systemLocationName: row.locationName, systemQty: row.quantity, firstCountQty: null, checkStatus: 0 } , false));
 }
 
 export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {}) {
@@ -343,7 +326,7 @@ export async function finishGoodsCheck(prisma, actor, checkId) {
 export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   const check = await getCheck(prisma, actor, checkId);
   const rows = await prisma.ydGoodsCheckItem.findMany({ where: { checkId: check.id }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
-  const pricedRows = await addInventoryPrices(prisma, rows, check.storeId);
+  const pricedRows = addInventoryPrices(rows);
   let list = pricedRows.map(normalizeItem);
   if (type === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
   if (type === "adjustment") list = list.filter((row) => row.needsAdjustment);

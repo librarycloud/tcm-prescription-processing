@@ -219,7 +219,7 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
             var result = new E6PharmacyProductSnapshot();
             var cursorBytes = DecodeCursor(cursor);
             var cursorClause = cursorBytes == null ? "" : " AND p.[_c_] > @cursor ";
-            var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[创建日期], p.[修改日期], p.[_c_]
+            var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
 FROM dbo.[DC商品] p
 WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0) " + cursorClause + @"
  ORDER BY p.[_c_];";
@@ -244,6 +244,7 @@ WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID
                             manufacturer = ToNullableText(reader["生产厂商"]),
                             categoryAttribute = ToNullableText(reader["商品类别属性"]),
                             unit = ToNullableText(reader["单位"]),
+                            retailPrice = reader.IsDBNull(reader.GetOrdinal("零售价")) ? "0" : Convert.ToDecimal(reader["零售价"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
                             e6CreatedAt = ToIso(reader["创建日期"]),
                             e6ModifiedAt = ToIso(reader["修改日期"])
                         });
@@ -269,7 +270,7 @@ WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID
                     (cursorBytes == null ? "" : "changed.[_c_] > @cursor") +
                     (cursorBytes == null || locationCursorBytes == null ? "" : " OR ") +
                     (locationCursorBytes == null ? "" : "changedLocation.[_c_] > @locationCursor") + ")") + @") ";
-            var sql = @"SELECT p.[编号] AS [商品编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[金额], i.[_c_], l.[_c_] AS [货位_c_]
+            var sql = @"SELECT p.[编号] AS [商品编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[_c_], l.[_c_] AS [货位_c_]
 FROM dbo.[AC货位商品帐] i
 LEFT JOIN dbo.[DC商品] p ON p.[ID] = i.[商品id]
 LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id]
@@ -292,8 +293,7 @@ WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
                             productionDate = ToDate(reader["生产日期"]),
                             expiryDate = ToDate(reader["有效期至"]),
                             inboundDate = ToDate(reader["入库时间"]),
-                            quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
-                            amount = Convert.ToDecimal(reader["金额"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                            quantity = Convert.ToDecimal(reader["数量"]).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
                         });
                         result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
                         if (!reader.IsDBNull(reader.GetOrdinal("货位_c_"))) result.LocationCursor = MaxCursor(result.LocationCursor, reader["货位_c_"]);
