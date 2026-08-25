@@ -5,7 +5,12 @@ import {
   RECORD_STATUS,
   RECORD_STATUS_VALUES,
 } from "../constants/recordStatus.js";
-import { toPositiveInt, validatePhone, normalizeOptionalUsername } from "../utils/validators.js";
+import {
+  toPositiveInt,
+  normalizeOptionalPhone,
+  normalizeOptionalUsername,
+  requireAccountIdentifier,
+} from "../utils/validators.js";
 import { describeChanges, recordOperation } from "./operationLogService.js";
 
 const select = {
@@ -62,13 +67,15 @@ async function resolveStoreId(prisma, actor, requestedStoreId, current = null) {
 async function normalizeData(prisma, actor, payload, current = null, creating = false) {
   const data = {};
   if (creating || payload.phone !== undefined) {
-    const phone = String(payload.phone || "").trim();
-    validatePhone(phone);
-    const owner = await prisma.admin.findFirst({
-      where: { phone, ...(current?.id ? { id: { not: current.id } } : {}) },
-      select: { id: true },
-    });
-    if (owner) throw new AppError("手机号已被使用", 409);
+    const rawPhone = payload.phone === undefined && current ? current.phone : payload.phone;
+    const phone = normalizeOptionalPhone(rawPhone);
+    if (phone) {
+      const owner = await prisma.admin.findFirst({
+        where: { phone, ...(current?.id ? { id: { not: current.id } } : {}) },
+        select: { id: true },
+      });
+      if (owner) throw new AppError("手机号已被使用", 409);
+    }
     data.phone = phone;
   }
   if (creating || payload.username !== undefined) {
@@ -84,6 +91,10 @@ async function normalizeData(prisma, actor, payload, current = null, creating = 
     }
     data.username = username;
   }
+  requireAccountIdentifier(
+    data.phone !== undefined ? data.phone : current?.phone,
+    data.username !== undefined ? data.username : current?.username,
+  );
   if (creating || payload.storeId !== undefined) {
     data.storeId = await resolveStoreId(prisma, actor, payload.storeId, current);
   }
@@ -276,7 +287,7 @@ export async function updateStoreAdmin(prisma, id, payload, actor, authSessions 
   const shouldRevokeTokens = Boolean(
     data.password ||
     data.username !== undefined && data.username !== current.username ||
-    data.phone !== current.phone ||
+    (data.phone !== undefined && data.phone !== current.phone) ||
     Number(data.role) !== Number(current.role) ||
     Number(data.status) !== Number(current.status) ||
     Number(data.storeId) !== Number(current.storeId)

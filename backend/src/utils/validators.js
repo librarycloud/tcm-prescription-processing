@@ -41,6 +41,12 @@ export function normalizeOptionalPhone(phone, fieldName = '手机号') {
   return normalized;
 }
 
+export function requireAccountIdentifier(phone, username) {
+  if (!phone && !username) {
+    throw new AppError('手机号和用户名至少填写一个', 400);
+  }
+}
+
 const EMAIL_LOCAL_ALLOWED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.!#$%&'*+-/=?^_`{|}~";
 const EMAIL_DOMAIN_ALLOWED = 'abcdefghijklmnopqrstuvwxyz0123456789-';
 

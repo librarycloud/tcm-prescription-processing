@@ -35,7 +35,7 @@ model Admin {
   id              Int       @id @default(autoincrement())
   username        String?   @unique @db.VarChar(64)
   password        String    @db.VarChar(255)
-  phone           String    @unique @db.VarChar(20)
+  phone           String?   @unique @db.VarChar(20)
   openid          String?   @unique @db.VarChar(64)
   unionid         String?   @unique @db.VarChar(64)
   wechatBoundAt   DateTime? @map("wechat_bound_at")

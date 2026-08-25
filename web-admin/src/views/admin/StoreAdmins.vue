@@ -251,12 +251,18 @@ const rules = {
     trigger: 'blur'
   }],
   phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
+    {
+      validator: (_rule, value, callback) => {
+        if (!value || isValidPhone(value)) callback();
+        else callback(new Error('请输入正确的手机号'));
+      },
+      trigger: 'blur'
+    },
     {
       validator: (_rule, value, callback) =>
-        isValidPhone(value) ? callback() : callback(new Error('请输入正确的手机号')),
-      trigger: 'blur'
-    }
+        value || form.username ? callback() : callback(new Error('手机号和用户名至少填写一个')),
+      trigger: ['blur', 'change']
+    },
   ],
   storeId: [{ required: true, message: '请选择所属门店', trigger: 'change' }],
   password: [

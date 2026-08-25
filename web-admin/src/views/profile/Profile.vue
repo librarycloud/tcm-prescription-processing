@@ -96,13 +96,19 @@ const rules = {
     else callback(new Error('用户名需为2-64位英文数字且不能是纯数字'));
   }, trigger: 'blur' }],
   phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
     {
       validator: (_rule, value, callback) => {
-        if (!isValidPhone(value)) callback(new Error('请输入正确的手机号'));
-        else callback();
+        if (!value || isValidPhone(value)) callback();
+        else callback(new Error('请输入正确的手机号'));
       },
       trigger: 'blur'
+    },
+    {
+      validator: (_rule, value, callback) => {
+        if (value || form.username) callback();
+        else callback(new Error('手机号和用户名至少填写一个'));
+      },
+      trigger: ['blur', 'change']
     }
   ],
   password: [

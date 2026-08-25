@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { AppError } from '../utils/appError.js';
-import { validatePhone, normalizeOptionalUsername } from '../utils/validators.js';
+import { validatePhone, normalizeOptionalPhone, normalizeOptionalUsername, requireAccountIdentifier } from '../utils/validators.js';
 import { publicUser, signLoginToken } from './authService.js';
 import { ROLES } from '../constants/roles.js';
 
@@ -56,14 +56,17 @@ export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, 
   if (!current) throw new AppError('用户不存在', 404);
 
   const data = {};
-  const phoneChanged = payload.phone !== undefined && String(payload.phone).trim() !== current.phone;
+  const phoneChanged = payload.phone !== undefined &&
+    (isAdmin ? normalizeOptionalPhone(payload.phone) : String(payload.phone).trim()) !== current.phone;
 
   if (payload.phone !== undefined) {
-    validatePhone(payload.phone);
-    const phone = String(payload.phone).trim();
+    const phone = isAdmin ? normalizeOptionalPhone(payload.phone) : String(payload.phone).trim();
+    if (!isAdmin) validatePhone(phone);
     if (phoneChanged) {
-      const owner = await repository.findUnique({ where: { phone } });
-      if (owner && owner.id !== current.id) throw new AppError('手机号已被使用', 400);
+      if (phone) {
+        const owner = await repository.findUnique({ where: { phone } });
+        if (owner && owner.id !== current.id) throw new AppError('手机号已被使用', 400);
+      }
     }
     data.phone = phone;
   }
@@ -78,6 +81,13 @@ export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, 
       if (owner) throw new AppError('用户名已被使用', 409);
     }
     data.username = username;
+  }
+
+  if (isAdmin) {
+    requireAccountIdentifier(
+      data.phone !== undefined ? data.phone : current.phone,
+      data.username !== undefined ? data.username : current.username,
+    );
   }
 
   if (payload.nickname !== undefined) {

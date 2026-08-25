@@ -157,10 +157,6 @@ Page({
 
   async submit() {
     const { phone, username, nickname, password, confirmPassword } = this.data.form;
-    if (!phone) {
-      wx.showToast({ title: '请输入手机号', icon: 'none' });
-      return;
-    }
     if (!password && confirmPassword) {
       wx.showToast({ title: '请先输入新密码', icon: 'none' });
       return;
@@ -176,6 +172,10 @@ Page({
 
     if (username && (!/^[A-Za-z0-9]{2,64}$/.test(username) || !/[A-Za-z]/.test(username))) {
       wx.showToast({ title: '用户名需为2-64位英文和数字，且不能是纯数字', icon: 'none' });
+      return;
+    }
+    if (!phone && !username) {
+      wx.showToast({ title: '手机号和用户名至少填写一个', icon: 'none' });
       return;
     }
     const payload = { phone, username: username || null, nickname };
