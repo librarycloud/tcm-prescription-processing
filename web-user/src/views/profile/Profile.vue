@@ -24,6 +24,7 @@
 
       <el-form v-else ref="formRef" :model="form" :rules="rules" label-width="96px" @submit.prevent>
         <el-form-item label="昵称" prop="nickname"><el-input v-model.trim="form.nickname" maxlength="30" show-word-limit /></el-form-item>
+        <el-form-item label="用户名" prop="username"><el-input v-model.trim="form.username" maxlength="64" placeholder="可选，仅英文和数字且不能是纯数字" /></el-form-item>
         <el-form-item label="手机号" prop="phone"><el-input v-model.trim="form.phone" maxlength="11" /></el-form-item>
         <el-form-item label="邮箱" prop="email">
           <div class="email-control">
@@ -66,6 +67,7 @@ let countdownTimer = null;
 
 const form = reactive({
   nickname: '',
+  username: '',
   phone: '',
   password: '',
   confirmPassword: '',
@@ -78,6 +80,10 @@ function isValidEmail(value) {
 }
 
 const rules = {
+  username: [{ validator: (_rule, value, callback) => {
+    if (!value || (/^[A-Za-z0-9]{2,64}$/.test(value) && /[A-Za-z]/.test(value))) callback();
+    else callback(new Error('用户名需为2-64位英文数字且不能是纯数字'));
+  }, trigger: 'blur' }],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     {
@@ -122,6 +128,7 @@ const rules = {
 function fillForm() {
   form.nickname = userStore.user?.nickname || '';
   form.phone = userStore.user?.phone || '';
+  form.username = userStore.user?.username || '';
   form.password = '';
   form.confirmPassword = '';
   form.email = userStore.user?.email || '';
@@ -184,6 +191,7 @@ async function handleSubmit() {
   try {
     const data = {
       nickname: form.nickname,
+      username: form.username || null,
       phone: form.phone
     };
     if (form.password) data.password = form.password;

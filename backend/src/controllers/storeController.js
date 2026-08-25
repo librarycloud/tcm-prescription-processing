@@ -16,11 +16,26 @@ export async function createStoreController(request, reply) {
 export async function updateStoreController(request, reply) {
   return ok(
     reply,
-    await updateStore(request.server.prisma, request.params.id, request.body || {}, request.user),
+    await updateStore(
+      request.server.prisma,
+      request.params.id,
+      request.body || {},
+      request.user,
+      request.server.authSessions,
+    ),
     '更新成功'
   );
 }
 
 export async function deleteStoreController(request, reply) {
-  return ok(reply, await deleteStore(request.server.prisma, request.params.id, request.user), '删除成功');
+  return ok(
+    reply,
+    await deleteStore(
+      request.server.prisma,
+      request.params.id,
+      request.user,
+      request.server.authSessions,
+    ),
+    '删除成功',
+  );
 }

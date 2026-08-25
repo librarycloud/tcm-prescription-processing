@@ -6,6 +6,19 @@ import {
 import { toPositiveInt } from "../utils/validators.js";
 import { describeChanges, recordOperation } from "./operationLogService.js";
 
+async function revokeStoreAdminSessions(prisma, authSessions, storeId) {
+  if (!authSessions?.revokeAccount) return;
+  const accounts = await prisma.admin.findMany({
+    where: { storeId: Number(storeId) },
+    select: { id: true },
+  });
+  await Promise.all(
+    accounts.map((account) =>
+      authSessions.revokeAccount({ accountType: "admin", accountId: account.id }),
+    ),
+  );
+}
+
 function normalizeStatus(value, fallback = 1) {
   if (value === undefined || value === null || value === "") return fallback;
   const status = Number(value);
@@ -116,7 +129,7 @@ export async function createStore(prisma, payload, actor) {
   return created;
 }
 
-export async function updateStore(prisma, id, payload, actor) {
+export async function updateStore(prisma, id, payload, actor, authSessions = null) {
   const storeId = Number(id);
   const current = await getStore(prisma, storeId);
   const data = normalizeStoreData(payload, true);
@@ -140,6 +153,13 @@ export async function updateStore(prisma, id, payload, actor) {
     data,
     include: storeInclude(),
   });
+  if (
+    data.status !== undefined &&
+    Number(data.status) !== Number(current.status) &&
+    Number(data.status) !== RECORD_STATUS.ENABLED
+  ) {
+    await revokeStoreAdminSessions(prisma, authSessions, storeId);
+  }
   await recordOperation(prisma, actor, {
     module: "store",
     action: "update",
@@ -156,7 +176,7 @@ export async function updateStore(prisma, id, payload, actor) {
   return updated;
 }
 
-export async function deleteStore(prisma, id, actor) {
+export async function deleteStore(prisma, id, actor, authSessions = null) {
   const store = await getStore(prisma, id);
   if (store._count.admins > 0 || store._count.packages > 0 || store._count.herbs > 0) {
     throw new AppError("门店存在管理员、业务数据或斗谱，不能删除，可改为停用", 409);
@@ -170,6 +190,7 @@ export async function deleteStore(prisma, id, actor) {
       deletedBy: actor?.id ? Number(actor.id) : null,
     },
   });
+  await revokeStoreAdminSessions(prisma, authSessions, store.id);
   await recordOperation(prisma, actor, {
     module: "store",
     action: "delete",

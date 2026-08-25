@@ -23,7 +23,7 @@
         <t-button size="small" theme="{{bindMethod === 'password' ? 'primary' : 'default'}}" data-method="password" bind:tap="switchBindMethod">账号密码</t-button>
         <t-button size="small" theme="{{bindMethod === 'pickup' ? 'primary' : 'default'}}" data-method="pickup" bind:tap="switchBindMethod">取货码</t-button>
       </view>
-      <t-input label="手机号" value="{{phone}}" placeholder="请输入账号手机号" type="number" bind:change="onPhoneChange" />
+      <t-input label="{{bindMethod === 'pickup' ? '手机号' : '账号'}}" value="{{bindMethod === 'pickup' ? phone : identifier}}" placeholder="{{bindMethod === 'pickup' ? '请输入账号手机号' : '请输入手机号或用户名'}}" type="{{bindMethod === 'pickup' ? 'number' : 'text'}}" bind:change="onPhoneChange" />
       <view wx:if="{{bindMethod === 'password'}}" class="password-field">
         <t-input label="密码" value="{{password}}" placeholder="请输入账号密码" type="{{passwordVisible ? 'text' : 'password'}}" bind:change="onPasswordChange" />
         <view class="password-eye" bindtap="togglePasswordVisible">
@@ -38,7 +38,7 @@
   </view>
 
   <view class="app-card" wx:if="{{mode === 'admin'}}">
-    <t-input label="手机号" value="{{adminPhone}}" placeholder="请输入管理员手机号" type="number" bind:change="onAdminPhoneChange" />
+    <t-input label="账号" value="{{adminIdentifier}}" placeholder="请输入手机号或用户名" bind:change="onAdminPhoneChange" />
     <t-input label="密码" value="{{adminPassword}}" placeholder="请输入管理员密码" type="password" bind:change="onAdminPasswordChange" />
     <view class="login-action">
       <t-button theme="primary" block loading="{{loading}}" bind:tap="submitAdmin">管理员登录</t-button>

@@ -27,7 +27,7 @@ async function main() {
   await prisma.user.upsert({
     where: { phone: '13800000000' },
     update: {
-      username: '13800000000',
+      username: null,
       password,
       role: 0,
       storeId: null,
@@ -35,7 +35,7 @@ async function main() {
       nickname: '默认管理员'
     },
     create: {
-      username: '13800000000',
+      username: null,
       password,
       phone: '13800000000',
       role: 0,

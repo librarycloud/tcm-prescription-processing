@@ -10,8 +10,8 @@
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" size="large" @submit.prevent="handleLogin">
-        <el-form-item prop="phone">
-          <el-input v-model.trim="form.phone" placeholder="请输入手机号" :prefix-icon="Iphone" />
+        <el-form-item prop="identifier">
+          <el-input v-model.trim="form.identifier" placeholder="请输入手机号或用户名" :prefix-icon="Iphone" />
         </el-form-item>
         <el-form-item prop="password">
           <el-input
@@ -45,7 +45,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Iphone, Lock } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
-import { isValidPhone } from '@/utils/phone';
 
 const router = useRouter();
 const route = useRoute();
@@ -55,7 +54,7 @@ const loading = ref(false);
 const remember = ref(true);
 
 const form = reactive({
-  phone: '',
+  identifier: '',
   password: ''
 });
 
@@ -67,16 +66,7 @@ function getUserRedirectTarget(redirect) {
 }
 
 const rules = {
-  phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    {
-      validator: (_rule, value, callback) => {
-        if (!isValidPhone(value)) callback(new Error('请输入正确的手机号'));
-        else callback();
-      },
-      trigger: 'blur'
-    }
-  ],
+  identifier: [{ required: true, message: '请输入手机号或用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 };
 
@@ -90,7 +80,7 @@ async function handleLogin() {
   try {
     await userStore.login(
       {
-        phone: form.phone,
+        identifier: form.identifier,
         password: form.password
       },
       remember.value

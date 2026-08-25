@@ -859,7 +859,7 @@ async function createPackageForPlan(prisma, actor, plan) {
       where: { phone: normalizedPhone },
       update: {},
       create: {
-        username: normalizedPhone,
+        username: null,
         phone: normalizedPhone,
         password: await bcrypt.hash(
           `processing-package:${normalizedPhone}:${Date.now()}`,

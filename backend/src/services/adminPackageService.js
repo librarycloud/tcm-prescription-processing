@@ -374,7 +374,7 @@ export async function createPackage(prisma, actor, payload) {
         where: { phone: normalizedPhone },
         update: {},
         create: {
-          username: normalizedPhone,
+          username: null,
           phone: normalizedPhone,
           password: await bcrypt.hash(
             `admin-package:${normalizedPhone}:${Date.now()}`,

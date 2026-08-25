@@ -19,6 +19,7 @@
       </view>
       <view class="info-value">{{user.phone || '-'}}</view>
     </view>
+    <view class="info-row"><view class="info-label"><view class="info-label-text"><text>用</text><text>户</text><text>名</text></view><text class="info-label-colon">：</text></view><view class="info-value">{{user.username || '未设置'}}</view></view>
     <view class="info-row">
       <view class="info-label">
         <view class="info-label-text">
@@ -89,6 +90,7 @@
       </view>
       <input class="form-control" value="{{form.phone}}" type="number" placeholder="请输入手机号" data-field="phone" bindinput="onChange" />
     </view>
+    <view class="form-row"><view class="form-label"><view class="form-label-text"><text>用</text><text>户</text><text>名</text></view><text class="form-label-colon">：</text></view><input class="form-control" value="{{form.username}}" maxlength="64" placeholder="可选，英文和数字，不能是纯数字" data-field="username" bindinput="onChange" /></view>
     <view class="form-row">
       <view class="form-label">
         <view class="form-label-text">

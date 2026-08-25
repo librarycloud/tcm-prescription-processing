@@ -51,41 +51,47 @@ export async function signLoginToken(jwt, authSessions, user) {
 }
 
 export async function login(prisma, jwt, authSessions, payload) {
-  const { phone, password } = payload;
-  validatePhone(phone);
+  const identifier = String(payload.identifier ?? '').trim();
+  const { password } = payload;
+  required(identifier, '手机号或用户名');
+  if (identifier.length > 64) throw new AppError('手机号或用户名格式不正确', 400);
   required(password, "密码");
 
-  const user = await prisma.admin.findUnique({
-    where: { phone },
+  const account = await prisma.admin.findFirst({
+    where: { OR: [{ username: identifier }, { phone: identifier }] },
     include: { store: true },
   });
-  if (!user || !isAdmin(user) || user.status !== RECORD_STATUS.ENABLED) {
+  if (!account || !isAdmin(account) || account.status !== RECORD_STATUS.ENABLED) {
     throw new AppError("手机号或密码错误", 401);
   }
   if (
-    isStoreMember(user) &&
-    (!user.storeId ||
-      user.store?.status !== RECORD_STATUS.ENABLED ||
-      user.store?.deletedAt)
+    isStoreMember(account) &&
+    (!account.storeId ||
+      account.store?.status !== RECORD_STATUS.ENABLED ||
+      account.store?.deletedAt)
   ) {
     throw new AppError("账号所属门店已停用，请联系全局管理员", 403);
   }
 
-  const matched = await bcrypt.compare(password, user.password);
+  const matched = await bcrypt.compare(password, account.password);
   if (!matched) throw new AppError("手机号或密码错误", 401);
 
   return {
-    token: await signLoginToken(jwt, authSessions, user),
-    user: publicUser(user),
+    token: await signLoginToken(jwt, authSessions, account),
+    user: publicUser(account),
   };
 }
 
 export async function userLogin(prisma, jwt, authSessions, payload) {
-  const { phone, password } = payload;
-  validatePhone(phone);
+  const identifier = String(payload.identifier ?? '').trim();
+  const { password } = payload;
+  required(identifier, '手机号或用户名');
+  if (identifier.length > 64) throw new AppError('手机号或用户名格式不正确', 400);
   required(password, "密码");
 
-  const user = await prisma.user.findUnique({ where: { phone } });
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ username: identifier }, { phone: identifier }] },
+  });
   if (!user || user.status !== RECORD_STATUS.ENABLED) {
     throw new AppError("手机号或密码错误", 401);
   }
@@ -305,7 +311,7 @@ export async function bindWechatByPickupCode(prisma, jwt, authSessions, payload)
       })
     : await prisma.user.create({
         data: {
-          username: normalizedPhone,
+          username: null,
           password: placeholderPassword,
           phone: normalizedPhone,
           openid: decoded.openid,

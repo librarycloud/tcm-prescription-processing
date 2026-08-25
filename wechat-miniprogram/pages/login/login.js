@@ -9,11 +9,12 @@ Page({
     requiresBind: false,
     bindToken: '',
     bindMethod: 'password',
+    identifier: '',
     phone: '',
     password: '',
     pickupCode: '',
     passwordVisible: false,
-    adminPhone: '13800000000',
+    adminIdentifier: '',
     adminPassword: '',
     agreeProtocol: true,
     loading: false
@@ -36,7 +37,8 @@ Page({
   },
 
   onPhoneChange(e) {
-    this.setData({ phone: e.detail.value });
+    const field = this.data.bindMethod === 'pickup' ? 'phone' : 'identifier';
+    this.setData({ [field]: e.detail.value });
   },
 
   onPasswordChange(e) {
@@ -56,7 +58,7 @@ Page({
   },
 
   onAdminPhoneChange(e) {
-    this.setData({ adminPhone: e.detail.value });
+    this.setData({ adminIdentifier: e.detail.value });
   },
 
   onAdminPasswordChange(e) {
@@ -94,7 +96,7 @@ Page({
       const code = await getWechatLoginCode();
       const data = await wechatLogin(code);
       if (data.requiresBind) {
-        this.setData({ requiresBind: true, bindToken: data.bindToken, password: '', pickupCode: '' });
+        this.setData({ requiresBind: true, bindToken: data.bindToken, password: '', pickupCode: '', phone: '', identifier: '' });
         wx.showToast({ title: '请选择绑定方式', icon: 'none' });
         return;
       }
@@ -107,7 +109,7 @@ Page({
 
   async submitBind() {
     if (!this.ensureProtocol()) return;
-    if (!this.data.phone) {
+    if (this.data.bindMethod === 'pickup' && !this.data.phone) {
       wx.showToast({ title: '请输入手机号', icon: 'none' });
       return;
     }
@@ -134,7 +136,7 @@ Page({
         return;
       }
       const account = await userLogin({
-        phone: this.data.phone,
+        identifier: this.data.identifier,
         password: this.data.password
       });
       setSession(account);
@@ -150,15 +152,15 @@ Page({
 
   async submitAdmin() {
     if (!this.ensureProtocol()) return;
-    if (!this.data.adminPhone || !this.data.adminPassword) {
-      wx.showToast({ title: '请输入管理员手机号和密码', icon: 'none' });
+    if (!this.data.adminIdentifier || !this.data.adminPassword) {
+      wx.showToast({ title: '请输入管理员账号和密码', icon: 'none' });
       return;
     }
 
     this.setData({ loading: true });
     try {
       const data = await login({
-        phone: this.data.adminPhone,
+        identifier: this.data.adminIdentifier,
         password: this.data.adminPassword
       });
       setSession(data);

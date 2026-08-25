@@ -13,7 +13,7 @@ import { recordOperation } from '../services/operationLogService.js';
 import { ok } from '../utils/response.js';
 
 async function runLoggedLogin(request, loginType, operation) {
-  const attemptedPhone = String(request.body?.phone || '').trim() || null;
+  const attemptedIdentifier = String(request.body?.identifier || '').trim() || null;
   try {
     const data = await operation();
     const completed = Boolean(data?.token && data?.user);
@@ -21,7 +21,7 @@ async function runLoggedLogin(request, loginType, operation) {
       userId: data?.user?.id,
       accountType: data?.user?.role === 1 ? 'user' : 'admin',
       storeId: data?.user?.storeId,
-      phone: data?.user?.phone || attemptedPhone,
+      phone: data?.user?.phone || attemptedIdentifier,
       loginType,
       success: completed,
       message: completed ? '登录成功' : '需要绑定用户信息'
@@ -41,7 +41,7 @@ async function runLoggedLogin(request, loginType, operation) {
     return data;
   } catch (error) {
     await recordLoginLog(request, {
-      phone: attemptedPhone,
+      phone: attemptedIdentifier,
       loginType,
       success: false,
       message: error.message || '登录失败'

@@ -23,6 +23,7 @@ Page({
     avatarText: '我',
     form: {
       phone: '',
+      username: '',
       nickname: '',
       email: '',
       emailCode: '',
@@ -41,6 +42,7 @@ Page({
       form: {
         ...this.data.form,
         phone: user.phone || '',
+        username: user.username || '',
         nickname: user.nickname || '',
         email: user.email || ''
       }
@@ -58,6 +60,7 @@ Page({
         form: {
           ...this.data.form,
           phone: user.phone || '',
+          username: user.username || '',
           nickname: user.nickname || '',
           email: user.email || ''
         }
@@ -79,6 +82,7 @@ Page({
       passwordVisible: false,
       form: {
         phone: this.data.user.phone || '',
+        username: this.data.user.username || '',
         nickname: this.data.user.nickname || '',
         email: this.data.user.email || '',
         emailCode: '',
@@ -94,6 +98,7 @@ Page({
       passwordVisible: false,
       form: {
         phone: this.data.user.phone || '',
+        username: this.data.user.username || '',
         nickname: this.data.user.nickname || '',
         email: this.data.user.email || '',
         emailCode: '',
@@ -200,7 +205,7 @@ Page({
   },
 
   async submit() {
-    const { phone, nickname, email, password, confirmPassword } = this.data.form;
+    const { phone, username, nickname, email, password, confirmPassword } = this.data.form;
     if (!phone) {
       wx.showToast({ title: '请输入手机号', icon: 'none' });
       return;
@@ -222,7 +227,11 @@ Page({
       return;
     }
 
-    const payload = { phone, nickname };
+    if (username && (!/^[A-Za-z0-9]{2,64}$/.test(username) || !/[A-Za-z]/.test(username))) {
+      wx.showToast({ title: '用户名需为2-64位英文和数字，且不能是纯数字', icon: 'none' });
+      return;
+    }
+    const payload = { phone, username: username || null, nickname };
     if (password) payload.password = password;
 
     this.setData({ saving: true });
@@ -236,6 +245,7 @@ Page({
         avatarText: data.user.nickname ? data.user.nickname.slice(0, 1) : '我',
         form: {
           phone: data.user.phone || '',
+          username: data.user.username || '',
           nickname: data.user.nickname || '',
           email: data.user.email || '',
           emailCode: '',

@@ -43,6 +43,9 @@
         <el-table-column prop="name" label="姓名" align="center">
           <template #default="{ row }">{{ row.name || '-' }}</template>
         </el-table-column>
+        <el-table-column prop="username" label="用户名" align="center">
+          <template #default="{ row }">{{ row.username || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="phone" label="手机号" align="center">
           <template #default="{ row }">{{ maskPhone(row.phone) }}</template>
         </el-table-column>
@@ -98,6 +101,9 @@
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" align-center>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model.trim="form.username" maxlength="64" placeholder="可选，2-64位英文和数字，不能是纯数字" />
+        </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-autocomplete
             v-model="form.phone"
@@ -222,6 +228,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({
   userId: null,
   phone: '',
+  username: '',
   nickname: '',
   name: '',
   storeId: null,
@@ -235,6 +242,14 @@ const dialogTitle = computed(() =>
 );
 
 const rules = {
+  username: [{
+    validator: (_rule, value, callback) => {
+      const username = String(value || '').trim();
+      if (!username || (/^[A-Za-z0-9]{2,64}$/.test(username) && /[A-Za-z]/.test(username))) callback();
+      else callback(new Error('用户名需为2-64位英文和数字，且不能是纯数字'));
+    },
+    trigger: 'blur'
+  }],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     {
@@ -297,6 +312,7 @@ function resetForm() {
   Object.assign(form, {
     userId: null,
     phone: '',
+    username: '',
     nickname: '',
     name: '',
     storeId: userStore.isSuperAdmin ? null : Number(userStore.user?.storeId) || null,
@@ -320,6 +336,7 @@ function openEdit(row) {
   Object.assign(form, {
     userId: null,
     phone: row.phone || '',
+    username: row.username || '',
     nickname: row.nickname || '',
     name: row.name || '',
     storeId: row.storeId,
@@ -339,6 +356,7 @@ async function handleSave() {
   try {
     const payload = {
       phone: form.phone,
+      username: form.username || null,
       nickname: form.nickname,
       name: form.name,
       storeId: form.storeId,
@@ -376,6 +394,7 @@ function handleUserSelect(user) {
   form.userId = user.id;
   selectedUserPhone.value = user.phone;
   form.phone = user.phone;
+  form.username = user.username || '';
   form.nickname = user.nickname || '';
   form.name = user.name || '';
   form.status = Number(user.status) === 0 ? 0 : 1;

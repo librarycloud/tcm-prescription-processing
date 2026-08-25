@@ -13,6 +13,27 @@ export function validatePhone(phone, fieldName = '手机号') {
   }
 }
 
+export function validateUsername(username, fieldName = '用户名', { allowLegacyPhone = false } = {}) {
+  required(username, fieldName);
+  const value = String(username).trim();
+  if (value.length < 2 || value.length > 64) {
+    throw new AppError(`${fieldName}长度必须为 2-64 位`, 400);
+  }
+  if (!/^[A-Za-z0-9]+$/.test(value)) {
+    throw new AppError(`${fieldName}只能包含英文和数字`, 400);
+  }
+  if (!/[A-Za-z]/.test(value) && !allowLegacyPhone) {
+    throw new AppError(`${fieldName}不能是纯数字`, 400);
+  }
+  return value;
+}
+
+export function normalizeOptionalUsername(username, fieldName = '用户名') {
+  const value = String(username ?? '').trim();
+  if (!value) return null;
+  return validateUsername(value, fieldName);
+}
+
 export function normalizeOptionalPhone(phone, fieldName = '手机号') {
   const normalized = String(phone ?? '').trim();
   if (!normalized) return null;

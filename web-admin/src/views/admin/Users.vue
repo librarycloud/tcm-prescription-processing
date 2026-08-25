@@ -39,6 +39,9 @@
         <el-table-column prop="name" label="姓名" align="center">
           <template #default="{ row }">{{ row.name || '-' }}</template>
         </el-table-column>
+        <el-table-column prop="username" label="用户名" align="center">
+          <template #default="{ row }">{{ row.username || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="phone" label="手机号" align="center">
           <template #default="{ row }">{{ maskPhone(row.phone) }}</template>
         </el-table-column>
@@ -104,6 +107,9 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
         <el-form-item label="用户昵称" prop="nickname">
           <el-input v-model.trim="form.nickname" maxlength="64" show-word-limit />
+        </el-form-item>
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model.trim="form.username" maxlength="64" placeholder="可选，2-64位英文和数字，不能是纯数字" />
         </el-form-item>
         <el-form-item label="姓名" prop="name">
           <el-input v-model.trim="form.name" maxlength="64" show-word-limit />
@@ -183,6 +189,7 @@ const selectedUser = ref(null);
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({
   nickname: '',
+  username: '',
   name: '',
   phone: '',
   email: '',
@@ -192,6 +199,14 @@ const form = reactive({
 });
 
 const rules = {
+  username: [{
+    validator: (_rule, value, callback) => {
+      const username = String(value || '').trim();
+      if (!username || (/^[A-Za-z0-9]{2,64}$/.test(username) && /[A-Za-z]/.test(username))) callback();
+      else callback(new Error('用户名需为2-64位英文和数字，且不能是纯数字'));
+    },
+    trigger: 'blur'
+  }],
   email: [
     {
       type: 'email',
@@ -294,6 +309,7 @@ function openEdit(row) {
   selectedUser.value = row;
   form.nickname = row.nickname || '';
   form.name = row.name || '';
+  form.username = row.username || '';
   form.phone = row.phone || '';
   form.email = row.email || '';
   form.remark = row.remark || '';
@@ -308,6 +324,7 @@ function openCreate() {
   Object.assign(form, {
     nickname: '',
     name: '',
+    username: '',
     phone: '',
     email: '',
     remark: '',
@@ -327,6 +344,7 @@ async function handleSave() {
     const payload = {
       nickname: form.nickname,
       name: form.name,
+      username: form.username || null,
       phone: form.phone,
       remark: form.remark
     };

@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import { AppError } from "../utils/appError.js";
-import { toPositiveInt, validatePhone } from "../utils/validators.js";
+import { toPositiveInt, validatePhone, normalizeOptionalUsername } from "../utils/validators.js";
 import { isStoreAdmin, isSuperAdmin, ROLES } from "../constants/roles.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
 import { describeChanges, recordOperation } from "./operationLogService.js";
@@ -43,6 +43,7 @@ export async function lookupUsers(prisma, phone) {
     where: { phone: { startsWith: keyword } },
     select: {
       id: true,
+      username: true,
       phone: true,
       status: true,
       nickname: true,
@@ -137,15 +138,26 @@ export async function updateUser(prisma, id, payload, actor, authSessions = null
 
   if (payload.phone !== undefined) {
     const phone = String(payload.phone).trim();
+    phoneChanged = phone !== current.phone;
     validatePhone(phone);
     const owner = await prisma.user.findFirst({
       where: { phone, id: { not: userId } },
       select: { id: true },
     });
     if (owner) throw new AppError("手机号已被其他用户使用", 409);
-    phoneChanged = phone !== current.phone;
     data.phone = phone;
-    data.username = phone;
+  }
+
+  if (payload.username !== undefined) {
+    const username = normalizeOptionalUsername(payload.username);
+    if (username) {
+      const owner = await prisma.user.findFirst({
+        where: { username, id: { not: userId } },
+        select: { id: true },
+      });
+      if (owner) throw new AppError("用户名已被其他用户使用", 409);
+    }
+    data.username = username;
   }
 
   if (payload.password) {
@@ -180,6 +192,7 @@ export async function updateUser(prisma, id, payload, actor, authSessions = null
   });
   const changeDescription = describeChanges(current, updated, [
     { key: "phone", label: "手机号" },
+    { key: "username", label: "用户名" },
     { key: "nickname", label: "昵称" },
     { key: "name", label: "姓名" },
     { key: "remark", label: "备注" },
@@ -231,6 +244,7 @@ export async function createUser(prisma, payload, actor) {
   if (password.length < 6 || password.length > 32) {
     throw new AppError("密码长度必须为 6-32 位", 400);
   }
+  const username = normalizeOptionalUsername(payload.username);
   const owner = await prisma.user.findUnique({
     where: { phone },
     select: { id: true },
@@ -240,9 +254,13 @@ export async function createUser(prisma, payload, actor) {
   const name = String(payload.name || "").trim();
   const remark = String(payload.remark || "").trim();
   if (payload.email) throw new AppError("邮箱必须由用户通过验证码绑定", 400);
+  if (username) {
+    const usernameOwner = await prisma.user.findFirst({ where: { username }, select: { id: true } });
+    if (usernameOwner) throw new AppError("用户名已被其他用户使用", 409);
+  }
   const created = await prisma.user.create({
     data: {
-      username: phone,
+      username,
       phone,
       password: await bcrypt.hash(password, 10),
       nickname: nickname || null,

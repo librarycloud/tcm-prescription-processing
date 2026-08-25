@@ -5,7 +5,7 @@ import {
   RECORD_STATUS,
   RECORD_STATUS_VALUES,
 } from "../constants/recordStatus.js";
-import { toPositiveInt, validatePhone } from "../utils/validators.js";
+import { toPositiveInt, validatePhone, normalizeOptionalUsername } from "../utils/validators.js";
 import { describeChanges, recordOperation } from "./operationLogService.js";
 
 const select = {
@@ -70,7 +70,19 @@ async function normalizeData(prisma, actor, payload, current = null, creating = 
     });
     if (owner) throw new AppError("手机号已被使用", 409);
     data.phone = phone;
-    data.username = phone;
+  }
+  if (creating || payload.username !== undefined) {
+    const username = payload.username === undefined && current
+      ? current.username || null
+      : normalizeOptionalUsername(payload.username);
+    if (username) {
+      const owner = await prisma.admin.findFirst({
+        where: { username, ...(current?.id ? { id: { not: current.id } } : {}) },
+        select: { id: true },
+      });
+      if (owner) throw new AppError("用户名已被使用", 409);
+    }
+    data.username = username;
   }
   if (creating || payload.storeId !== undefined) {
     data.storeId = await resolveStoreId(prisma, actor, payload.storeId, current);
@@ -169,6 +181,7 @@ export async function listStoreAdmins(prisma, query, actor) {
   if (keyword) {
     where.OR = [
       { phone: { contains: keyword } },
+      { username: { contains: keyword } },
       { nickname: { contains: keyword } },
       { name: { contains: keyword } },
       { store: { name: { contains: keyword } } },
@@ -202,7 +215,7 @@ export async function createStoreAdmin(prisma, payload, actor, authSessions = nu
       throw new AppError("用户 ID 不正确", 400);
     const current = await prisma.user.findUnique({ where: { id: userId } });
     if (!current) throw new AppError("用户不存在", 404);
-    const data = await normalizeData(prisma, actor, payload);
+    const data = await normalizeData(prisma, actor, payload, current, true);
     if (authSessions) {
       await authSessions.revokeAccount({ accountType: 'user', accountId: userId });
     }
@@ -210,7 +223,7 @@ export async function createStoreAdmin(prisma, payload, actor, authSessions = nu
       const created = await tx.admin.create({
         data: {
           ...data,
-          username: current.username,
+          username: data.username,
           phone: current.phone,
           password: data.password || current.password,
           email: current.email,
@@ -262,6 +275,7 @@ export async function updateStoreAdmin(prisma, id, payload, actor, authSessions 
   await assertStoreKeepsManager(prisma, current, data);
   const shouldRevokeTokens = Boolean(
     data.password ||
+    data.username !== undefined && data.username !== current.username ||
     data.phone !== current.phone ||
     Number(data.role) !== Number(current.role) ||
     Number(data.status) !== Number(current.status) ||
@@ -292,6 +306,7 @@ export async function updateStoreAdmin(prisma, id, payload, actor, authSessions 
           },
         },
         { key: "phone", label: "手机号" },
+        { key: "username", label: "用户名" },
         { key: "nickname", label: "昵称" },
         { key: "name", label: "姓名" },
         { label: "所属门店", get: (item) => item?.store?.name || item?.storeId },

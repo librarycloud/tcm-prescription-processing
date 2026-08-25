@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { AppError } from '../utils/appError.js';
-import { validatePhone } from '../utils/validators.js';
+import { validatePhone, normalizeOptionalUsername } from '../utils/validators.js';
 import { publicUser, signLoginToken } from './authService.js';
 import { ROLES } from '../constants/roles.js';
 
@@ -66,7 +66,18 @@ export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, 
       if (owner && owner.id !== current.id) throw new AppError('手机号已被使用', 400);
     }
     data.phone = phone;
-    data.username = phone;
+  }
+
+  if (payload.username !== undefined) {
+    const username = normalizeOptionalUsername(payload.username);
+    if (username) {
+      const owner = await repository.findFirst({
+        where: { username, id: { not: current.id } },
+        select: { id: true },
+      });
+      if (owner) throw new AppError('用户名已被使用', 409);
+    }
+    data.username = username;
   }
 
   if (payload.nickname !== undefined) {
@@ -83,7 +94,7 @@ export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, 
     return { token: await signLoginToken(jwt, authSessions, current), user: publicUser(current) };
   }
 
-  if (phoneChanged || data.password) {
+  if (phoneChanged || data.password || data.username !== undefined && data.username !== current.username) {
     await authSessions.revokeAccount({
       accountType: isAdmin ? 'admin' : 'user',
       accountId: Number(current.id)
