@@ -9,6 +9,7 @@ import {
   listGoodsCheckItems,
   listGoodsChecks,
   recountGoodsCheckItem,
+  reviewGoodsCheckItems,
   reviewGoodsCheckItem,
   updateGoodsCheckLocation,
 } from "../services/ydGoodsCheckService.js";
@@ -47,6 +48,11 @@ export async function updateGoodsCheckLocationController(request, reply) {
 
 export async function reviewGoodsCheckItemController(request, reply) {
   return ok(reply, await reviewGoodsCheckItem(request.server.prisma, request.user, request.params.itemId, request.body || {}), "复核已保存");
+}
+
+export async function reviewGoodsCheckItemsController(request, reply) {
+  const body = request.body || {};
+  return ok(reply, await reviewGoodsCheckItems(request.server.prisma, request.user, body.itemIds, body), "批量复核已保存");
 }
 
 export async function finishGoodsCheckController(request, reply) {

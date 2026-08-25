@@ -51,8 +51,13 @@
         </el-select>
         <el-button type="primary" :icon="Search" @click="loadItems">查询</el-button>
       </el-form>
-      <el-table v-loading="itemsLoading" :data="items" border table-layout="auto">
+      <div v-if="userStore.isManager" class="batch-review-actions">
+        <span>已选 {{ selectedReviewRows.length }} 条</span>
+        <el-button type="success" :disabled="!selectedReviewRows.length" @click="batchReview">批量复核确认</el-button>
+      </div>
+      <el-table v-loading="itemsLoading" :data="items" border table-layout="auto" @selection-change="handleReviewSelectionChange">
         <template #empty><EmptyView description="暂无盘点明细" /></template>
+        <el-table-column v-if="userStore.isManager" type="selection" width="48" align="center" :selectable="canSelectReview" />
         <el-table-column v-if="userStore.isSuperAdmin" label="门店"><template #default="{ row }">{{ row.store?.name || selectedCheck.store?.name || '-' }}</template></el-table-column>
         <el-table-column label="商品编号"><template #default="{ row }">{{ row.product?.productCode || '-' }}</template></el-table-column>
         <el-table-column label="商品名称" min-width="140"><template #default="{ row }"><el-tooltip v-if="isLongText(row.product?.name)" :content="row.product.name" placement="top"><span class="ellipsis-text">{{ shortText(row.product.name) }}</span></el-tooltip><span v-else>{{ row.product?.name || '-' }}</span></template></el-table-column>
@@ -127,12 +132,12 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { getProductStores } from '@/api/productDifference';
 import { getE6PharmacyCategoryMappings } from '@/api/e6Pharmacy';
-import { addInitialCount, createGoodsCheck, exportGoodsCheck, finishGoodsCheck, getGoodsCheckCandidates, getGoodsCheckItems, getGoodsChecks, recountGoodsCheckItem, reviewGoodsCheckItem, updateGoodsCheckLocation } from '@/api/ydGoodsCheck';
+import { addInitialCount, createGoodsCheck, exportGoodsCheck, finishGoodsCheck, getGoodsCheckCandidates, getGoodsCheckItems, getGoodsChecks, recountGoodsCheckItem, reviewGoodsCheckItem, reviewGoodsCheckItems, updateGoodsCheckLocation } from '@/api/ydGoodsCheck';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { formatDateSeconds } from '@/utils/date';
 
-const userStore = useUserStore(); const stores = ref([]); const categoryMappings = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const checksLoading = ref(false); const itemsLoading = ref(false);
+const userStore = useUserStore(); const stores = ref([]); const categoryMappings = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const selectedReviewRows = ref([]); const checksLoading = ref(false); const itemsLoading = ref(false);
 const checkQuery = reactive({ storeId: undefined, status: undefined }); const checkPagination = reactive({ page: 1, pageSize: 20, total: 0 }); const itemQuery = reactive({ keyword: '', locationName: '', checkStatus: undefined, locationStatus: undefined }); const itemPagination = reactive({ page: 1, pageSize: 50, total: 0 });
 const createDialog = ref(false); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1, categoryCodes: [] }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
 const candidateProducts = computed(() => {
@@ -183,8 +188,8 @@ async function loadStores() { if (userStore.isSuperAdmin) stores.value = await g
 async function loadCategoryMappings() { categoryMappings.value = await getE6PharmacyCategoryMappings(); }
 async function loadChecks() { checksLoading.value = true; try { const data = await getGoodsChecks({ ...checkQuery, page: checkPagination.page, pageSize: checkPagination.pageSize }); checks.value = data.list || []; Object.assign(checkPagination, data.pagination || {}); if (selectedCheck.value) { const fresh = checks.value.find((x) => x.id === selectedCheck.value.id); if (fresh) selectedCheck.value = fresh; } } finally { checksLoading.value = false; } }
 function resetChecks() { checkQuery.storeId = undefined; checkQuery.status = undefined; checkPagination.page = 1; loadChecks(); }
-async function selectCheck(row) { selectedCheck.value = row; itemPagination.page = 1; await loadItems(); }
-async function loadItems() { if (!selectedCheck.value) return; itemsLoading.value = true; try { const data = await getGoodsCheckItems(selectedCheck.value.id, { ...itemQuery, page: itemPagination.page, pageSize: itemPagination.pageSize }); items.value = data.list || []; Object.assign(itemPagination, data.pagination || {}); } finally { itemsLoading.value = false; } }
+async function selectCheck(row) { selectedCheck.value = row; selectedReviewRows.value = []; itemPagination.page = 1; await loadItems(); }
+async function loadItems() { if (!selectedCheck.value) return; itemsLoading.value = true; selectedReviewRows.value = []; try { const data = await getGoodsCheckItems(selectedCheck.value.id, { ...itemQuery, page: itemPagination.page, pageSize: itemPagination.pageSize }); items.value = data.list || []; Object.assign(itemPagination, data.pagination || {}); } finally { itemsLoading.value = false; } }
 async function create() { if (!createForm.checkName.trim() || !createForm.storeId) return ElMessage.warning('请填写盘点名称并选择门店'); const result = await createGoodsCheck(createForm); createDialog.value = false; await loadChecks(); await selectCheck(result); ElMessage.success('盘点单已创建'); }
 function openCount(row) { Object.assign(countForm, { mode: row.firstCountQty !== null && row.recountQty === null ? 'recount' : 'initial', id: row.id, product: row.product, batchNo: row.batchNo, location: row.countLocationName || row.systemLocationName || '', manualBatch: false, systemQty: row.recountQty !== null ? row.recountSystemQty : row.systemQty, qty: row.recountQty !== null ? row.recountQty : row.firstCountQty ?? 0 }); countDialog.value = true; }
 async function saveCount() { if (countForm.mode === 'recount') await recountGoodsCheckItem(countForm.id, { recountQty: countForm.qty }); else { if (countForm.manualBatch && !countForm.batchNo.trim()) return ElMessage.warning('请输入新增批号'); await addInitialCount(selectedCheck.value.id, { productId: countForm.product.id, batchNo: countForm.batchNo, locationName: countForm.location || undefined, firstCountQty: countForm.qty }); } countDialog.value = false; await loadItems(); await loadChecks(); if (candidateDialog.value) await loadCandidates(true); ElMessage.success('盘点数量已保存'); }
@@ -195,6 +200,17 @@ function openManualBatch() { if (!selectedCandidateProduct.value) return; Object
 function openLocation(row) { Object.assign(locationForm, { id: row.id, systemLocationName: row.systemLocationName, location: row.countLocationName || row.systemLocationName }); locationDialog.value = true; }
 async function saveLocation() { await updateGoodsCheckLocation(locationForm.id, { countLocationName: locationForm.location }); locationDialog.value = false; await loadItems(); if (candidateDialog.value) await loadCandidates(true); ElMessage.success('货位已保存'); }
 async function review(row) { await ElMessageBox.confirm('确认由当前账号完成第二人复核？', '二次确认', { type: 'warning' }); await reviewGoodsCheckItem(row.id, { approved: true }); await loadItems(); await loadChecks(); if (candidateDialog.value) await loadCandidates(true); ElMessage.success('已确认'); }
+function canSelectReview(row) { return Boolean(row.id && row.firstCountQty !== null && row.reviewStatus !== 1); }
+function handleReviewSelectionChange(rows) { selectedReviewRows.value = rows; }
+async function batchReview() {
+  const rows = selectedReviewRows.value.filter(canSelectReview);
+  if (!rows.length) return ElMessage.warning('请选择已盘点且未确认的记录');
+  await ElMessageBox.confirm(`确认批量复核 ${rows.length} 条盘点记录？`, '批量复核确认', { type: 'warning' });
+  await reviewGoodsCheckItems({ checkId: selectedCheck.value.id, itemIds: rows.map((row) => row.id), approved: true });
+  await loadItems();
+  await loadChecks();
+  ElMessage.success(`已确认 ${rows.length} 条盘点记录`);
+}
 async function finish() { await ElMessageBox.confirm('结束后将不能继续盘点，是否继续？', '结束盘点', { type: 'warning' }); await finishGoodsCheck(selectedCheck.value.id); await loadChecks(); selectedCheck.value = { ...selectedCheck.value, status: 2 }; ElMessage.success('盘点已结束'); }
 async function download(type) { const blob = await exportGoodsCheck(selectedCheck.value.id, type); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${selectedCheck.value.checkName}-${type}.xlsx`; link.click(); URL.revokeObjectURL(url); }
 watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch(() => [itemPagination.page, itemPagination.pageSize], loadItems); onMounted(async () => { await Promise.all([loadStores(), loadCategoryMappings()]); await loadChecks(); });
@@ -216,6 +232,7 @@ watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch
 .detail-filters :deep(.el-input) { width: 190px; }
 .detail-filters :deep(.el-select) { width: 145px; flex: 0 0 145px; }
 .detail-filters :deep(.el-button) { flex: 0 0 auto; }
+.batch-review-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; color: var(--el-text-color-secondary); font-size: 13px; }
 .candidate-filters { margin-bottom: 18px; }
 .candidate-filters :deep(.el-input) { width: 260px; }
 .drawer-section-title { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 13px; }

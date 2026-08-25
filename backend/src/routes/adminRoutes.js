@@ -196,6 +196,7 @@ import {
   goodsCheckItemsController,
   listGoodsChecksController,
   recountGoodsCheckItemController,
+  reviewGoodsCheckItemsController,
   reviewGoodsCheckItemController,
   updateGoodsCheckLocationController,
 } from "../controllers/ydGoodsCheckController.js";
@@ -267,6 +268,7 @@ export default async function adminRoutes(fastify) {
   fastify.get("/yd-goods-check/:id/export", exportGoodsCheckController);
   fastify.put("/yd-goods-check/items/:itemId/recount", storeStaffRoute, recountGoodsCheckItemController);
   fastify.put("/yd-goods-check/items/:itemId/location", updateGoodsCheckLocationController);
+  fastify.post("/yd-goods-check/items/review-batch", storeStaffRoute, reviewGoodsCheckItemsController);
   fastify.post("/yd-goods-check/items/:itemId/review", reviewGoodsCheckItemController);
   fastify.get("/products/import-template", productImportTemplateController);
   fastify.post("/products/import-preview", previewProductImportController);

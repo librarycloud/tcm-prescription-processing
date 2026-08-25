@@ -62,6 +62,13 @@ function candidateProducts(rows) {
   return [...products.values()];
 }
 
+function filterCandidateRows(rows, filter) {
+  if (filter === 'missing') return rows.filter((row) => !row.manualBatch && !row.counted);
+  if (filter === 'recount') return rows.filter((row) => !row.manualBatch && Number(row.checkStatus) === 2 && row.checkItemId);
+  if (filter === 'mine') return rows.filter((row) => !row.manualBatch && row.counted);
+  return rows;
+}
+
 Page({
   data: {
     activeTab: 'overview',
@@ -78,6 +85,14 @@ Page({
     checkName: '',
     creating: false,
     keyword: '',
+    candidateFilterOptions: [
+      { value: '', label: '条件筛选' },
+      { value: 'missing', label: '全部漏盘' },
+      { value: 'recount', label: '待复盘' },
+      { value: 'mine', label: '自己的盘点记录' }
+    ],
+    candidateFilterIndex: 0,
+    candidateFilter: '',
     candidateSearched: false,
     candidateLoading: false,
     candidates: [],
@@ -120,6 +135,8 @@ Page({
     this.setData({
       selectedCheck,
       keyword: '',
+      candidateFilterIndex: 0,
+      candidateFilter: '',
       candidateSearched: false,
       candidates: [],
       candidateProducts: [],
@@ -129,7 +146,7 @@ Page({
   },
 
   backToChecks() {
-    this.setData({ selectedCheck: null, candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
+    this.setData({ selectedCheck: null, candidateFilterIndex: 0, candidateFilter: '', candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
   },
 
   openCreate() {
@@ -172,6 +189,10 @@ Page({
     const keyword = e.detail.value || '';
     this.setData({ keyword }, () => {
       clearTimeout(candidateSearchTimer);
+      if (!keyword.trim() && !this.data.candidateFilter) {
+        this.searchCandidates();
+        return;
+      }
       if (!canSearchKeyword(keyword)) {
         candidateRequestId += 1;
         this.setData({ candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
@@ -181,9 +202,42 @@ Page({
     });
   },
 
+  onCandidateFilterChange(e) {
+    const candidateFilterIndex = Number(e.detail.value);
+    const candidateFilter = this.data.candidateFilterOptions[candidateFilterIndex]?.value || '';
+    clearTimeout(candidateSearchTimer);
+    this.setData({ candidateFilterIndex, candidateFilter }, () => this.searchCandidates(false, true));
+  },
+
   async searchCandidates(preserveProduct = false, force = false, autoSelect = false) {
     const keyword = this.data.keyword.trim();
+    const filter = this.data.candidateFilter;
     if (!keyword) {
+      if (filter && this.data.selectedCheck) {
+        const productId = preserveProduct ? this.data.selectedProduct?.id : null;
+        const requestId = ++candidateRequestId;
+        this.setData({ candidateLoading: true, candidateSearched: true, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
+        try {
+          const mineParams = filter === 'mine'
+            ? (this.data.isStoreStaff ? { myCounted: 1 } : { countedOnly: 1 })
+            : {};
+          const rawCandidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, mineParams);
+          if (requestId !== candidateRequestId) return;
+          const candidates = filterCandidateRows(rawCandidates || [], filter);
+          const products = candidateProducts(candidates || []);
+          const selectedProduct = productId ? products.find((item) => item.id === productId) || null : null;
+          this.setData({
+            candidates,
+            candidateProducts: selectedProduct ? [] : products,
+            candidateSearched: true,
+            selectedProduct,
+            selectedInventories: selectedProduct ? candidates.filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory) : []
+          });
+        } finally {
+          if (requestId === candidateRequestId) this.setData({ candidateLoading: false });
+        }
+        return;
+      }
       candidateRequestId += 1;
       this.setData({ candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
       return;
@@ -196,8 +250,12 @@ Page({
     const requestId = ++candidateRequestId;
     this.setData({ candidateLoading: true, candidateSearched: true, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
     try {
-      const candidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, { keyword });
+      const mineParams = filter === 'mine'
+        ? (this.data.isStoreStaff ? { myCounted: 1 } : { countedOnly: 1 })
+        : {};
+      const rawCandidates = await getGoodsCheckCandidates(this.data.selectedCheck.id, { keyword, ...mineParams });
       if (requestId !== candidateRequestId) return;
+      const candidates = filterCandidateRows(rawCandidates || [], filter);
       const products = candidateProducts(candidates || []);
       const exactMatches = products.filter((item) =>
         String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
@@ -254,6 +312,9 @@ Page({
     const systemQty = isRecount && row.recountSystemQty !== null && row.recountSystemQty !== undefined
       ? row.recountSystemQty
       : row.quantity;
+    const countQty = this.data.isStoreStaff
+      ? ''
+      : numberText(isRecount && row.recountQty !== null && row.recountQty !== undefined ? row.recountQty : (isRecount ? row.firstCountQty : row.quantity));
     this.setData({
       countVisible: true,
       countForm: {
@@ -264,7 +325,7 @@ Page({
         locationName: row.countLocationName || row.locationName || '',
         locationEditing: false,
         systemQty: numberText(systemQty),
-        countQty: numberText(isRecount && row.recountQty !== null && row.recountQty !== undefined ? row.recountQty : (isRecount ? row.firstCountQty : row.quantity)),
+        countQty,
         manualBatch: false
       }
     });

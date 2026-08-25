@@ -71,7 +71,7 @@
         @selection-change="handleSelectionChange"
       >
         <template #empty><EmptyView description="暂无E6诊所处方导入数据" /></template>
-        <el-table-column type="selection" width="44" :selectable="canMerge" />
+        <el-table-column type="selection" width="44" align="center" :selectable="canMerge" />
         <el-table-column label="订单时间">
           <template #default="{ row }">{{ formatDateSeconds(row.sourceCreatedAt) }}</template>
         </el-table-column>
@@ -226,10 +226,24 @@
               <template #default="{ row }">{{ Number(row.scheduleType) === 2 ? '等待通知' : '指定日期' }}</template>
             </el-table-column>
             <el-table-column label="加工日期">
-              <template #default="{ row }">{{ row.processDate ? formatDate(row.processDate) : '-' }}</template>
+              <template #default="{ row }">{{ formatDateOnly(row.processDate) }}</template>
             </el-table-column>
             <el-table-column label="状态">
               <template #default="{ row }">{{ row.deletedAt ? '已删除' : '有效' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="150" align="center">
+              <template #default="{ row }">
+                <el-dropdown :disabled="!row.id || planPrintLoading" @command="(command) => openPlanPrint(command, row)">
+                  <el-button type="primary" link :loading="planPrintLoading" :icon="Printer">打印标签</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="processing">打印加工标签</el-dropdown-item>
+                      <el-dropdown-item command="packaging">打印包装标签</el-dropdown-item>
+                      <el-dropdown-item command="pickup">打印取货标签</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
             </el-table-column>
           </el-table>
         </div>
@@ -403,17 +417,24 @@
         <el-button type="primary" :loading="confirming" @click="submitConfirm">确认生成</el-button>
       </template>
     </el-drawer>
+
+    <ProcessingPrintDialog
+      v-model="planPrintVisible"
+      :plan-info="planPrintInfo"
+      :template-type="planPrintType"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Refresh, Search } from '@element-plus/icons-vue';
+import { Printer, Refresh, Search } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
+import ProcessingPrintDialog from '@/components/ProcessingPrintDialog.vue';
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
 import {
   confirmE6Import,
@@ -424,14 +445,14 @@ import {
   rejectE6Import,
   revalidateE6Import
 } from '@/api/e6Integration';
-import { getDictionaries, getDoctors } from '@/api/processing';
+import { getDictionaries, getDoctors, getProcessingWorkflow } from '@/api/processing';
 import { getStores } from '@/api/store';
 import {
   E6_IMPORT_STATUS,
   E6_IMPORT_STATUS_OPTIONS,
   e6ImportStatusMeta
 } from '@/constants/e6Integration';
-import { formatDate, formatDateSeconds } from '@/utils/date';
+import { formatDate, formatDateOnly, formatDateSeconds } from '@/utils/date';
 import { maskPhone } from '@/utils/phone';
 import { useUserStore } from '@/stores/user';
 import { datePlusDays, splitDoseBatches } from '@/utils/processingBatches';
@@ -442,6 +463,10 @@ const loading = ref(false);
 const confirming = ref(false);
 const detailVisible = ref(false);
 const confirmVisible = ref(false);
+const planPrintVisible = ref(false);
+const planPrintLoading = ref(false);
+const planPrintInfo = ref(null);
+const planPrintType = ref('PROCESSING');
 const confirmFormRef = ref(null);
 const list = ref([]);
 const stores = ref([]);
@@ -699,6 +724,18 @@ async function openDetail(row) {
   detailVisible.value = true;
 }
 
+async function openPlanPrint(type, plan) {
+  if (!plan?.id || planPrintLoading.value) return;
+  planPrintLoading.value = true;
+  try {
+    planPrintInfo.value = await getProcessingWorkflow(plan.id);
+    planPrintType.value = type === 'pickup' ? 'PACKAGE_PICKUP' : type === 'packaging' ? 'PACKAGING' : 'PROCESSING';
+    planPrintVisible.value = true;
+  } finally {
+    planPrintLoading.value = false;
+  }
+}
+
 function editPrescription(row) {
   router.push({ name: 'Prescriptions', query: { editId: row.prescriptionId } });
 }
@@ -901,6 +938,10 @@ onMounted(() => Promise.all([loadData(), loadReferences()]));
 .e6-import-table :deep(.cell),
 .e6-import-table :deep(.el-table__cell) {
   min-width: 0;
+}
+.e6-import-table :deep(.el-table-column--selection .cell) {
+  display: flex;
+  justify-content: center;
 }
 .e6-import-table :deep(.table-actions) {
   width: auto;

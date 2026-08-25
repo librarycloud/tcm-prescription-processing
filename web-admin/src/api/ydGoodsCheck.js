@@ -9,5 +9,6 @@ export const addInitialCount = (id, data) => request.post(`/admin/yd-goods-check
 export const recountGoodsCheckItem = (itemId, data) => request.put(`/admin/yd-goods-check/items/${itemId}/recount`, data);
 export const updateGoodsCheckLocation = (itemId, data) => request.put(`/admin/yd-goods-check/items/${itemId}/location`, data);
 export const reviewGoodsCheckItem = (itemId, data) => request.post(`/admin/yd-goods-check/items/${itemId}/review`, data);
+export const reviewGoodsCheckItems = (data) => request.post('/admin/yd-goods-check/items/review-batch', data);
 export const finishGoodsCheck = (id) => request.post(`/admin/yd-goods-check/${id}/finish`);
 export const exportGoodsCheck = (id, type) => request.get(`/admin/yd-goods-check/${id}/export`, { params: { type }, responseType: 'blob' });

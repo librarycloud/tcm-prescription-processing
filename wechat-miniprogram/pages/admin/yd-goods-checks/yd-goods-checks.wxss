@@ -1,11 +1,14 @@
 .yd-check-page { padding-bottom: 180rpx; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-bottom: 20rpx; }
 .page-heading > view { min-width: 0; }
+.heading-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 12rpx; }
 .page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 36rpx; font-weight: 700; }
 .check-card, .product-option, .inventory-card { margin-bottom: 14rpx; }
 .check-title, .product-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
 .check-card .muted, .product-option .muted { margin-top: 10rpx; }
 .search-panel { position: relative; margin-bottom: 28rpx; }
+.filter-picker { min-height: 76rpx; padding: 18rpx 20rpx; box-sizing: border-box; border: 1rpx solid #e5e6eb; border-radius: 8rpx; background: #fff; color: #4e5969; }
+.heading-filter { min-width: 180rpx; padding: 12rpx 16rpx; }
 .search-row { display: flex; align-items: center; gap: 12rpx; overflow: hidden; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; --td-input-bg-color: transparent; --td-input-vertical-padding: 16rpx 24rpx; --td-input-suffix-text-color: #0052d9; }
 .search-scan-icon { flex: 0 0 auto; padding: 8rpx; }
 .search-input { min-width: 0; flex: 1; }

@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { AppError } from "../utils/appError.js";
+import { isStoreStaff } from "../constants/roles.js";
 import { businessScope, resolveBusinessStoreId } from "./permissionService.js";
 import { toPositiveInt } from "../utils/validators.js";
 
@@ -258,6 +259,27 @@ export async function reviewGoodsCheckItem(prisma, actor, itemId, payload = {}) 
   return normalizeItem(updated);
 }
 
+export async function reviewGoodsCheckItems(prisma, actor, itemIds, payload = {}) {
+  const ids = [...new Set((Array.isArray(itemIds) ? itemIds : []).map((value) => toPositiveInt(value, 0)).filter(Boolean))];
+  if (!ids.length) throw new AppError("请选择需要复核的盘点记录", 400);
+  const items = await prisma.ydGoodsCheckItem.findMany({ where: { id: { in: ids } } });
+  if (items.length !== ids.length) throw new AppError("部分盘点记录不存在", 404);
+  const checkId = toPositiveInt(payload.checkId, 0);
+  if (checkId && items.some((item) => Number(item.checkId) !== checkId)) throw new AppError("盘点记录不属于当前盘点单", 400);
+  for (const item of items) {
+    await getCheck(prisma, actor, item.checkId);
+    if (item.firstCountQty === null || item.firstCountQty === undefined) throw new AppError("只能复核已完成盘点的记录", 400);
+    if (Number(item.reviewStatus) === 1) throw new AppError("部分记录已经确认，请刷新后重试", 409);
+    if ((item.firstCountedBy && Number(item.firstCountedBy) === Number(actor.id)) || (item.recountedBy && Number(item.recountedBy) === Number(actor.id))) throw new AppError("需要第二名盘点员确认", 400);
+  }
+  const approved = !(payload.approved === false || Number(payload.reviewStatus) === 2);
+  const result = await prisma.ydGoodsCheckItem.updateMany({
+    where: { id: { in: ids }, reviewStatus: { not: 1 } },
+    data: { reviewStatus: approved ? 1 : 2, reviewedBy: Number(actor.id), reviewedAt: new Date(), ...(approved ? { checkStatus: CHECK_STATUS.CONFIRMED } : {}) },
+  });
+  return { count: result.count, approved };
+}
+
 export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
   const check = await getCheck(prisma, actor, checkId);
   const where = { checkId: check.id };
@@ -298,6 +320,8 @@ async function missingCandidates(prisma, check, rows, keyword) {
 export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {}) {
   const check = await getCheck(prisma, actor, checkId);
   const keyword = text(query.keyword);
+  const myCounted = isStoreStaff(actor) && (query.myCounted === true || text(query.myCounted) === "1");
+  const countedOnly = query.countedOnly === true || text(query.countedOnly) === "1";
   const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
   const productWhere = productFilter(categoryCodes, keyword);
   const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(Object.keys(productWhere).length ? { product: productWhere } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { locationName: "asc" }] });
@@ -307,11 +331,17 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
       id: true, productId: true, batchNo: true, systemLocationName: true,
       countLocationName: true, systemQty: true, firstCountQty: true,
       recountQty: true, recountSystemQty: true, checkStatus: true, reviewStatus: true,
+      firstCountedBy: true, recountedBy: true,
+      product: { select: productInclude.select },
     },
   });
-  const itemsByKey = new Map(rows.map((row) => [itemKey(row.productId, row.batchNo, row.systemLocationName), row]));
-  const result = inventories.map((row) => {
+  const visibleRows = myCounted
+    ? rows.filter((row) => Number(row.firstCountedBy) === Number(actor.id) || Number(row.recountedBy) === Number(actor.id))
+    : rows;
+  const itemsByKey = new Map(visibleRows.map((row) => [itemKey(row.productId, row.batchNo, row.systemLocationName), row]));
+  const result = inventories.flatMap((row) => {
     const item = itemsByKey.get(itemKey(row.productId, row.batchNo, row.locationName));
+    if ((myCounted || countedOnly) && !item) return [];
     return {
       ...row,
       quantity: Number(row.quantity || 0),
@@ -326,6 +356,29 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
       reviewStatus: item ? Number(item.reviewStatus || 0) : 0,
     };
   });
+  if (myCounted || countedOnly) {
+    const inventoryKeys = new Set(inventories.map((row) => itemKey(row.productId, row.batchNo, row.locationName)));
+    visibleRows
+      .filter((row) => !inventoryKeys.has(itemKey(row.productId, row.batchNo, row.systemLocationName)))
+      .forEach((row) => {
+        result.push({
+          productId: row.productId,
+          product: row.product,
+          batchNo: row.batchNo,
+          locationName: row.systemLocationName,
+          quantity: Number(row.systemQty || 0),
+          counted: row.firstCountQty !== null && row.firstCountQty !== undefined,
+          checkItemId: row.id,
+          countLocationName: row.countLocationName || null,
+          systemQty: Number(row.systemQty || 0),
+          firstCountQty: row.firstCountQty === null || row.firstCountQty === undefined ? null : Number(row.firstCountQty),
+          recountQty: row.recountQty === null || row.recountQty === undefined ? null : Number(row.recountQty),
+          recountSystemQty: row.recountSystemQty === null || row.recountSystemQty === undefined ? null : Number(row.recountSystemQty),
+          checkStatus: Number(row.checkStatus || 0),
+          reviewStatus: Number(row.reviewStatus || 0),
+        });
+      });
+  }
   if (keyword) {
     const products = await prisma.e6PharmacyProduct.findMany({
       where: productFilter(categoryCodes, keyword),
