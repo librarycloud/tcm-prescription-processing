@@ -50,11 +50,11 @@
           <el-option label="货位未变化" :value="0" /><el-option label="货位有变化" :value="1" />
         </el-select>
         <el-button type="primary" :icon="Search" @click="loadItems">查询</el-button>
+        <div v-if="userStore.isManager" class="batch-review-actions">
+          <span>已选 {{ selectedReviewRows.length }} 条</span>
+          <el-button type="success" :disabled="!selectedReviewRows.length" @click="batchReview">批量复核确认</el-button>
+        </div>
       </el-form>
-      <div v-if="userStore.isManager" class="batch-review-actions">
-        <span>已选 {{ selectedReviewRows.length }} 条</span>
-        <el-button type="success" :disabled="!selectedReviewRows.length" @click="batchReview">批量复核确认</el-button>
-      </div>
       <el-table v-loading="itemsLoading" :data="items" border table-layout="auto" @selection-change="handleReviewSelectionChange">
         <template #empty><EmptyView description="暂无盘点明细" /></template>
         <el-table-column v-if="userStore.isManager" type="selection" width="48" align="center" :selectable="canSelectReview" />
@@ -232,7 +232,7 @@ watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch
 .detail-filters :deep(.el-input) { width: 190px; }
 .detail-filters :deep(.el-select) { width: 145px; flex: 0 0 145px; }
 .detail-filters :deep(.el-button) { flex: 0 0 auto; }
-.batch-review-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; color: var(--el-text-color-secondary); font-size: 13px; }
+.batch-review-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: 2px; color: var(--el-text-color-secondary); font-size: 13px; }
 .candidate-filters { margin-bottom: 18px; }
 .candidate-filters :deep(.el-input) { width: 260px; }
 .drawer-section-title { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 13px; }

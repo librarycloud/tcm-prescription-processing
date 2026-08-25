@@ -89,7 +89,7 @@ Page({
       { value: '', label: '条件筛选' },
       { value: 'missing', label: '全部漏盘' },
       { value: 'recount', label: '待复盘' },
-      { value: 'mine', label: '自己的盘点记录' }
+      { value: 'mine', label: '盘点记录' }
     ],
     candidateFilterIndex: 0,
     candidateFilter: '',
