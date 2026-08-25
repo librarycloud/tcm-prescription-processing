@@ -2,6 +2,7 @@ import { ok } from "../utils/response.js";
 import {
   addInitialCount,
   createGoodsCheck,
+  deleteGoodsCheck,
   exportGoodsCheck,
   finishGoodsCheck,
   getGoodsCheck,
@@ -12,6 +13,7 @@ import {
   reviewGoodsCheckItems,
   reviewGoodsCheckItem,
   updateGoodsCheckLocation,
+  updateGoodsCheck,
 } from "../services/ydGoodsCheckService.js";
 
 export async function listGoodsChecksController(request, reply) {
@@ -20,6 +22,14 @@ export async function listGoodsChecksController(request, reply) {
 
 export async function createGoodsCheckController(request, reply) {
   return ok(reply, await createGoodsCheck(request.server.prisma, request.user, request.body || {}), "盘点单已创建");
+}
+
+export async function updateGoodsCheckController(request, reply) {
+  return ok(reply, await updateGoodsCheck(request.server.prisma, request.user, request.params.id, request.body || {}), "盘点单已更新");
+}
+
+export async function deleteGoodsCheckController(request, reply) {
+  return ok(reply, await deleteGoodsCheck(request.server.prisma, request.user, request.params.id), "盘点单及盘点记录已删除");
 }
 
 export async function goodsCheckDetailController(request, reply) {

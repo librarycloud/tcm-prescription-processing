@@ -2,6 +2,8 @@ import request from './request';
 
 export const getGoodsChecks = (params) => request.get('/admin/yd-goods-check', { params });
 export const createGoodsCheck = (data) => request.post('/admin/yd-goods-check', data);
+export const updateGoodsCheck = (id, data) => request.put(`/admin/yd-goods-check/${id}`, data);
+export const deleteGoodsCheck = (id) => request.delete(`/admin/yd-goods-check/${id}`);
 export const getGoodsCheck = (id) => request.get(`/admin/yd-goods-check/${id}`);
 export const getGoodsCheckItems = (id, params) => request.get(`/admin/yd-goods-check/${id}/items`, { params });
 export const getGoodsCheckCandidates = (id, params) => request.get(`/admin/yd-goods-check/${id}/candidates`, { params });

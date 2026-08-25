@@ -2,7 +2,7 @@
   <div class="page yd-check-page">
     <div class="page-header">
       <div><h1 class="page-title">药店商品盘点</h1><p class="page-subtitle">按门店记录初盘、复盘和库存调整依据</p></div>
-      <div class="header-actions"><el-button type="primary" :icon="Plus" @click="createDialog = true">新建盘点</el-button></div>
+      <div class="header-actions"><el-button type="primary" :icon="Plus" @click="openCreate">新建盘点</el-button></div>
     </div>
 
     <el-card shadow="never">
@@ -25,6 +25,7 @@
         <el-table-column label="记录数"><template #default="{ row }">{{ row.summary?.total || 0 }} / {{ row.summary?.counted || 0 }}</template></el-table-column>
         <el-table-column label="需调整"><template #default="{ row }">{{ row.summary?.adjustment || 0 }}</template></el-table-column>
         <el-table-column label="创建时间" min-width="160"><template #default="{ row }">{{ dateTime(row.createdAt) }}</template></el-table-column>
+        <el-table-column v-if="userStore.isManager" label="操作" width="150" fixed="right"><template #default="{ row }"><el-button link type="primary" :icon="Edit" @click.stop="openEdit(row)">编辑</el-button><el-button link type="danger" @click.stop="removeCheck(row)">删除</el-button></template></el-table-column>
       </el-table>
       <Pagination v-model:page="checkPagination.page" v-model:page-size="checkPagination.pageSize" :total="checkPagination.total" />
     </el-card>
@@ -41,6 +42,7 @@
         </div>
       </div>
       <el-form class="filters detail-filters" inline @submit.prevent="loadItems">
+        <div v-if="userStore.isManager" class="batch-review-actions"><span>已选 {{ selectedReviewRows.length }} 条</span><el-button type="success" :disabled="!selectedReviewRows.length" @click="batchReview">批量复核确认</el-button></div>
         <el-input v-model.trim="itemQuery.keyword" clearable placeholder="商品编号、名称、条码" @keyup.enter="loadItems" />
         <el-input v-model.trim="itemQuery.locationName" clearable placeholder="系统货位或盘点货位" @keyup.enter="loadItems" />
         <el-select v-model="itemQuery.checkStatus" clearable placeholder="全部盘点状态" @change="loadItems">
@@ -50,10 +52,6 @@
           <el-option label="货位未变化" :value="0" /><el-option label="货位有变化" :value="1" />
         </el-select>
         <el-button type="primary" :icon="Search" @click="loadItems">查询</el-button>
-        <div v-if="userStore.isManager" class="batch-review-actions">
-          <span>已选 {{ selectedReviewRows.length }} 条</span>
-          <el-button type="success" :disabled="!selectedReviewRows.length" @click="batchReview">批量复核确认</el-button>
-        </div>
       </el-form>
       <el-table v-loading="itemsLoading" :data="items" border table-layout="auto" @selection-change="handleReviewSelectionChange">
         <template #empty><EmptyView description="暂无盘点明细" /></template>
@@ -77,9 +75,9 @@
       <Pagination v-model:page="itemPagination.page" v-model:page-size="itemPagination.pageSize" :total="itemPagination.total" />
     </el-card>
 
-    <el-dialog v-model="createDialog" title="新建药店盘点" width="460px">
+    <el-dialog v-model="planDialog" :title="editingCheck ? '编辑药店盘点' : '新建药店盘点'" width="460px">
       <el-form label-width="90px"><el-form-item label="门店" required><el-select v-model="createForm.storeId" :disabled="!userStore.isSuperAdmin" placeholder="选择门店"><el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" /></el-select></el-form-item><el-form-item label="盘点名称" required><el-input v-model="createForm.checkName" placeholder="如：2026年7月临时盘点" /></el-form-item><el-form-item label="盘点类型"><el-select v-model="createForm.checkType"><el-option label="临时盘点" :value="1" /><el-option label="季度盘点" :value="2" /><el-option label="年度盘点" :value="3" /></el-select></el-form-item><el-form-item label="商品分类"><el-select v-model="createForm.categoryCodes" multiple filterable collapse-tags collapse-tags-tooltip clearable placeholder="不选择表示全部分类"><el-option v-for="item in categoryMappings" :key="item.categoryCode" :label="`${item.categoryCode} / ${item.categoryName}`" :value="item.categoryCode" /></el-select></el-form-item></el-form>
-      <template #footer><el-button @click="createDialog = false">取消</el-button><el-button type="primary" @click="create">创建</el-button></template>
+      <template #footer><el-button @click="planDialog = false">取消</el-button><el-button type="primary" @click="savePlan">{{ editingCheck ? '保存' : '创建' }}</el-button></template>
     </el-dialog>
     <el-dialog v-model="countDialog" :title="countForm.mode === 'recount' ? '复盘' : '初盘'" width="420px"><el-form label-width="90px"><el-form-item label="商品">{{ countForm.product?.productCode }} {{ countForm.product?.name }}</el-form-item><el-form-item label="批号"><el-input v-if="countForm.manualBatch" v-model="countForm.batchNo" placeholder="输入新增批号" /><span v-else>{{ countForm.batchNo || '-' }}</span></el-form-item><el-form-item label="系统数量">{{ qty(countForm.systemQty) }}</el-form-item><el-form-item v-if="countForm.mode === 'initial'" label="盘点货位"><el-input v-model="countForm.location" placeholder="没有变化可留空" /></el-form-item><el-form-item :label="countForm.mode === 'recount' ? '复盘数量' : '初盘数量'"><el-input-number v-model="countForm.qty" :min="0" :precision="3" controls-position="right" /></el-form-item></el-form><template #footer><el-button @click="countDialog = false">取消</el-button><el-button type="primary" @click="saveCount">保存</el-button></template></el-dialog>
     <el-drawer v-model="candidateDialog" class="candidate-drawer" title="新增盘点记录" direction="rtl" size="min(1240px, 92vw)">
@@ -132,14 +130,14 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { getProductStores } from '@/api/productDifference';
 import { getE6PharmacyCategoryMappings } from '@/api/e6Pharmacy';
-import { addInitialCount, createGoodsCheck, exportGoodsCheck, finishGoodsCheck, getGoodsCheckCandidates, getGoodsCheckItems, getGoodsChecks, recountGoodsCheckItem, reviewGoodsCheckItem, reviewGoodsCheckItems, updateGoodsCheckLocation } from '@/api/ydGoodsCheck';
+import { addInitialCount, createGoodsCheck, deleteGoodsCheck, exportGoodsCheck, finishGoodsCheck, getGoodsCheckCandidates, getGoodsCheckItems, getGoodsChecks, recountGoodsCheckItem, reviewGoodsCheckItem, reviewGoodsCheckItems, updateGoodsCheck, updateGoodsCheckLocation } from '@/api/ydGoodsCheck';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { formatDateSeconds } from '@/utils/date';
 
 const userStore = useUserStore(); const stores = ref([]); const categoryMappings = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const selectedReviewRows = ref([]); const checksLoading = ref(false); const itemsLoading = ref(false);
 const checkQuery = reactive({ storeId: undefined, status: undefined }); const checkPagination = reactive({ page: 1, pageSize: 20, total: 0 }); const itemQuery = reactive({ keyword: '', locationName: '', checkStatus: undefined, locationStatus: undefined }); const itemPagination = reactive({ page: 1, pageSize: 50, total: 0 });
-const createDialog = ref(false); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1, categoryCodes: [] }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
+const planDialog = ref(false); const editingCheck = ref(null); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1, categoryCodes: [] }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
 const candidateProducts = computed(() => {
   const products = new Map();
   candidates.value.forEach((row) => {
@@ -190,7 +188,10 @@ async function loadChecks() { checksLoading.value = true; try { const data = awa
 function resetChecks() { checkQuery.storeId = undefined; checkQuery.status = undefined; checkPagination.page = 1; loadChecks(); }
 async function selectCheck(row) { selectedCheck.value = row; selectedReviewRows.value = []; itemPagination.page = 1; await loadItems(); }
 async function loadItems() { if (!selectedCheck.value) return; itemsLoading.value = true; selectedReviewRows.value = []; try { const data = await getGoodsCheckItems(selectedCheck.value.id, { ...itemQuery, page: itemPagination.page, pageSize: itemPagination.pageSize }); items.value = data.list || []; Object.assign(itemPagination, data.pagination || {}); } finally { itemsLoading.value = false; } }
-async function create() { if (!createForm.checkName.trim() || !createForm.storeId) return ElMessage.warning('请填写盘点名称并选择门店'); const result = await createGoodsCheck(createForm); createDialog.value = false; await loadChecks(); await selectCheck(result); ElMessage.success('盘点单已创建'); }
+function openCreate() { editingCheck.value = null; Object.assign(createForm, { storeId: userStore.isSuperAdmin ? undefined : userStore.user?.storeId, checkName: '', checkType: 1, categoryCodes: [] }); planDialog.value = true; }
+function openEdit(row) { editingCheck.value = row; Object.assign(createForm, { storeId: row.storeId, checkName: row.checkName, checkType: Number(row.checkType || 1), categoryCodes: Array.isArray(row.categoryCodes) ? [...row.categoryCodes] : [] }); planDialog.value = true; }
+async function savePlan() { if (!createForm.checkName.trim() || !createForm.storeId) return ElMessage.warning('请填写盘点名称并选择门店'); if (editingCheck.value) { const result = await updateGoodsCheck(editingCheck.value.id, createForm); planDialog.value = false; await loadChecks(); if (selectedCheck.value?.id === result.id) selectedCheck.value = result; ElMessage.success('盘点单已更新'); return; } const result = await createGoodsCheck(createForm); planDialog.value = false; await loadChecks(); await selectCheck(result); ElMessage.success('盘点单已创建'); }
+async function removeCheck(row) { await ElMessageBox.confirm(`删除盘点计划“${row.checkName}”后，该计划包含的盘点记录也会一并删除，是否继续？`, '删除盘点计划', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }); await deleteGoodsCheck(row.id); if (selectedCheck.value?.id === row.id) selectedCheck.value = null; await loadChecks(); ElMessage.success('盘点计划及记录已删除'); }
 function openCount(row) { Object.assign(countForm, { mode: row.firstCountQty !== null && row.recountQty === null ? 'recount' : 'initial', id: row.id, product: row.product, batchNo: row.batchNo, location: row.countLocationName || row.systemLocationName || '', manualBatch: false, systemQty: row.recountQty !== null ? row.recountSystemQty : row.systemQty, qty: row.recountQty !== null ? row.recountQty : row.firstCountQty ?? 0 }); countDialog.value = true; }
 async function saveCount() { if (countForm.mode === 'recount') await recountGoodsCheckItem(countForm.id, { recountQty: countForm.qty }); else { if (countForm.manualBatch && !countForm.batchNo.trim()) return ElMessage.warning('请输入新增批号'); await addInitialCount(selectedCheck.value.id, { productId: countForm.product.id, batchNo: countForm.batchNo, locationName: countForm.location || undefined, firstCountQty: countForm.qty }); } countDialog.value = false; await loadItems(); await loadChecks(); if (candidateDialog.value) await loadCandidates(true); ElMessage.success('盘点数量已保存'); }
 function openCandidateDialog() { candidateKeyword.value = ''; candidateSearched.value = false; candidates.value = []; selectedCandidateProduct.value = null; candidateDialog.value = true; }

@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { AppError } from "../utils/appError.js";
 import { isStoreStaff } from "../constants/roles.js";
-import { businessScope, resolveBusinessStoreId } from "./permissionService.js";
+import { assertManager, businessScope, resolveBusinessStoreId } from "./permissionService.js";
 import { toPositiveInt } from "../utils/validators.js";
 
 export const CHECK_STATUS = Object.freeze({
@@ -165,6 +165,38 @@ export async function createGoodsCheck(prisma, actor, payload = {}) {
     data: { storeId, checkName, checkType, categoryCodes: categoryCodes.length ? categoryCodes : null, status: 0, createdBy: Number(actor.id) },
     include: { store: { select: { id: true, name: true, code: true } } },
   });
+}
+
+function validateCheckFields(payload = {}) {
+  const checkName = text(payload.checkName);
+  if (!checkName) throw new AppError("盘点名称不能为空", 400);
+  const checkType = Number(payload.checkType || 1);
+  if (!Number.isInteger(checkType) || checkType < 1 || checkType > 3) throw new AppError("盘点类型不正确", 400);
+  return { checkName, checkType, categoryCodes: normalizeCategoryCodes(payload.categoryCodes) };
+}
+
+export async function updateGoodsCheck(prisma, actor, id, payload = {}) {
+  assertManager(actor);
+  const check = await getCheck(prisma, actor, id);
+  const { checkName, checkType, categoryCodes } = validateCheckFields(payload);
+  const hasItems = await prisma.ydGoodsCheckItem.count({ where: { checkId: check.id } });
+  const requestedStoreId = payload.storeId === undefined ? check.storeId : await resolveBusinessStoreId(prisma, actor, payload.storeId);
+  if (hasItems && requestedStoreId !== check.storeId) throw new AppError("已有盘点记录，不能修改所属门店", 400);
+  return prisma.ydGoodsCheck.update({
+    where: { id: check.id },
+    data: { storeId: requestedStoreId, checkName, checkType, categoryCodes: categoryCodes.length ? categoryCodes : null },
+    include: { store: { select: { id: true, name: true, code: true } } },
+  });
+}
+
+export async function deleteGoodsCheck(prisma, actor, id) {
+  assertManager(actor);
+  const check = await getCheck(prisma, actor, id);
+  await prisma.$transaction(async (tx) => {
+    await tx.ydGoodsCheckItem.deleteMany({ where: { checkId: check.id } });
+    await tx.ydGoodsCheck.delete({ where: { id: check.id } });
+  });
+  return { id: check.id };
 }
 
 export async function getGoodsCheck(prisma, actor, id) {

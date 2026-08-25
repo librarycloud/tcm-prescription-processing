@@ -189,6 +189,7 @@ import {
 import {
   addInitialCountController,
   createGoodsCheckController,
+  deleteGoodsCheckController,
   exportGoodsCheckController,
   finishGoodsCheckController,
   goodsCheckCandidatesController,
@@ -199,6 +200,7 @@ import {
   reviewGoodsCheckItemsController,
   reviewGoodsCheckItemController,
   updateGoodsCheckLocationController,
+  updateGoodsCheckController,
 } from "../controllers/ydGoodsCheckController.js";
 
 export default async function adminRoutes(fastify) {
@@ -260,6 +262,8 @@ export default async function adminRoutes(fastify) {
   fastify.post("/e6-pharmacy/barcode-import", importE6PharmacyBarcodesController);
   fastify.get("/yd-goods-check", storeStaffRoute, listGoodsChecksController);
   fastify.post("/yd-goods-check", createGoodsCheckController);
+  fastify.put("/yd-goods-check/:id", storeStaffRoute, updateGoodsCheckController);
+  fastify.delete("/yd-goods-check/:id", storeStaffRoute, deleteGoodsCheckController);
   fastify.get("/yd-goods-check/:id", storeStaffRoute, goodsCheckDetailController);
   fastify.get("/yd-goods-check/:id/items", storeStaffRoute, goodsCheckItemsController);
   fastify.get("/yd-goods-check/:id/candidates", storeStaffRoute, goodsCheckCandidatesController);
