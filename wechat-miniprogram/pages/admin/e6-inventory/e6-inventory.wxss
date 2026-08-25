@@ -8,7 +8,9 @@
 .search-input { min-width: 0; flex: 1; }
 .section-title { margin: 28rpx 0 14rpx; color: #4e5969; font-size: 28rpx; font-weight: 600; }
 .product-option { margin-bottom: 14rpx; }
-.product-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
+.product-title-row { display: flex; align-items: center; gap: 20rpx; min-width: 0; }
+.product-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
+.product-price { flex: 0 0 auto; min-width: 132rpx; color: #0052d9; font-size: 28rpx; font-weight: 600; text-align: right; }
 .product-option .muted, .product-detail .muted { margin-top: 10rpx; line-height: 1.5; }
 .inventory-total { margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid #eef0f5; color: #4e5969; }
 .inventory-total text { color: #0052d9; font-size: 34rpx; font-weight: 700; }

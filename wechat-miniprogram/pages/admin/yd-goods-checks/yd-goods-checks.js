@@ -53,6 +53,7 @@ function candidateProducts(rows) {
     const totalQuantity = inventories.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     products.set(row.product.id, {
       ...row.product,
+      retailPriceText: Number(row.product.retailPrice || 0).toFixed(2),
       inventoryCount: inventories.length,
       batchCount: inventories.length,
       totalQuantity,

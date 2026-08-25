@@ -81,7 +81,7 @@ Page({
     try {
       const data = await getE6PharmacyProducts({ keyword, storeId: this.data.storeId || undefined, page: 1, pageSize: 50 });
       if (requestId !== searchRequestId) return;
-      const products = data?.list || [];
+      const products = (data?.list || []).map(decorateProduct);
       const exactMatches = products.filter((item) =>
         String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
       );

@@ -9,7 +9,7 @@
     <view class="search-row"><t-icon class="search-scan-icon" name="scan" size="44rpx" color="#0052d9" bind:tap="scan" /><t-input class="search-input" borderless suffix="查询商品" value="{{keyword}}" placeholder="名称、编码或条码" bind:change="onKeywordChange" bind:click="search" bind:enter="search" /></view>
   </view>
 
-  <view wx:if="{{products.length}}" class="product-results"><view class="section-title">匹配商品</view><view wx:for="{{products}}" wx:key="id" class="app-card product-option" data-index="{{index}}" bind:tap="selectProduct"><view class="product-title">{{item.productCode}} · {{item.name}}</view><view class="muted">单位：{{item.unit || '-'}}　零售价：¥{{item.retailPrice || '0.00'}}　规格：{{item.specification || '-'}}</view><view class="muted">生产厂商：{{item.manufacturer || '-'}}　条码：{{item.barcode || '无条码'}}</view></view></view>
+  <view wx:if="{{products.length}}" class="product-results"><view class="section-title">匹配商品</view><view wx:for="{{products}}" wx:key="id" class="app-card product-option" data-index="{{index}}" bind:tap="selectProduct"><view class="product-title-row"><view class="product-title">{{item.productCode}} · {{item.name}}</view><text class="product-price">¥{{item.retailPriceText}}</text></view><view class="muted">单位：{{item.unit || '-'}}　规格：{{item.specification || '-'}}</view><view class="muted">生产厂商：{{item.manufacturer || '-'}}　条码：{{item.barcode || '无条码'}}</view></view></view>
 
   <t-empty wx:if="{{searched && !searchLoading && !products.length}}" description="暂无匹配商品" />
 
@@ -17,9 +17,9 @@
   <view wx:if="{{selectedProduct}}" class="product-detail">
     <view class="section-title">商品信息</view>
     <view class="app-card">
-      <view class="product-title">{{selectedProduct.name}}</view>
+      <view class="product-title-row"><view class="product-title">{{selectedProduct.name}}</view><text class="product-price">¥{{selectedProduct.retailPriceText}}</text></view>
       <view class="muted">编码：{{selectedProduct.productCode}}　条码：{{selectedProduct.barcode || '-'}}</view>
-      <view class="muted">规格：{{selectedProduct.specification || '-'}}　单位：{{selectedProduct.unit || '-'}}　零售价：¥{{selectedProduct.retailPriceText}}</view>
+      <view class="muted">规格：{{selectedProduct.specification || '-'}}　单位：{{selectedProduct.unit || '-'}}</view>
       <view class="muted">生产厂商：{{selectedProduct.manufacturer || '-'}}</view>
       <view class="inventory-total">总库存 <text>{{selectedProduct.totalQuantityText}}</text> {{selectedProduct.unit || ''}}　共 {{selectedProduct.batchCount}} 个库存批次</view>
     </view>

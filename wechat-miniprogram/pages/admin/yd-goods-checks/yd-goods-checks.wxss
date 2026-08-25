@@ -6,6 +6,9 @@
 .page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 36rpx; font-weight: 700; }
 .check-card, .product-option, .inventory-card { margin-bottom: 14rpx; }
 .check-title, .product-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
+.product-title-row { display: flex; align-items: center; gap: 20rpx; min-width: 0; }
+.product-title-row .product-title { min-width: 0; flex: 1; }
+.product-price { flex: 0 0 auto; min-width: 132rpx; color: #0052d9; font-size: 28rpx; font-weight: 600; text-align: right; }
 .check-card .muted, .product-option .muted { margin-top: 10rpx; }
 .search-panel { position: relative; margin-bottom: 28rpx; }
 .filter-picker { display: flex; align-items: center; justify-content: space-between; min-height: 76rpx; padding: 16rpx 20rpx; box-sizing: border-box; border: 1rpx solid #cbd8f2; border-radius: 12rpx; background: #f5f8ff; color: #0052d9; font-size: 26rpx; font-weight: 600; box-shadow: 0 4rpx 12rpx rgba(0, 82, 217, .08); }
