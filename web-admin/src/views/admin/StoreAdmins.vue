@@ -15,7 +15,14 @@
           clearable
           placeholder="搜索姓名、昵称、手机号或门店"
         />
-        <el-select v-model="query.storeId" clearable filterable placeholder="全部门店" @change="handleSearch">
+        <el-select
+          v-if="userStore.isSuperAdmin"
+          v-model="query.storeId"
+          clearable
+          filterable
+          placeholder="全部门店"
+          @change="handleSearch"
+        >
           <el-option v-for="item in stores" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
         <el-select v-model="query.status" clearable placeholder="全部状态" @change="handleSearch">
@@ -120,7 +127,12 @@
           <el-input v-model.trim="form.name" maxlength="64" show-word-limit />
         </el-form-item>
         <el-form-item label="所属门店" prop="storeId">
-          <el-select v-model="form.storeId" filterable placeholder="请选择所属门店">
+          <el-select
+            v-model="form.storeId"
+            filterable
+            placeholder="请选择所属门店"
+            :disabled="!userStore.isSuperAdmin"
+          >
             <el-option v-for="item in stores" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
@@ -256,8 +268,13 @@ const rules = {
 };
 
 async function loadStores() {
-  const data = await getStores({ page: 1, pageSize: 100 });
-  stores.value = data?.list || [];
+  if (userStore.isSuperAdmin) {
+    const data = await getStores({ page: 1, pageSize: 100 });
+    stores.value = data?.list || [];
+    return;
+  }
+  const store = userStore.user?.store;
+  stores.value = store ? [store] : [];
 }
 
 async function loadData() {
@@ -282,7 +299,7 @@ function resetForm() {
     phone: '',
     nickname: '',
     name: '',
-    storeId: null,
+    storeId: userStore.isSuperAdmin ? null : Number(userStore.user?.storeId) || null,
     role: ROLES.STORE_ADMIN,
     password: '',
     confirmPassword: '',
