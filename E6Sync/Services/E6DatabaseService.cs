@@ -255,6 +255,59 @@ WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID
             return result;
         }
 
+        public E6PharmacyProductSnapshot QueryPharmacyProductsByCodes(IList<string> productCodes)
+        {
+            var result = new E6PharmacyProductSnapshot();
+            var codes = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var code in productCodes ?? new List<string>())
+            {
+                var value = code == null ? "" : code.Trim();
+                if (!string.IsNullOrWhiteSpace(value) && seen.Add(value)) codes.Add(value);
+            }
+            const int chunkSize = 1000;
+            for (var offset = 0; offset < codes.Count; offset += chunkSize)
+            {
+                var count = Math.Min(chunkSize, codes.Count - offset);
+                var placeholders = new List<string>();
+                for (var index = 0; index < count; index++) placeholders.Add("@code" + index);
+                var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
+FROM dbo.[DC商品] p
+WHERE p.[编号] IN (" + string.Join(",", placeholders) + ");";
+                using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    for (var index = 0; index < count; index++) command.Parameters.AddWithValue("@code" + index, codes[offset + index]);
+                    connection.Open();
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read()) AddPharmacyProduct(result, reader);
+                    }
+                }
+            }
+            return result;
+        }
+
+        private static void AddPharmacyProduct(E6PharmacyProductSnapshot result, SqlDataReader reader)
+        {
+            result.Products.Add(new E6PharmacyProductUpload
+            {
+                productCode = Convert.ToString(reader["编号"])?.Trim(),
+                name = Convert.ToString(reader["名称"])?.Trim(),
+                category = ToNullableText(reader["分类"]),
+                categoryCode = ToNullableText(reader["分类编号"]),
+                barcode = ToNullableText(reader["条形码"]),
+                specification = ToNullableText(reader["规格"]),
+                dosageForm = ToNullableText(reader["剂型"]),
+                manufacturer = ToNullableText(reader["生产厂商"]),
+                categoryAttribute = ToNullableText(reader["商品类别属性"]),
+                unit = ToNullableText(reader["单位"]),
+                retailPrice = reader.IsDBNull(reader.GetOrdinal("零售价")) ? "0" : Convert.ToDecimal(reader["零售价"]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
+                e6CreatedAt = ToIso(reader["创建日期"]),
+                e6ModifiedAt = ToIso(reader["修改日期"])
+            });
+        }
+
         public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor, string locationCursor)
         {
             var result = new E6PharmacyInventorySnapshot();

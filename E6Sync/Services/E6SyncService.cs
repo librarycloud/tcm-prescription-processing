@@ -193,6 +193,34 @@ namespace E6Sync.Services
             }
             var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor), cancellationToken).ConfigureAwait(false);
             stats.QueryCount += snapshot.Batches.Count;
+            if (!fullSync && snapshot.Batches.Count > 0)
+            {
+                var uploadedCodes = new HashSet<string>(products.ConvertAll(item => item.productCode ?? ""), StringComparer.OrdinalIgnoreCase);
+                var inventoryCodes = new List<string>();
+                foreach (var batch in snapshot.Batches)
+                {
+                    var code = (batch.productCode ?? "").Trim();
+                    if (!string.IsNullOrWhiteSpace(code) && !uploadedCodes.Contains(code)) inventoryCodes.Add(code);
+                }
+                if (inventoryCodes.Count > 0)
+                {
+                    var supplement = await Task.Run(() => database.QueryPharmacyProductsByCodes(inventoryCodes), cancellationToken).ConfigureAwait(false);
+                    stats.QueryCount += supplement.Products.Count;
+                    foreach (var product in supplement.Products)
+                    {
+                        if (uploadedCodes.Add(product.productCode ?? "")) products.Add(product);
+                    }
+                    foreach (var productBatch in SplitBatches(supplement.Products, 1000))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var productResult = await api.SendPharmacyProductsAsync(productBatch, cancellationToken).ConfigureAwait(false);
+                        if (!productResult.Success) throw new InvalidOperationException(productResult.Message);
+                        stats.SuccessCount++;
+                        productBatchCount++;
+                    }
+                    log.Info(string.Format("药店增量补传库存对应商品：{0} 条", supplement.Products.Count));
+                }
+            }
             log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，模式 {2}", products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
             if (fullSync && snapshot.Batches.Count == 0)
                 throw new InvalidOperationException("药店货位库存查询为 0，已停止全量上传；请检查药店数据库和库存表");
