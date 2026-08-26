@@ -8,8 +8,13 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-release:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     defaults:
       run:
