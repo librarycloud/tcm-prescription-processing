@@ -35,3 +35,6 @@ Thumbs.db
 
 # WeChat Developer Tools local settings
 wechat-miniprogram/project.private.config.json
+android-app/release.keystore
+android-app/app/build/
+android-app/.gradle/
