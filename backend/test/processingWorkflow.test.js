@@ -9,6 +9,7 @@ import {
   deleteProcessingPhoto,
   finishEquipmentUsage,
   getProcessingPhoto,
+  startEquipmentUsage,
   startPackagingUsage,
 } from "../src/services/processingWorkflowService.js";
 import { config } from "../src/config.js";
@@ -152,6 +153,87 @@ test("decoction workflows require a packaging-machine scan for every completed p
     statusCode: 409,
     message: "第 1 组尚未开始打包",
   });
+});
+
+test("scanning a decoction pot can start a soaking usage", async () => {
+  const state = {
+    plan: {
+      id: 21,
+      storeId: 3,
+      status: 1,
+      currentStage: PROCESSING_STAGE.DISPENSING_DONE,
+      dispensingCompletedAt: new Date(),
+      processType: { code: "DECOCTION", name: "代煎" },
+    },
+    pot: {
+      id: 31,
+      storeId: 3,
+      equipmentNo: "P01",
+      name: "1号煎药锅",
+      type: EQUIPMENT_TYPE.DECOCTION_POT,
+      status: EQUIPMENT_STATUS.ENABLED,
+      scanToken: "pot-token",
+      currentUsageId: null,
+      deletedAt: null,
+    },
+    usages: [],
+  };
+  let nextUsageId = 1;
+  const prisma = {
+    processingPlan: {
+      findFirst: async () => ({ ...state.plan, equipmentUsages: state.usages }),
+      update: async ({ data }) => {
+        Object.assign(state.plan, data);
+        return state.plan;
+      },
+    },
+    processingEquipment: {
+      findFirst: async ({ where }) => {
+        const code = where.OR[0].scanToken || where.OR[1].equipmentNo;
+        return state.pot.storeId === where.storeId &&
+          (state.pot.scanToken === code || state.pot.equipmentNo === code)
+          ? state.pot
+          : null;
+      },
+      updateMany: async ({ where, data }) => {
+        if (state.pot.id !== where.id || state.pot.currentUsageId !== where.currentUsageId)
+          return { count: 0 };
+        Object.assign(state.pot, data);
+        return { count: 1 };
+      },
+    },
+    processingEquipmentUsage: {
+      findFirst: async ({ where }) =>
+        state.usages.find(
+          (item) =>
+            (!where.requestId || item.requestId === where.requestId) &&
+            (!where.processingPlanId || item.processingPlanId === where.processingPlanId) &&
+            (!where.stage || item.stage === where.stage) &&
+            (!where.portionNo || item.portionNo === where.portionNo) &&
+            (!where.status || item.status === where.status),
+        ) || null,
+      create: async ({ data }) => {
+        const usage = { id: nextUsageId++, ...data, equipment: state.pot };
+        state.usages.push(usage);
+        return usage;
+      },
+    },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (work) => work(prisma),
+  };
+
+  const result = await startEquipmentUsage(prisma, actor, 21, {
+    stage: PROCESSING_STAGE.SOAKING,
+    portionNo: 1,
+    equipmentCode: "TCM:EQUIPMENT:1:pot-token",
+    requestId: "soaking-pot-request",
+  });
+
+  assert.equal(state.usages[0].stage, PROCESSING_STAGE.SOAKING);
+  assert.equal(state.usages[0].equipmentId, state.pot.id);
+  assert.equal(state.pot.currentUsageId, state.usages[0].id);
+  assert.equal(state.plan.currentStage, PROCESSING_STAGE.SOAKING);
+  assert.equal(result.equipmentUsages[0].equipment.type, EQUIPMENT_TYPE.DECOCTION_POT);
 });
 
 test("scanning starts packaging and manual completion finishes it", async () => {

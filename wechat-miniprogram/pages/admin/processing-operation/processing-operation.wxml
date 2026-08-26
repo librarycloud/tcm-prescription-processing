@@ -58,7 +58,7 @@
     <view wx:if="{{showProcessingSteps && detail.isDecoction}}" class="app-card step-card">
       <view class="step-head">
         <view class="step-index">2</view>
-        <view><view class="step-title">浸泡</view><view class="muted">可连续扫描多个浸泡桶</view></view>
+        <view><view class="step-title">浸泡</view><view class="muted">可连续扫描浸泡桶或煎药锅</view></view>
       </view>
       <view class="usage-row" wx:for="{{activeSoakings}}" wx:key="id">
         <view>

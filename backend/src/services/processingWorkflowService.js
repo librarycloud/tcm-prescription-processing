@@ -461,6 +461,9 @@ export async function deleteProcessingPhoto(prisma, actor, planId, photoId) {
 async function findScannedEquipment(tx, plan, rawCode, expectedType) {
   const code = scanValue(rawCode, "EQUIPMENT");
   if (!code) throw new AppError("请扫描设备码", 400);
+  const expectedTypes = Array.isArray(expectedType)
+    ? expectedType
+    : [expectedType];
   const equipment = await tx.processingEquipment.findFirst({
     where: {
       storeId: plan.storeId,
@@ -469,8 +472,11 @@ async function findScannedEquipment(tx, plan, rawCode, expectedType) {
     },
   });
   if (!equipment) throw new AppError("设备不存在或不属于当前门店", 404);
-  if (equipment.type !== expectedType) {
-    const expectedName = EQUIPMENT_TYPE_NAMES[expectedType] || "指定设备";
+  if (!expectedTypes.includes(equipment.type)) {
+    const expectedName = expectedTypes
+      .map((type) => EQUIPMENT_TYPE_NAMES[type])
+      .filter(Boolean)
+      .join("或") || "指定设备";
     throw new AppError(`请扫描${expectedName}设备码`, 400);
   }
   if (equipment.status !== EQUIPMENT_STATUS.ENABLED)
@@ -510,7 +516,7 @@ export async function startEquipmentUsage(prisma, actor, id, payload = {}) {
       if (!plan) throw new AppError("加工计划状态已变化，请刷新", 409);
       const expectedType =
         stage === PROCESSING_STAGE.SOAKING
-          ? EQUIPMENT_TYPE.SOAK_BUCKET
+          ? [EQUIPMENT_TYPE.SOAK_BUCKET, EQUIPMENT_TYPE.DECOCTION_POT]
           : EQUIPMENT_TYPE.DECOCTION_POT;
       const equipment = await findScannedEquipment(
         tx,
