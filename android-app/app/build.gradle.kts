@@ -9,6 +9,15 @@ android {
     compileSdk = 36
     buildFeatures { compose = true; buildConfig = true }
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    kotlinOptions {
+        jvmTarget = "21"
+    }
+
     val configuredApiBaseUrl = providers.gradleProperty("API_BASE_URL")
         .orElse(providers.environmentVariable("API_BASE_URL"))
         .orElse("https://api.tcm.example.com")
