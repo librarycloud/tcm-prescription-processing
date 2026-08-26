@@ -24,7 +24,7 @@ Debug 包默认请求 `http://10.0.2.2:3000`，这是 Android 模拟器访问宿
 gradle assembleRelease -PAPI_BASE_URL=https://api.tcm.example.com
 ```
 
-GitHub Actions 使用仓库 Secret `API_BASE_URL`；未配置时 Release 默认使用 `https://api.tcm.example.com`。登录使用后端 `POST /auth/login`，JWT 会在本次进程内用于后续 `/admin/*` 请求。
+GitHub Actions 使用仓库 Secret `API_BASE_URL`；手动运行 Debug workflow 时也可以在 `Run workflow` 的 `api_base_url` 输入框中直接填写地址。未配置时 Debug 使用模拟器地址，Release 默认使用 `https://api.tcm.example.com`。登录使用后端 `POST /auth/login`，JWT 会在本次进程内用于后续 `/admin/*` 请求。
 
 Debug 允许 HTTP 仅用于本地开发，Release 会强制关闭明文流量，因此正式 API 必须使用 HTTPS。
 
