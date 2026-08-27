@@ -278,23 +278,6 @@ internal fun SearchBarField(
     modifier: Modifier = Modifier,
     onScan: (() -> Unit)? = null,
 ) {
-    val leadingIcon: (@Composable () -> Unit)? = if (onScan != null) {
-        {
-            IconButton(
-                onClick = onScan,
-                modifier = Modifier.size(36.dp),
-            ) {
-                Icon(
-                    Icons.Default.QrCodeScanner,
-                    contentDescription = "扫码",
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    } else {
-        null
-    }
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -303,7 +286,23 @@ internal fun SearchBarField(
             value = value,
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = Muted, fontSize = 13.sp) },
-            leadingIcon = leadingIcon,
+            leadingIcon = if (onScan == null) {
+                null
+            } else {
+                @Composable {
+                    IconButton(
+                        onClick = { onScan.invoke() },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            contentDescription = "扫码",
+                            tint = Primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            },
             trailingIcon = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (value.isNotEmpty()) {
