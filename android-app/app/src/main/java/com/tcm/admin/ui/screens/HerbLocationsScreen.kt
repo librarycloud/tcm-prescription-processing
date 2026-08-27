@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -212,18 +213,36 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
                                                 text = code,
+                                                modifier = Modifier.weight(1f),
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontSize = 13.sp,
                                                 color = Ink,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
                                             )
-                                            Spacer(Modifier.weight(1f))
-                                            Text(
-                                                text = positionLabel(loc),
-                                                color = Muted,
-                                                fontSize = 11.sp,
-                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Surface(
+                                                color = Color.White,
+                                                shape = RoundedCornerShape(5.dp),
+                                                border = BorderStroke(1.dp, Primary.copy(alpha = 0.35f)),
+                                            ) {
+                                                Text(
+                                                    text = positionLabel(loc),
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                    color = PrimaryDark,
+                                                    fontSize = 10.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
                                         }
                                         Spacer(Modifier.height(3.dp))
+                                        Text(
+                                            text = locationTypeLabel(loc.optString("type")),
+                                            color = Muted,
+                                            fontSize = 11.sp,
+                                        )
+                                        Spacer(Modifier.height(2.dp))
                                         if (herbs.length() == 0) {
                                             Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
                                         } else {
@@ -299,7 +318,12 @@ internal fun HerbLocationAssignScreen(
             if (!existingLocation) {
                 Text("位置", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     listOf("D" to "药斗", "G" to "药柜", "F" to "冰箱", "C" to "仓库").forEach { (key, label) ->
                         SegmentedButton(label, locationType == key, onClick = { locationType = key })
                     }
