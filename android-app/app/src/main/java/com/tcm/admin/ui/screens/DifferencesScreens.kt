@@ -108,8 +108,8 @@ internal fun DifferencesScreen() {
         Spacer(Modifier.height(14.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegmentedButton("当前差异", tab == "current") { tab = "current" }
-            SegmentedButton("差异流水", tab == "logs") { tab = "logs" }
+            SegmentedButton("当前差异", tab == "current", onClick = { tab = "current" })
+            SegmentedButton("差异流水", tab == "logs", onClick = { tab = "logs" })
         }
 
         Spacer(Modifier.height(14.dp))
@@ -292,7 +292,7 @@ internal fun DifferencesScreen() {
                 Column {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("PRE_RECEIPT" to "先到货", "PRE_SHIPMENT" to "先出货").forEach { (key, label) ->
-                            SegmentedButton(label, registerType == key) { registerType = key }
+                            SegmentedButton(label, registerType == key, onClick = { registerType = key })
                         }
                     }
                     Spacer(Modifier.height(10.dp))

@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,22 +53,22 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONObject
 
 // ==================== Color Palette ====================
-internal val PageBackground = Color(0xFFF5F7FA)
-internal val Primary = Color(0xFF0052D9)
-internal val PrimaryDark = Color(0xFF003CAB)
-internal val PrimarySoft = Color(0xFFECF2FE)
-internal val Ink = Color(0xFF1D2129)
-internal val RegularText = Color(0xFF4E5969)
-internal val Muted = Color(0xFF86909C)
-internal val Border = Color(0xFFE5E6EB)
-internal val Success = Color(0xFF00B578)
-internal val SuccessSoft = Color(0xFFE8F8F2)
-internal val Warning = Color(0xFFFF7D00)
-internal val WarningSoft = Color(0xFFFFF7E8)
-internal val Danger = Color(0xFFF53F3F)
-internal val DangerSoft = Color(0xFFFEECEE)
-internal val Purple = Color(0xFF722ED1)
-internal val PurpleSoft = Color(0xFFF9F0FF)
+internal val PageBackground: Color @Composable get() = MaterialTheme.colorScheme.background
+internal val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary
+internal val PrimaryDark: Color @Composable get() = MaterialTheme.colorScheme.onPrimaryContainer
+internal val PrimarySoft: Color @Composable get() = MaterialTheme.colorScheme.primaryContainer
+internal val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
+internal val RegularText: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+internal val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+internal val Border: Color @Composable get() = MaterialTheme.colorScheme.outline
+internal val Success: Color @Composable get() = MaterialTheme.colorScheme.tertiary
+internal val SuccessSoft: Color @Composable get() = MaterialTheme.colorScheme.tertiaryContainer
+internal val Warning: Color @Composable get() = MaterialTheme.colorScheme.secondary
+internal val WarningSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
+internal val Danger: Color @Composable get() = MaterialTheme.colorScheme.error
+internal val DangerSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
+internal val Purple: Color @Composable get() = MaterialTheme.colorScheme.tertiary
+internal val PurpleSoft: Color @Composable get() = MaterialTheme.colorScheme.tertiaryContainer
 internal val CardShape = RoundedCornerShape(10.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 

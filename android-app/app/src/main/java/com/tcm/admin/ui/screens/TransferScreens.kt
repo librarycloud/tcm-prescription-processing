@@ -151,22 +151,22 @@ internal fun TransfersScreen() {
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SegmentedButton("全部状态", statusFilter == null && !overdueOnly) {
+            SegmentedButton("全部状态", statusFilter == null && !overdueOnly, onClick = {
                 statusFilter = null
                 overdueOnly = false
-            }
-            SegmentedButton("借出中", statusFilter == 0 && !overdueOnly) {
+            })
+            SegmentedButton("借出中", statusFilter == 0 && !overdueOnly, onClick = {
                 statusFilter = 0
                 overdueOnly = false
-            }
-            SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly) {
+            })
+            SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly, onClick = {
                 statusFilter = 1
                 overdueOnly = false
-            }
-            SegmentedButton("已逾期", overdueOnly) {
+            })
+            SegmentedButton("已逾期", overdueOnly, onClick = {
                 statusFilter = null
                 overdueOnly = true
-            }
+            })
         }
 
         if (stores.size > 1) {
@@ -310,7 +310,7 @@ internal fun TransfersScreen() {
                     ) {
                         stores.forEach { store ->
                             val id = store.opt("id")?.toString().orEmpty()
-                            SegmentedButton(store.optString("name"), fromStoreId == id) { fromStoreId = id }
+                            SegmentedButton(store.optString("name"), fromStoreId == id, onClick = { fromStoreId = id })
                         }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -322,7 +322,7 @@ internal fun TransfersScreen() {
                     ) {
                         stores.forEach { store ->
                             val id = store.opt("id")?.toString().orEmpty()
-                            SegmentedButton(store.optString("name"), toStoreId == id) { toStoreId = id }
+                            SegmentedButton(store.optString("name"), toStoreId == id, onClick = { toStoreId = id })
                         }
                     }
                     Spacer(Modifier.height(10.dp))

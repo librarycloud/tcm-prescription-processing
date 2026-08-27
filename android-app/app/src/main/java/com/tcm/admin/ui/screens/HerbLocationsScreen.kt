@@ -120,7 +120,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             listOf("" to "全部区域", "D" to "药斗", "G" to "药柜", "F" to "冰箱", "C" to "仓库").forEach { (key, label) ->
-                SegmentedButton(label, type == key) { type = key }
+                SegmentedButton(label, type == key, onClick = { type = key })
             }
         }
 

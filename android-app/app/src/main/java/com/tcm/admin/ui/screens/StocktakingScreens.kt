@@ -221,8 +221,8 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
                             runCatching {
                                 withContext(Dispatchers.IO) {
                                     ApiClient.createGoodsCheck(
-                                        JSONObject().put("name", checkName.trim()),
-                                        selectedStoreId.toIntOrNull(),
+                                        checkName.trim(),
+                                        storeId = selectedStoreId.toIntOrNull(),
                                     )
                                 }
                             }.onSuccess {

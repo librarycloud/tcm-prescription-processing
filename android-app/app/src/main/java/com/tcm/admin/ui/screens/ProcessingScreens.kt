@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -116,13 +118,13 @@ internal fun ProcessingScreenV2() {
                         page = page,
                         pageSize = 20,
                     )
-                    Triple(summary, paged, null)
+                    Triple<JSONObject, JSONObject?, JSONArray?>(summary, paged, null)
                 } else {
                     val pickupData = ApiClient.pickupTasks(
                         keyword = keyword.trim(),
                         storeId = storeIdInt,
                     )
-                    Triple(summary, null, pickupData)
+                    Triple<JSONObject, JSONObject?, JSONArray?>(summary, null, pickupData)
                 }
             }
         }.onSuccess { (summary, pagedPlans, pickupData) ->
@@ -242,7 +244,7 @@ internal fun ProcessingScreenV2() {
                             Card(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(76.dp),
+                                    .height(64.dp),
                                 shape = CardShape,
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (isSelected) PrimarySoft else Color.White,
@@ -259,12 +261,12 @@ internal fun ProcessingScreenV2() {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        .padding(horizontal = 7.dp, vertical = 4.dp),
                                     verticalArrangement = Arrangement.Center,
                                 ) {
                                     Text(
                                         text = value,
-                                        fontSize = 19.sp,
+                                        fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = when {
                                             !isPositive -> Ink
@@ -277,7 +279,7 @@ internal fun ProcessingScreenV2() {
                                     Text(
                                         text = label,
                                         color = if (isSelected) Primary else Muted,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                     )
                                 }
@@ -297,18 +299,22 @@ internal fun ProcessingScreenV2() {
             onSearch = { page = 1; reload++ },
         )
 
-        // Store Chips
+        // Store chips stay compact and wrap naturally below the search field.
         if (stores.size > 1) {
-            Spacer(Modifier.height(10.dp))
-            StoreChipsRow(
-                stores = stores,
-                selectedStoreId = selectedStoreId,
-                onSelectStore = { id ->
-                    selectedStoreId = id
-                    page = 1
-                    reload++
-                },
-            )
+            Spacer(Modifier.height(8.dp))
+            val storeOptions = listOf(JSONObject().put("id", "").put("name", "全部")) + stores
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                storeOptions.chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val chipWeight = Modifier.weight(1f)
+                        row.forEach { store ->
+                            val id = store.optString("id")
+                            SegmentedButton(store.optString("name", "门店"), selectedStoreId == id, { selectedStoreId = id; page = 1; reload++ }, chipWeight)
+                        }
+                        repeat(3 - row.size) { Spacer(chipWeight) }
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(14.dp))
@@ -663,10 +669,14 @@ internal fun ProcessingScreenV2() {
     }
 
     selectedPackageDetail?.let { item ->
-        PackageDetailDialogV2(
-            item = item,
-            onDismiss = { selectedPackageDetail = null },
-            onReload = { selectedPackageDetail = null; reload++ },
+        PackageDetailPage(
+            pkg = item,
+            onNavigate = { target ->
+                if (target is ScreenTarget.PackageVerify) {
+                    selectedPackageDetail = null
+                }
+            },
+            onBack = { selectedPackageDetail = null },
         )
     }
 }
@@ -789,7 +799,7 @@ internal fun ProcessingPlanFormDialog(
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (method, label) ->
-                        SegmentedButton(label, pickupMethod == method) { pickupMethod = method }
+                        SegmentedButton(label, pickupMethod == method, onClick = { pickupMethod = method })
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -868,7 +878,7 @@ internal fun WorkflowOperationDialog(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(plan) {
-        runCatching { withContext(Dispatchers.IO) { ApiClient.planWorkflow(plan.optInt("id")) } }
+        runCatching { withContext(Dispatchers.IO) { ApiClient.processingWorkflow(plan.optInt("id")) } }
             .onSuccess { workflow = it }
             .onFailure { error = it.message ?: "加载工序失败" }
     }
@@ -885,8 +895,8 @@ internal fun WorkflowOperationDialog(
                 Text("工序阶段选择", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SegmentedButton("浸泡", stage == 3) { stage = 3 }
-                    SegmentedButton("煎煮", stage == 4) { stage = 4 }
+                    SegmentedButton("浸泡", stage == 3, onClick = { stage = 3 })
+                    SegmentedButton("煎煮", stage == 4, onClick = { stage = 4 })
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(

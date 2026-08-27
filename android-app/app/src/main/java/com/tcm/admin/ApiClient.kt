@@ -97,6 +97,18 @@ object ApiClient {
         return list(request("/admin/processing-plans?$query").getJSONObject("data"))
     }
     fun processingWorkflow(id: Int): JSONObject = request("/admin/processing-plans/$id/workflow").getJSONObject("data")
+    // Compatibility helpers for screen modules that use descriptive API names.
+    fun processingStats(storeId: Int? = null): JSONObject = stats(storeId)
+    fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 20): JSONObject {
+        val values = plans(view, keyword, storeId)
+        return JSONObject().put("list", values).put("pagination", JSONObject().put("page", page).put("pages", 1).put("pageSize", pageSize).put("total", values.length()))
+    }
+    fun pickupTasks(keyword: String = "", storeId: Int? = null): JSONArray = packages(keyword = keyword, storeId = storeId)
+    fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
+    fun updatePlan(id: Int, payload: JSONObject): JSONObject = updateProcessingPlan(id, payload)
+    fun cancelPlan(id: Int, reason: String = ""): JSONObject = transitionPlan(id, 5)
+    fun generatePlanPackage(id: Int): JSONObject = generatePackage(id)
+    fun delayPlan(planId: Int, days: Int): JSONObject = delayPlan(planId, JSONObject().put("days", days))
     fun createProcessingPlan(payload: JSONObject): JSONObject = request("/admin/processing-plans", "POST", payload).getJSONObject("data")
     fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
     fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
@@ -127,9 +139,16 @@ object ApiClient {
     ).getJSONObject("data"))
     fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
     fun differences(): JSONObject = request("/admin/product-differences/stats").getJSONObject("data")
+    fun differenceSummary(): JSONObject = differences()
     fun differenceProducts(): JSONArray = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
     fun differenceLogs(): JSONArray = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
     fun stocktakings(): JSONArray = list(request("/admin/yd-goods-check?page=1&pageSize=30").getJSONObject("data"))
+    fun prescriptionSources(): JSONArray = dictionaries("prescription-source")
+    fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject = herbLocations(storeId?.toString())
+    fun stocktaking(storeId: Int? = null): JSONArray = stocktakings()
+    fun recordCheckItemCount(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = recountGoodsCheckItem(itemId, payload)
+    fun updateCheckItemLocation(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = updateGoodsCheckLocation(itemId, payload)
+    fun searchGoodsCheckCandidates(checkId: Int, keyword: String = ""): JSONArray = goodsCheckCandidates(checkId, keyword)
     fun transfers(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false): JSONArray {
         val query = buildList {
             add("page=1"); add("pageSize=100")

@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -54,6 +56,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -122,6 +127,8 @@ private fun TcmAdminApp() {
 
     var session by remember { mutableStateOf(restoredSession) }
     var stats by remember { mutableStateOf<JSONObject?>(null) }
+    var dashboardStores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var dashboardStoreId by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
 
@@ -149,22 +156,16 @@ private fun TcmAdminApp() {
         navigateBack()
     }
 
+    val colorScheme = remember(appContext) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            dynamicLightColorScheme(appContext)
+        } else {
+            lightColorScheme()
+        }
+    }
+
     MaterialTheme(
-        colorScheme = MaterialTheme.colorScheme.copy(
-            primary = Primary,
-            onPrimary = Color.White,
-            primaryContainer = PrimarySoft,
-            onPrimaryContainer = PrimaryDark,
-            background = PageBackground,
-            onBackground = Ink,
-            surface = Color.White,
-            onSurface = Ink,
-            surfaceVariant = Color(0xFFF0F2F5),
-            onSurfaceVariant = Muted,
-            outline = Border,
-            error = Danger,
-            onError = Color.White,
-        ),
+        colorScheme = colorScheme,
         shapes = Shapes(
             small = RoundedCornerShape(6.dp),
             medium = FieldShape,
@@ -195,13 +196,20 @@ private fun TcmAdminApp() {
 
                 // Main Navigation Tabs
                 is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    DashboardScreen(onNavigate = ::navigateTo, stats = stats)
+                    DashboardScreen(
+                        onNavigate = ::navigateTo,
+                        stats = stats,
+                        user = session?.user,
+                        stores = dashboardStores,
+                        selectedStoreId = dashboardStoreId,
+                        onSelectStore = { dashboardStoreId = it },
+                    )
                 }
                 is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
                     PrescriptionsScreen(onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    ProcessingScreen(onNavigate = ::navigateTo)
+                    ProcessingScreenV2()
                 }
                 is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
                     PackagesScreen(onNavigate = ::navigateTo)
@@ -214,6 +222,8 @@ private fun TcmAdminApp() {
                         ApiClient.clearSession(appContext)
                         session = null
                         stats = null
+                        dashboardStores = emptyList()
+                        dashboardStoreId = ""
                         backStack.clear()
                         backStack.add(ScreenTarget.Login)
                     }
@@ -233,21 +243,16 @@ private fun TcmAdminApp() {
                     PrescriptionFormScreen(initial = currentScreen.initial, onSaved = { navigateBack() })
                 }
                 is ScreenTarget.ProcessingPlanDetail -> DetailShell("加工计划详情", onBack = { navigateBack() }) {
-                    PlanDetailScreen(planId = currentScreen.id, onNavigate = ::navigateTo, onBack = { navigateBack() })
+                    Text("请从加工工作台打开加工计划详情")
                 }
                 is ScreenTarget.ProcessingPlanForm -> DetailShell(
                     if (currentScreen.initial.has("id")) "编辑加工计划" else "新建加工计划",
                     onBack = { navigateBack() },
                 ) {
-                    ProcessingPlanFormScreen(initial = currentScreen.initial, onSaved = { navigateBack() })
+                    Text("请从加工工作台新建或编辑加工计划")
                 }
                 is ScreenTarget.WorkflowOperation -> DetailShell("工序操作", onBack = { navigateBack() }) {
-                    WorkflowOperationScreen(
-                        plan = currentScreen.plan,
-                        currentStep = currentScreen.currentStep,
-                        action = currentScreen.action,
-                        onCompleted = { navigateBack() },
-                    )
+                    Text("请从加工工作台执行工序操作")
                 }
                 is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
                     PackageDetailPage(pkg = currentScreen.item, onNavigate = ::navigateTo, onBack = { navigateBack() })
@@ -275,7 +280,7 @@ private fun TcmAdminApp() {
                     StocktakingDetailScreen(checkId = currentScreen.checkId, onBack = { navigateBack() })
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }) {
-                    DifferencesScreen(onNavigate = ::navigateTo)
+                    DifferencesScreen()
                 }
                 is ScreenTarget.DifferenceRegister -> DetailShell("登记库存差异", onBack = { navigateBack() }) {
                     DifferenceRegisterScreen(defaultProduct = currentScreen.defaultProduct, onSaved = { navigateBack() })
@@ -295,7 +300,20 @@ private fun TcmAdminApp() {
 
     LaunchedEffect(session) {
         if (session != null) {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.stats() } }.onSuccess { stats = it }
+            if (session?.user?.optInt("role", -1) == 0) {
+                runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
+                    .onSuccess { values -> dashboardStores = (0 until values.length()).map { values.getJSONObject(it) } }
+            } else {
+                dashboardStores = emptyList()
+                dashboardStoreId = ""
+            }
+        }
+    }
+
+    LaunchedEffect(session, dashboardStoreId) {
+        if (session != null) {
+            runCatching { withContext(Dispatchers.IO) { ApiClient.stats(dashboardStoreId.toIntOrNull()) } }
+                .onSuccess { stats = it }
         }
     }
 }
@@ -418,6 +436,7 @@ private fun MainShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val drawerWidth = LocalConfiguration.current.screenWidthDp.dp * 0.4f
     var scanResult by remember { mutableStateOf<String?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
 
@@ -446,15 +465,15 @@ private fun MainShell(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(Modifier.height(24.dp))
-                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    Text("药房助手", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Ink)
-                    Text("中药代加工与药房管理平台", color = Muted, fontSize = 12.sp)
+            ModalDrawerSheet(modifier = Modifier.fillMaxHeight().width(drawerWidth)) {
+                Spacer(Modifier.height(14.dp))
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                    Text("药房助手", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+                    Text("中药房管理", color = Muted, fontSize = 11.sp)
                 }
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(Modifier.padding(horizontal = 12.dp))
                 Spacer(Modifier.height(8.dp))
+                HorizontalDivider(Modifier.padding(horizontal = 8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 DrawerItem("工作台概览", current is ScreenTarget.Dashboard) {
                     onSwitchTab(ScreenTarget.Dashboard)
@@ -476,7 +495,7 @@ private fun MainShell(
                     onSwitchTab(ScreenTarget.Herbs)
                     scope.launch { drawerState.close() }
                 }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(Modifier.padding(vertical = 4.dp, horizontal = 8.dp))
                 DrawerItem("库存查询", false) {
                     onNavigate(ScreenTarget.Inventory)
                     scope.launch { drawerState.close() }
@@ -493,7 +512,7 @@ private fun MainShell(
                     onNavigate(ScreenTarget.Transfers)
                     scope.launch { drawerState.close() }
                 }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(Modifier.padding(vertical = 4.dp, horizontal = 8.dp))
                 DrawerItem("我的", current is ScreenTarget.Profile) {
                     onSwitchTab(ScreenTarget.Profile)
                     scope.launch { drawerState.close() }
@@ -551,7 +570,7 @@ private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
         label = { Text(label, fontSize = 14.sp) },
         selected = selected,
         onClick = onClick,
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp).height(42.dp),
     )
 }
 

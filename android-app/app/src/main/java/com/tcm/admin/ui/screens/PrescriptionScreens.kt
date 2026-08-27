@@ -132,10 +132,10 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SegmentedButton("全部状态", status == null) { status = null }
-            SegmentedButton("进行中", status == 0) { status = 0 }
-            SegmentedButton("已完成", status == 1) { status = 1 }
-            SegmentedButton("已取消", status == 2) { status = 2 }
+            SegmentedButton("全部状态", status == null, onClick = { status = null })
+            SegmentedButton("进行中", status == 0, onClick = { status = 0 })
+            SegmentedButton("已完成", status == 1, onClick = { status = 1 })
+            SegmentedButton("已取消", status == 2, onClick = { status = 2 })
         }
 
         if (stores.size > 1) {

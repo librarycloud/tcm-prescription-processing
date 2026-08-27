@@ -222,9 +222,9 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SegmentedButton("全部包裹", status == null) { status = null; page = 1 }
-            SegmentedButton("待领取", status == 0) { status = 0; page = 1 }
-            SegmentedButton("已领取", status == 1) { status = 1; page = 1 }
+            SegmentedButton("全部包裹", status == null, onClick = { status = null; page = 1 })
+            SegmentedButton("待领取", status == 0, onClick = { status = 0; page = 1 })
+            SegmentedButton("已领取", status == 1, onClick = { status = 1; page = 1 })
         }
 
         if (stores.size > 1) {
@@ -566,7 +566,7 @@ internal fun PackageFormScreen(
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) ->
-                    SegmentedButton(label, method == key) { method = key }
+                    SegmentedButton(label, method == key, onClick = { method = key })
                 }
             }
 
@@ -672,7 +672,7 @@ internal fun PackageVerifyScreen(
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) ->
-                    SegmentedButton(label, method == key) { method = key }
+                    SegmentedButton(label, method == key, onClick = { method = key })
                 }
             }
 

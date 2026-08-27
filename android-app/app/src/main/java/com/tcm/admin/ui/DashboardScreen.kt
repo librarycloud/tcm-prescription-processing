@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,7 +41,15 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONObject
 
 @Composable
-internal fun DashboardScreen(onNavigate: (ScreenTarget) -> Unit, stats: JSONObject?) {
+internal fun DashboardScreen(
+    onNavigate: (ScreenTarget) -> Unit,
+    stats: JSONObject?,
+    user: JSONObject? = null,
+    stores: List<JSONObject> = emptyList(),
+    selectedStoreId: String = "",
+    onSelectStore: (String) -> Unit = {},
+) {
+    val isGlobalAdmin = user?.optInt("role", -1) == 0
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,42 +79,35 @@ internal fun DashboardScreen(onNavigate: (ScreenTarget) -> Unit, stats: JSONObje
 
         Spacer(Modifier.height(14.dp))
 
-        // Store Card
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            shape = CardShape,
-            border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        if (isGlobalAdmin) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = CardShape,
+                border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
             ) {
-                Surface(
-                    color = PrimarySoft,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.size(38.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Store,
-                            contentDescription = null,
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp),
-                        )
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Store, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("统计门店", color = Muted, fontSize = 12.sp)
+                        Spacer(Modifier.weight(1f))
+                        Text(if (selectedStoreId.isBlank()) "全部门店" else "已选择", color = Primary, fontSize = 12.sp)
+                    }
+                    if (stores.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SegmentedButton("全部门店", selectedStoreId.isBlank(), { onSelectStore("") })
+                            stores.forEach { store ->
+                                val id = store.opt("id")?.toString().orEmpty()
+                                SegmentedButton(store.optString("name", "门店"), selectedStoreId == id, { onSelectStore(id) })
+                            }
+                        }
                     }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("当前工作门店", color = Muted, fontSize = 12.sp)
-                    Text("全部门店（管理员模式）", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 14.sp)
-                }
             }
+            Spacer(Modifier.height(16.dp))
         }
-
-        Spacer(Modifier.height(20.dp))
 
         // Processing Stats
         SectionHeader("加工概况", "按日统计待办与完成情况")
@@ -116,8 +118,6 @@ internal fun DashboardScreen(onNavigate: (ScreenTarget) -> Unit, stats: JSONObje
                 "逾期未开工" to stat(stats, "overdueCount"),
                 "加工中" to stat(stats, "processingCount"),
                 "今日完成" to stat(stats, "todayFinished"),
-                "等待顾客" to stat(stats, "waitingNoticeCount"),
-                "明日加工" to stat(stats, "tomorrowWaitingCount"),
             ),
             onClick = { onNavigate(ScreenTarget.Processing) },
         )
@@ -172,6 +172,7 @@ internal fun StatsGrid(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val cellWeight = Modifier.weight(1f)
                 row.forEach { (label, value) ->
                     val isPositive = value != "0" && value != "-"
                     val isAlert = label.contains("逾期") || label.contains("等待") || label.contains("超时")
@@ -184,8 +185,8 @@ internal fun StatsGrid(
 
                     Card(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(78.dp)
+                            .then(cellWeight)
+                            .height(68.dp)
                             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         shape = CardShape,
@@ -195,12 +196,12 @@ internal fun StatsGrid(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text(
                                 text = value,
-                                fontSize = 20.sp,
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = valueColor,
                             )
@@ -208,13 +209,13 @@ internal fun StatsGrid(
                             Text(
                                 text = label,
                                 color = Muted,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                             )
                         }
                     }
                 }
                 repeat(columns - row.size) {
-                    Spacer(Modifier.weight(1f))
+                    Spacer(cellWeight)
                 }
             }
         }
