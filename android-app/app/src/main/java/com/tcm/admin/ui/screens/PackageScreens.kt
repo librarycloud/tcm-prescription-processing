@@ -156,5 +156,37 @@ internal fun PackagesScreenV3(onOpen: (PackageItem) -> Unit) {
         items.orEmpty().forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.name, fontWeight = FontWeight.SemiBold); Text("${item.customer} · ${item.phone}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", fontWeight = FontWeight.Bold, color = Primary, fontSize = 17.sp); Text("${item.method} · ${item.time}", color = Muted, fontSize = 12.sp) } } }
     }
     if (form) AlertDialog(onDismissRequest = { if (!busy) form = false }, title = { Text("新增包裹") }, text = { Column { OutlinedTextField(itemName, { itemName = it }, Modifier.fillMaxWidth(), label = { Text("物品名称") }, singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(receiverName, { receiverName = it }, Modifier.fillMaxWidth(), label = { Text("收件人") }, singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(receiverPhone, { receiverPhone = it }, Modifier.fillMaxWidth(), label = { Text("手机号（可选）") }, singleLine = true); Spacer(Modifier.height(8.dp)); Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) -> SegmentedButton(label, method == key) { method = key } }; }; if (method == 2) OutlinedTextField(tracking, { tracking = it }, Modifier.fillMaxWidth(), label = { Text("快递单号") }, singleLine = true) } }, confirmButton = { Button(enabled = itemName.isNotBlank() && receiverName.isNotBlank() && !busy && (method != 2 || tracking.isNotBlank()), onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.createPackage(JSONObject().put("itemName", itemName.trim()).put("receiverName", receiverName.trim()).put("receiverPhone", receiverPhone.trim()).put("pickupMethod", method).put("expressTrackingNo", tracking.trim())) } }.onSuccess { form = false; itemName = ""; receiverName = ""; receiverPhone = ""; tracking = ""; reload++ }.onFailure { error = it.message ?: "新增包裹失败" }; busy = false } }) { Text(if (busy) "提交中..." else "创建") } }, dismissButton = { TextButton({ if (!busy) form = false }) { Text("取消") } })
-    if (verify) AlertDialog(onDismissRequest = { if (!busy) verify = false }, title = { Text("取货码核销") }, text = { Column { OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth(), label = { Text("6 位取货码") }, singleLine = true); Spacer(Modifier.height(8.dp)); Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) -> SegmentedButton(label, method == key) { method = key } } }; if (method == 2) OutlinedTextField(tracking, { tracking = it }, Modifier.fillMaxWidth(), label = { Text("快递单号") }, singleLine = true) } }, confirmButton = { Button(enabled = code.length == 6 && !busy && (method != 2 || tracking.isNotBlank()), onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(code, method, tracking.trim()) } }.onSuccess { verify = false; code = ""; tracking = ""; reload++ }.onFailure { error = it.message ?: "核销失败" }; busy = false } }) { Text(if (busy) "核销中..." else "确认核销") } }, dismissButton = { TextButton({ if (!busy) verify = false }) { Text("取消") } })
+    if (verify) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) verify = false },
+            title = { Text("取货码核销") },
+            text = {
+                Column {
+                    OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth(), label = { Text("6 位取货码") }, singleLine = true)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) ->
+                            SegmentedButton(label, method == key) { method = key }
+                        }
+                    }
+                    if (method == 2) OutlinedTextField(tracking, { tracking = it }, Modifier.fillMaxWidth(), label = { Text("快递单号") }, singleLine = true)
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = code.length == 6 && !busy && (method != 2 || tracking.isNotBlank()),
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(code, method, tracking.trim()) } }
+                                .onSuccess { verify = false; code = ""; tracking = ""; reload++ }
+                                .onFailure { error = it.message ?: "核销失败" }
+                            busy = false
+                        }
+                    },
+                ) { Text(if (busy) "核销中..." else "确认核销") }
+            },
+            dismissButton = { TextButton({ if (!busy) verify = false }) { Text("取消") } },
+        )
+    }
 }

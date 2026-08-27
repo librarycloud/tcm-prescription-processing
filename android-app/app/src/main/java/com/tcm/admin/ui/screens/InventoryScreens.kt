@@ -194,7 +194,37 @@ internal fun StocktakingScreen() {
         AlertDialog(onDismissRequest = { locationItem = null }, title = { Text("修改货位") }, text = { Column { Text(item.optJSONObject("product")?.optString("name", "商品") ?: "商品", fontWeight = FontWeight.SemiBold); OutlinedTextField(locationValue, { locationValue = it }, Modifier.fillMaxWidth(), label = { Text("货位名称") }, singleLine = true) } }, confirmButton = { Button(enabled = locationValue.isNotBlank(), onClick = { scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.updateGoodsCheckLocation(item.optInt("id"), JSONObject().put("locationName", locationValue.trim())) } }.onSuccess { locationItem = null; selected = null; reload++ }.onFailure { error = it.message ?: "保存货位失败" } } }) { Text("保存") } }, dismissButton = { TextButton({ locationItem = null }) { Text("取消") } })
     }
     LaunchedEffect(candidateVisible, candidateKeyword, activeCheckId) { if (candidateVisible && activeCheckId > 0) runCatching { withContext(Dispatchers.IO) { ApiClient.goodsCheckCandidates(activeCheckId, candidateKeyword) } }.onSuccess { values -> candidates = (0 until values.length()).map { values.getJSONObject(it) } }.onFailure { error = it.message ?: "加载候选商品失败" } }
-    if (candidateVisible) AlertDialog(onDismissRequest = { candidateVisible = false }, title = { Text("选择盘点商品") }, text = { Column(Modifier.verticalScroll(rememberScrollState())) { OutlinedTextField(candidateKeyword, { candidateKeyword = it }, Modifier.fillMaxWidth(), label = { Text("商品名、编码或条码") }, singleLine = true); Spacer(Modifier.height(8.dp)); candidates.take(30).forEach { candidate -> val product = candidate.optJSONObject("product") ?: candidate; OutlinedButton({ countItem = JSONObject().put("product", product).put("productId", candidate.optInt("productId", product.optInt("id"))).put("batchNo", candidate.optString("batchNo")).put("locationName", candidate.optString("locationName")); countValue = ""; candidateVisible = false }, Modifier.fillMaxWidth().padding(bottom = 6.dp), shape = RoundedCornerShape(6.dp)) { Text("${product.optString("name")} · ${candidate.opt("quantity") ?: 0} ${product.optString("unit")}") } } }, confirmButton = { Button({ candidateVisible = false }) { Text("关闭") } })
+    if (candidateVisible) {
+        AlertDialog(
+            onDismissRequest = { candidateVisible = false },
+            title = { Text("选择盘点商品") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(candidateKeyword, { candidateKeyword = it }, Modifier.fillMaxWidth(), label = { Text("商品名、编码或条码") }, singleLine = true)
+                    Spacer(Modifier.height(8.dp))
+                    candidates.take(30).forEach { candidate ->
+                        val product = candidate.optJSONObject("product") ?: candidate
+                        OutlinedButton(
+                            onClick = {
+                                countItem = JSONObject()
+                                    .put("product", product)
+                                    .put("productId", candidate.optInt("productId", product.optInt("id")))
+                                    .put("batchNo", candidate.optString("batchNo"))
+                                    .put("locationName", candidate.optString("locationName"))
+                                countValue = ""
+                                candidateVisible = false
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                            shape = RoundedCornerShape(6.dp),
+                        ) {
+                            Text("${product.optString("name")} · ${candidate.opt("quantity") ?: 0} ${product.optString("unit")}")
+                        }
+                    }
+                }
+            },
+            confirmButton = { Button({ candidateVisible = false }) { Text("关闭") } },
+        )
+    }
 }
 
 private fun goodsCheckStatus(status: Int): String = when (status) { 0 -> "待盘点"; 1 -> "盘点中"; 2 -> "已完成"; else -> "未知" }

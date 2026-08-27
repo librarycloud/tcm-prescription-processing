@@ -177,6 +177,32 @@ internal fun TransfersScreen() {
         AlertDialog(onDismissRequest = { detail = null }, title = { Text(transfer.optString("transferNo")) }, text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text("${transfer.optJSONObject("fromStore")?.optString("name") ?: "-"}  ->  ${transfer.optJSONObject("toStore")?.optString("name") ?: "-"}", color = Muted); Spacer(Modifier.height(8.dp)); (0 until items.length()).forEach { index -> val item = items.getJSONObject(index); Text(item.optString("itemName"), fontWeight = FontWeight.SemiBold); Text("${item.opt("quantity") ?: 0} ${item.optString("unit")} · 已归还 ${item.opt("returnedQuantity") ?: 0}", color = Muted, fontSize = 12.sp); val available = item.optDouble("availableReturnQuantity", 0.0); if (available > 0 && transfer.optJSONObject("permissions")?.optBoolean("canSubmitReturn") == true) OutlinedButton({ returnItem = item; returnQuantity = available.toString() }, shape = RoundedCornerShape(6.dp)) { Text("申请归还") }; if (index < items.length() - 1) HorizontalDivider(Modifier.padding(vertical = 8.dp)) }; pendingReturn?.let { record -> Spacer(Modifier.height(10.dp)); Text("待确认归还：${record.opt("quantity") ?: 0} · ${record.optString("returnDate").take(10)}", color = Warning, fontSize = 13.sp) } } }, confirmButton = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { if (canConfirm) Button({ scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.confirmOutbound(transfer.optInt("id")) } }.onSuccess { detail = null; reload++ }.onFailure { error = it.message ?: "确认调出失败" } } }) { Text("确认调出") }; if (pendingReturn != null && transfer.optJSONObject("permissions")?.optBoolean("canConfirmReturn") == true) Button({ scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(transfer.optInt("id"), pendingReturn.optInt("id")) } }.onSuccess { detail = null; reload++ }.onFailure { error = it.message ?: "确认归还失败" } } }) { Text("确认归还") }; if (transfer.optJSONObject("permissions")?.optBoolean("canCancel") == true) OutlinedButton({ scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.cancelTransfer(transfer.optInt("id"), "安卓端取消") } }.onSuccess { detail = null; reload++ }.onFailure { error = it.message ?: "取消调拨失败" } } }) { Text("取消") }; OutlinedButton({ detail = null }) { Text("关闭") } } }, dismissButton = { TextButton({ detail = null }) { Text("关闭") } })
     }
     returnItem?.let { item ->
-        AlertDialog(onDismissRequest = { returnItem = null }, title = { Text("申请归还") }, text = { Column { Text(item.optString("itemName"), fontWeight = FontWeight.SemiBold); OutlinedTextField(returnQuantity, { returnQuantity = it }, Modifier.fillMaxWidth(), label = { Text("归还数量") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true) } }, confirmButton = { Button(enabled = returnQuantity.toDoubleOrNull()?.let { it > 0 } == true, onClick = { val transferId = detail?.optInt("id") ?: 0; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.addTransferReturns(transferId, JSONObject().put("returnDate", LocalDate.now().toString()).put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()))) } }.onSuccess { returnItem = null; detail = null; reload++ }.onFailure { error = it.message ?: "提交归还失败" } } }) { Text("提交") } }, dismissButton = { TextButton({ returnItem = null }) { Text("取消") } })
+        AlertDialog(
+            onDismissRequest = { returnItem = null },
+            title = { Text("申请归还") },
+            text = {
+                Column {
+                    Text(item.optString("itemName"), fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(returnQuantity, { returnQuantity = it }, Modifier.fillMaxWidth(), label = { Text("归还数量") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = returnQuantity.toDoubleOrNull()?.let { it > 0 } == true,
+                    onClick = {
+                        val transferId = detail?.optInt("id") ?: 0
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.addTransferReturns(transferId, JSONObject().put("returnDate", LocalDate.now().toString()).put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()))))
+                                }
+                            }.onSuccess { returnItem = null; detail = null; reload++ }
+                                .onFailure { error = it.message ?: "提交归还失败" }
+                        }
+                    },
+                ) { Text("提交") }
+            },
+            dismissButton = { TextButton({ returnItem = null }) { Text("取消") } },
+        )
     }
 }

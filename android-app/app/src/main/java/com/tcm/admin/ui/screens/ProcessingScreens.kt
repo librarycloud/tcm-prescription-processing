@@ -141,8 +141,36 @@ internal fun ProcessingScreenV2() {
             values.filter { keyword.isBlank() || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${item.customer} · ${item.name}", fontWeight = FontWeight.SemiBold); Text("${item.phone} · ${item.time}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = JSONObject().put("packageId", item.id).put("pickupCode", item.code).put("receiverName", item.customer).put("receiverPhone", item.phone) }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; if (item.statusCode == 0) Button({ workflowPlan = JSONObject().put("packageId", item.id).put("packageCode", item.code) }, shape = RoundedCornerShape(6.dp)) { Text("核销") } } } }
         }
     }
-    detailPlan?.let { detail -> if (detail.has("packageId")) PackageDetailDialogV2(packageItem(JSONObject().put("id", detail.optInt("packageId")).put("pickupCode", detail.optString("pickupCode")).put("receiverName", detail.optString("receiverName")).put("receiverPhone", detail.optString("receiverPhone"))), { detailPlan = null }) else PlanDetailDialog(detail, onClose = { detailPlan = null }, onDelete = { id -> scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPlan(id) } }.onSuccess { detailPlan = null; reload++ }.onFailure { error = it.message ?: "删除加工计划失败" } } }) }
-    workflowPlan?.let { plan -> if (plan.has("packageId")) PackageDetailDialogV2(packageItem(JSONObject().put("id", plan.optInt("packageId")).put("pickupCode", plan.optString("packageCode")).put("receiverName", "客户")), { workflowPlan = null }) else WorkflowDialog(plan) { workflowPlan = null } }
+    detailPlan?.let { detail ->
+        if (detail.has("packageId")) {
+            PackageDetailDialogV2(
+                packageItem(JSONObject().put("id", detail.optInt("packageId")).put("pickupCode", detail.optString("pickupCode")).put("receiverName", detail.optString("receiverName")).put("receiverPhone", detail.optString("receiverPhone"))),
+                onClose = { detailPlan = null },
+            )
+        } else {
+            PlanDetailDialog(
+                detail,
+                onClose = { detailPlan = null },
+                onDelete = { id ->
+                    scope.launch {
+                        runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPlan(id) } }
+                            .onSuccess { detailPlan = null; reload++ }
+                            .onFailure { error = it.message ?: "删除加工计划失败" }
+                    }
+                },
+            )
+        }
+    }
+    workflowPlan?.let { plan ->
+        if (plan.has("packageId")) {
+            PackageDetailDialogV2(
+                packageItem(JSONObject().put("id", plan.optInt("packageId")).put("pickupCode", plan.optString("packageCode")).put("receiverName", "客户")),
+                onClose = { workflowPlan = null },
+            )
+        } else {
+            WorkflowDialog(plan, onClose = { workflowPlan = null })
+        }
+    }
     if (createVisible) AlertDialog(onDismissRequest = { createVisible = false }, title = { Text("新建加工计划") }, text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text("处方", color = Muted, fontSize = 12.sp); prescriptions.take(8).forEach { prescription -> SegmentedButton("${prescription.optString("prescriptionNo")} · ${prescription.optString("customerName")}", prescriptionId == prescription.optInt("id")) { prescriptionId = prescription.optInt("id") } }; Spacer(Modifier.height(8.dp)); Text("加工类型", color = Muted, fontSize = 12.sp); processTypes.take(6).forEach { type -> SegmentedButton(type.optString("name"), processTypeId == type.optInt("id")) { processTypeId = type.optInt("id") } }; OutlinedTextField(totalDose, { totalDose = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("总剂数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true); OutlinedTextField(processDate, { processDate = it }, Modifier.fillMaxWidth(), label = { Text("加工日期 YYYY-MM-DD") }, singleLine = true); val decoction = processTypes.firstOrNull { it.optInt("id") == processTypeId }?.let { it.optString("code") == "DECOCTION" || it.optString("name") == "代煎" } == true; if (decoction) { OutlinedTextField(bagCount, { bagCount = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("袋数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true); OutlinedTextField(volumeMl, { volumeMl = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("每袋毫升数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true) } } }, confirmButton = { val decoction = processTypes.firstOrNull { it.optInt("id") == processTypeId }?.let { it.optString("code") == "DECOCTION" || it.optString("name") == "代煎" } == true; Button(enabled = prescriptionId > 0 && processTypeId > 0 && totalDose.toIntOrNull()?.let { it > 0 } == true && (!decoction || (bagCount.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true)), onClick = { val payload = JSONObject().put("prescriptionId", prescriptionId).put("processTypeId", processTypeId).put("totalDose", totalDose.toInt()).put("batchNo", 1).put("scheduleType", 1).put("processDate", processDate).put("pickupMethod", 0); if (decoction) { payload.put("bagCount", bagCount.toInt()); payload.put("volumeMl", volumeMl.toInt()) }; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.createProcessingPlan(payload) } }.onSuccess { createVisible = false; reload++ }.onFailure { error = it.message ?: "创建加工计划失败" } } }) { Text("创建") } }, dismissButton = { TextButton({ createVisible = false }) { Text("取消") } })
 }
 
