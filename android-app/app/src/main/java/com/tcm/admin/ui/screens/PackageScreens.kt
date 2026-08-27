@@ -124,7 +124,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
         loading = true
         runCatching {
             withContext(Dispatchers.IO) {
-                ApiClient.packages(
+                ApiClient.packagesPaged(
                     status = status,
                     keyword = keyword.trim(),
                     storeId = selectedStoreId.toIntOrNull(),

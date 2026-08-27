@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,7 +62,7 @@ internal fun DifferencesScreen() {
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
-                Triple(ApiClient.differenceSummary(), ApiClient.differences(), ApiClient.differenceLogs())
+                Triple(ApiClient.differenceSummary(), ApiClient.differenceProducts(), ApiClient.differenceLogs())
             }
         }.onSuccess { (summary, list, logList) ->
             stats = summary

@@ -14,6 +14,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import storeRoutes from './routes/storeRoutes.js';
 import e6IntegrationRoutes from './routes/e6IntegrationRoutes.js';
+import appRoutes from './routes/appRoutes.js';
 import { initializeIpLookup } from './utils/ipLookup.js';
 import { startRobotDeliveryWorker } from './services/robotNotificationService.js';
 
@@ -46,6 +47,7 @@ export async function buildApp() {
   );
 
   fastify.get('/health', async (_request, reply) => ok(reply, { status: 'ok' }));
+  await fastify.register(appRoutes, { prefix: '/app' });
   await fastify.register(authRoutes, { prefix: '/auth' });
   await fastify.register(adminRoutes, { prefix: '/admin' });
   await fastify.register(userRoutes, { prefix: '/user' });

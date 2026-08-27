@@ -45,8 +45,13 @@ android {
         applicationId = "com.tcm.admin"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = providers.gradleProperty("VERSION_CODE")
+            .map(String::toInt)
+            .orElse(1)
+            .get()
+        versionName = providers.gradleProperty("VERSION_NAME")
+            .orElse("1.0")
+            .get()
     }
 
     signingConfigs {

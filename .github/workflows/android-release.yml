@@ -1,8 +1,23 @@
 name: Android Release APK
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
+      version_code:
+        description: "Android versionCode，例如 2"
+        required: true
+        type: string
+      version_name:
+        description: "Android versionName，例如 1.1"
+        required: true
+        type: string
+      release_tag:
+        description: "可选，GitHub Release 标签，例如 v1.1.0；不填则使用 v版本名称"
+        required: false
+        type: string
       api_base_url:
         description: "正式 API 根地址，例如 https://api.tcm.example.com"
         required: false
@@ -11,6 +26,9 @@ on:
 concurrency:
   group: android-release-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build-release:
@@ -74,6 +92,8 @@ jobs:
       - name: Build signed release APK
         env:
           API_BASE_URL: ${{ inputs.api_base_url || secrets.API_BASE_URL }}
+          VERSION_CODE_INPUT: ${{ inputs.version_code }}
+          VERSION_NAME_INPUT: ${{ inputs.version_name }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -82,12 +102,61 @@ jobs:
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
-          gradle --no-daemon assembleRelease -PAPI_BASE_URL="$API_BASE_URL"
+          version_code="$VERSION_CODE_INPUT"
+          version_name="$VERSION_NAME_INPUT"
+          if [ -z "$version_code" ]; then
+            version_code="$(sed -n 's/.*\.orElse(\([0-9][0-9]*\)).*/\1/p' app/build.gradle.kts | tail -n 1 | tr -d '[:space:]')"
+          fi
+          if [ -z "$version_name" ]; then
+            version_name="$(sed -n 's/.*\.orElse("\([^"]*\)").*/\1/p' app/build.gradle.kts | tail -n 1)"
+          fi
+          case "$version_code" in
+            ''|*[!0-9]*) echo "version_code must be a positive integer"; exit 1 ;;
+          esac
+          test "$version_code" -gt 0
+          test -n "$version_name"
+          gradle --no-daemon assembleRelease \
+            -PAPI_BASE_URL="$API_BASE_URL" \
+            -PVERSION_CODE="$version_code" \
+            -PVERSION_NAME="$version_name"
+          printf 'ANDROID_VERSION_CODE=%s\nANDROID_VERSION_NAME=%s\n' "$version_code" "$version_name" >> "$GITHUB_ENV"
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
           name: tcm-admin-release-apk
           path: android-app/app/build/outputs/apk/release/app-release.apk
+      - name: Create release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_code="$ANDROID_VERSION_CODE"
+          version_name="$ANDROID_VERSION_NAME"
+          test -n "$version_code"
+          test -n "$version_name"
+          sha256="$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')"
+          size="$(stat -c '%s' app/build/outputs/apk/release/app-release.apk)"
+          cat > app-version.android.json <<EOF
+          {
+            "versionCode": $version_code,
+            "versionName": "$version_name",
+            "minVersionCode": 1,
+            "forceUpdate": false,
+            "releaseNotes": [],
+            "publishedAt": "$(date -u +%F)",
+            "apkAsset": "app-release.apk",
+            "sha256": "$sha256",
+            "size": $size
+          }
+          EOF
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag || (github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version_name) || github.ref_name) }}
+          name: 药房助手 ${{ inputs.release_tag || (github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version_name) || github.ref_name) }}
+          generate_release_notes: true
+          files: |
+            android-app/app/build/outputs/apk/release/app-release.apk
+            android-app/app-version.android.json
       - name: Remove signing keystore
         if: always()
         run: rm -f release.keystore

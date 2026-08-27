@@ -166,6 +166,12 @@ const routes = [
         meta: { title: '群机器人通知', icon: 'Bell', group: 'system', allowedRoles: [0, 2] }
       },
       {
+        path: 'app-releases',
+        name: 'AppReleases',
+        component: () => import('@/views/admin/AppReleases.vue'),
+        meta: { title: 'Android版本发布', icon: 'Download', group: 'system', allowedRoles: [0] }
+      },
+      {
         path: 'processing-equipment',
         name: 'ProcessingEquipment',
         component: () => import('@/views/admin/ProcessingEquipment.vue'),

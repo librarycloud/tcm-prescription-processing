@@ -10,6 +10,7 @@
     "dev": "node --watch src/app.js",
     "prestart": "prisma generate",
     "start": "node src/app.js",
+    "sync:android-release": "node scripts/syncAndroidRelease.mjs",
     "test": "node --test",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

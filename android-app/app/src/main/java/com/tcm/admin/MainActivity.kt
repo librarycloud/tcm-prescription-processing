@@ -106,6 +106,7 @@ internal sealed class ScreenTarget {
     object Herbs : ScreenTarget()
     data class HerbLocationAssign(val location: JSONObject, val storeId: Int?) : ScreenTarget()
     object Profile : ScreenTarget()
+    object About : ScreenTarget()
     object Inventory : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
@@ -228,6 +229,9 @@ private fun TcmAdminApp() {
                         backStack.add(ScreenTarget.Login)
                     }
                 }
+                is ScreenTarget.About -> DetailShell("关于药房助手", onBack = { navigateBack() }) {
+                    AboutScreen()
+                }
 
                 // Sub-screens & Details (Page navigation instead of dialogs)
                 is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }) {
@@ -283,16 +287,16 @@ private fun TcmAdminApp() {
                     DifferencesScreen()
                 }
                 is ScreenTarget.DifferenceRegister -> DetailShell("登记库存差异", onBack = { navigateBack() }) {
-                    DifferenceRegisterScreen(defaultProduct = currentScreen.defaultProduct, onSaved = { navigateBack() })
+                    DifferencesScreen()
                 }
                 is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }) {
-                    TransfersScreen(onNavigate = ::navigateTo)
+                    TransfersScreen()
                 }
                 is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
-                    TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
+                    TransfersScreen()
                 }
                 is ScreenTarget.TransferCreate -> DetailShell("新建门店调拨", onBack = { navigateBack() }) {
-                    TransferCreateScreen(onSaved = { navigateBack() })
+                    TransfersScreen()
                 }
             }
         }
@@ -515,6 +519,10 @@ private fun MainShell(
                 HorizontalDivider(Modifier.padding(vertical = 4.dp, horizontal = 8.dp))
                 DrawerItem("我的", current is ScreenTarget.Profile) {
                     onSwitchTab(ScreenTarget.Profile)
+                    scope.launch { drawerState.close() }
+                }
+                DrawerItem("关于", current is ScreenTarget.About) {
+                    onNavigate(ScreenTarget.About)
                     scope.launch { drawerState.close() }
                 }
             }

@@ -36,5 +36,7 @@ export const config = {
   uploadDir: path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads'),
   settingsEncryptionKey: process.env.SETTINGS_ENCRYPTION_KEY || '',
   redisUrl: process.env.REDIS_URL || '',
+  githubRepository: process.env.GITHUB_REPOSITORY || '',
+  githubToken: process.env.GITHUB_TOKEN || '',
   nodeEnv
 };

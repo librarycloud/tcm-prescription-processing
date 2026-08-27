@@ -72,6 +72,7 @@ object ApiClient {
     fun me(): JSONObject = request("/user/me").getJSONObject("data")
 
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    fun androidAppVersion(): JSONObject = request("/app/version/android").getJSONObject("data")
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray {
         val query = buildList {
             add("page=1"); add("pageSize=100")
@@ -127,6 +128,10 @@ object ApiClient {
         }.joinToString("&")
         return list(request("/admin/packages?$query").getJSONObject("data"))
     }
+    fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 15): JSONObject {
+        val values = packages(status, source, dateScope, keyword, storeId, sortBy)
+        return JSONObject().put("list", values).put("total", values.length()).put("page", page).put("pageSize", pageSize)
+    }
    fun packageDetail(id: Int): JSONObject = request("/admin/packages/$id").getJSONObject("data")
     fun packageByCode(code: String): JSONObject = request("/admin/packages/by-code/${java.net.URLEncoder.encode(code, "UTF-8")}").getJSONObject("data")
     fun createPackage(payload: JSONObject): JSONObject = request("/admin/packages", "POST", payload).getJSONObject("data")
@@ -138,8 +143,8 @@ object ApiClient {
             (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
     ).getJSONObject("data"))
     fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
-    fun differences(): JSONObject = request("/admin/product-differences/stats").getJSONObject("data")
-    fun differenceSummary(): JSONObject = differences()
+    fun differences(): JSONArray = differenceProducts()
+    fun differenceSummary(): JSONObject = request("/admin/product-differences/stats").getJSONObject("data")
     fun differenceProducts(): JSONArray = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
     fun differenceLogs(): JSONArray = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
     fun stocktakings(): JSONArray = list(request("/admin/yd-goods-check?page=1&pageSize=30").getJSONObject("data"))
