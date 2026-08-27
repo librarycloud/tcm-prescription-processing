@@ -58,6 +58,8 @@ internal fun AboutScreen() {
     var error by remember { mutableStateOf<String?>(null) }
     var downloadId by remember { mutableStateOf<Long?>(null) }
     var downloadProgress by remember { mutableStateOf(0) }
+    var downloadedBytes by remember { mutableStateOf(0L) }
+    var downloadTotalBytes by remember { mutableStateOf(0L) }
     var downloadedUri by remember { mutableStateOf<Uri?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
 
@@ -96,6 +98,8 @@ internal fun AboutScreen() {
             downloadedUri = null
             downloadError = null
             downloadProgress = 0
+            downloadedBytes = 0L
+            downloadTotalBytes = version.optLong("size", 0L).coerceAtLeast(0L)
             downloadId = downloadManager.enqueue(request)
         }.onFailure { downloadError = it.message ?: "无法开始下载" }
     }
@@ -105,18 +109,22 @@ internal fun AboutScreen() {
         while (true) {
             val state = withContext(Dispatchers.IO) {
                 downloadManager.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
-                    if (!cursor.moveToFirst()) return@withContext Triple(-1, 0, null)
+                    if (!cursor.moveToFirst()) return@withContext DownloadState(-1, 0L, 0L, 0, null)
                     val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                     val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                     val complete = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                    val progress = if (total > 0) ((complete * 100L) / total).toInt().coerceIn(0, 100) else 0
-                    Triple(status, progress, downloadManager.getUriForDownloadedFile(id))
+                    val knownTotal = if (total > 0) total else downloadTotalBytes
+                    val progress = if (knownTotal > 0) ((complete * 100L) / knownTotal).toInt().coerceIn(0, 100) else 0
+                    DownloadState(status, complete.coerceAtLeast(0L), knownTotal, progress, downloadManager.getUriForDownloadedFile(id))
                 }
             }
-            downloadProgress = state.second
-            when (state.first) {
+            downloadedBytes = state.downloadedBytes
+            if (state.totalBytes > 0) downloadTotalBytes = state.totalBytes
+            downloadProgress = state.progress
+            when (state.status) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
-                    downloadedUri = state.third
+                    downloadProgress = 100
+                    downloadedUri = state.uri
                     downloadId = null
                     break
                 }
@@ -176,9 +184,21 @@ internal fun AboutScreen() {
                 }
                 Spacer(Modifier.height(12.dp))
                 if (downloadId != null) {
-                    LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth(), color = Primary)
+                    if (downloadTotalBytes > 0L) {
+                        LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth(), color = Primary)
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
+                    }
                     Spacer(Modifier.height(5.dp))
-                    Text("正在下载 $downloadProgress%", color = Muted, fontSize = 12.sp)
+                    Text(
+                        if (downloadTotalBytes > 0L) {
+                            "正在下载 $downloadProgress%（${formatDownloadSize(downloadedBytes)} / ${formatDownloadSize(downloadTotalBytes)}）"
+                        } else {
+                            "正在下载 ${formatDownloadSize(downloadedBytes)}"
+                        },
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
                 } else if (downloadedUri != null) {
                     Button(onClick = { installDownloaded(context, downloadedUri!!) }, modifier = Modifier.fillMaxWidth(), shape = FieldShape) { Text("安装更新") }
                 } else {
@@ -191,6 +211,20 @@ internal fun AboutScreen() {
             }
         }
     }
+}
+
+private data class DownloadState(
+    val status: Int,
+    val downloadedBytes: Long,
+    val totalBytes: Long,
+    val progress: Int,
+    val uri: Uri?,
+)
+
+private fun formatDownloadSize(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> "%.1f MB".format(java.util.Locale.US, bytes / (1024f * 1024f))
+    bytes >= 1024L -> "%.0f KB".format(java.util.Locale.US, bytes / 1024f)
+    else -> "$bytes B"
 }
 
 private fun installDownloaded(context: Context, uri: Uri) {
