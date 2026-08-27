@@ -99,6 +99,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
     var reload by remember { mutableStateOf(0) }
     var page by remember { mutableStateOf(1) }
     var pages by remember { mutableStateOf(1) }
+    var packageStats by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -116,6 +117,12 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
                 if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
             }
+    }
+
+    LaunchedEffect(selectedStoreId) {
+        runCatching {
+            withContext(Dispatchers.IO) { ApiClient.stats(selectedStoreId.toIntOrNull()) }
+        }.onSuccess { packageStats = it }
     }
 
     LaunchedEffect(status, sortBy, keyword, selectedStoreId, reload, page) {
@@ -184,6 +191,19 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
                 }
             }
         }
+
+        Spacer(Modifier.height(14.dp))
+
+        SectionHeader("包裹概况", "包裹领取与核销进度")
+        Spacer(Modifier.height(8.dp))
+        StatsGrid(
+            items = listOf(
+                "待领取" to stat(packageStats, "pendingCount"),
+                "今日已领" to stat(packageStats, "todayPicked"),
+                "包裹总数" to stat(packageStats, "totalCount"),
+            ),
+            columns = 3,
+        )
 
         Spacer(Modifier.height(14.dp))
 

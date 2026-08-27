@@ -153,8 +153,8 @@ object ApiClient {
     ).getJSONObject("data"))
     fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
     fun differences(): JSONArray = differenceProducts()
-    fun differenceSummary(): JSONObject {
-        val summary = request("/admin/product-differences/stats").getJSONObject("data")
+    fun differenceSummary(storeId: Int? = null): JSONObject {
+        val summary = request("/admin/product-differences/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
         return JSONObject()
             .put("preReceiptQuantity", summary.optInt("more", 0))
             .put("preShipmentQuantity", summary.optInt("less", 0))

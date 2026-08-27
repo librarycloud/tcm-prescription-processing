@@ -1,7 +1,7 @@
 package com.tcm.admin
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,11 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,8 +36,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 @Composable
@@ -56,23 +47,6 @@ internal fun DashboardScreen(
     selectedStoreId: String = "",
     onSelectStore: (String) -> Unit = {},
 ) {
-    val isGlobalAdmin = user?.optInt("role", -1) == 0
-    val storeId = selectedStoreId.toIntOrNull()
-    var herbSummary by remember { mutableStateOf<JSONObject?>(null) }
-    var stocktakingSummary by remember { mutableStateOf<JSONObject?>(null) }
-    var differenceSummary by remember { mutableStateOf<JSONObject?>(null) }
-
-    LaunchedEffect(user?.optInt("id"), selectedStoreId) {
-        if (user == null) return@LaunchedEffect
-        withContext(Dispatchers.IO) {
-            runCatching { ApiClient.herbLocationMatrix(storeId) }
-                .onSuccess { herbSummary = it.optJSONObject("summary") }
-            runCatching { ApiClient.stocktaking(storeId) }
-                .onSuccess { stocktakingSummary = it }
-            runCatching { ApiClient.differenceSummary() }
-                .onSuccess { differenceSummary = it }
-        }
-    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -102,86 +76,13 @@ internal fun DashboardScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        if (isGlobalAdmin) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = CardShape,
-                border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
-            ) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Store, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(7.dp))
-                        Text("统计门店", color = Muted, fontSize = 12.sp)
-                        Spacer(Modifier.weight(1f))
-                        Text(if (selectedStoreId.isBlank()) "全部门店" else "已选择", color = Primary, fontSize = 12.sp)
-                    }
-                    if (stores.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            SegmentedButton("全部门店", selectedStoreId.isBlank(), { onSelectStore("") })
-                            stores.forEach { store ->
-                                val id = store.opt("id")?.toString().orEmpty()
-                                SegmentedButton(store.optString("name", "门店"), selectedStoreId == id, { onSelectStore(id) })
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-        }
-
-        // Processing Stats
-        SectionHeader("加工概况", "按日统计待办与完成情况")
-        Spacer(Modifier.height(10.dp))
-        StatsGrid(
-            items = listOf(
-                "今日待加工" to stat(stats, "waitingCount"),
-                "逾期未开工" to stat(stats, "overdueCount"),
-                "加工中" to stat(stats, "processingCount"),
-                "今日完成" to stat(stats, "todayFinished"),
-            ),
-            onClick = { onNavigate(ScreenTarget.Processing) },
-            columns = 4,
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        // Packages Stats
-        SectionHeader("包裹概况", "包裹领取与核销进度")
-        Spacer(Modifier.height(10.dp))
-        StatsGrid(
-            items = listOf(
-                "待领取" to stat(stats, "pendingCount"),
-                "今日已领" to stat(stats, "todayPicked"),
-                "包裹总数" to stat(stats, "totalCount"),
-            ),
-            onClick = { onNavigate(ScreenTarget.Packages) },
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        SectionHeader("库存与斗谱概况", "货位、盘点和库存差异实时数据")
-        Spacer(Modifier.height(10.dp))
-        StatsGrid(
-            items = listOf(
-                "斗谱货位" to stat(herbSummary, "totalLocations"),
-                "已分配" to stat(herbSummary, "assignedLocations"),
-                "盘点单" to (stocktakingSummary?.optJSONObject("pagination")?.optInt("total", 0)?.toString() ?: "-"),
-                "差异商品" to stat(differenceSummary, "total"),
-            ),
-        )
-
-        Spacer(Modifier.height(20.dp))
-
         // Quick Actions
         SectionHeader("快捷功能", "快速直达管理模块")
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             QuickAction("处方管理", "查看、新建与管理处方", Icons.AutoMirrored.Filled.Assignment, Primary) { onNavigate(ScreenTarget.Prescriptions) }
             QuickAction("E6商品库存", "查询商品批次、规格、条码与效期", Icons.Default.Inventory, Color(0xFF0F766E)) { onNavigate(ScreenTarget.Inventory) }
-            QuickAction("商品盘点", "益达盘点单与差异录入", Icons.AutoMirrored.Filled.CompareArrows, Color(0xFF722ED1)) { onNavigate(ScreenTarget.Stocktaking) }
+            QuickAction("商品盘点", "商品盘点计划与差异录入", Icons.AutoMirrored.Filled.CompareArrows, Color(0xFF722ED1)) { onNavigate(ScreenTarget.Stocktaking) }
             QuickAction("库存差异", "登记与处理实货多/实货少差异", Icons.Default.Tune, Warning) { onNavigate(ScreenTarget.Differences) }
             QuickAction("门店调拨", "跨门店物资借调与归还跟踪", Icons.Default.LocalShipping, Color(0xFF009688)) { onNavigate(ScreenTarget.Transfers) }
         }

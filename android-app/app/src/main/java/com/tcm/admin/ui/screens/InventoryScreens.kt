@@ -339,9 +339,9 @@ internal fun InventoryScreen() {
                     HorizontalDivider(color = Color(0xFFF2F3F5))
                     Spacer(Modifier.height(6.dp))
 
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             text = "生产：${prodDate.ifBlank { "-" }}",

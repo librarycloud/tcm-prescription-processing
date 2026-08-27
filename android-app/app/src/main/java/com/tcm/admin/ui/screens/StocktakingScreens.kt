@@ -95,7 +95,7 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                SectionHeader("商品盘点", "益达商品盘点单与差异录入")
+                SectionHeader("商品盘点", "商品盘点计划与差异录入")
             }
             Button(
                 onClick = { createVisible = true },

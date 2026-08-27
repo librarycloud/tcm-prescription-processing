@@ -56,7 +56,6 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var keyword by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("") }
-    var selectedLocation by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
 
@@ -90,6 +89,17 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 SectionHeader("斗谱管理", "中药斗谱布局与货位药材维护")
+            }
+            Spacer(Modifier.width(10.dp))
+            Button(
+                onClick = {
+                    onNavigate(ScreenTarget.HerbLocationAssign(JSONObject(), selectedStoreId?.toIntOrNull()))
+                },
+                shape = FieldShape,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+            ) {
+                Text("配置药材", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -130,18 +140,6 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
         if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
 
         data?.let { root ->
-            val summary = root.optJSONObject("summary") ?: JSONObject()
-            StatsGrid(
-                listOf(
-                    "总位置数" to summary.optInt("totalLocations").toString(),
-                    "已分配" to summary.optInt("assignedLocations").toString(),
-                    "空置位置" to summary.optInt("emptyLocations").toString(),
-                    "药材总数" to summary.optInt("totalHerbs").toString(),
-                ),
-            )
-
-            Spacer(Modifier.height(16.dp))
-
             val units = root.optJSONArray("units") ?: JSONArray()
             if (units.length() == 0) {
                 AppEmptyState("未找到匹配的货位数据")
@@ -196,15 +194,15 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                             val loc = locations.getJSONObject(lIndex)
                             val herbs = loc.optJSONArray("herbs") ?: JSONArray()
                             val code = loc.optString("code")
-                            val isSelected = selectedLocation?.optString("code") == code
-
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedLocation = if (isSelected) null else loc },
+                                    .clickable {
+                                        onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
+                                    },
                                 shape = FieldShape,
-                                color = if (isSelected) PrimarySoft else Color(0xFFF9FAFB),
-                                border = BorderStroke(1.dp, if (isSelected) Primary else Color(0xFFEAECF0)),
+                                color = Color(0xFFF9FAFB),
+                                border = BorderStroke(1.dp, Color(0xFFEAECF0)),
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -216,9 +214,9 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                                                 text = code,
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontSize = 13.sp,
-                                                color = if (isSelected) PrimaryDark else Ink,
+                                                color = Ink,
                                             )
-                                            Spacer(Modifier.width(6.dp))
+                                            Spacer(Modifier.weight(1f))
                                             Text(
                                                 text = positionLabel(loc),
                                                 color = Muted,
@@ -241,16 +239,6 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                                         }
                                     }
 
-                                    OutlinedButton(
-                                        onClick = {
-                                            onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
-                                        },
-                                        shape = RoundedCornerShape(6.dp),
-                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                        modifier = Modifier.height(30.dp),
-                                    ) {
-                                        Text("配置", fontSize = 11.sp)
-                                    }
                                 }
                             }
                         }
@@ -269,11 +257,17 @@ internal fun HerbLocationAssignScreen(
     storeId: Int?,
     onSaved: () -> Unit,
 ) {
+    val existingLocation = location.optString("code").isNotBlank()
     var selectedHerbId by remember { mutableStateOf(0) }
     var herbName by remember { mutableStateOf("") }
     var herbCode by remember { mutableStateOf("") }
     var specification by remember { mutableStateOf("") }
-    var slotNo by remember { mutableStateOf("1") }
+    var herbKeyword by remember { mutableStateOf("") }
+    var locationType by remember { mutableStateOf(location.optString("type").ifBlank { "D" }) }
+    var unitNo by remember { mutableStateOf(location.opt("unitNo")?.toString().orEmpty()) }
+    var layerNo by remember { mutableStateOf(location.opt("layerNo")?.toString().orEmpty()) }
+    var columnNo by remember { mutableStateOf(location.opt("columnNo")?.toString().orEmpty()) }
+    var slotNo by remember { mutableStateOf(location.opt("slotNo")?.toString() ?: "1") }
     var herbs by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -296,37 +290,104 @@ internal fun HerbLocationAssignScreen(
     ) {
         AppCard {
             SectionHeader(
-                title = "配置货位 ${location.optString("code")}",
-                subtitle = "位置：${positionLabel(location)}",
+                title = if (existingLocation) "配置货位 ${location.optString("code")}" else "配置药材",
+                subtitle = if (existingLocation) "位置：${positionLabel(location)}" else "先设置位置，再搜索匹配药材",
             )
 
             Spacer(Modifier.height(14.dp))
 
-            if (herbs.isNotEmpty()) {
-                Text("从已有药材选择：", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            if (!existingLocation) {
+                Text("位置", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    herbs.take(16).forEach { herb ->
-                        val id = herb.optInt("id")
-                        SegmentedButton(
-                            label = herb.optString("name"),
-                            selected = selectedHerbId == id,
-                            onClick = {
-                                selectedHerbId = id
-                                herbName = ""
-                                herbCode = ""
-                                specification = ""
-                            },
-                        )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("D" to "药斗", "G" to "药柜", "F" to "冰箱", "C" to "仓库").forEach { (key, label) ->
+                        SegmentedButton(label, locationType == key, onClick = { locationType = key })
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = unitNo,
+                    onValueChange = { unitNo = it.filter(Char::isDigit).take(3) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (locationType == "D") "斗号" else "编号") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = layerNo,
+                    onValueChange = { layerNo = it.filter(Char::isDigit).take(3) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("层") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+                if (locationType == "D") {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = columnNo,
+                        onValueChange = { columnNo = it.filter(Char::isDigit).take(3) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("列") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = FieldShape,
+                    )
                 }
                 Spacer(Modifier.height(14.dp))
             }
 
-            Text("或输入新增药材信息：", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Text("搜索匹配药材", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = herbKeyword,
+                onValueChange = { herbKeyword = it; if (it.isBlank()) selectedHerbId = 0 },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("药材名称、编码") },
+                placeholder = { Text("输入关键词筛选已有药材") },
+                singleLine = true,
+                shape = FieldShape,
+            )
+            val needle = herbKeyword.trim().lowercase()
+            val filteredHerbs = herbs.filter { herb ->
+                needle.isNotBlank() && listOf(herb.optString("name"), herb.optString("code"), herb.optString("specification"))
+                    .any { it.lowercase().contains(needle) }
+            }.take(12)
+            if (filteredHerbs.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    filteredHerbs.forEach { herb ->
+                        val id = herb.optInt("id")
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                selectedHerbId = id
+                                herbName = herb.optString("name")
+                                herbCode = herb.optString("code")
+                                specification = herb.optString("specification")
+                            },
+                            shape = FieldShape,
+                            color = if (selectedHerbId == id) PrimarySoft else Color(0xFFF9FAFB),
+                            border = BorderStroke(1.dp, if (selectedHerbId == id) Primary else Color(0xFFEAECF0)),
+                        ) {
+                            Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                Text(herb.optString("name"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(
+                                    listOf(herb.optString("code"), herb.optString("specification")).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "已有药材" },
+                                    color = Muted,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (herbKeyword.isNotBlank()) {
+                Text("没有匹配的已有药材，可继续填写新增药材", color = Muted, fontSize = 12.sp)
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text("或填写新增药材信息", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
 
             OutlinedTextField(
@@ -363,7 +424,7 @@ internal fun HerbLocationAssignScreen(
                 shape = FieldShape,
             )
 
-            if (location.optString("type") == "D") {
+            if (existingLocation && location.optString("type") == "D") {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = slotNo,
@@ -385,10 +446,12 @@ internal fun HerbLocationAssignScreen(
         Spacer(Modifier.height(24.dp))
 
         Button(
-            enabled = (selectedHerbId > 0 || herbName.isNotBlank()) && !busy,
+            enabled = (selectedHerbId > 0 || herbName.isNotBlank()) &&
+                (existingLocation || buildLocationCode(locationType, unitNo, layerNo, columnNo, slotNo).isNotBlank()) && !busy,
             onClick = {
                 busy = true
-                val payload = JSONObject().put("locationCode", location.optString("code"))
+                val code = if (existingLocation) location.optString("code") else buildLocationCode(locationType, unitNo, layerNo, columnNo, slotNo)
+                val payload = JSONObject().put("locationCode", code)
                 storeId?.let { payload.put("storeId", it) }
                 if (selectedHerbId > 0) {
                     payload.put("herbId", selectedHerbId)
@@ -397,7 +460,7 @@ internal fun HerbLocationAssignScreen(
                         .put("code", herbCode.trim())
                         .put("specification", specification.trim())
                 }
-                slotNo.toIntOrNull()?.let { payload.put("slotNo", it) }
+                if (locationType == "D") slotNo.toIntOrNull()?.let { payload.put("slotNo", it) }
 
                 scope.launch {
                     runCatching {
@@ -429,6 +492,15 @@ private fun locationTypeLabel(type: String): String = when (type) {
     "F" -> "冰箱"
     "C" -> "仓库"
     else -> "位置"
+}
+
+private fun buildLocationCode(type: String, unitNo: String, layerNo: String, columnNo: String, slotNo: String): String {
+    if (unitNo.isBlank() || layerNo.isBlank()) return ""
+    return if (type == "D") {
+        if (columnNo.isBlank()) "" else "D-$unitNo-$layerNo-$columnNo"
+    } else {
+        "$type-$unitNo-$layerNo"
+    }
 }
 
 private fun positionLabel(location: JSONObject): String {

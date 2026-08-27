@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -285,10 +286,10 @@ internal fun SearchBarField(
             value = value,
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = Muted, fontSize = 13.sp) },
-            leadingIcon = {
-                if (onScan != null) {
+            leadingIcon = onScan?.let { scan ->
+                {
                     IconButton(
-                        onClick = onScan,
+                        onClick = scan,
                         modifier = Modifier.size(36.dp),
                     ) {
                         Icon(
@@ -298,13 +299,6 @@ internal fun SearchBarField(
                             modifier = Modifier.size(20.dp),
                         )
                     }
-                } else {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "搜索",
-                        tint = Muted,
-                        modifier = Modifier.size(18.dp),
-                    )
                 }
             },
             trailingIcon = {
@@ -335,6 +329,7 @@ internal fun SearchBarField(
                     }
                 }
             },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             singleLine = true,
             shape = FieldShape,
             colors = OutlinedTextFieldDefaults.colors(
