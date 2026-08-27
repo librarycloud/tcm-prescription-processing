@@ -26,8 +26,8 @@ export function parsePickupQrContent(value) {
   if (!match) return null;
   const payload = `${match[1]}:${match[2]}`;
   const expected = signatureFor(payload);
-  const actualBuffer = Buffer.from(match[3]);
-  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(match[3], "base64url");
+  const expectedBuffer = Buffer.from(expected, "base64url");
   if (
     actualBuffer.length !== expectedBuffer.length ||
     !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
