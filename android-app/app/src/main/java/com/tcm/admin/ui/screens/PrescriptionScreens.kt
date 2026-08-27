@@ -1,6 +1,9 @@
 package com.tcm.admin
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,19 +12,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,11 +114,11 @@ internal fun PrescriptionsScreen() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                SectionHeader("处方管理", "查看、新建与编辑中药处方")
+                SectionHeader("处方管理", "查看、新建与管理中药处方")
             }
             Button(
                 onClick = { editing = JSONObject() },
-                shape = RoundedCornerShape(8.dp),
+                shape = FieldShape,
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -120,24 +129,29 @@ internal fun PrescriptionsScreen() {
 
         Spacer(Modifier.height(14.dp))
 
+        // Search bar
         SearchBarField(
             value = keyword,
             onValueChange = { keyword = it },
-            placeholder = "搜索顾客姓名、手机号或备注",
+            placeholder = "搜索患者姓名、手机号或处方号",
             onSearch = { reload++ },
         )
 
         Spacer(Modifier.height(10.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SegmentedButton("全部", status == null) { status = null }
+        // Status Tabs
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SegmentedButton("全部状态", status == null) { status = null }
             SegmentedButton("进行中", status == 0) { status = 0 }
             SegmentedButton("已完成", status == 1) { status = 1 }
             SegmentedButton("已取消", status == 2) { status = 2 }
         }
 
         if (stores.size > 1) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             StoreChipsRow(
                 stores = stores,
                 selectedStoreId = selectedStoreId,
@@ -149,113 +163,109 @@ internal fun PrescriptionsScreen() {
 
         if (items == null && error == null) AppEmptyState("加载中...")
         if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
-        if (items != null && items!!.isEmpty()) AppEmptyState("暂无处方")
+        if (items != null && items!!.isEmpty()) AppEmptyState("暂无处方记录")
 
-        items.orEmpty().forEach { item ->
-            val doctorName = item.optJSONObject("doctor")?.optString("name", "-") ?: "-"
-            val sourceName = item.optJSONObject("source")?.optString("name", "-") ?: "-"
-            val plans = item.optJSONArray("plans") ?: JSONArray()
-            val statusCode = item.optInt("status")
+        items.orEmpty().forEach { p ->
+            val doctor = p.optJSONObject("doctor")?.optString("name", "-") ?: "-"
+            val source = p.optJSONObject("source")?.optString("name", "-") ?: "-"
+            val store = p.optJSONObject("store")?.optString("name", "") ?: ""
+            val createdAt = p.optString("createdAt").replace("T", " ").take(16)
+            val statusCode = p.optInt("status")
+            val isExternal = p.optInt("isExternal") == 1
 
-            AppCard(
-                modifier = Modifier.padding(bottom = 10.dp),
-                onClick = { detail = item },
-            ) {
+            AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = item.optString("customerName", "顾客"),
+                            text = p.optString("customerName", "患者"),
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             color = Ink,
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = "${maskPhone(item.optString("phone"))} · 医生：$doctorName",
-                            color = Muted,
-                            fontSize = 12.sp,
-                        )
+                        if (isExternal) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                color = WarningSoft,
+                                shape = RoundedCornerShape(4.dp),
+                            ) {
+                                Text(
+                                    text = "外方",
+                                    color = Warning,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
                     }
-                    StatusPill(prescriptionStatusLabel(statusCode))
+                    StatusPill(text = prescriptionStatusLabel(statusCode))
                 }
 
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = Color(0xFFF2F3F5))
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(10.dp))
 
-                InfoRowItem("处方来源", sourceName)
-                InfoRowItem("加工批次", "${plans.length()} 个批次")
-                if (item.optString("remark").isNotBlank()) {
-                    InfoRowItem("备注", item.optString("remark"))
+                InfoRowItem(label = "联系电话", value = maskPhone(p.optString("phone")))
+                InfoRowItem(label = "主治医生", value = doctor)
+                InfoRowItem(label = "处方来源", value = source)
+                if (store.isNotBlank()) {
+                    InfoRowItem(label = "所属门店", value = store)
+                }
+                InfoRowItem(label = "创建时间", value = createdAt)
+
+                val remark = p.optString("remark", "")
+                if (remark.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = Color(0xFFF9FAFB),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "备注：$remark",
+                            color = RegularText,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { editing = p },
+                        shape = FieldShape,
+                    ) {
+                        Text("编辑")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        ApiClient.prescriptionDetail(p.optInt("id"))
+                                    }
+                                }.onSuccess { detail = it }
+                                    .onFailure { error = it.message ?: "加载处方详情失败" }
+                            }
+                        },
+                        shape = FieldShape,
+                    ) {
+                        Text("查看详情")
+                    }
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
-    }
-
-    detail?.let { item ->
-        val plans = item.optJSONArray("plans") ?: JSONArray()
-        val canEdit = item.optInt("status") == 0
-        AlertDialog(
-            onDismissRequest = { detail = null },
-            title = { Text(item.optString("customerName", "处方详情"), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    InfoRowItem("顾客姓名", item.optString("customerName", "-"))
-                    InfoRowItem("联系电话", item.optString("phone", "-"))
-                    InfoRowItem("医生", item.optJSONObject("doctor")?.optString("name", "-") ?: "-")
-                    InfoRowItem("处方来源", item.optJSONObject("source")?.optString("name", "-") ?: "-")
-                    InfoRowItem("状态", prescriptionStatusLabel(item.optInt("status")), isBold = true, valueColor = Primary)
-                    InfoRowItem("备注", item.optString("remark").ifBlank { "-" })
-
-                    Spacer(Modifier.height(10.dp))
-                    Text("加工批次 (${plans.length()})", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    Spacer(Modifier.height(6.dp))
-                    for (i in 0 until plans.length()) {
-                        val plan = plans.getJSONObject(i)
-                        Text(
-                            text = "第${plan.optInt("batchNo", i + 1)}批 · ${plan.optJSONObject("processType")?.optString("name", "加工") ?: "加工"} · ${planStatus(plan.optInt("status"))}",
-                            fontSize = 12.sp,
-                            color = RegularText,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (canEdit) {
-                        Button(onClick = { editing = item; detail = null }, shape = RoundedCornerShape(6.dp)) {
-                            Text("编辑")
-                        }
-                    }
-                    if (item.optInt("status") == 0) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    runCatching {
-                                        withContext(Dispatchers.IO) {
-                                            ApiClient.updatePrescription(item.optInt("id"), JSONObject().put("status", 2))
-                                        }
-                                    }.onSuccess { detail = null; reload++ }
-                                        .onFailure { error = it.message ?: "取消处方失败" }
-                                }
-                            },
-                            shape = RoundedCornerShape(6.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                        ) {
-                            Text("取消处方")
-                        }
-                    }
-                    OutlinedButton(onClick = { detail = null }, shape = RoundedCornerShape(6.dp)) {
-                        Text("关闭")
-                    }
-                }
-            },
-        )
     }
 
     editing?.let { initial ->
@@ -264,8 +274,45 @@ internal fun PrescriptionsScreen() {
             doctors = doctors,
             sources = sources,
             onClose = { editing = null },
-            onSaved = { editing = null; reload++ },
+            onSaved = {
+                editing = null
+                reload++
+            },
             onError = { error = it },
+        )
+    }
+
+    detail?.let { p ->
+        AlertDialog(
+            onDismissRequest = { detail = null },
+            title = { Text(p.optString("customerName", "处方详情"), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    InfoRowItem(label = "处方号", value = p.optString("prescriptionNo", "-"))
+                    InfoRowItem(label = "状态", value = prescriptionStatusLabel(p.optInt("status")))
+                    InfoRowItem(label = "电话", value = maskPhone(p.optString("phone")))
+                    InfoRowItem(label = "医生", value = p.optJSONObject("doctor")?.optString("name", "-") ?: "-")
+                    InfoRowItem(label = "来源", value = p.optJSONObject("source")?.optString("name", "-") ?: "-")
+                    val items = p.optJSONArray("items") ?: JSONArray()
+                    if (items.length() > 0) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("处方药材明细 (${items.length()}味)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Spacer(Modifier.height(4.dp))
+                        (0 until items.length()).forEach { idx ->
+                            val item = items.getJSONObject(idx)
+                            InfoRowItem(
+                                label = item.optString("herbName", "药材"),
+                                value = "${item.opt("quantity") ?: 0} ${item.optString("unit", "g")}",
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { detail = null }, shape = FieldShape) {
+                    Text("关闭")
+                }
+            },
         )
     }
 }
@@ -300,7 +347,7 @@ private fun PrescriptionFormDialog(
                     label = { Text("顾客姓名") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = FieldShape,
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -310,7 +357,7 @@ private fun PrescriptionFormDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = FieldShape,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text("选择医生", color = Muted, fontSize = 12.sp)
@@ -350,7 +397,7 @@ private fun PrescriptionFormDialog(
                     onValueChange = { remark = it },
                     label = { Text("处方备注") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = FieldShape,
                 )
             }
         },
@@ -381,7 +428,7 @@ private fun PrescriptionFormDialog(
                         busy = false
                     }
                 },
-                shape = RoundedCornerShape(8.dp),
+                shape = FieldShape,
             ) {
                 Text(if (busy) "保存中..." else "保存")
             }

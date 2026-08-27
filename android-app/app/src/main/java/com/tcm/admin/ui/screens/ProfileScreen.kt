@@ -1,16 +1,6 @@
 package com.tcm.admin
 
-import android.os.Bundle
-import android.app.Activity
-import android.content.Intent
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,80 +9,185 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Assignment
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Store
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
-import java.time.LocalDate
-@Composable internal fun ProfileScreen(user: JSONObject?, onLogout: () -> Unit) { val displayName = user?.optString("nickname").orEmpty().ifBlank { user?.optString("username").orEmpty().ifBlank { "管理员" } }; val role = when (user?.optInt("role", 0)) { 0 -> "全局管理员"; 2 -> "门店管理员"; 3 -> "门店员工"; else -> "管理员" }; Column(Modifier.fillMaxSize().padding(16.dp)) { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Surface(Modifier.size(52.dp), shape = RoundedCornerShape(26.dp), color = Primary.copy(alpha = .14f)) { Box(contentAlignment = Alignment.Center) { Text(displayName.take(1), color = Primary, fontWeight = FontWeight.Bold, fontSize = 20.sp) } }; Spacer(Modifier.width(12.dp)); Column { Text(displayName, fontWeight = FontWeight.Bold, fontSize = 18.sp); Text(role, color = Muted, fontSize = 13.sp) } } }; Spacer(Modifier.height(14.dp)); listOf("手机号" to (user?.optString("phone").orEmpty().ifBlank { "-" }), "用户名" to (user?.optString("username").orEmpty().ifBlank { "-" }), "所属门店" to (user?.optJSONObject("store")?.optString("name").orEmpty().ifBlank { "全部门店" })).forEach { (label, value) -> InfoRow(label, value) }; Spacer(Modifier.height(24.dp)); OutlinedButton(onLogout, Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) { Text("退出登录") } } }
-@Composable private fun InfoRow(label: String, value: String) { Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { Text(label, modifier = Modifier.width(86.dp), color = Muted); Text(value, color = Ink); Spacer(Modifier.weight(1f)); Icon(Icons.Default.ChevronRight, null, tint = Muted) }; HorizontalDivider(color = Color(0xFFE5E6EB)) }
+
+@Composable
+internal fun ProfileScreen(user: JSONObject?, onLogout: () -> Unit) {
+    val displayName = user?.optString("nickname").orEmpty().ifBlank {
+        user?.optString("username").orEmpty().ifBlank { "管理员" }
+    }
+    val role = when (user?.optInt("role", 0)) {
+        0 -> "全局管理员"
+        2 -> "门店管理员"
+        3 -> "门店员工"
+        else -> "管理员"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        // User Profile Header Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = CardShape,
+            border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    modifier = Modifier.size(56.dp),
+                    shape = CircleShape,
+                    color = PrimarySoft,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = displayName.take(1),
+                            color = Primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = displayName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Ink,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    StatusPill(text = role)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Account Details Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = CardShape,
+            border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                ProfileDetailRow(
+                    icon = Icons.Default.Person,
+                    label = "用户名",
+                    value = user?.optString("username").orEmpty().ifBlank { "-" },
+                )
+                HorizontalDivider(color = Color(0xFFF2F3F5))
+                ProfileDetailRow(
+                    icon = Icons.Default.Phone,
+                    label = "手机号",
+                    value = maskPhone(user?.optString("phone")),
+                )
+                HorizontalDivider(color = Color(0xFFF2F3F5))
+                ProfileDetailRow(
+                    icon = Icons.Default.Business,
+                    label = "所属门店",
+                    value = user?.optJSONObject("store")?.optString("name").orEmpty().ifBlank { "全部门店（全局权限）" },
+                )
+                HorizontalDivider(color = Color(0xFFF2F3F5))
+                ProfileDetailRow(
+                    icon = Icons.Default.Shield,
+                    label = "权限角色",
+                    value = role,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        // Logout Button
+        OutlinedButton(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+            border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Danger,
+            ),
+        ) {
+            Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("退出登录", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
+        
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ProfileDetailRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = Muted,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = label,
+            color = RegularText,
+            fontSize = 14.sp,
+            modifier = Modifier.width(80.dp),
+        )
+        Text(
+            text = value,
+            color = Ink,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
