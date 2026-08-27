@@ -339,24 +339,30 @@ internal fun InventoryScreen(initialQuery: String = "") {
                     HorizontalDivider(color = Color(0xFFF2F3F5))
                     Spacer(Modifier.height(6.dp))
 
-                    Column(
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
                             text = "生产：${prodDate.ifBlank { "-" }}",
+                            modifier = Modifier.weight(1f),
                             color = Muted,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
+                            maxLines = 1,
                         )
                         Text(
                             text = "有效期：${expDate.ifBlank { "-" }}",
+                            modifier = Modifier.weight(1f),
                             color = if (expDate.isNotBlank()) Danger else Muted,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
+                            maxLines = 1,
                         )
                         Text(
                             text = "入库：${inDate.ifBlank { "-" }}",
+                            modifier = Modifier.weight(1f),
                             color = Muted,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
+                            maxLines = 1,
                         )
                     }
                 }

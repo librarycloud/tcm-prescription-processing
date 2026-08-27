@@ -307,6 +307,79 @@ internal fun HerbLocationAssignScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
+        if (existingLocation) {
+            val currentHerbs = (0 until (location.optJSONArray("herbs")?.length() ?: 0))
+                .map { location.getJSONArray("herbs").getJSONObject(it) }
+            AppCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("当前位置", color = Muted, fontSize = 11.sp)
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            location.optString("code"),
+                            color = Ink,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(positionLabel(location), color = PrimaryDark, fontSize = 12.sp)
+                    }
+                    Surface(
+                        color = PrimarySoft,
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Text(
+                            locationTypeLabel(location.optString("type")),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            color = PrimaryDark,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text("已配置药材", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                if (currentHerbs.isEmpty()) {
+                    Text("当前货位为空，可在下方添加药材", color = Muted, fontSize = 12.sp)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        currentHerbs.forEach { herb ->
+                            Surface(
+                                color = Color(0xFFF9FAFB),
+                                shape = FieldShape,
+                                border = BorderStroke(1.dp, Color(0xFFEAECF0)),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(herb.optString("name"), color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        val detail = listOf(herb.optString("code"), herb.optString("specification"))
+                                            .filter { it.isNotBlank() }
+                                            .joinToString(" · ")
+                                        if (detail.isNotBlank()) Text(detail, color = Muted, fontSize = 11.sp)
+                                    }
+                                    herb.opt("slotNo")?.takeIf { it.toString().isNotBlank() }?.let {
+                                        Text("第${it}格", color = Muted, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         AppCard {
             SectionHeader(
                 title = if (existingLocation) "配置货位 ${location.optString("code")}" else "配置药材",
