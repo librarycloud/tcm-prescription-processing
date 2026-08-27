@@ -1,4 +1,4 @@
-# 中药取药助手 Android 管理员端
+# 药房助手 Android 管理员端
 
 Kotlin + Jetpack Compose 的管理员端原生 Android App，最低支持 Android 12（API 31）。当前版本已接入现有 Fastify 后端的管理员登录和概览统计接口，列表接口也已提供统一客户端封装；部分页面保留演示数据用于离线验证布局。
 
@@ -9,6 +9,10 @@ Kotlin + Jetpack Compose 的管理员端原生 Android App，最低支持 Androi
 ```bash
 gradle --no-daemon assembleDebug
 ```
+
+## 代码结构
+
+Android 端当前仅面向管理员使用。`MainActivity` 负责登录状态、导航壳和页面路由；业务页面按模块拆分在 `app/src/main/java/com/tcm/admin/ui/screens`，共享的包裹模型与 Compose 组件位于 `ui/AppModels.kt` 和 `ui/AppComponents.kt`。接口访问统一封装在 `ApiClient.kt`，扫码入口保留在独立的 `ScannerActivity`。
 
 产物位于 `app/build/outputs/apk/debug/app-debug.apk`。
 
@@ -24,7 +28,7 @@ Debug 包默认请求 `http://10.0.2.2:3000`，这是 Android 模拟器访问宿
 gradle assembleRelease -PAPI_BASE_URL=https://api.tcm.example.com
 ```
 
-GitHub Actions 使用仓库 Secret `API_BASE_URL`；手动运行 Debug workflow 时也可以在 `Run workflow` 的 `api_base_url` 输入框中直接填写地址。未配置时 Debug 使用模拟器地址，Release 默认使用 `https://api.tcm.example.com`。登录使用后端 `POST /auth/login`，JWT 会在本次进程内用于后续 `/admin/*` 请求。
+GitHub Actions 使用仓库 Secret `API_BASE_URL`；手动运行 Debug workflow 时也可以在 `Run workflow` 的 `api_base_url` 输入框中直接填写地址。未配置时 Debug 使用模拟器地址，Release 默认使用 `https://api.tcm.example.com`。登录使用后端 `POST /auth/login`，JWT 会保存在本地以便下次打开应用直接进入工作台，退出登录时清除。
 
 Debug 允许 HTTP 仅用于本地开发，Release 会强制关闭明文流量，因此正式 API 必须使用 HTTPS。
 

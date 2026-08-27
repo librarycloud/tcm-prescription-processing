@@ -1,5 +1,6 @@
 package com.tcm.admin
 
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -9,9 +10,38 @@ import java.nio.charset.StandardCharsets
 data class AdminSession(val token: String, val user: JSONObject)
 
 object ApiClient {
+    private const val SESSION_PREFS = "admin_session"
+    private const val TOKEN_KEY = "token"
+    private const val USER_KEY = "user"
     private var token: String? = null
 
     fun setToken(value: String?) { token = value }
+
+    fun saveSession(context: Context, session: AdminSession) {
+        token = session.token
+        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(TOKEN_KEY, session.token)
+            .putString(USER_KEY, session.user.toString())
+            .apply()
+    }
+
+    fun loadSession(context: Context): AdminSession? {
+        val preferences = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+        val savedToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
+        val savedUser = preferences.getString(USER_KEY, null) ?: return null
+        val user = runCatching { JSONObject(savedUser) }.getOrNull() ?: return null
+        token = savedToken
+        return AdminSession(savedToken, user)
+    }
+
+    fun clearSession(context: Context) {
+        token = null
+        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+    }
 
     fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
