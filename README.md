@@ -66,6 +66,8 @@ wechat-miniprogram/   微信小程序
 docs/                 E6 等业务对接文档
 ```
 
+面向管理员和门店操作人员的完整使用教程见：[docs/使用说明.md](docs/使用说明.md)。
+
 ## 运行要求
 
 - Node.js `24.x` 或更高版本（后端在 `package.json` 中要求 `>=24.0.0`）
