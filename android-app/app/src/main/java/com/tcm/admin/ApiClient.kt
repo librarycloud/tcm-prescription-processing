@@ -6,10 +6,23 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import java.util.concurrent.TimeUnit
+import okhttp3.ConnectionPool
 
 data class AdminSession(val token: String, val user: JSONObject)
 
 object ApiClient {
+    private val client = OkHttpClient.Builder()
+        .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
     private const val SESSION_PREFS = "admin_session"
     private const val TOKEN_KEY = "token"
     private const val USER_KEY = "user"
@@ -177,42 +190,52 @@ object ApiClient {
     }
 
     private fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray): JSONObject {
-        val boundary = "----TcmAdmin${System.currentTimeMillis()}"
-        val connection = (URL(BuildConfig.API_BASE_URL.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 10_000; readTimeout = 30_000; doOutput = true
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            token?.let { setRequestProperty("Authorization", "Bearer $it") }
-        }
-        connection.outputStream.use { output ->
-            output.write("--$boundary\r\n".toByteArray(StandardCharsets.UTF_8))
-            output.write("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${filename.replace("\"", "_")}\"\r\n".toByteArray(StandardCharsets.UTF_8))
-            output.write("Content-Type: $mimeType\r\n\r\n".toByteArray(StandardCharsets.UTF_8))
-            output.write(bytes)
-            output.write("\r\n--$boundary--\r\n".toByteArray(StandardCharsets.UTF_8))
-        }
-        val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        val json = runCatching { JSONObject(response) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
-        if (connection.responseCode == 401) token = null
+        val requestBody = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                fieldName,
+                filename,
+                bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+            )
+            .build()
+        
+        val requestBuilder = Request.Builder()
+            .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
+            .post(requestBody)
+            .header("Accept", "application/json")
+            
+        token?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        
+        val response = client.newCall(requestBuilder.build()).execute()
+        val responseBodyString = response.body?.string().orEmpty()
+        val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
+        if (response.code == 401) token = null
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "上传失败"))
         return json
     }
 
     private fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
-        val connection = (URL(BuildConfig.API_BASE_URL.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
-            requestMethod = method
-            connectTimeout = 10_000
-            readTimeout = 15_000
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "application/json")
-            token?.let { setRequestProperty("Authorization", "Bearer $it") }
-            if (body != null) { doOutput = true; outputStream.use { it.write(body.toString().toByteArray()) } }
+        val requestBuilder = Request.Builder()
+            .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            
+        token?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        
+        val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
+        
+        when (method.uppercase()) {
+            "GET" -> requestBuilder.get()
+            "POST" -> requestBuilder.post(requestBody ?: "".toRequestBody(null))
+            "PUT" -> requestBuilder.put(requestBody ?: "".toRequestBody(null))
+            "DELETE" -> requestBuilder.delete(requestBody)
+            else -> requestBuilder.method(method, requestBody)
         }
-        val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        val json = runCatching { JSONObject(response) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
-        if (connection.responseCode == 401) token = null
+        
+        val response = client.newCall(requestBuilder.build()).execute()
+        val responseBodyString = response.body?.string().orEmpty()
+        val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
+        if (response.code == 401) token = null
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "请求失败"))
         return json
     }
