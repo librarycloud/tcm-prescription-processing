@@ -30,6 +30,7 @@ import { publishProcessingCompletedRobotEvent } from "./robotBusinessEventServic
 import { PROCESSING_STAGE } from "../constants/processingWorkflow.js";
 import { generateProcessingPlanIdentity } from "../utils/processingCode.js";
 import { assertProcessingWorkflowComplete } from "./processingWorkflowService.js";
+import { withPickupQrContent } from "../utils/pickupQr.js";
 
 const scope = (actor, requestedStoreId) => ({
   ...businessScope(actor, requestedStoreId),
@@ -354,7 +355,10 @@ export async function listProcessingPlans(prisma, actor, query = {}) {
     processingPlanRepository.count(prisma, { where }),
   ]);
   return {
-    list,
+    list: list.map((plan) => ({
+      ...plan,
+      package: withPickupQrContent(plan.package),
+    })),
     pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
   };
 }

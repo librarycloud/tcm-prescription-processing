@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,7 +47,9 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Shapes
@@ -107,7 +108,7 @@ internal sealed class ScreenTarget {
     data class HerbLocationAssign(val location: JSONObject, val storeId: Int?) : ScreenTarget()
     object Profile : ScreenTarget()
     object About : ScreenTarget()
-    object Inventory : ScreenTarget()
+    data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
     object Differences : ScreenTarget()
@@ -241,7 +242,7 @@ private fun TcmAdminApp() {
 
                 // Sub-screens & Details (Page navigation instead of dialogs)
                 is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }) {
-                    InventoryScreen()
+                    InventoryScreen(initialQuery = currentScreen.initialQuery)
                 }
                 is ScreenTarget.PrescriptionDetail -> DetailShell("处方详情", onBack = { navigateBack() }) {
                     PrescriptionDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
@@ -447,27 +448,13 @@ private fun MainShell(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val drawerWidth = LocalConfiguration.current.screenWidthDp.dp * 0.4f
-    var scanResult by remember { mutableStateOf<String?>(null) }
-    var scanError by remember { mutableStateOf<String?>(null) }
-
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
-            val code = value.filter(Char::isDigit).take(6)
-            if (code.length == 6) {
-                scope.launch {
-                    runCatching {
-                        withContext(Dispatchers.IO) {
-                            ApiClient.verifyPackage(code, 0, "")
-                        }
-                    }.onSuccess {
-                        scanResult = code
-                    }.onFailure {
-                        scanError = it.message ?: "核验失败"
-                    }
-                }
-            } else {
+            if (value.startsWith("TCM:PICKUP:1:")) {
                 onNavigate(ScreenTarget.PackageVerify(value))
+            } else {
+                onNavigate(ScreenTarget.Inventory(value))
             }
         }
     }
@@ -507,7 +494,7 @@ private fun MainShell(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp, horizontal = 8.dp))
                 DrawerItem("库存查询", false) {
-                    onNavigate(ScreenTarget.Inventory)
+                    onNavigate(ScreenTarget.Inventory())
                     scope.launch { drawerState.close() }
                 }
                 DrawerItem("商品盘点", false) {
@@ -551,31 +538,6 @@ private fun MainShell(
         }
     }
 
-    if (scanResult != null) {
-        AlertDialog(
-            onDismissRequest = { scanResult = null },
-            title = { Text("核验成功") },
-            text = { Text("取货码 ${scanResult}\n包裹已完成领取核验。") },
-            confirmButton = {
-                Button(onClick = { scanResult = null }, shape = FieldShape) {
-                    Text("完成")
-                }
-            },
-        )
-    }
-
-    if (scanError != null) {
-        AlertDialog(
-            onDismissRequest = { scanError = null },
-            title = { Text("核验失败") },
-            text = { Text(scanError!!) },
-            confirmButton = {
-                Button(onClick = { scanError = null }, shape = FieldShape) {
-                    Text("关闭")
-                }
-            },
-        )
-    }
 }
 
 @Composable
@@ -585,6 +547,11 @@ private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
         selected = selected,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp).height(42.dp),
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = Color.Transparent,
+            selectedTextColor = Primary,
+            unselectedTextColor = Muted,
+        ),
     )
 }
 
@@ -626,7 +593,7 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
         },
         actions = {
             IconButton(onClick = onScan) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码核验", tint = Primary)
+                Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码搜索商品", tint = Primary)
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -664,6 +631,13 @@ private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit
                 onClick = { onSwitchTab(target) },
                 icon = { Icon(pair.second, contentDescription = pair.first) },
                 label = { Text(pair.first, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Primary,
+                    selectedTextColor = Primary,
+                    unselectedIconColor = Muted,
+                    unselectedTextColor = Muted,
+                    indicatorColor = Color.Transparent,
+                ),
             )
         }
     }

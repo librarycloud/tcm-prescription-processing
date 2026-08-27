@@ -90,11 +90,14 @@ async function loadTemplates() {
 
 async function loadQrCode() {
   if (!props.packageInfo?.pickupCode) return;
-  qrDataUrl.value = await createQRCodeDataUrl(props.packageInfo.pickupCode, { width: 360 });
+  qrDataUrl.value = await createQRCodeDataUrl(
+    props.packageInfo.pickupQrContent || props.packageInfo.pickupCode,
+    { width: 360 }
+  );
 }
 
 watch(
-  () => [props.modelValue, props.packageInfo?.pickupCode],
+  () => [props.modelValue, props.packageInfo?.pickupCode, props.packageInfo?.pickupQrContent],
   async ([visible]) => {
     if (!visible) return;
     await Promise.all([loadTemplates(), loadQrCode()]);

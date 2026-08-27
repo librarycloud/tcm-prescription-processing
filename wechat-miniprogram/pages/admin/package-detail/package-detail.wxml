@@ -4,7 +4,7 @@
       <view class="code">{{detail.pickupCode}}</view>
       <t-tag theme="{{detail.statusTheme}}">{{detail.statusText}}</t-tag>
     </view>
-    <qr-code text="{{detail.pickupCode}}" />
+    <qr-code text="{{detail.pickupQrContent}}" />
   </view>
 
   <t-cell-group>

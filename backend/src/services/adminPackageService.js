@@ -26,6 +26,7 @@ import { packageRepository } from "../repositories/packageRepository.js";
 import { processingPlanRepository } from "../repositories/processingPlanRepository.js";
 import { RECORD_STATUS } from "../constants/recordStatus.js";
 import { publishPackageRobotEvent } from "./robotBusinessEventService.js";
+import { parsePickupQrContent, withPickupQrContent } from "../utils/pickupQr.js";
 
 function normalizePickupMethod(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -325,24 +326,24 @@ export async function listPackages(prisma, actor, query) {
   ]);
 
   return {
-    list,
+    list: list.map(withPickupQrContent),
     pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
   };
 }
 
 export async function getPackageDetail(prisma, actor, id) {
-  return getAccessiblePackage(
+  return withPickupQrContent(await getAccessiblePackage(
     prisma,
     actor,
     { id: Number(id) },
     packageInclude(),
-  );
+  ));
 }
 
 export async function getPackageByPickupCode(prisma, actor, pickupCodeValue) {
   required(pickupCodeValue, "取货码");
   const pickupCode = String(pickupCodeValue).replace(/\D/g, "");
-  return getAccessiblePackage(prisma, actor, { pickupCode }, packageInclude());
+  return withPickupQrContent(await getAccessiblePackage(prisma, actor, { pickupCode }, packageInclude()));
 }
 
 export async function createPackage(prisma, actor, payload) {
@@ -415,7 +416,7 @@ export async function createPackage(prisma, actor, payload) {
     return createdPackage;
   });
   await publishPackageRobotEvent(prisma, "PACKAGE_CREATED", created, actor);
-  return created;
+  return withPickupQrContent(created);
 }
 
 export async function updatePackage(prisma, actor, id, payload) {
@@ -485,7 +486,7 @@ export async function updatePackage(prisma, actor, id, payload) {
       { key: "expressAddress", label: "\u5feb\u9012\u5730\u5740" },
     ]),
   });
-  return updated;
+  return withPickupQrContent(updated);
 }
 
 export async function deletePackage(prisma, actor, id) {
@@ -512,8 +513,11 @@ export async function deletePackage(prisma, actor, id) {
 }
 
 export async function verifyPackage(prisma, actor, payload) {
-  required(payload.pickupCode, "取货码");
-  const pickupCode = String(payload.pickupCode).replace(/\D/g, "");
+  const qrContent = String(payload.pickupQrContent || "").trim();
+  const signedQr = qrContent ? parsePickupQrContent(qrContent) : null;
+  if (qrContent && !signedQr) throw new AppError("二维码无效或已被篡改", 400);
+  required(payload.pickupCode || signedQr?.pickupCode, "取货码");
+  const pickupCode = signedQr?.pickupCode || String(payload.pickupCode).replace(/\D/g, "");
   const pickupMethod = requirePickupMethod(payload.pickupMethod);
   const expressTrackingNo = String(payload.expressTrackingNo || "").trim();
   if (pickupMethod === 2 && !expressTrackingNo)
@@ -522,6 +526,9 @@ export async function verifyPackage(prisma, actor, payload) {
     throw new AppError("快递单号不能超过 100 个字符", 400);
 
   const current = await getAccessiblePackage(prisma, actor, { pickupCode });
+  if (signedQr && (signedQr.packageId !== current.id || signedQr.pickupCode !== current.pickupCode)) {
+    throw new AppError("二维码与包裹信息不匹配", 400);
+  }
   if (current.status === PACKAGE_STATUS.PICKED)
     throw new AppError("该包裹已核销，不能重复核销", 400);
 
@@ -556,5 +563,5 @@ export async function verifyPackage(prisma, actor, payload) {
     return updated;
   });
   await publishPackageRobotEvent(prisma, "PACKAGE_VERIFIED", updated, actor);
-  return updated;
+  return withPickupQrContent(updated);
 }

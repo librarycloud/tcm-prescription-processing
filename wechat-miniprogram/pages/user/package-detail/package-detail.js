@@ -22,6 +22,7 @@ Page({
       detail: {
         ...item,
         pickupCode: formatPickupCode(item.pickupCode),
+        pickupQrContent: item.pickupQrContent || item.pickupCode,
         createdAtText: formatDate(item.createdAt),
         pickedAtText: formatDate(item.pickedAt),
         pickupMethodText: pickupMethodText(item.pickupMethod),

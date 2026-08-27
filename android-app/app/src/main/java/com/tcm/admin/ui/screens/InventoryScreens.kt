@@ -52,15 +52,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable
-internal fun InventoryScreen() {
-    var query by remember { mutableStateOf("") }
+internal fun InventoryScreen(initialQuery: String = "") {
+    var query by remember(initialQuery) { mutableStateOf(initialQuery) }
     var products by remember { mutableStateOf<List<JSONObject>?>(null) }
     var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selectedStoreId by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
-    var searchRequest by remember { mutableStateOf(0) }
+    var searchRequest by remember(initialQuery) { mutableStateOf(if (initialQuery.isBlank()) 0 else 1) }
     val context = LocalContext.current
 
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

@@ -2,10 +2,10 @@ package com.tcm.admin
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +57,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.asImageBitmap
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,26 +67,22 @@ import org.json.JSONObject
 
 @Composable
 private fun FakeQr(value: String) {
-    Canvas(
-        Modifier
-            .size(140.dp)
-            .background(Color.White, RoundedCornerShape(8.dp)),
-    ) {
-        val cells = 21
-        val cell = size.minDimension / cells
-        for (x in 0 until cells) {
-            for (y in 0 until cells) {
-                if (((x * 31 + y * 17 + value.length * 13) % 7) < 3 ||
-                    (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13)
-                ) {
-                    drawRect(
-                        if ((x + y) % 3 == 0) Color.Black else Color(0xFF262626),
-                        androidx.compose.ui.geometry.Offset(x * cell, y * cell),
-                        androidx.compose.ui.geometry.Size(cell, cell),
-                    )
+    val bitmap = remember(value) {
+        runCatching {
+            val matrix = MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, 512, 512)
+            Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).also { result ->
+                for (x in 0 until matrix.width) {
+                    for (y in 0 until matrix.height) {
+                        result.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                    }
                 }
             }
-        }
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(bitmap = bitmap.asImageBitmap(), contentDescription = "取货二维码", modifier = Modifier.size(140.dp))
+    } else {
+        Box(Modifier.size(140.dp).background(Color.White, RoundedCornerShape(8.dp)))
     }
 }
 
@@ -419,7 +419,7 @@ internal fun PackageDetailPage(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    FakeQr(pkg.code)
+                    FakeQr(pkg.pickupQrContent.ifBlank { pkg.code })
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = "取货码：${pkg.code}",
@@ -638,7 +638,14 @@ internal fun PackageVerifyScreen(
     initialCode: String,
     onVerified: () -> Unit,
 ) {
-    var code by remember(initialCode) { mutableStateOf(initialCode.filter(Char::isDigit).take(6)) }
+    var signedQrContent by remember(initialCode) {
+        mutableStateOf(initialCode.takeIf { it.startsWith("TCM:PICKUP:1:") })
+    }
+    var code by remember(initialCode) {
+        val signedCode = Regex("^TCM:PICKUP:1:\\d+:(\\d{6}):[A-Za-z0-9_-]+$")
+            .matchEntire(initialCode)?.groupValues?.getOrNull(1)
+        mutableStateOf(signedCode ?: initialCode.filter(Char::isDigit).take(6))
+    }
     var method by remember { mutableStateOf(0) }
     var tracking by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -661,7 +668,10 @@ internal fun PackageVerifyScreen(
 
             OutlinedTextField(
                 value = code,
-                onValueChange = { code = it.filter(Char::isDigit).take(6) },
+                onValueChange = {
+                    code = it.filter(Char::isDigit).take(6)
+                    signedQrContent = null
+                },
                 label = { Text("6 位取货码 *") },
                 placeholder = { Text("例如：891234") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -707,7 +717,7 @@ internal fun PackageVerifyScreen(
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
-                            ApiClient.verifyPackage(code, method, tracking.trim())
+                            ApiClient.verifyPackage(code, method, tracking.trim(), signedQrContent)
                         }
                     }.onSuccess {
                         onVerified()

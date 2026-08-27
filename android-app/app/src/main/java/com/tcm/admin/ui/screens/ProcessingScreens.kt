@@ -152,6 +152,7 @@ internal fun ProcessingScreenV2() {
                         time = obj.optString("finishDate", "").take(16).replace("T", " "),
                         store = store?.optString("name", "").orEmpty(),
                         expressTrackingNo = obj.optString("expressTrackingNo", ""),
+                        pickupQrContent = obj.optString("pickupQrContent", ""),
                     )
                 }
             }

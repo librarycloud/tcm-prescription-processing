@@ -81,7 +81,7 @@ internal fun DashboardScreen(
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             QuickAction("处方管理", "查看、新建与管理处方", Icons.AutoMirrored.Filled.Assignment, Primary) { onNavigate(ScreenTarget.Prescriptions) }
-            QuickAction("E6商品库存", "查询商品批次、规格、条码与效期", Icons.Default.Inventory, Color(0xFF0F766E)) { onNavigate(ScreenTarget.Inventory) }
+            QuickAction("E6商品库存", "查询商品批次、规格、条码与效期", Icons.Default.Inventory, Color(0xFF0F766E)) { onNavigate(ScreenTarget.Inventory()) }
             QuickAction("商品盘点", "商品盘点计划与差异录入", Icons.AutoMirrored.Filled.CompareArrows, Color(0xFF722ED1)) { onNavigate(ScreenTarget.Stocktaking) }
             QuickAction("库存差异", "登记与处理实货多/实货少差异", Icons.Default.Tune, Warning) { onNavigate(ScreenTarget.Differences) }
             QuickAction("门店调拨", "跨门店物资借调与归还跟踪", Icons.Default.LocalShipping, Color(0xFF009688)) { onNavigate(ScreenTarget.Transfers) }

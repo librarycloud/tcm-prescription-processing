@@ -40,7 +40,9 @@ Component({
             width: this.data.size,
             height: this.data.size,
             canvasId: this.data.canvasId,
-            text: normalizePickupCode(this.data.text) || this.data.text,
+            text: this.data.text.startsWith('TCM:PICKUP:1:')
+              ? this.data.text
+              : (normalizePickupCode(this.data.text) || this.data.text),
             _this: this
           });
         } catch (error) {

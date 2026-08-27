@@ -126,7 +126,7 @@
     </el-card>
 
     <el-dialog v-model="qrVisible" title="领取二维码" width="380px">
-      <QRCodeCard v-if="selectedPackage" :content="selectedPackage.pickupCode" />
+      <QRCodeCard v-if="selectedPackage" :content="selectedPackage.pickupQrContent || selectedPackage.pickupCode" />
     </el-dialog>
   </div>
 </template>

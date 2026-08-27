@@ -3,6 +3,7 @@ import { AppError } from '../utils/appError.js';
 import { validatePhone, normalizeOptionalPhone, normalizeOptionalUsername, requireAccountIdentifier } from '../utils/validators.js';
 import { publicUser, signLoginToken } from './authService.js';
 import { ROLES } from '../constants/roles.js';
+import { withPickupQrContent } from '../utils/pickupQr.js';
 
 function packageInclude() {
   return {
@@ -12,11 +13,12 @@ function packageInclude() {
 
 export async function listMyPackages(prisma, user) {
   if (Number(user?.role) !== ROLES.USER) throw new AppError('无普通用户权限', 403);
-  return prisma.package.findMany({
+  const data = await prisma.package.findMany({
     where: { receiverPhone: user.phone, deletedAt: null },
     include: packageInclude(),
     orderBy: { createdAt: 'desc' }
   });
+  return data.map(withPickupQrContent);
 }
 
 export async function getMyPackageDetail(prisma, user, id) {
@@ -30,7 +32,7 @@ export async function getMyPackageDetail(prisma, user, id) {
     throw new AppError('包裹不存在', 404);
   }
 
-  return data;
+  return withPickupQrContent(data);
 }
 
 export async function getCurrentUser(prisma, currentUser) {

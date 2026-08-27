@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -331,7 +330,6 @@ internal fun SearchBarField(
                     }
                 }
             },
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             singleLine = true,
             shape = FieldShape,
             colors = OutlinedTextFieldDefaults.colors(

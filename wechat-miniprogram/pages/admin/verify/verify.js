@@ -15,6 +15,7 @@ Page({
   data: {
     activeTab: 'packages',
     pickupCode: '',
+    pickupQrContent: '',
     pickupMethodOptions: PICKUP_METHOD_OPTIONS,
     pickupMethodIndex: 0,
     pickupMethod: null,
@@ -28,9 +29,11 @@ Page({
   onTabChange: onAdminTabChange,
 
   onLoad(options) {
-    const pickupCode = normalizePickupCode(options.pickupCode || '');
+    const qrContent = String(options.pickupQrContent || options.qrContent || '').trim();
+    const qrMatch = qrContent.match(/^TCM:PICKUP:1:\d+:(\d{6}):[A-Za-z0-9_-]+$/);
+    const pickupCode = normalizePickupCode(qrMatch ? qrMatch[1] : options.pickupCode || '');
     if (/^\d{6}$/.test(pickupCode)) {
-      this.setData({ pickupCode: formatPickupCode(pickupCode) }, () => this.lookup());
+      this.setData({ pickupCode: formatPickupCode(pickupCode), pickupQrContent: qrMatch ? qrContent : '' }, () => this.lookup());
     }
   },
 
@@ -38,6 +41,7 @@ Page({
     const pickupCode = formatPickupCode(e.detail.value);
     this.setData({
       pickupCode,
+      pickupQrContent: '',
       packageInfo: normalizePickupCode(this.data.packageInfo?.pickupCode) === normalizePickupCode(pickupCode) ? this.data.packageInfo : null
     });
   },
@@ -46,7 +50,13 @@ Page({
     wx.scanCode({
       onlyFromCamera: false,
       success: (res) => {
-        this.setData({ pickupCode: formatPickupCode(res.result) }, () => this.lookup());
+        const value = String(res.result || '').trim();
+        const qrMatch = value.match(/^TCM:PICKUP:1:\d+:(\d{6}):[A-Za-z0-9_-]+$/);
+        const pickupCode = normalizePickupCode(qrMatch ? qrMatch[1] : value);
+        this.setData({
+          pickupCode: formatPickupCode(pickupCode),
+          pickupQrContent: qrMatch ? value : ''
+        }, () => this.lookup());
       }
     });
   },
@@ -138,7 +148,8 @@ Page({
       const data = await verifyPackage(
         normalizePickupCode(this.data.packageInfo.pickupCode),
         this.data.pickupMethod,
-        this.data.expressTrackingNo
+        this.data.expressTrackingNo,
+        this.data.pickupQrContent
       );
       wx.showToast({ title: '核销成功', icon: 'success' });
       setTimeout(() => {

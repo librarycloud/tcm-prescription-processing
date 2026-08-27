@@ -22,6 +22,7 @@ Page({
       detail: {
         ...item,
         pickupCode: formatPickupCode(item.pickupCode),
+        pickupQrContent: item.pickupQrContent || item.pickupCode,
         createdAtText: formatDate(item.createdAt),
         pickedAtText: formatDate(item.pickedAt),
         modifiedAtText: formatDate(item.modifiedAt),
@@ -35,7 +36,7 @@ Page({
 
   verify() {
     wx.navigateTo({
-      url: `/pages/admin/verify/verify?pickupCode=${encodeURIComponent(this.data.detail.pickupCode)}`
+      url: `/pages/admin/verify/verify?pickupCode=${encodeURIComponent(this.data.detail.pickupCode)}&pickupQrContent=${encodeURIComponent(this.data.detail.pickupQrContent || '')}`
     });
   },
 

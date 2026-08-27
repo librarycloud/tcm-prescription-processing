@@ -16,6 +16,7 @@ internal data class PackageItem(
     val statusCode: Int = 0,
     val methodCode: Int = 0,
     val expressTrackingNo: String = "",
+    val pickupQrContent: String = "",
 )
 
 internal fun packageItem(value: JSONObject): PackageItem {
@@ -39,5 +40,6 @@ internal fun packageItem(value: JSONObject): PackageItem {
         statusCode = statusCode,
         methodCode = methodCode,
         expressTrackingNo = value.optString("expressTrackingNo", ""),
+        pickupQrContent = value.optString("pickupQrContent", ""),
     )
 }

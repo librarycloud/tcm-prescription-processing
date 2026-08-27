@@ -199,11 +199,11 @@ export function updatePackage(id, data) {
   return request({ url: `/admin/packages/${id}`, method: 'PUT', data });
 }
 
-export function verifyPackage(pickupCode, pickupMethod, expressTrackingNo = '') {
+export function verifyPackage(pickupCode, pickupMethod, expressTrackingNo = '', pickupQrContent = '') {
   return request({
     url: '/admin/packages/verify',
     method: 'POST',
-    data: { pickupCode, pickupMethod, expressTrackingNo }
+    data: { pickupCode, pickupMethod, expressTrackingNo, pickupQrContent }
   });
 }
 

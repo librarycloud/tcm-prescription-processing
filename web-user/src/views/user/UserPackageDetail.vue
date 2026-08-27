@@ -27,7 +27,7 @@
         </div>
       </el-card>
 
-      <QRCodeCard :content="detail.pickupCode" />
+      <QRCodeCard :content="detail.pickupQrContent || detail.pickupCode" />
     </div>
   </div>
 </template>
