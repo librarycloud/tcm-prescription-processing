@@ -23,9 +23,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Inventory
@@ -182,7 +182,7 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailShell(title: String, go: (Screen) -> Unit, content: @Composable () -> Unit) {
-    Scaffold(topBar = { TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton({ go(Screen.Dashboard) }) { Icon(Icons.Default.ArrowBack, "返回") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = PageBackground)) }, containerColor = PageBackground) { padding -> Box(Modifier.padding(padding)) { content() } }
+    Scaffold(topBar = { TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton({ go(Screen.Dashboard) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = PageBackground)) }, containerColor = PageBackground) { padding -> Box(Modifier.padding(padding)) { content() } }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -193,7 +193,7 @@ private fun AppTopBar(title: String, showMenu: Boolean) {
 
 @Composable
 private fun BottomNav(current: Screen, go: (Screen) -> Unit) {
-    val items = listOf(Screen.Dashboard to ("概览" to Icons.Default.Assignment), Screen.Herbs to ("斗谱" to Icons.Default.Inventory), Screen.Processing to ("加工" to Icons.Default.Sync), Screen.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn), Screen.Profile to ("我的" to Icons.Default.AccountCircle))
+    val items = listOf(Screen.Dashboard to ("概览" to Icons.AutoMirrored.Filled.Assignment), Screen.Herbs to ("斗谱" to Icons.Default.Inventory), Screen.Processing to ("加工" to Icons.Default.Sync), Screen.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn), Screen.Profile to ("我的" to Icons.Default.AccountCircle))
     NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = Color.White) { items.forEach { (screen, pair) -> NavigationBarItem(selected = current == screen, onClick = { go(screen) }, icon = { Icon(pair.second, pair.first) }, label = { Text(pair.first, fontSize = 11.sp) }) } }
 }
 
@@ -207,7 +207,7 @@ private fun DashboardScreen(go: (Screen) -> Unit, stats: JSONObject?) {
         Spacer(Modifier.height(18.dp)); SectionTitle("包裹概况")
         StatsGrid(listOf("待取货" to stat(stats, "pendingCount", "34"), "今日新增" to stat(stats, "todayAdded", "19"), "今日已取" to stat(stats, "todayPicked", "41"), "总包裹" to stat(stats, "totalCount", "268")))
         Spacer(Modifier.height(18.dp)); SectionTitle("业务管理")
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { QuickAction("库存查询", Icons.Default.Inventory) { go(Screen.Inventory) }; QuickAction("商品盘点", Icons.Default.Assignment) { go(Screen.Stocktaking) }; QuickAction("库存差异", Icons.Default.Tune) { go(Screen.Differences) }; QuickAction("门店调拨", Icons.Default.LocalShipping) { go(Screen.Transfers) } }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { QuickAction("库存查询", Icons.Default.Inventory) { go(Screen.Inventory) }; QuickAction("商品盘点", Icons.AutoMirrored.Filled.Assignment) { go(Screen.Stocktaking) }; QuickAction("库存差异", Icons.Default.Tune) { go(Screen.Differences) }; QuickAction("门店调拨", Icons.Default.LocalShipping) { go(Screen.Transfers) } }
     }
 }
 
