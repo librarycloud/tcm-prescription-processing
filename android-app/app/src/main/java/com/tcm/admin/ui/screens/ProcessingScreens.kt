@@ -138,7 +138,39 @@ internal fun ProcessingScreenV2() {
             }
         } else {
             val values = pickupTasks.orEmpty(); if (pickupTasks != null && values.isEmpty()) Text("暂无待领取任务", color = Muted)
-            values.filter { keyword.isBlank() || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${item.customer} · ${item.name}", fontWeight = FontWeight.SemiBold); Text("${item.phone} · ${item.time}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = JSONObject().put("packageId", item.id).put("pickupCode", item.code).put("receiverName", item.customer).put("receiverPhone", item.phone) }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; if (item.statusCode == 0) Button({ workflowPlan = JSONObject().put("packageId", item.id).put("packageCode", item.code) }, shape = RoundedCornerShape(6.dp)) { Text("核销") } } } }
+            values.filter { keyword.isBlank() || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item ->
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                    colors = CardDefaults.cardColors(Color.White),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("${item.customer} · ${item.name}", fontWeight = FontWeight.SemiBold)
+                                Text("${item.phone} · ${item.time}", color = Muted, fontSize = 12.sp)
+                            }
+                            StatusPill(item.status)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                {
+                                    detailPlan = JSONObject().put("packageId", item.id).put("pickupCode", item.code).put("receiverName", item.customer).put("receiverPhone", item.phone)
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                            ) { Text("详情") }
+                            if (item.statusCode == 0) {
+                                Button(
+                                    { workflowPlan = JSONObject().put("packageId", item.id).put("packageCode", item.code) },
+                                    shape = RoundedCornerShape(6.dp),
+                                ) { Text("核销") }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     detailPlan?.let { detail ->

@@ -273,7 +273,63 @@ internal fun DifferencesScreen() {
         }
     }
     writeOff?.let { product -> AlertDialog(onDismissRequest = { writeOff = null }, title = { Text("差异销账") }, text = { Column { Text("${product.optString("name")} · 当前差异 ${product.optDouble("diffQuantity")}", color = Muted); Spacer(Modifier.height(10.dp)); OutlinedTextField(quantity, { quantity = it }, Modifier.fillMaxWidth(), label = { Text("销账数量") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true) } }, confirmButton = { Button({ scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.writeOffDifference(JSONObject().put("productId", product.optInt("id")).put("quantity", quantity.toDouble()).put("businessDate", LocalDate.now().toString())) } }.onSuccess { writeOff = null; reload++ }.onFailure { error = it.message ?: "销账失败" } } }, enabled = quantity.toDoubleOrNull()?.let { it > 0 } == true) { Text("确认销账") } }, dismissButton = { TextButton({ writeOff = null }) { Text("取消") } }) }
-    if (registerVisible) AlertDialog(onDismissRequest = { registerVisible = false }, title = { Text("登记库存差异") }, text = { Column { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf("PRE_RECEIPT" to "先到货", "PRE_SHIPMENT" to "先出货").forEach { (key, label) -> SegmentedButton(label, registerType == key) { registerType = key } } }; Spacer(Modifier.height(8.dp)); products.orEmpty().take(8).forEach { product -> OutlinedButton({ registerProduct = product }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) { Text(if (registerProduct?.optInt("id") == product.optInt("id")) "已选：${product.optString("name")}" else product.optString("name")) } }; OutlinedTextField(registerQuantity, { registerQuantity = it }, Modifier.fillMaxWidth(), label = { Text("数量") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true) } }, confirmButton = { Button(enabled = registerProduct != null && registerQuantity.toDoubleOrNull()?.let { it > 0 } == true, onClick = { val product = registerProduct!!; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.registerDifference(JSONObject().put("operationType", registerType).put("businessDate", LocalDate.now().toString()).put("items", JSONArray().put(JSONObject().put("productId", product.optInt("id")).put("quantity", registerQuantity.toDouble()))) } }.onSuccess { registerVisible = false; registerProduct = null; registerQuantity = ""; reload++ }.onFailure { error = it.message ?: "登记差异失败" } } }) { Text("登记") } }, dismissButton = { TextButton({ registerVisible = false }) { Text("取消") } })
+    if (registerVisible) {
+        AlertDialog(
+            onDismissRequest = { registerVisible = false },
+            title = { Text("登记库存差异") },
+            text = {
+                Column {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("PRE_RECEIPT" to "先到货", "PRE_SHIPMENT" to "先出货").forEach { (key, label) ->
+                            SegmentedButton(label, registerType == key) { registerType = key }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    products.orEmpty().take(8).forEach { product ->
+                        OutlinedButton(
+                            { registerProduct = product },
+                            Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(6.dp),
+                        ) {
+                            Text(if (registerProduct?.optInt("id") == product.optInt("id")) "已选：${product.optString("name")}" else product.optString("name"))
+                        }
+                    }
+                    OutlinedTextField(
+                        registerQuantity,
+                        { registerQuantity = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("数量") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = registerProduct != null && registerQuantity.toDoubleOrNull()?.let { it > 0 } == true,
+                    onClick = {
+                        val product = registerProduct
+                        if (product != null) {
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        ApiClient.registerDifference(
+                                            JSONObject()
+                                                .put("operationType", registerType)
+                                                .put("businessDate", LocalDate.now().toString())
+                                                .put("items", JSONArray().put(JSONObject().put("productId", product.optInt("id")).put("quantity", registerQuantity.toDouble())))
+                                        )
+                                    }
+                                }.onSuccess { registerVisible = false; registerProduct = null; registerQuantity = ""; reload++ }
+                                    .onFailure { error = it.message ?: "登记差异失败" }
+                            }
+                        }
+                    },
+                ) { Text("登记") }
+            },
+            dismissButton = { TextButton({ registerVisible = false }) { Text("取消") } },
+        )
+    }
 }
 
 private fun diffOperationLabel(value: String): String = when (value) { "PRE_RECEIPT" -> "先到货未入库"; "PRE_SHIPMENT" -> "先出货未销库"; "WRITE_OFF_RECEIPT" -> "入库销账"; "WRITE_OFF_SHIPMENT" -> "销库销账"; "REVERSAL" -> "冲销"; "IMPORT_OPENING" -> "导入期初差异"; "IMPORT_ADJUSTMENT" -> "导入调整"; else -> value }

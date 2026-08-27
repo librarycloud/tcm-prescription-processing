@@ -100,7 +100,48 @@ private fun FakeQr(value: String) { Canvas(Modifier.size(150.dp).background(Colo
 private fun PackagesScreenV2(onOpen: (PackageItem) -> Unit) {
     var keyword by remember { mutableStateOf("") }; var statusFilter by remember { mutableStateOf<Int?>(null) }; var list by remember { mutableStateOf<List<PackageItem>?>(null) }; var error by remember { mutableStateOf<String?>(null) }; var reload by remember { mutableStateOf(0) }
     LaunchedEffect(keyword, statusFilter, reload) { error = null; runCatching { withContext(Dispatchers.IO) { ApiClient.packages(status = statusFilter, keyword = keyword) } }.onSuccess { a -> list = (0 until a.length()).map { packageItem(a.getJSONObject(it)) } }.onFailure { error = it.message ?: "加载包裹失败" } }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("取货码、手机号、姓名、物品") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true); Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("全部", statusFilter == null) { statusFilter = null }; SegmentedButton("待取", statusFilter == 0) { statusFilter = 0 }; SegmentedButton("已取", statusFilter == 1) { statusFilter = 1 } }; Spacer(Modifier.height(14.dp)); error?.let { Text(it, color = Danger, fontSize = 13.sp) }; if (list == null && error == null) Text("加载中...", color = Muted); if (list != null && list!!.isEmpty()) Text("暂无包裹", color = Muted); list.orEmpty().filter { keyword.isBlank() || it.customer.contains(keyword) || it.phone.contains(keyword) || it.code.contains(keyword) || it.name.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.name, fontWeight = FontWeight.SemiBold); Text("${item.customer} · ${item.phone}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Text("${item.method}${if (item.store.isNotBlank()) " · ${item.store}" else ""} · ${item.time}", color = Muted, fontSize = 12.sp) } } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        OutlinedTextField(
+            keyword,
+            { keyword = it },
+            Modifier.fillMaxWidth(),
+            placeholder = { Text("取货码、手机号、姓名、物品") },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            singleLine = true,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SegmentedButton("全部", statusFilter == null) { statusFilter = null }
+            SegmentedButton("待取", statusFilter == 0) { statusFilter = 0 }
+            SegmentedButton("已取", statusFilter == 1) { statusFilter = 1 }
+        }
+        Spacer(Modifier.height(14.dp))
+        error?.let { Text(it, color = Danger, fontSize = 13.sp) }
+        if (list == null && error == null) Text("加载中...", color = Muted)
+        if (list != null && list!!.isEmpty()) Text("暂无包裹", color = Muted)
+        list.orEmpty()
+            .filter { keyword.isBlank() || it.customer.contains(keyword) || it.phone.contains(keyword) || it.code.contains(keyword) || it.name.contains(keyword) }
+            .forEach { item ->
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) },
+                    colors = CardDefaults.cardColors(Color.White),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(item.name, fontWeight = FontWeight.SemiBold)
+                                Text("${item.customer} · ${item.phone}", color = Muted, fontSize = 12.sp)
+                            }
+                            StatusPill(item.status)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text("${item.method}${if (item.store.isNotBlank()) " · ${item.store}" else ""} · ${item.time}", color = Muted, fontSize = 12.sp)
+                    }
+                }
+            }
+    }
 }
 
 @Composable
