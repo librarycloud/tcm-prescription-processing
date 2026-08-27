@@ -4,6 +4,15 @@
 
 面向连锁中药房的处方创建、分批加工、取药通知与核销管理系统。项目采用前后端分离架构，管理端、普通用户 Web 端和微信小程序共用 Fastify API 与 MariaDB 数据库；每个加工计划预生成唯一取货码，完成加工后自动生成包裹并复用该取货码。
 
+## 文档导航
+
+- 管理员使用教程（管理端 Web、管理员微信小程序）：[docs/使用说明.md](docs/使用说明.md)
+- E6 处方同步接口：[docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md)
+- 管理端前端说明：[web-admin/README.md](web-admin/README.md)
+- Android 管理员端说明（当前仍在开发）：[android-app/README.md](android-app/README.md)
+
+建议阅读顺序：先按本文完成环境、数据库和服务启动，再阅读管理员使用教程进行业务操作。普通用户端的独立启动说明见 `web-user/README.md`。
+
 ## 功能概览
 
 ### 处方与加工
@@ -39,6 +48,7 @@
 | 管理端 | Vue 3、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts |
 | 用户端 | Vue 3、Vite、Pinia、Vue Router、Axios、Element Plus |
 | 小程序 | 微信原生小程序、TDesign Miniprogram |
+| Android 管理员端 | Kotlin、Jetpack Compose（开发中） |
 | 认证与安全 | JWT、bcrypt、Helmet、请求限流 |
 
 ## 核心业务流程
@@ -62,7 +72,8 @@
 backend/              Fastify API、Prisma schema、迁移和种子数据
 web-admin/            管理端 Vue 应用（默认开发端口 5173）
 web-user/             普通用户 Vue 应用（默认开发端口 5174）
-wechat-miniprogram/   微信小程序
+wechat-miniprogram/   微信小程序（管理员和普通用户入口）
+android-app/          Android 管理员端（开发中）
 docs/                 E6 等业务对接文档
 ```
 
@@ -75,6 +86,25 @@ docs/                 E6 等业务对接文档
 - MariaDB `10.6+` 或兼容的 MySQL
 - 生产部署建议使用 Linux、Nginx 和 PM2
 - 小程序生产环境需要配置 HTTPS 合法域名
+
+## 快速开始
+
+以下命令适用于本地开发，首次执行前请先准备 MariaDB 和 Redis，并按“本地开发”章节创建数据库和环境变量。
+
+```bash
+# 终端 1：后端 API
+(cd backend && npm install && npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed && npm run dev)
+
+# 终端 2：管理员 Web
+(cd web-admin && npm install && npm run dev)
+
+# 终端 3：普通用户 Web（按需启动）
+(cd web-user && npm install && npm run dev)
+```
+
+三条命令应分别在三个终端运行；括号会使每条命令结束后回到项目根目录。
+
+启动后：管理员 Web 默认访问 `http://localhost:5173`，普通用户 Web 默认访问 `http://localhost:5174`，后端健康检查为 `http://localhost:3000/health`。默认种子账号和密码以 `backend/prisma/seed.js` 为准，首次登录后请立即修改密码。
 
 ## 本地开发
 
@@ -101,6 +131,8 @@ cp .env.example .env
 DATABASE_URL="mysql://tcm_user:replace-with-a-strong-password@127.0.0.1:3306/tcm"
 JWT_SECRET="replace-with-a-long-random-secret"
 REDIS_URL="redis://127.0.0.1:6379"
+WX_APPID="wx-your-appid"
+WX_SECRET="your-wechat-secret"
 SETTINGS_ENCRYPTION_KEY="replace-with-a-32-byte-base64-key"
 PORT=3000
 HOST="0.0.0.0"
@@ -121,6 +153,7 @@ npm run dev
 
 > MariaDB 使用 Prisma 的 `mysql` provider，因此 `DATABASE_URL` 以 `mysql://` 开头。
 > Redis 用于保存有效登录会话；后端启动和已登录接口校验都需要连接 `REDIS_URL`。
+> 微信登录需要填写 `WX_APPID` 和 `WX_SECRET`；短信、邮件和机器人密钥在管理端配置后会加密保存。
 
 ### 3. 启动管理端
 
@@ -164,7 +197,29 @@ VITE_DEV_PORT=5174
 
 ### 5. 运行小程序
 
-使用微信开发者工具导入 `wechat-miniprogram`，安装依赖后执行“工具 -> 构建 npm”。在 `wechat-miniprogram/app.js` 配置接口地址；正式环境必须使用已备案并加入微信合法域名的 HTTPS 地址。
+使用微信开发者工具导入 `wechat-miniprogram`，在项目目录安装依赖后执行“工具 -> 构建 npm”。在 `wechat-miniprogram/app.js` 的 `globalData.baseUrl` 配置后端地址：
+
+```bash
+cd wechat-miniprogram
+npm install
+```
+
+开发环境可填写局域网中可被手机访问的后端地址；真机调试时不能填写 `localhost`。正式环境必须使用已备案并加入微信合法域名的 HTTPS 地址。
+
+### 6. 常用命令速查
+
+| 目标 | 命令 | 目录 |
+| --- | --- | --- |
+| 后端开发 | `npm run dev` | `backend/` |
+| 后端测试 | `npm test` | `backend/` |
+| 数据库迁移（开发） | `npm run prisma:migrate` | `backend/` |
+| 数据库迁移（生产） | `npm run prisma:deploy` | `backend/` |
+| 管理端构建/检查 | `npm run build` / `npm run lint` | `web-admin/` |
+| 用户端构建/检查 | `npm run build` / `npm run lint` | `web-user/` |
+| 小程序依赖 | `npm install` | `wechat-miniprogram/` |
+| Android Debug 构建 | `gradle --no-daemon assembleDebug` | `android-app/` |
+
+前端改动提交前建议至少执行对应目录的 `npm run lint` 和 `npm run build`；后端改动执行 `npm test`。
 
 ## 生产部署
 
@@ -414,6 +469,16 @@ sudo systemctl reload nginx
 
 如果前端构建失败，旧的 `dist` 文件仍会保留；确认新构建成功后再重载 Nginx。
 
+### 发布检查清单
+
+- [ ] 已备份 MariaDB 数据库，并确认上传目录有独立备份。
+- [ ] 已核对生产环境 `.env` 中的数据库、Redis、JWT 和加密密钥，且没有使用示例值。
+- [ ] 已执行 `npm run prisma:deploy`，并确认后端 `/health` 返回正常。
+- [ ] 已完成 `web-admin` 和 `web-user` 构建，检查两个域名可以正常刷新和登录。
+- [ ] 已检查短信、邮件、群机器人和打印模板（如启用）。
+- [ ] 微信小程序已配置生产 API 地址、HTTPS 合法域名，并完成管理员登录验证。
+- [ ] 已通过 PM2 和 Nginx 日志确认无持续报错。
+
 ## 备份与排错
 
 ### 数据库备份
@@ -535,4 +600,7 @@ E6 导入状态：`0` 待确认、`1` 待映射、`2` 导入异常、`3` 已生�
 0 = 全局管理员
 1 = 普通用户
 2 = 门店管理员
+3 = 门店员工
 ```
+
+角色权限以服务端校验为准。前端菜单隐藏只用于改善使用体验，不能替代接口权限控制。
