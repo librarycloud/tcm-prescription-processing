@@ -19,9 +19,29 @@ object ApiClient {
     }
 
     fun stats(): JSONObject = request("/admin/stats").getJSONObject("data")
-    fun plans(): JSONArray = list(request("/admin/processing-plans?view=today-all&page=1&pageSize=30").getJSONObject("data"))
-    fun packages(): JSONArray = list(request("/admin/packages?page=1&pageSize=30").getJSONObject("data"))
-    fun inventory(): JSONArray = list(request("/admin/e6-pharmacy/products?page=1&pageSize=30").getJSONObject("data"))
+    fun plans(view: String = "today-all", keyword: String = ""): JSONArray {
+        val query = buildList {
+            add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
+            add("page=1")
+            add("pageSize=100")
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return list(request("/admin/processing-plans?$query").getJSONObject("data"))
+    }
+    fun processingWorkflow(id: Int): JSONObject = request("/admin/processing-plans/$id/workflow").getJSONObject("data")
+    fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = ""): JSONArray {
+        val query = buildList {
+            add("page=1")
+            add("pageSize=100")
+            status?.let { add("status=$it") }
+            source?.let { add("source=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            dateScope?.let { add("dateScope=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return list(request("/admin/packages?$query").getJSONObject("data"))
+    }
+    fun packageDetail(id: Int): JSONObject = request("/admin/packages/$id").getJSONObject("data")
+    fun inventory(keyword: String = ""): JSONArray = list(request("/admin/e6-pharmacy/products?page=1&pageSize=50${keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""}").getJSONObject("data"))
     fun differences(): JSONObject = request("/admin/product-differences/stats").getJSONObject("data")
     fun differenceProducts(): JSONArray = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
     fun differenceLogs(): JSONArray = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
@@ -32,13 +52,17 @@ object ApiClient {
     fun transitionPlan(id: Int, status: Int): JSONObject = request("/admin/processing-plans/$id/transition", "POST", JSONObject().put("status", status)).getJSONObject("data")
     fun generatePackage(id: Int): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST").getJSONObject("data")
     fun verifyPackage(code: String): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", 1)).getJSONObject("data")
-    fun createGoodsCheck(name: String, type: Int = 1): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type)).getJSONObject("data")
+    fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
+    fun goodsCheck(id: Int): JSONObject = request("/admin/yd-goods-check/$id").getJSONObject("data")
     fun finishGoodsCheck(id: Int): JSONObject = request("/admin/yd-goods-check/$id/finish", "POST").getJSONObject("data")
     fun registerDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/register", "POST", payload).getJSONObject("data")
     fun writeOffDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/write-off", "POST", payload).getJSONObject("data")
     fun cancelTransfer(id: Int, reason: String): JSONObject = request("/admin/store-transfers/$id/cancel", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
     fun confirmOutbound(id: Int): JSONObject = request("/admin/store-transfers/$id/confirm-outbound", "POST").getJSONObject("data")
     fun confirmReturn(id: Int, returnId: Int): JSONObject = request("/admin/store-transfers/$id/returns/$returnId/confirm", "POST").getJSONObject("data")
+    fun transferDetail(id: Int): JSONObject = request("/admin/store-transfers/$id").getJSONObject("data")
+    fun transferStores(): JSONArray = request("/admin/store-transfers/stores").getJSONArray("data")
+    fun createTransfer(payload: JSONObject): JSONObject = request("/admin/store-transfers", "POST", payload).getJSONObject("data")
 
     private fun list(data: JSONObject): JSONArray = when {
         data.has("list") -> data.optJSONArray("list") ?: JSONArray()
