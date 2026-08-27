@@ -61,6 +61,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -104,6 +105,8 @@ private val Border = Color(0xFFE4E7ED)
 private val Success = Color(0xFF67C23A)
 private val Warning = Color(0xFFE6A23C)
 private val Danger = Color(0xFFF56C6C)
+private val CardShape = RoundedCornerShape(8.dp)
+private val FieldShape = RoundedCornerShape(8.dp)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -126,7 +129,10 @@ private fun TcmAdminApp() {
     val scope = rememberCoroutineScope()
     var selectedPackage by remember { mutableStateOf<PackageItem?>(null) }
     val go: (Screen) -> Unit = { screen = it }
-    MaterialTheme(colorScheme = androidx.compose.material3.lightColorScheme(primary = Primary, onPrimary = Color.White, primaryContainer = PrimarySoft, onPrimaryContainer = PrimaryDark, secondary = Color(0xFF0F766E), onSecondary = Color.White, secondaryContainer = Color(0xFFE6FFFB), onSecondaryContainer = Color(0xFF115E59), tertiary = Color(0xFF8B5CF6), background = PageBackground, onBackground = Ink, surface = Color.White, onSurface = Ink, surfaceVariant = Color(0xFFF0F2F5), onSurfaceVariant = Muted, outline = Border, error = Danger, onError = Color.White)) {
+    MaterialTheme(
+        colorScheme = androidx.compose.material3.lightColorScheme(primary = Primary, onPrimary = Color.White, primaryContainer = PrimarySoft, onPrimaryContainer = PrimaryDark, secondary = Color(0xFF0F766E), onSecondary = Color.White, secondaryContainer = Color(0xFFE6FFFB), onSecondaryContainer = Color(0xFF115E59), tertiary = Color(0xFF8B5CF6), background = PageBackground, onBackground = Ink, surface = Color.White, onSurface = Ink, surfaceVariant = Color(0xFFF0F2F5), onSurfaceVariant = Muted, outline = Border, error = Danger, onError = Color.White),
+        shapes = Shapes(small = RoundedCornerShape(6.dp), medium = FieldShape, large = CardShape),
+    ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
             when (screen) {
                 Screen.Login -> LoginScreen(loginLoading, loginError) { identifier, password ->
@@ -165,24 +171,27 @@ private fun TcmAdminApp() {
 private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, String) -> Unit) {
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 56.dp), verticalArrangement = Arrangement.Center) {
-        Text("中药处方加工与取药管理系统", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Spacer(Modifier.height(8.dp))
-        Text("工作台", color = Muted, fontSize = 15.sp)
-        Spacer(Modifier.height(28.dp))
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 40.dp), verticalArrangement = Arrangement.Center) {
+        Surface(color = PrimarySoft, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(52.dp)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Inventory, null, tint = Primary, modifier = Modifier.size(28.dp)) }
+        }
         Spacer(Modifier.height(18.dp))
-        Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) {
+        Text("中药处方加工与取药管理系统", fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Spacer(Modifier.height(6.dp))
+        Text("工作台", color = PrimaryDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(24.dp))
+        Card(colors = CardDefaults.cardColors(Color.White), shape = CardShape, elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
             Column(Modifier.padding(20.dp)) {
                 OutlinedTextField(identifier, { identifier = it }, Modifier.fillMaxWidth(), label = { Text("手机号或用户名") }, leadingIcon = { Icon(Icons.Default.AccountCircle, null) }, singleLine = true)
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("密码") }, leadingIcon = { Icon(Icons.Default.Lock, null) }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), singleLine = true)
                 Spacer(Modifier.height(20.dp))
-                Button(onClick = { onLogin(identifier, password) }, Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(6.dp), enabled = identifier.isNotBlank() && password.isNotBlank() && !loading) { Text(if (loading) "登录中..." else "登录") }
+                Button(onClick = { onLogin(identifier, password) }, Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(6.dp), enabled = identifier.isNotBlank() && password.isNotBlank() && !loading) { Text(if (loading) "登录中..." else "登录", fontWeight = FontWeight.SemiBold) }
                 if (error != null) { Spacer(Modifier.height(10.dp)); Text(error, color = Danger, fontSize = 13.sp) }
             }
         }
         Spacer(Modifier.height(14.dp))
-        Text("请使用后端账号登录", color = Muted, fontSize = 12.sp)
+        Text("请使用后端账号登录", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -207,7 +216,11 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
-                Text("中药取药助手", Modifier.padding(horizontal = 24.dp, vertical = 24.dp), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Primary)
+                Column(Modifier.fillMaxWidth().background(PrimarySoft).padding(horizontal = 24.dp, vertical = 22.dp)) {
+                    Text("中药取药助手", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = PrimaryDark)
+                    Spacer(Modifier.height(4.dp))
+                    Text("门店运营工作台", color = PrimaryDark.copy(alpha = .72f), fontSize = 12.sp)
+                }
                 DrawerItem("概览", current == Screen.Dashboard) { go(Screen.Dashboard); scope.launch { drawerState.close() } }
                 DrawerItem("处方管理", current == Screen.Prescriptions) { go(Screen.Prescriptions); scope.launch { drawerState.close() } }
                 DrawerItem("加工计划", current == Screen.Processing) { go(Screen.Processing); scope.launch { drawerState.close() } }
@@ -224,7 +237,7 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
             }
         },
     ) {
-        Scaffold(topBar = { AppTopBar("中药取药助手", onMenu = { scope.launch { drawerState.open() } }, onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) }) }, bottomBar = { BottomNav(current, go) }, containerColor = PageBackground) { padding -> Box(Modifier.padding(padding)) { content() } }
+        Scaffold(topBar = { AppTopBar("中药取药助手", onMenu = { scope.launch { drawerState.open() } }, onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) }) }, bottomBar = { BottomNav(current, go) }, containerColor = PageBackground) { padding -> Box(Modifier.fillMaxSize().padding(padding)) { content() } }
     }
     if (scanResult != null) AlertDialog(onDismissRequest = { scanResult = null }, title = { Text("核验成功") }, text = { Text("取货码 ${scanResult}\n包裹已完成领取核验。") }, confirmButton = { Button({ scanResult = null }) { Text("完成") } })
     if (scanError != null) AlertDialog(onDismissRequest = { scanError = null }, title = { Text("核验失败") }, text = { Text(scanError!!) }, confirmButton = { Button({ scanError = null }) { Text("关闭") } })
@@ -238,30 +251,34 @@ private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailShell(title: String, go: (Screen) -> Unit, content: @Composable () -> Unit) {
-    Scaffold(topBar = { TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton({ go(Screen.Dashboard) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White, scrolledContainerColor = Color.White)) }, containerColor = PageBackground) { padding -> Box(Modifier.padding(padding)) { content() } }
+    Scaffold(topBar = { TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton(onClick = { go(Screen.Dashboard) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White, scrolledContainerColor = Color.White)) }, containerColor = PageBackground) { padding -> Box(Modifier.fillMaxSize().padding(padding)) { content() } }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
-    TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton(onMenu) { Icon(Icons.Default.Menu, "打开菜单") } }, actions = { IconButton(onScan) { Icon(Icons.Default.QrCodeScanner, "扫码核验") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White, scrolledContainerColor = Color.White))
+    TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Default.Menu, "打开菜单") } }, actions = { IconButton(onClick = onScan) { Icon(Icons.Default.QrCodeScanner, "扫码核验") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White, scrolledContainerColor = Color.White))
 }
 
 @Composable
 private fun BottomNav(current: Screen, go: (Screen) -> Unit) {
     val items = listOf(Screen.Dashboard to ("概览" to Icons.AutoMirrored.Filled.Assignment), Screen.Herbs to ("斗谱" to Icons.Default.Inventory), Screen.Processing to ("加工" to Icons.Default.Sync), Screen.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn), Screen.Profile to ("我的" to Icons.Default.AccountCircle))
-    NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = Color.White) { items.forEach { (screen, pair) -> NavigationBarItem(selected = current == screen, onClick = { go(screen) }, icon = { Icon(pair.second, pair.first) }, label = { Text(pair.first, fontSize = 11.sp) }) } }
+    NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = Color.White, tonalElevation = 2.dp) { items.forEach { (screen, pair) -> NavigationBarItem(selected = current == screen, onClick = { go(screen) }, icon = { Icon(pair.second, pair.first) }, label = { Text(pair.first, fontSize = 11.sp) }) } }
 }
 
 @Composable
 private fun DashboardScreen(go: (Screen) -> Unit, stats: JSONObject?) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Store, null, tint = Primary); Spacer(Modifier.width(10.dp)); Text("当前门店", color = Muted); Spacer(Modifier.weight(1f)); Text("全部门店", fontWeight = FontWeight.SemiBold); Icon(Icons.Default.ChevronRight, null, tint = Muted) } }
-        Spacer(Modifier.height(18.dp)); SectionTitle("加工概况")
+        Text("今日概览", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Spacer(Modifier.height(4.dp))
+        Text("实时掌握处方、加工和包裹状态", color = Muted, fontSize = 13.sp)
+        Spacer(Modifier.height(16.dp))
+        Card(colors = CardDefaults.cardColors(Color.White), shape = CardShape, elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { Surface(color = PrimarySoft, shape = RoundedCornerShape(8.dp), modifier = Modifier.size(36.dp)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Store, null, tint = Primary, modifier = Modifier.size(20.dp)) } }; Spacer(Modifier.width(10.dp)); Column { Text("当前门店", color = Muted, fontSize = 12.sp); Text("全部门店", fontWeight = FontWeight.SemiBold) }; Spacer(Modifier.weight(1f)); Icon(Icons.Default.ChevronRight, null, tint = Muted) } }
+        Spacer(Modifier.height(20.dp)); SectionTitle("加工概况")
         StatsGrid(listOf("今日待加工" to stat(stats, "waitingCount"), "逾期未开工" to stat(stats, "overdueCount"), "加工中" to stat(stats, "processingCount"), "今日完成" to stat(stats, "todayFinished"), "等待顾客" to stat(stats, "waitingNoticeCount"), "明日加工" to stat(stats, "tomorrowWaitingCount")))
-        Spacer(Modifier.height(18.dp)); SectionTitle("包裹概况")
+        Spacer(Modifier.height(20.dp)); SectionTitle("包裹概况")
         StatsGrid(listOf("待取货" to stat(stats, "pendingCount"), "今日新增" to stat(stats, "todayAdded"), "今日已取" to stat(stats, "todayPicked"), "总包裹" to stat(stats, "totalCount")))
-        Spacer(Modifier.height(18.dp)); SectionTitle("业务管理")
+        Spacer(Modifier.height(20.dp)); SectionTitle("业务管理")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { QuickAction("处方管理", Icons.AutoMirrored.Filled.Assignment) { go(Screen.Prescriptions) }; QuickAction("库存查询", Icons.Default.Inventory) { go(Screen.Inventory) }; QuickAction("商品盘点", Icons.AutoMirrored.Filled.Assignment) { go(Screen.Stocktaking) }; QuickAction("库存差异", Icons.Default.Tune) { go(Screen.Differences) }; QuickAction("门店调拨", Icons.Default.LocalShipping) { go(Screen.Transfers) } }
     }
 }
@@ -269,9 +286,9 @@ private fun DashboardScreen(go: (Screen) -> Unit, stats: JSONObject?) {
 private fun stat(stats: JSONObject?, key: String): String = stats?.opt(key)?.toString() ?: "-"
 
 @Composable private fun SectionTitle(text: String) { Text(text, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink) }
-@Composable private fun StatsGrid(items: List<Pair<String, String>>) { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { items.chunked(3).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { row.forEach { (label, value) -> Card(Modifier.weight(1f), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(14.dp)) { Text(value, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Primary); Text(label, color = Muted, fontSize = 12.sp) } } }; repeat(3 - row.size) { Spacer(Modifier.weight(1f)) } } } } }
-@Composable private fun QuickAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) { OutlinedButton(onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary)) { Icon(icon, null, Modifier.size(18.dp)); Spacer(Modifier.width(10.dp)); Text(label, modifier = Modifier.weight(1f)); Icon(Icons.Default.ChevronRight, null) } }
-@Composable private fun SegmentedButton(label: String, selected: Boolean, onClick: () -> Unit) { if (selected) Button(onClick, shape = RoundedCornerShape(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 8.dp)) { Text(label) } else OutlinedButton(onClick, shape = RoundedCornerShape(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 8.dp)) { Text(label) } }
+@Composable private fun StatsGrid(items: List<Pair<String, String>>) { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { items.chunked(3).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { row.forEachIndexed { index, (label, value) -> Card(Modifier.weight(1f).height(86.dp), colors = CardDefaults.cardColors(if (index == 0) PrimarySoft else Color.White), shape = CardShape, elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Column(Modifier.padding(horizontal = 13.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (index == 0) PrimaryDark else Primary); Text(label, color = Muted, fontSize = 12.sp) } } }; repeat(3 - row.size) { Spacer(Modifier.weight(1f)) } } } } }
+@Composable private fun QuickAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) { OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(6.dp), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = Primary)) { Icon(icon, null, Modifier.size(18.dp)); Spacer(Modifier.width(10.dp)); Text(label, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium); Icon(Icons.Default.ChevronRight, null) } }
+@Composable private fun SegmentedButton(label: String, selected: Boolean, onClick: () -> Unit) { if (selected) Button(onClick = onClick, shape = RoundedCornerShape(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp)) { Text(label) } else OutlinedButton(onClick = onClick, shape = RoundedCornerShape(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp)) { Text(label) } }
 
 @Composable
 private fun ProcessingScreen() {
