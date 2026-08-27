@@ -1,8 +1,12 @@
 package com.tcm.admin
 
 import android.os.Bundle
+import android.app.Activity
+import android.content.Intent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +36,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
@@ -46,8 +52,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -63,6 +73,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -75,6 +86,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -98,7 +110,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Screen { Login, Dashboard, Processing, Packages, Herbs, Profile, Inventory, Stocktaking, Differences, Transfers }
 
-private data class PackageItem(val name: String, val customer: String, val code: String, val status: String, val time: String, val id: Int = 0, val phone: String = "-", val store: String = "", val method: String = "", val info: String = "", val statusCode: Int = 0)
+private data class PackageItem(val name: String, val customer: String, val code: String, val status: String, val time: String, val id: Int = 0, val phone: String = "-", val store: String = "", val method: String = "", val info: String = "", val statusCode: Int = 0, val methodCode: Int = 0)
 
 @Composable
 private fun TcmAdminApp() {
@@ -123,8 +135,8 @@ private fun TcmAdminApp() {
                     }
                 }
                 Screen.Dashboard -> MainShell(screen, go) { DashboardScreen(go, stats) }
-                Screen.Processing -> MainShell(screen, go) { ProcessingScreen() }
-                Screen.Packages -> MainShell(screen, go) { PackagesScreen(onOpen = { selectedPackage = it }) }
+                Screen.Processing -> MainShell(screen, go) { ProcessingScreenV2() }
+                Screen.Packages -> MainShell(screen, go) { PackagesScreenV2(onOpen = { selectedPackage = it }) }
                 Screen.Herbs -> MainShell(screen, go) { HerbsScreen() }
                 Screen.Profile -> MainShell(screen, go) { ProfileScreen(session?.user) { ApiClient.setToken(null); session = null; stats = null; go(Screen.Login) } }
                 Screen.Inventory -> DetailShell("库存查询", go) { InventoryScreen() }
@@ -133,7 +145,7 @@ private fun TcmAdminApp() {
                 Screen.Transfers -> DetailShell("门店调拨", go) { TransfersScreen() }
             }
             if (selectedPackage != null) {
-                PackageDetailDialog(selectedPackage!!) { selectedPackage = null }
+                PackageDetailDialogV2(selectedPackage!!) { selectedPackage = null }
             }
         }
     }
@@ -171,7 +183,50 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
 
 @Composable
 private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composable () -> Unit) {
-    Scaffold(topBar = { AppTopBar("中药取药助手") }, bottomBar = { BottomNav(current, go) }, containerColor = PageBackground) { padding -> Box(Modifier.padding(padding)) { content() } }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var scanResult by remember { mutableStateOf<String?>(null) }
+    var scanError by remember { mutableStateOf<String?>(null) }
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)
+        if (result.resultCode == Activity.RESULT_OK && !value.isNullOrBlank()) {
+            scope.launch {
+                runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(value) } }
+                    .onSuccess { scanResult = value }
+                    .onFailure { scanError = it.message ?: "取货码核验失败" }
+            }
+        }
+    }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text("中药取药助手", Modifier.padding(horizontal = 24.dp, vertical = 24.dp), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Primary)
+                DrawerItem("概览", current == Screen.Dashboard) { go(Screen.Dashboard); scope.launch { drawerState.close() } }
+                DrawerItem("加工计划", current == Screen.Processing) { go(Screen.Processing); scope.launch { drawerState.close() } }
+                DrawerItem("包裹管理", current == Screen.Packages) { go(Screen.Packages); scope.launch { drawerState.close() } }
+                DrawerItem("斗谱与库位", current == Screen.Herbs) { go(Screen.Herbs); scope.launch { drawerState.close() } }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text("业务管理", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = Muted, fontSize = 12.sp)
+                DrawerItem("库存查询", current == Screen.Inventory) { go(Screen.Inventory); scope.launch { drawerState.close() } }
+                DrawerItem("商品盘点", current == Screen.Stocktaking) { go(Screen.Stocktaking); scope.launch { drawerState.close() } }
+                DrawerItem("库存差异", current == Screen.Differences) { go(Screen.Differences); scope.launch { drawerState.close() } }
+                DrawerItem("门店调拨", current == Screen.Transfers) { go(Screen.Transfers); scope.launch { drawerState.close() } }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                DrawerItem("我的", current == Screen.Profile) { go(Screen.Profile); scope.launch { drawerState.close() } }
+            }
+        },
+    ) {
+        Scaffold(topBar = { AppTopBar("中药取药助手", onMenu = { scope.launch { drawerState.open() } }, onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) }) }, bottomBar = { BottomNav(current, go) }, containerColor = PageBackground) { padding -> Box(Modifier.padding(padding)) { content() } }
+    }
+    if (scanResult != null) AlertDialog(onDismissRequest = { scanResult = null }, title = { Text("核验成功") }, text = { Text("取货码 ${scanResult}\n包裹已完成领取核验。") }, confirmButton = { Button({ scanResult = null }) { Text("完成") } })
+    if (scanError != null) AlertDialog(onDismissRequest = { scanError = null }, title = { Text("核验失败") }, text = { Text(scanError!!) }, confirmButton = { Button({ scanError = null }) { Text("关闭") } })
+}
+
+@Composable
+private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    NavigationDrawerItem(label = { Text(label) }, selected = selected, onClick = onClick, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -182,8 +237,8 @@ private fun DetailShell(title: String, go: (Screen) -> Unit, content: @Composabl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppTopBar(title: String) {
-    TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = PageBackground))
+private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
+    TopAppBar(title = { Text(title, fontWeight = FontWeight.SemiBold) }, navigationIcon = { IconButton(onMenu) { Icon(Icons.Default.Menu, "打开菜单") } }, actions = { IconButton(onScan) { Icon(Icons.Default.QrCodeScanner, "扫码核验") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = PageBackground))
 }
 
 @Composable
@@ -619,3 +674,101 @@ private fun transferStatusLabel(status: Int, outboundStatus: Int): String = when
     outboundStatus == 0 -> "待出库"
     else -> "借出中"
 }
+private fun packageStatus(status: Int): String = when (status) { 0 -> "待领取"; 1 -> "已领取"; else -> "已关闭" }
+
+private fun packageItem(value: JSONObject): PackageItem {
+    val statusCode = value.optInt("status", 0)
+    val store = value.optJSONObject("store")?.optString("name", "") ?: ""
+    val methodCode = value.optInt("pickupMethod", 0)
+    val method = when (methodCode) { 0 -> "自提"; 1 -> "跑腿"; 2 -> "快递"; else -> "未设置" }
+    return PackageItem(value.optString("itemName", "包裹"), value.optString("receiverName", "客户"), value.optString("pickupCode", "-"), packageStatus(statusCode), value.optString("createdAt", "-").replace("T", " ").take(16), value.optInt("id", 0), value.optString("receiverPhone", "-"), store, method, value.optString("itemInfo", ""), statusCode, methodCode)
+}
+
+@Composable
+private fun ProcessingScreenV2() {
+    var mode by remember { mutableStateOf("plans") }
+    var view by remember { mutableStateOf("today-all") }
+    var keyword by remember { mutableStateOf("") }
+    var plans by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var pickupTasks by remember { mutableStateOf<List<PackageItem>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var detailPlan by remember { mutableStateOf<JSONObject?>(null) }
+    var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
+    var busyId by remember { mutableStateOf<Int?>(null) }
+    var reload by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(mode, view, keyword, reload) {
+        error = null
+        if (mode == "plans") {
+            runCatching { withContext(Dispatchers.IO) { ApiClient.plans(view, keyword) } }.onSuccess { a -> plans = (0 until a.length()).map { a.getJSONObject(it) } }.onFailure { error = it.message ?: "加载加工计划失败" }
+        } else {
+            runCatching { withContext(Dispatchers.IO) { ApiClient.packages(source = "processing", dateScope = "pickup-workbench", keyword = keyword) } }.onSuccess { a -> pickupTasks = (0 until a.length()).map { packageItem(a.getJSONObject(it)) } }.onFailure { error = it.message ?: "加载待领取任务失败" }
+        }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("加工计划", mode == "plans") { mode = "plans"; view = "today-all" }; SegmentedButton("待领取", mode == "pickup") { mode = "pickup" } }
+        Spacer(Modifier.height(12.dp)); OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("姓名、手机号或备注") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+        if (mode == "plans") { Spacer(Modifier.height(10.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("today-all" to "今日全部", "today-waiting" to "待加工", "overdue" to "逾期", "processing" to "加工中", "today-finished" to "今日完成", "tomorrow" to "明日").forEach { (key, label) -> SegmentedButton(label, view == key) { view = key } } } }
+        Spacer(Modifier.height(14.dp)); error?.let { Text(it, color = Danger, fontSize = 13.sp) }; if (plans == null && pickupTasks == null && error == null) Text("加载中...", color = Muted)
+        if (mode == "plans") {
+            val values = plans.orEmpty(); if (plans != null && values.isEmpty()) Text("暂无加工计划", color = Muted)
+            values.forEach { plan ->
+                val id = plan.optInt("id", 0); val status = plan.optInt("status", 0); val prescription = plan.optJSONObject("prescription"); val customer = prescription?.optString("customerName", "客户") ?: plan.optString("customerName", "客户"); val phone = prescription?.optString("phone", "-") ?: plan.optString("customerPhone", "-"); val processType = plan.optJSONObject("processType")?.optString("name", "加工") ?: "加工"; val store = plan.optJSONObject("store")?.optString("name", "") ?: ""
+                Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("$customer · $processType", fontWeight = FontWeight.SemiBold); Text("$phone${if (store.isNotBlank()) " · $store" else ""}", color = Muted, fontSize = 12.sp) }; StatusPill(planStatus(status)) }; Spacer(Modifier.height(8.dp)); Text("第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂 · ${plan.optString("processDate", "等待通知").take(10)}", color = Muted, fontSize = 13.sp); plan.optString("processRemark", "").takeIf { it.isNotBlank() }?.let { Text("备注：$it", color = Muted, fontSize = 12.sp) }; Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; when { status == 0 -> Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 1) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "开始加工失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("开始加工") }; status in 1..4 -> OutlinedButton({ workflowPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("工序详情") } }; if (status == 2) Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.generatePackage(id) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "生成包裹失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("生成包裹") }; if (status == 1) OutlinedButton(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 5) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "取消失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("取消加工") } } } }
+            }
+        } else {
+            val values = pickupTasks.orEmpty(); if (pickupTasks != null && values.isEmpty()) Text("暂无待领取任务", color = Muted)
+            values.filter { keyword.isBlank() || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${item.customer} · ${item.name}", fontWeight = FontWeight.SemiBold); Text("${item.phone} · ${item.time}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = JSONObject().put("packageId", item.id).put("pickupCode", item.code).put("receiverName", item.customer).put("receiverPhone", item.phone) }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; if (item.statusCode == 0) Button({ workflowPlan = JSONObject().put("packageId", item.id).put("packageCode", item.code) }, shape = RoundedCornerShape(6.dp)) { Text("核销") } } } }
+        }
+    }
+    detailPlan?.let { detail -> if (detail.has("packageId")) PackageDetailDialogV2(packageItem(JSONObject().put("id", detail.optInt("packageId")).put("pickupCode", detail.optString("pickupCode")).put("receiverName", detail.optString("receiverName")).put("receiverPhone", detail.optString("receiverPhone"))), { detailPlan = null }) else PlanDetailDialog(detail) { detailPlan = null } }
+    workflowPlan?.let { plan -> if (plan.has("packageId")) PackageDetailDialogV2(packageItem(JSONObject().put("id", plan.optInt("packageId")).put("pickupCode", plan.optString("packageCode")).put("receiverName", "客户")), { workflowPlan = null }) else WorkflowDialog(plan) { workflowPlan = null } }
+}
+
+@Composable private fun PlanDetailDialog(plan: JSONObject, onClose: () -> Unit) { val prescription = plan.optJSONObject("prescription"); val customer = prescription?.optString("customerName", "客户") ?: plan.optString("customerName", "客户"); val text = listOf("顾客：$customer", "手机号：${prescription?.optString("phone", "-") ?: "-"}", "批次：第${plan.optInt("batchNo", 1)}批", "剂数：${plan.optInt("totalDose", 0)}剂", "状态：${planStatus(plan.optInt("status", 0))}", "备注：${plan.optString("processRemark", plan.optString("remark", "-"))}").joinToString("\n"); androidx.compose.material3.AlertDialog(onDismissRequest = onClose, confirmButton = { Button(onClose) { Text("关闭") } }, title = { Text("加工计划详情") }, text = { Text(text, color = Ink) }) }
+
+@Composable
+private fun WorkflowDialog(plan: JSONObject, onClose: () -> Unit) {
+    var workflow by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(plan.optInt("id")) {
+        runCatching { withContext(Dispatchers.IO) { ApiClient.processingWorkflow(plan.optInt("id")) } }
+            .onSuccess { workflow = it }
+            .onFailure { error = it.message ?: "工序加载失败" }
+    }
+    val usages = workflow?.optJSONArray("equipmentUsages")
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { Button(onClose) { Text("关闭") } },
+        title = { Text("工序详情") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                when {
+                    error != null -> Text(error!!, color = Danger)
+                    workflow == null -> Text("加载中...", color = Muted)
+                    usages == null || usages.length() == 0 -> Text("暂无设备工序记录", color = Muted)
+                    else -> {
+                        Text("当前阶段：${workflow!!.optInt("currentStage", 0)}", fontWeight = FontWeight.SemiBold)
+                        for (i in 0 until usages.length()) {
+                            val usage = usages.getJSONObject(i)
+                            val stage = when (usage.optInt("stage")) { 3 -> "浸泡"; 4 -> "煎煮"; 5 -> "打包"; else -> "工序" }
+                            val state = if (usage.optInt("status") == 1) "进行中" else "已完成"
+                            Text("第${usage.optInt("portionNo", 0)}组 · $stage · $state", color = Ink)
+                            Text(usage.optString("startedAt", "-"), color = Muted, fontSize = 12.sp)
+                            Spacer(Modifier.height(6.dp))
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun PackagesScreenV2(onOpen: (PackageItem) -> Unit) {
+    var keyword by remember { mutableStateOf("") }; var statusFilter by remember { mutableStateOf<Int?>(null) }; var list by remember { mutableStateOf<List<PackageItem>?>(null) }; var error by remember { mutableStateOf<String?>(null) }; var reload by remember { mutableStateOf(0) }
+    LaunchedEffect(keyword, statusFilter, reload) { error = null; runCatching { withContext(Dispatchers.IO) { ApiClient.packages(status = statusFilter, keyword = keyword) } }.onSuccess { a -> list = (0 until a.length()).map { packageItem(a.getJSONObject(it)) } }.onFailure { error = it.message ?: "加载包裹失败" } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("取货码、手机号、姓名、物品") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true); Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("全部", statusFilter == null) { statusFilter = null }; SegmentedButton("待取", statusFilter == 0) { statusFilter = 0 }; SegmentedButton("已取", statusFilter == 1) { statusFilter = 1 } }; Spacer(Modifier.height(14.dp)); error?.let { Text(it, color = Danger, fontSize = 13.sp) }; if (list == null && error == null) Text("加载中...", color = Muted); if (list != null && list!!.isEmpty()) Text("暂无包裹", color = Muted); list.orEmpty().filter { keyword.isBlank() || it.customer.contains(keyword) || it.phone.contains(keyword) || it.code.contains(keyword) || it.name.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.name, fontWeight = FontWeight.SemiBold); Text("${item.customer} · ${item.phone}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Text("${item.method}${if (item.store.isNotBlank()) " · ${item.store}" else ""} · ${item.time}", color = Muted, fontSize = 12.sp) } } }
+}
+
+@Composable private fun PackageDetailDialogV2(item: PackageItem, onClose: () -> Unit) { var detail by remember { mutableStateOf<JSONObject?>(null) }; var error by remember { mutableStateOf<String?>(null) }; var busy by remember { mutableStateOf(false) }; val scope = rememberCoroutineScope(); LaunchedEffect(item.id) { if (item.id > 0) runCatching { withContext(Dispatchers.IO) { ApiClient.packageDetail(item.id) } }.onSuccess { detail = it }.onFailure { error = it.message ?: "详情加载失败" } }; val current = detail; androidx.compose.material3.AlertDialog(onDismissRequest = onClose, confirmButton = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { if (item.statusCode == 0) Button(enabled = !busy, onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code) } }.onSuccess { onClose() }.onFailure { error = it.message ?: "核销失败" }; busy = false } }) { Text(if (busy) "核销中..." else "确认核销") }; OutlinedButton(onClose) { Text("关闭") } } }, title = { Text("包裹详情") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) { Text(item.code, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Primary); Spacer(Modifier.height(10.dp)); FakeQr(item.code); Spacer(Modifier.height(10.dp)); Text("物品：${current?.optString("itemName", item.name) ?: item.name}\n客户：${current?.optString("receiverName", item.customer) ?: item.customer}\n手机号：${current?.optString("receiverPhone", item.phone) ?: item.phone}\n取货方式：${item.method}\n状态：${item.status}\n门店：${current?.optJSONObject("store")?.optString("name", item.store) ?: item.store}\n备注：${current?.optString("itemInfo", item.info) ?: item.info}", color = Ink); error?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Danger, fontSize = 12.sp) } } }) }
