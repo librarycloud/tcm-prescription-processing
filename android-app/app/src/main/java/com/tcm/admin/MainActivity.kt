@@ -1,14 +1,12 @@
 package com.tcm.admin
 
-import android.os.Bundle
-import android.app.Activity
 import android.content.Intent
+import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,10 +28,12 @@ import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -58,6 +58,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,19 +77,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-internal val PageBackground = Color(0xFFF5F7FA)
-internal val Primary = Color(0xFF0052D9)
-internal val PrimaryDark = Color(0xFF003CAB)
-internal val PrimarySoft = Color(0xFFECF2FE)
-internal val Ink = Color(0xFF1D2129)
-internal val Muted = Color(0xFF86909C)
-internal val Border = Color(0xFFE5E6EB)
-internal val Success = Color(0xFF00B578)
-internal val Warning = Color(0xFFFF7D00)
-internal val Danger = Color(0xFFF53F3F)
-internal val CardShape = RoundedCornerShape(10.dp)
-internal val FieldShape = RoundedCornerShape(8.dp)
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,35 +84,77 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal enum class Screen {
-    Login, Dashboard, Prescriptions, Processing, Packages, Herbs, Profile,
-    Inventory, Stocktaking, Differences, Transfers
+internal sealed class ScreenTarget {
+    object Login : ScreenTarget()
+    object Dashboard : ScreenTarget()
+    object Prescriptions : ScreenTarget()
+    data class PrescriptionDetail(val id: Int) : ScreenTarget()
+    data class PrescriptionEdit(val initial: JSONObject = JSONObject()) : ScreenTarget()
+    object Processing : ScreenTarget()
+    data class ProcessingPlanDetail(val id: Int) : ScreenTarget()
+    data class ProcessingPlanForm(val initial: JSONObject = JSONObject()) : ScreenTarget()
+    data class WorkflowOperation(val plan: JSONObject, val currentStep: String, val action: String) : ScreenTarget()
+    object Packages : ScreenTarget()
+    data class PackageDetail(val item: PackageItem) : ScreenTarget()
+    data class PackageForm(val initial: PackageItem? = null) : ScreenTarget()
+    data class PackageVerify(val initialCode: String = "") : ScreenTarget()
+    object Herbs : ScreenTarget()
+    data class HerbLocationAssign(val location: JSONObject, val storeId: Int?) : ScreenTarget()
+    object Profile : ScreenTarget()
+    object Inventory : ScreenTarget()
+    object Stocktaking : ScreenTarget()
+    data class StocktakingDetail(val checkId: Int) : ScreenTarget()
+    object Differences : ScreenTarget()
+    data class DifferenceRegister(val defaultProduct: JSONObject? = null) : ScreenTarget()
+    object Transfers : ScreenTarget()
+    data class TransferDetail(val id: Int) : ScreenTarget()
+    object TransferCreate : ScreenTarget()
 }
 
 @Composable
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
-    var screen by remember { mutableStateOf(if (restoredSession != null) Screen.Dashboard else Screen.Login) }
+    val backStack = remember {
+        mutableStateListOf<ScreenTarget>(if (restoredSession != null) ScreenTarget.Dashboard else ScreenTarget.Login)
+    }
+    val currentScreen = backStack.lastOrNull() ?: ScreenTarget.Login
+
     var session by remember { mutableStateOf(restoredSession) }
     var stats by remember { mutableStateOf<JSONObject?>(null) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
-    var selectedPackage by remember { mutableStateOf<PackageItem?>(null) }
-    val go: (Screen) -> Unit = { screen = it }
+
+    fun navigateTo(target: ScreenTarget) {
+        backStack.add(target)
+    }
+
+    fun navigateBack(): Boolean {
+        return if (backStack.size > 1) {
+            backStack.removeAt(backStack.size - 1)
+            true
+        } else {
+            false
+        }
+    }
+
+    fun switchTab(target: ScreenTarget) {
+        backStack.clear()
+        backStack.add(target)
+    }
+
+    BackHandler(enabled = backStack.size > 1) {
+        navigateBack()
+    }
 
     MaterialTheme(
-        colorScheme = androidx.compose.material3.lightColorScheme(
+        colorScheme = MaterialTheme.colorScheme.copy(
             primary = Primary,
             onPrimary = Color.White,
             primaryContainer = PrimarySoft,
             onPrimaryContainer = PrimaryDark,
-            secondary = Color(0xFF0F766E),
-            onSecondary = Color.White,
-            secondaryContainer = Color(0xFFE6FFFB),
-            onSecondaryContainer = Color(0xFF115E59),
-            tertiary = Color(0xFF8B5CF6),
             background = PageBackground,
             onBackground = Ink,
             surface = Color.White,
@@ -142,8 +172,8 @@ private fun TcmAdminApp() {
         ),
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
-            when (screen) {
-                Screen.Login -> LoginScreen(loginLoading, loginError) { identifier, password ->
+            when (currentScreen) {
+                is ScreenTarget.Login -> LoginScreen(loginLoading, loginError) { identifier, password ->
                     loginLoading = true
                     loginError = null
                     scope.launch {
@@ -154,33 +184,111 @@ private fun TcmAdminApp() {
                         }.onSuccess { value ->
                             ApiClient.saveSession(appContext, value)
                             session = value
-                            screen = Screen.Dashboard
+                            backStack.clear()
+                            backStack.add(ScreenTarget.Dashboard)
                         }.onFailure {
                             loginError = it.message ?: "登录失败"
                         }
                         loginLoading = false
                     }
                 }
-                Screen.Dashboard -> MainShell(screen, go) { DashboardScreen(go, stats) }
-                Screen.Prescriptions -> MainShell(screen, go) { PrescriptionsScreen() }
-                Screen.Processing -> MainShell(screen, go) { ProcessingScreenV2() }
-                Screen.Packages -> MainShell(screen, go) { PackagesScreenV3(onOpen = { selectedPackage = it }) }
-                Screen.Herbs -> MainShell(screen, go) { HerbsScreen() }
-                Screen.Profile -> MainShell(screen, go) {
+
+                // Main Navigation Tabs
+                is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                    DashboardScreen(onNavigate = ::navigateTo, stats = stats)
+                }
+                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                    PrescriptionsScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                    ProcessingScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                    PackagesScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                    HerbsScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
                     ProfileScreen(session?.user) {
                         ApiClient.clearSession(appContext)
                         session = null
                         stats = null
-                        go(Screen.Login)
+                        backStack.clear()
+                        backStack.add(ScreenTarget.Login)
                     }
                 }
-                Screen.Inventory -> DetailShell("库存查询", go) { InventoryScreen() }
-                Screen.Stocktaking -> DetailShell("商品盘点", go) { StocktakingScreen() }
-                Screen.Differences -> DetailShell("库存差异", go) { DifferencesScreen() }
-                Screen.Transfers -> DetailShell("门店调拨", go) { TransfersScreen() }
-            }
-            if (selectedPackage != null) {
-                PackageDetailDialogV2(selectedPackage!!) { selectedPackage = null }
+
+                // Sub-screens & Details (Page navigation instead of dialogs)
+                is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }) {
+                    InventoryScreen()
+                }
+                is ScreenTarget.PrescriptionDetail -> DetailShell("处方详情", onBack = { navigateBack() }) {
+                    PrescriptionDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
+                }
+                is ScreenTarget.PrescriptionEdit -> DetailShell(
+                    if (currentScreen.initial.has("id")) "编辑处方" else "新建处方",
+                    onBack = { navigateBack() },
+                ) {
+                    PrescriptionFormScreen(initial = currentScreen.initial, onSaved = { navigateBack() })
+                }
+                is ScreenTarget.ProcessingPlanDetail -> DetailShell("加工计划详情", onBack = { navigateBack() }) {
+                    PlanDetailScreen(planId = currentScreen.id, onNavigate = ::navigateTo, onBack = { navigateBack() })
+                }
+                is ScreenTarget.ProcessingPlanForm -> DetailShell(
+                    if (currentScreen.initial.has("id")) "编辑加工计划" else "新建加工计划",
+                    onBack = { navigateBack() },
+                ) {
+                    ProcessingPlanFormScreen(initial = currentScreen.initial, onSaved = { navigateBack() })
+                }
+                is ScreenTarget.WorkflowOperation -> DetailShell("工序操作", onBack = { navigateBack() }) {
+                    WorkflowOperationScreen(
+                        plan = currentScreen.plan,
+                        currentStep = currentScreen.currentStep,
+                        action = currentScreen.action,
+                        onCompleted = { navigateBack() },
+                    )
+                }
+                is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
+                    PackageDetailPage(pkg = currentScreen.item, onNavigate = ::navigateTo, onBack = { navigateBack() })
+                }
+                is ScreenTarget.PackageForm -> DetailShell(
+                    if (currentScreen.initial != null) "编辑包裹" else "创建包裹",
+                    onBack = { navigateBack() },
+                ) {
+                    PackageFormScreen(initial = currentScreen.initial, onSaved = { navigateBack() })
+                }
+                is ScreenTarget.PackageVerify -> DetailShell("取货码核销", onBack = { navigateBack() }) {
+                    PackageVerifyScreen(initialCode = currentScreen.initialCode, onVerified = { navigateBack() })
+                }
+                is ScreenTarget.HerbLocationAssign -> DetailShell("配置货位", onBack = { navigateBack() }) {
+                    HerbLocationAssignScreen(
+                        location = currentScreen.location,
+                        storeId = currentScreen.storeId,
+                        onSaved = { navigateBack() },
+                    )
+                }
+                is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }) {
+                    StocktakingScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }) {
+                    StocktakingDetailScreen(checkId = currentScreen.checkId, onBack = { navigateBack() })
+                }
+                is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }) {
+                    DifferencesScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.DifferenceRegister -> DetailShell("登记库存差异", onBack = { navigateBack() }) {
+                    DifferenceRegisterScreen(defaultProduct = currentScreen.defaultProduct, onSaved = { navigateBack() })
+                }
+                is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }) {
+                    TransfersScreen(onNavigate = ::navigateTo)
+                }
+                is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
+                    TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
+                }
+                is ScreenTarget.TransferCreate -> DetailShell("新建门店调拨", onBack = { navigateBack() }) {
+                    TransferCreateScreen(onSaved = { navigateBack() })
+                }
             }
         }
     }
@@ -200,67 +308,74 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 40.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Spacer(Modifier.height(48.dp))
+
+        Surface(
+            modifier = Modifier.size(64.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = Primary,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Assignment,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            text = "药房助手 管理端",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Ink,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "中药代加工与药房工作台管理系统",
+            fontSize = 13.sp,
+            color = Muted,
+        )
+
+        Spacer(Modifier.height(36.dp))
+
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Border),
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Surface(
-                    color = PrimarySoft,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.size(56.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Inventory,
-                            contentDescription = null,
-                            tint = Primary,
-                            modifier = Modifier.size(30.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "药房助手",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Ink,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "中药房智慧管理工作台",
-                    fontSize = 13.sp,
-                    color = Muted,
-                )
-                Spacer(Modifier.height(24.dp))
+            Column(Modifier.padding(20.dp)) {
                 OutlinedTextField(
                     value = identifier,
                     onValueChange = { identifier = it },
                     label = { Text("用户名 / 手机号") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Muted) },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = FieldShape,
-                    singleLine = true,
                 )
+
                 Spacer(Modifier.height(14.dp))
+
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("密码") },
-                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("登录密码") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Muted) },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = FieldShape,
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
                 )
+
                 if (error != null) {
                     Spacer(Modifier.height(10.dp))
                     Text(
@@ -269,19 +384,22 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                         fontSize = 13.sp,
                     )
                 }
+
                 Spacer(Modifier.height(20.dp))
+
                 Button(
                     onClick = { onLogin(identifier.trim(), password.trim()) },
                     enabled = identifier.isNotBlank() && password.isNotBlank() && !loading,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(8.dp),
+                        .height(46.dp),
+                    shape = FieldShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 ) {
                     Text(
-                        text = if (loading) "登录中..." else "登 录",
+                        text = if (loading) "正在登录..." else "登 录",
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -289,32 +407,38 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composable () -> Unit) {
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+private fun MainShell(
+    current: ScreenTarget,
+    onSwitchTab: (ScreenTarget) -> Unit,
+    onNavigate: (ScreenTarget) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var scanResult by remember { mutableStateOf<String?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
 
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)
-        if (result.resultCode == Activity.RESULT_OK && !value.isNullOrBlank()) {
-            scope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        val pkg = ApiClient.packageByCode(value)
-                        val method = pkg.optInt("pickupMethod", 0)
-                        if (method == 2) {
-                            throw IllegalStateException("快递包裹请在包裹详情中填写快递单号后核销")
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
+            val code = value.filter(Char::isDigit).take(6)
+            if (code.length == 6) {
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            ApiClient.verifyPackage(code, 0, "")
                         }
-                        ApiClient.verifyPackage(value, method)
+                    }.onSuccess {
+                        scanResult = code
+                    }.onFailure {
+                        scanError = it.message ?: "核验失败"
                     }
-                }.onSuccess {
-                    scanResult = value
-                }.onFailure {
-                    scanError = it.message ?: "取货码核验失败"
                 }
+            } else {
+                onNavigate(ScreenTarget.PackageVerify(value))
             }
         }
     }
@@ -323,71 +447,55 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(PrimarySoft)
-                        .padding(horizontal = 24.dp, vertical = 22.dp),
-                ) {
-                    Text(
-                        text = "药房助手",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = PrimaryDark,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "门店运营工作台",
-                        color = PrimaryDark.copy(alpha = 0.72f),
-                        fontSize = 12.sp,
-                    )
+                Spacer(Modifier.height(24.dp))
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Text("药房助手", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Ink)
+                    Text("中药代加工与药房管理平台", color = Muted, fontSize = 12.sp)
                 }
-                DrawerItem("概览", current == Screen.Dashboard) {
-                    go(Screen.Dashboard)
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(Modifier.padding(horizontal = 12.dp))
+                Spacer(Modifier.height(8.dp))
+
+                DrawerItem("工作台概览", current is ScreenTarget.Dashboard) {
+                    onSwitchTab(ScreenTarget.Dashboard)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("处方管理", current == Screen.Prescriptions) {
-                    go(Screen.Prescriptions)
+                DrawerItem("处方管理", current is ScreenTarget.Prescriptions) {
+                    onSwitchTab(ScreenTarget.Prescriptions)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("加工计划", current == Screen.Processing) {
-                    go(Screen.Processing)
+                DrawerItem("加工管理", current is ScreenTarget.Processing) {
+                    onSwitchTab(ScreenTarget.Processing)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("包裹管理", current == Screen.Packages) {
-                    go(Screen.Packages)
+                DrawerItem("包裹管理", current is ScreenTarget.Packages) {
+                    onSwitchTab(ScreenTarget.Packages)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("斗谱与库位", current == Screen.Herbs) {
-                    go(Screen.Herbs)
+                DrawerItem("斗谱管理", current is ScreenTarget.Herbs) {
+                    onSwitchTab(ScreenTarget.Herbs)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(
-                    text = "业务管理",
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                    color = Muted,
-                    fontSize = 12.sp,
-                )
-                DrawerItem("库存查询", current == Screen.Inventory) {
-                    go(Screen.Inventory)
+                DrawerItem("库存查询", false) {
+                    onNavigate(ScreenTarget.Inventory)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("商品盘点", current == Screen.Stocktaking) {
-                    go(Screen.Stocktaking)
+                DrawerItem("商品盘点", false) {
+                    onNavigate(ScreenTarget.Stocktaking)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("库存差异", current == Screen.Differences) {
-                    go(Screen.Differences)
+                DrawerItem("库存差异", false) {
+                    onNavigate(ScreenTarget.Differences)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("门店调拨", current == Screen.Transfers) {
-                    go(Screen.Transfers)
+                DrawerItem("门店调拨", false) {
+                    onNavigate(ScreenTarget.Transfers)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                DrawerItem("我的", current == Screen.Profile) {
-                    go(Screen.Profile)
+                DrawerItem("我的", current is ScreenTarget.Profile) {
+                    onSwitchTab(ScreenTarget.Profile)
                     scope.launch { drawerState.close() }
                 }
             }
@@ -401,7 +509,7 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
                     onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
                 )
             },
-            bottomBar = { BottomNav(current, go) },
+            bottomBar = { BottomNav(current, onSwitchTab) },
             containerColor = PageBackground,
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
@@ -416,7 +524,7 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
             title = { Text("核验成功") },
             text = { Text("取货码 ${scanResult}\n包裹已完成领取核验。") },
             confirmButton = {
-                Button({ scanResult = null }) {
+                Button(onClick = { scanResult = null }, shape = FieldShape) {
                     Text("完成")
                 }
             },
@@ -429,7 +537,7 @@ private fun MainShell(current: Screen, go: (Screen) -> Unit, content: @Composabl
             title = { Text("核验失败") },
             text = { Text(scanError!!) },
             confirmButton = {
-                Button({ scanError = null }) {
+                Button(onClick = { scanError = null }, shape = FieldShape) {
                     Text("关闭")
                 }
             },
@@ -449,13 +557,13 @@ private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailShell(title: String, go: (Screen) -> Unit, content: @Composable () -> Unit) {
+private fun DetailShell(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp) },
                 navigationIcon = {
-                    IconButton(onClick = { go(Screen.Dashboard) }) {
+                    IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
@@ -496,23 +604,31 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
 }
 
 @Composable
-private fun BottomNav(current: Screen, go: (Screen) -> Unit) {
+private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit) {
     val items = listOf(
-        Screen.Dashboard to ("概览" to Icons.AutoMirrored.Filled.Assignment),
-        Screen.Herbs to ("斗谱" to Icons.Default.Inventory),
-        Screen.Processing to ("加工" to Icons.Default.Sync),
-        Screen.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
-        Screen.Profile to ("我的" to Icons.Default.AccountCircle),
+        ScreenTarget.Dashboard to ("概览" to Icons.AutoMirrored.Filled.Assignment),
+        ScreenTarget.Herbs to ("斗谱" to Icons.Default.Inventory),
+        ScreenTarget.Processing to ("加工" to Icons.Default.Sync),
+        ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
+        ScreenTarget.Profile to ("我的" to Icons.Default.AccountCircle),
     )
     NavigationBar(
         modifier = Modifier.navigationBarsPadding(),
         containerColor = Color.White,
         tonalElevation = 3.dp,
     ) {
-        items.forEach { (screen, pair) ->
+        items.forEach { (target, pair) ->
+            val isSelected = when (target) {
+                is ScreenTarget.Dashboard -> current is ScreenTarget.Dashboard
+                is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
+                is ScreenTarget.Processing -> current is ScreenTarget.Processing
+                is ScreenTarget.Packages -> current is ScreenTarget.Packages
+                is ScreenTarget.Profile -> current is ScreenTarget.Profile
+                else -> false
+            }
             NavigationBarItem(
-                selected = current == screen,
-                onClick = { go(screen) },
+                selected = isSelected,
+                onClick = { onSwitchTab(target) },
                 icon = { Icon(pair.second, contentDescription = pair.first) },
                 label = { Text(pair.first, fontSize = 11.sp) },
             )

@@ -277,7 +277,7 @@ internal fun DifferencesScreen() {
                 }
             },
             dismissButton = {
-                TextButton({ writeOff = null }) {
+                TextButton(onClick = { writeOff = null }) {
                     Text("取消")
                 }
             },
@@ -357,7 +357,7 @@ internal fun DifferencesScreen() {
                 }
             },
             dismissButton = {
-                TextButton({ registerVisible = false }) {
+                TextButton(onClick = { registerVisible = false }) {
                     Text("取消")
                 }
             },

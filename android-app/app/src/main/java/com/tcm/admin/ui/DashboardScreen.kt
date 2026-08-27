@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONObject
 
 @Composable
-internal fun DashboardScreen(go: (Screen) -> Unit, stats: JSONObject?) {
+internal fun DashboardScreen(onNavigate: (ScreenTarget) -> Unit, stats: JSONObject?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,38 +119,34 @@ internal fun DashboardScreen(go: (Screen) -> Unit, stats: JSONObject?) {
                 "等待顾客" to stat(stats, "waitingNoticeCount"),
                 "明日加工" to stat(stats, "tomorrowWaitingCount"),
             ),
-            onClick = { go(Screen.Processing) },
+            onClick = { onNavigate(ScreenTarget.Processing) },
         )
 
         Spacer(Modifier.height(20.dp))
 
-        // Package Stats
-        SectionHeader("包裹概况", "包裹入库与核销状态")
+        // Packages Stats
+        SectionHeader("包裹概况", "包裹领取与核销进度")
         Spacer(Modifier.height(10.dp))
         StatsGrid(
             items = listOf(
-                "待取货" to stat(stats, "pendingCount"),
-                "今日新增" to stat(stats, "todayAdded"),
-                "今日已取" to stat(stats, "todayPicked"),
-                "总包裹" to stat(stats, "totalCount"),
+                "待领取" to stat(stats, "waitingPickupCount"),
+                "今日已领" to stat(stats, "todayPickedCount"),
+                "已超时" to stat(stats, "timeoutCount"),
             ),
-            onClick = { go(Screen.Packages) },
+            onClick = { onNavigate(ScreenTarget.Packages) },
         )
 
         Spacer(Modifier.height(20.dp))
 
-        // Business Management Quick Actions
-        SectionHeader("业务管理", "快捷管理功能入口")
+        // Quick Actions
+        SectionHeader("快捷功能", "快速直达管理模块")
         Spacer(Modifier.height(10.dp))
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            QuickAction("处方管理", "查看及录入中药处方", Icons.AutoMirrored.Filled.Assignment, Primary) { go(Screen.Prescriptions) }
-            QuickAction("库存查询", "扫码或搜索 E6 药店商品库存", Icons.Default.Inventory, Success) { go(Screen.Inventory) }
-            QuickAction("商品盘点", "商品与库存批次实盘盘点", Icons.AutoMirrored.Filled.Assignment, Purple) { go(Screen.Stocktaking) }
-            QuickAction("库存差异", "登记与处理实货多/实货少差异", Icons.Default.Tune, Warning) { go(Screen.Differences) }
-            QuickAction("门店调拨", "跨门店物资借调与归还跟踪", Icons.Default.LocalShipping, Color(0xFF009688)) { go(Screen.Transfers) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickAction("处方管理", "查看、新建与管理处方", Icons.AutoMirrored.Filled.Assignment, Primary) { onNavigate(ScreenTarget.Prescriptions) }
+            QuickAction("E6商品库存", "查询商品批次、规格、条码与效期", Icons.Default.Inventory, Color(0xFF0F766E)) { onNavigate(ScreenTarget.Inventory) }
+            QuickAction("商品盘点", "益达盘点单与差异录入", Icons.AutoMirrored.Filled.CompareArrows, Color(0xFF722ED1)) { onNavigate(ScreenTarget.Stocktaking) }
+            QuickAction("库存差异", "登记与处理实货多/实货少差异", Icons.Default.Tune, Warning) { onNavigate(ScreenTarget.Differences) }
+            QuickAction("门店调拨", "跨门店物资借调与归还跟踪", Icons.Default.LocalShipping, Color(0xFF009688)) { onNavigate(ScreenTarget.Transfers) }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -178,7 +174,7 @@ internal fun StatsGrid(
             ) {
                 row.forEach { (label, value) ->
                     val isPositive = value != "0" && value != "-"
-                    val isAlert = label.contains("逾期") || label.contains("等待")
+                    val isAlert = label.contains("逾期") || label.contains("等待") || label.contains("超时")
                     val valueColor = when {
                         !isPositive -> Ink
                         isAlert -> Danger
