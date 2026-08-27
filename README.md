@@ -6,7 +6,7 @@
 
 ## 文档导航
 
-- 管理员使用教程（管理端 Web、管理员微信小程序）：[docs/使用说明.md](docs/使用说明.md)
+- 管理员使用教程（管理端 Web、管理员微信小程序、Android 管理员端）：[docs/使用说明.md](docs/使用说明.md)
 - E6 处方同步接口：[docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md)
 - 管理端前端说明：[web-admin/README.md](web-admin/README.md)
 - Android 管理员端说明（当前仍在开发）：[android-app/README.md](android-app/README.md)
