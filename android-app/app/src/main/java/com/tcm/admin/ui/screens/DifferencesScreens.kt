@@ -88,6 +88,7 @@ internal fun DifferencesScreen() {
             }
             Button(
                 onClick = { registerVisible = true },
+                modifier = Modifier.height(CompactControlHeight),
                 shape = RoundedCornerShape(8.dp),
             ) {
                 Text("登记差异")

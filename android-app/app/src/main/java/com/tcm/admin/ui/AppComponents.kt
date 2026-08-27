@@ -71,6 +71,8 @@ internal val Purple: Color @Composable get() = MaterialTheme.colorScheme.tertiar
 internal val PurpleSoft: Color @Composable get() = MaterialTheme.colorScheme.tertiaryContainer
 internal val CardShape = RoundedCornerShape(10.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
+internal val CompactControlHeight = 40.dp
+internal val SearchControlHeight = 48.dp
 
 // ==================== Helper Mappings ====================
 internal fun planStatus(status: Int): String = when (status) {
@@ -184,7 +186,7 @@ internal fun SegmentedButton(
                 color = Color.White,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
             )
         }
     } else {
@@ -200,7 +202,7 @@ internal fun SegmentedButton(
                 color = RegularText,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Normal,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
             )
         }
     }
@@ -284,12 +286,26 @@ internal fun SearchBarField(
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = Muted, fontSize = 13.sp) },
             leadingIcon = {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = "搜索",
-                    tint = Muted,
-                    modifier = Modifier.size(18.dp),
-                )
+                if (onScan != null) {
+                    IconButton(
+                        onClick = onScan,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            contentDescription = "扫码",
+                            tint = Primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                } else {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "搜索",
+                        tint = Muted,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             },
             trailingIcon = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -306,18 +322,16 @@ internal fun SearchBarField(
                             )
                         }
                     }
-                    if (onScan != null) {
-                        IconButton(
-                            onClick = onScan,
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.QrCodeScanner,
-                                contentDescription = "扫码",
-                                tint = Primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                    IconButton(
+                        onClick = onSearch,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "搜索",
+                            tint = Primary,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
             },
@@ -331,18 +345,8 @@ internal fun SearchBarField(
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth().height(SearchControlHeight),
         )
-        Spacer(Modifier.width(8.dp))
-        Button(
-            onClick = onSearch,
-            shape = FieldShape,
-            colors = ButtonDefaults.buttonColors(containerColor = Primary),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-            modifier = Modifier.height(48.dp),
-        ) {
-            Text("搜索", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-        }
     }
 }
 

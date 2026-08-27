@@ -31,6 +31,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +43,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 @Composable
@@ -50,6 +57,22 @@ internal fun DashboardScreen(
     onSelectStore: (String) -> Unit = {},
 ) {
     val isGlobalAdmin = user?.optInt("role", -1) == 0
+    val storeId = selectedStoreId.toIntOrNull()
+    var herbSummary by remember { mutableStateOf<JSONObject?>(null) }
+    var stocktakingSummary by remember { mutableStateOf<JSONObject?>(null) }
+    var differenceSummary by remember { mutableStateOf<JSONObject?>(null) }
+
+    LaunchedEffect(user?.optInt("id"), selectedStoreId) {
+        if (user == null) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            runCatching { ApiClient.herbLocationMatrix(storeId) }
+                .onSuccess { herbSummary = it.optJSONObject("summary") }
+            runCatching { ApiClient.stocktaking(storeId) }
+                .onSuccess { stocktakingSummary = it }
+            runCatching { ApiClient.differenceSummary() }
+                .onSuccess { differenceSummary = it }
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -120,6 +143,7 @@ internal fun DashboardScreen(
                 "今日完成" to stat(stats, "todayFinished"),
             ),
             onClick = { onNavigate(ScreenTarget.Processing) },
+            columns = 4,
         )
 
         Spacer(Modifier.height(20.dp))
@@ -129,11 +153,24 @@ internal fun DashboardScreen(
         Spacer(Modifier.height(10.dp))
         StatsGrid(
             items = listOf(
-                "待领取" to stat(stats, "waitingPickupCount"),
-                "今日已领" to stat(stats, "todayPickedCount"),
-                "已超时" to stat(stats, "timeoutCount"),
+                "待领取" to stat(stats, "pendingCount"),
+                "今日已领" to stat(stats, "todayPicked"),
+                "包裹总数" to stat(stats, "totalCount"),
             ),
             onClick = { onNavigate(ScreenTarget.Packages) },
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        SectionHeader("库存与斗谱概况", "货位、盘点和库存差异实时数据")
+        Spacer(Modifier.height(10.dp))
+        StatsGrid(
+            items = listOf(
+                "斗谱货位" to stat(herbSummary, "totalLocations"),
+                "已分配" to stat(herbSummary, "assignedLocations"),
+                "盘点单" to (stocktakingSummary?.optJSONObject("pagination")?.optInt("total", 0)?.toString() ?: "-"),
+                "差异商品" to stat(differenceSummary, "total"),
+            ),
         )
 
         Spacer(Modifier.height(20.dp))
@@ -164,10 +201,11 @@ internal fun SectionTitle(text: String) {
 internal fun StatsGrid(
     items: List<Pair<String, String>>,
     onClick: (() -> Unit)? = null,
+    columns: Int? = null,
 ) {
-    val columns = if (items.size % 2 == 0 && items.size <= 4) 2 else 3
+    val gridColumns = columns ?: if (items.size % 2 == 0 && items.size <= 4) 2 else 3
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.chunked(columns).forEach { row ->
+        items.chunked(gridColumns).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -214,7 +252,7 @@ internal fun StatsGrid(
                         }
                     }
                 }
-                repeat(columns - row.size) {
+                repeat(gridColumns - row.size) {
                     Spacer(cellWeight)
                 }
             }

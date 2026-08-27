@@ -106,6 +106,7 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
             }
             Button(
                 onClick = { onNavigate(ScreenTarget.PrescriptionEdit(JSONObject())) },
+                modifier = Modifier.height(CompactControlHeight),
                 shape = FieldShape,
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
             ) {

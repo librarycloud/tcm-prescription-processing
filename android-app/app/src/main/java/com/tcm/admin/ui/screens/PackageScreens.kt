@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -135,8 +134,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
             }
         }.onSuccess { root ->
             val list = root.optJSONArray("list")
-            val total = root.optInt("total", 0)
-            pages = if (total > 0) kotlin.math.ceil(total.toDouble() / 15.0).toInt().coerceAtLeast(1) else 1
+            pages = root.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             if (list != null) {
                 items = (0 until list.length()).map { packageItem(list.getJSONObject(it)) }
             } else {
@@ -167,6 +165,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { onNavigate(ScreenTarget.PackageVerify("")) },
+                    modifier = Modifier.height(CompactControlHeight),
                     shape = FieldShape,
                 ) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -175,6 +174,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
                 }
                 Button(
                     onClick = { onNavigate(ScreenTarget.PackageForm(null)) },
+                    modifier = Modifier.height(CompactControlHeight),
                     shape = FieldShape,
                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 ) {
@@ -187,32 +187,16 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
 
         Spacer(Modifier.height(14.dp))
 
-        // Search Bar with Scan
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = keyword,
-                onValueChange = {
-                    keyword = it
-                    page = 1
-                },
-                placeholder = { Text("搜索姓名、手机号或取货码", fontSize = 13.sp, color = Muted) },
-                singleLine = true,
-                shape = FieldShape,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(
-                onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                shape = FieldShape,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp),
-                modifier = Modifier.height(48.dp),
-            ) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码", tint = Primary, modifier = Modifier.size(20.dp))
-            }
-        }
+        SearchBarField(
+            value = keyword,
+            onValueChange = {
+                keyword = it
+                page = 1
+            },
+            placeholder = "搜索姓名、手机号或取货码",
+            onSearch = { page = 1; reload++ },
+            onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+        )
 
         Spacer(Modifier.height(10.dp))
 

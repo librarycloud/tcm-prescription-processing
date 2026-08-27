@@ -175,7 +175,7 @@ internal fun ProcessingScreenV2() {
         ) {
             OutlinedButton(
                 onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).height(CompactControlHeight),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
             ) {
@@ -185,7 +185,7 @@ internal fun ProcessingScreenV2() {
             }
             Button(
                 onClick = { createPlanVisible = true },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).height(CompactControlHeight),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
             ) {

@@ -77,7 +77,7 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
                 Pair(ApiClient.stocktaking(selectedStoreId.toIntOrNull()), ApiClient.availableStores())
             }
         }.onSuccess { (values, storeValues) ->
-            checks = (0 until values.length()).map { values.getJSONObject(it) }
+            checks = (0 until (values.optJSONArray("list")?.length() ?: 0)).map { values.getJSONArray("list").getJSONObject(it) }
             stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
         }.onFailure {
             error = it.message ?: "加载盘点单失败"
@@ -99,6 +99,7 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
             }
             Button(
                 onClick = { createVisible = true },
+                modifier = Modifier.height(CompactControlHeight),
                 shape = FieldShape,
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
             ) {
@@ -125,9 +126,10 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
 
         checks.orEmpty().forEach { check ->
             val status = check.optInt("status")
-            val total = check.optInt("totalItems", 0)
-            val counted = check.optInt("countedItems", 0)
-            val diff = check.optInt("diffItems", 0)
+            val summary = check.optJSONObject("summary") ?: JSONObject()
+            val total = summary.optInt("total", 0)
+            val counted = summary.optInt("counted", 0)
+            val diff = summary.optInt("adjustment", 0)
             val progress = if (total > 0) (counted.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
 
             AppCard(
@@ -140,7 +142,7 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = check.optString("checkNo"),
+                        text = check.optString("checkNo").ifBlank { check.optString("id", "-") },
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Ink,
@@ -151,7 +153,7 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    text = check.optString("name", "未命名盘点"),
+                    text = check.optString("checkName", check.optString("name", "未命名盘点")),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
                     color = Ink,
@@ -185,6 +187,7 @@ internal fun StocktakingScreen(onNavigate: (ScreenTarget) -> Unit) {
                 ) {
                     OutlinedButton(
                         onClick = { onNavigate(ScreenTarget.StocktakingDetail(check.optInt("id"))) },
+                        modifier = Modifier.height(CompactControlHeight),
                         shape = FieldShape,
                     ) {
                         Text("进入盘点明细")

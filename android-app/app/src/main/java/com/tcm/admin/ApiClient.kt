@@ -3,9 +3,6 @@ package com.tcm.admin
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import java.nio.charset.StandardCharsets
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -101,8 +98,13 @@ object ApiClient {
     // Compatibility helpers for screen modules that use descriptive API names.
     fun processingStats(storeId: Int? = null): JSONObject = stats(storeId)
     fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 20): JSONObject {
-        val values = plans(view, keyword, storeId)
-        return JSONObject().put("list", values).put("pagination", JSONObject().put("page", page).put("pages", 1).put("pageSize", pageSize).put("total", values.length()))
+        val query = buildList {
+            add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
+            add("page=$page"); add("pageSize=$pageSize")
+            storeId?.let { add("storeId=$it") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/processing-plans?$query").getJSONObject("data")
     }
     fun pickupTasks(keyword: String = "", storeId: Int? = null): JSONArray = packages(keyword = keyword, storeId = storeId)
     fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
@@ -129,8 +131,15 @@ object ApiClient {
         return list(request("/admin/packages?$query").getJSONObject("data"))
     }
     fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 15): JSONObject {
-        val values = packages(status, source, dateScope, keyword, storeId, sortBy)
-        return JSONObject().put("list", values).put("total", values.length()).put("page", page).put("pageSize", pageSize)
+        val query = buildList {
+            add("page=$page"); add("pageSize=$pageSize")
+            add("sortBy=${java.net.URLEncoder.encode(sortBy, "UTF-8")}"); add("sortOrder=desc")
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            source?.let { add("source=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            dateScope?.let { add("dateScope=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/packages?$query").getJSONObject("data")
     }
    fun packageDetail(id: Int): JSONObject = request("/admin/packages/$id").getJSONObject("data")
     fun packageByCode(code: String): JSONObject = request("/admin/packages/by-code/${java.net.URLEncoder.encode(code, "UTF-8")}").getJSONObject("data")
@@ -144,13 +153,76 @@ object ApiClient {
     ).getJSONObject("data"))
     fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
     fun differences(): JSONArray = differenceProducts()
-    fun differenceSummary(): JSONObject = request("/admin/product-differences/stats").getJSONObject("data")
-    fun differenceProducts(): JSONArray = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
-    fun differenceLogs(): JSONArray = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
-    fun stocktakings(): JSONArray = list(request("/admin/yd-goods-check?page=1&pageSize=30").getJSONObject("data"))
+    fun differenceSummary(): JSONObject {
+        val summary = request("/admin/product-differences/stats").getJSONObject("data")
+        return JSONObject()
+            .put("preReceiptQuantity", summary.optInt("more", 0))
+            .put("preShipmentQuantity", summary.optInt("less", 0))
+            .put("affectedProducts", summary.optInt("total", 0))
+            .put("total", summary.optInt("total", 0))
+    }
+    fun differenceProducts(): JSONArray {
+        val values = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
+        return JSONArray().also { result ->
+            for (index in 0 until values.length()) {
+                val product = values.getJSONObject(index)
+                val difference = product.optDouble("diffQuantity", 0.0)
+                result.put(JSONObject(product.toString())
+                    .put("preReceiptQuantity", if (difference > 0) difference else 0.0)
+                    .put("preShipmentQuantity", if (difference < 0) -difference else 0.0))
+            }
+        }
+    }
+    fun differenceLogs(): JSONArray {
+        val values = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
+        return JSONArray().also { result ->
+            for (index in 0 until values.length()) {
+                val log = values.getJSONObject(index)
+                result.put(JSONObject(log.toString())
+                    .put("quantity", kotlin.math.abs(log.optDouble("changeQuantity", 0.0))))
+            }
+        }
+    }
+    fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 30): JSONObject {
+        val query = buildList { add("page=$page"); add("pageSize=$pageSize"); storeId?.let { add("storeId=$it") } }.joinToString("&")
+        return request("/admin/yd-goods-check?$query").getJSONObject("data")
+    }
     fun prescriptionSources(): JSONArray = dictionaries("prescription-source")
-    fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject = herbLocations(storeId?.toString())
-    fun stocktaking(storeId: Int? = null): JSONArray = stocktakings()
+    fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject {
+        val root = herbLocations(storeId?.toString())
+        val allLocations = root.optJSONArray("locations") ?: JSONArray()
+        val units = linkedMapOf<String, JSONObject>()
+        var assigned = 0
+        val needle = keyword.trim().lowercase()
+        for (index in 0 until allLocations.length()) {
+            val location = allLocations.getJSONObject(index)
+            val locationType = location.optString("type")
+            val herbs = location.optJSONArray("herbs") ?: JSONArray()
+            val matchesKeyword = needle.isBlank() || location.optString("code").lowercase().contains(needle) ||
+                (0 until herbs.length()).any { herbIndex ->
+                    herbs.getJSONObject(herbIndex).optString("name").lowercase().contains(needle) ||
+                        herbs.getJSONObject(herbIndex).optString("code").lowercase().contains(needle)
+                }
+            if ((type.isNotBlank() && locationType != type) || !matchesKeyword) continue
+            if (herbs.length() > 0) assigned++
+            val key = listOf(locationType, location.optInt("unitNo")).joinToString(":")
+            val unit = units.getOrPut(key) {
+                JSONObject().put("type", locationType).put("unitNo", location.optInt("unitNo")).put("locations", JSONArray())
+            }
+            unit.getJSONArray("locations").put(location)
+        }
+        val visibleLocations = units.values.sumOf { it.getJSONArray("locations").length() }
+        return JSONObject()
+            .put("store", root.optJSONObject("store"))
+            .put("herbs", root.optJSONArray("herbs") ?: JSONArray())
+            .put("units", JSONArray(units.values.toList()))
+            .put("summary", JSONObject()
+                .put("totalLocations", visibleLocations)
+                .put("assignedLocations", assigned)
+                .put("emptyLocations", visibleLocations - assigned)
+                .put("totalHerbs", (root.optJSONArray("herbs") ?: JSONArray()).length()))
+    }
+    fun stocktaking(storeId: Int? = null): JSONObject = stocktakings(storeId)
     fun recordCheckItemCount(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = recountGoodsCheckItem(itemId, payload)
     fun updateCheckItemLocation(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = updateGoodsCheckLocation(itemId, payload)
     fun searchGoodsCheckCandidates(checkId: Int, keyword: String = ""): JSONArray = goodsCheckCandidates(checkId, keyword)
@@ -242,20 +314,27 @@ object ApiClient {
         val requestBuilder = Request.Builder()
             .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
             .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            
+
+        // Only send JSON metadata when a JSON payload exists. Fastify rejects an
+        // empty request body paired with application/json before reaching the route.
+        if (body != null) {
+            requestBuilder.header("Content-Type", "application/json")
+        }
+
         token?.let { requestBuilder.header("Authorization", "Bearer $it") }
-        
+
         val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
-        
+
         when (method.uppercase()) {
             "GET" -> requestBuilder.get()
-            "POST" -> requestBuilder.post(requestBody ?: "".toRequestBody(null))
-            "PUT" -> requestBuilder.put(requestBody ?: "".toRequestBody(null))
+            // OkHttp requires a non-null body for POST/PUT. A zero-byte body
+            // without a media type preserves the endpoint's bodyless semantics.
+            "POST" -> requestBuilder.post(requestBody ?: ByteArray(0).toRequestBody(null))
+            "PUT" -> requestBuilder.put(requestBody ?: ByteArray(0).toRequestBody(null))
             "DELETE" -> requestBuilder.delete(requestBody)
             else -> requestBuilder.method(method, requestBody)
         }
-        
+
         val response = client.newCall(requestBuilder.build()).execute()
         val responseBodyString = response.body?.string().orEmpty()
         val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }

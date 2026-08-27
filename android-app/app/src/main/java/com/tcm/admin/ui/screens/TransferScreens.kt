@@ -19,7 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -227,7 +227,7 @@ internal fun TransfersScreen() {
                         )
                         Spacer(Modifier.width(8.dp))
                         Icon(
-                            Icons.Default.CompareArrows,
+                            Icons.AutoMirrored.Filled.CompareArrows,
                             contentDescription = null,
                             tint = Primary,
                             modifier = Modifier.size(18.dp),

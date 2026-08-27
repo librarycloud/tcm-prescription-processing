@@ -219,7 +219,13 @@ private fun TcmAdminApp() {
                     HerbsScreen(onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    ProfileScreen(session?.user) {
+                    ProfileScreen(
+                        user = session?.user,
+                        onSessionUpdated = { updated ->
+                            ApiClient.saveSession(appContext, updated)
+                            session = updated
+                        },
+                    ) {
                         ApiClient.clearSession(appContext)
                         session = null
                         stats = null
