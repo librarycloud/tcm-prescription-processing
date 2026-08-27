@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -126,7 +127,7 @@ private fun TcmAdminApp() {
                 Screen.Processing -> MainShell(screen, go) { ProcessingScreen() }
                 Screen.Packages -> MainShell(screen, go) { PackagesScreen(onOpen = { selectedPackage = it }) }
                 Screen.Herbs -> MainShell(screen, go) { HerbsScreen(go) }
-                Screen.Profile -> MainShell(screen, go) { ProfileScreen { ApiClient.setToken(null); session = null; stats = null; go(Screen.Login) } }
+                Screen.Profile -> MainShell(screen, go) { ProfileScreen(session?.user) { ApiClient.setToken(null); session = null; stats = null; go(Screen.Login) } }
                 Screen.Inventory -> DetailShell("库存查询", go) { InventoryScreen() }
                 Screen.Stocktaking -> DetailShell("商品盘点", go) { StocktakingScreen() }
                 Screen.Differences -> DetailShell("库存差异", go) { DifferencesScreen() }
@@ -148,16 +149,11 @@ private fun TcmAdminApp() {
 private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, String) -> Unit) {
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var adminMode by remember { mutableStateOf(true) }
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 56.dp), verticalArrangement = Arrangement.Center) {
         Text("中药处方加工与取药管理系统", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
         Spacer(Modifier.height(8.dp))
-        Text("管理员工作台", color = Muted, fontSize = 15.sp)
+        Text("工作台", color = Muted, fontSize = 15.sp)
         Spacer(Modifier.height(28.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegmentedButton("管理员", adminMode) { adminMode = true }
-            SegmentedButton("门店员工", !adminMode) { adminMode = false }
-        }
         Spacer(Modifier.height(18.dp))
         Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) {
             Column(Modifier.padding(20.dp)) {
@@ -170,7 +166,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
             }
         }
         Spacer(Modifier.height(14.dp))
-        Text("请使用后端管理员账号登录", color = Muted, fontSize = 12.sp)
+        Text("请使用后端账号登录", color = Muted, fontSize = 12.sp)
     }
 }
 
@@ -199,31 +195,58 @@ private fun BottomNav(current: Screen, go: (Screen) -> Unit) {
 
 @Composable
 private fun DashboardScreen(go: (Screen) -> Unit, stats: JSONObject?) {
-    var store by remember { mutableStateOf("全部门店") }
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Store, null, tint = Primary); Spacer(Modifier.width(10.dp)); Text("当前门店", color = Muted); Spacer(Modifier.weight(1f)); Text(store, fontWeight = FontWeight.SemiBold); Icon(Icons.Default.ChevronRight, null, tint = Muted) } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Store, null, tint = Primary); Spacer(Modifier.width(10.dp)); Text("当前门店", color = Muted); Spacer(Modifier.weight(1f)); Text("全部门店", fontWeight = FontWeight.SemiBold); Icon(Icons.Default.ChevronRight, null, tint = Muted) } }
         Spacer(Modifier.height(18.dp)); SectionTitle("加工概况")
-        StatsGrid(listOf("今日待加工" to stat(stats, "waitingCount", "12"), "逾期未开工" to stat(stats, "overdueCount", "3"), "加工中" to stat(stats, "processingCount", "8"), "今日完成" to stat(stats, "todayFinished", "26"), "等待顾客" to stat(stats, "waitingNoticeCount", "5"), "明日加工" to stat(stats, "tomorrowWaitingCount", "18")))
+        StatsGrid(listOf("今日待加工" to stat(stats, "waitingCount"), "逾期未开工" to stat(stats, "overdueCount"), "加工中" to stat(stats, "processingCount"), "今日完成" to stat(stats, "todayFinished"), "等待顾客" to stat(stats, "waitingNoticeCount"), "明日加工" to stat(stats, "tomorrowWaitingCount")))
         Spacer(Modifier.height(18.dp)); SectionTitle("包裹概况")
-        StatsGrid(listOf("待取货" to stat(stats, "pendingCount", "34"), "今日新增" to stat(stats, "todayAdded", "19"), "今日已取" to stat(stats, "todayPicked", "41"), "总包裹" to stat(stats, "totalCount", "268")))
+        StatsGrid(listOf("待取货" to stat(stats, "pendingCount"), "今日新增" to stat(stats, "todayAdded"), "今日已取" to stat(stats, "todayPicked"), "总包裹" to stat(stats, "totalCount")))
         Spacer(Modifier.height(18.dp)); SectionTitle("业务管理")
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { QuickAction("库存查询", Icons.Default.Inventory) { go(Screen.Inventory) }; QuickAction("商品盘点", Icons.AutoMirrored.Filled.Assignment) { go(Screen.Stocktaking) }; QuickAction("库存差异", Icons.Default.Tune) { go(Screen.Differences) }; QuickAction("门店调拨", Icons.Default.LocalShipping) { go(Screen.Transfers) } }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { QuickAction("库存查询", Icons.Default.Inventory) { go(Screen.Inventory) }; QuickAction("商品盘点", Icons.AutoMirrored.Filled.Assignment) { go(Screen.Stocktaking) }; QuickAction("库存差异", Icons.Default.Tune) { go(Screen.Differences) }; QuickAction("门店调拨", Icons.Default.LocalShipping) { go(Screen.Transfers) } }
     }
 }
 
-private fun stat(stats: JSONObject?, key: String, fallback: String): String = stats?.optInt(key, fallback.toInt())?.toString() ?: fallback
+private fun stat(stats: JSONObject?, key: String): String = stats?.opt(key)?.toString() ?: "-"
 
 @Composable private fun SectionTitle(text: String) { Text(text, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink) }
 @Composable private fun StatsGrid(items: List<Pair<String, String>>) { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { items.chunked(3).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { row.forEach { (label, value) -> Card(Modifier.weight(1f), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(14.dp)) { Text(value, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Primary); Text(label, color = Muted, fontSize = 12.sp) } } }; repeat(3 - row.size) { Spacer(Modifier.weight(1f)) } } } } }
-@Composable private fun QuickAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) { OutlinedButton(onClick, shape = RoundedCornerShape(6.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary)) { Icon(icon, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(label) } }
+@Composable private fun QuickAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) { OutlinedButton(onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary)) { Icon(icon, null, Modifier.size(18.dp)); Spacer(Modifier.width(10.dp)); Text(label, modifier = Modifier.weight(1f)); Icon(Icons.Default.ChevronRight, null) } }
 @Composable private fun SegmentedButton(label: String, selected: Boolean, onClick: () -> Unit) { if (selected) Button(onClick, shape = RoundedCornerShape(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 8.dp)) { Text(label) } else OutlinedButton(onClick, shape = RoundedCornerShape(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 8.dp)) { Text(label) } }
 
 @Composable
 private fun ProcessingScreen() {
-    var mode by remember { mutableStateOf("加工计划") }
-    val tasks = listOf("王女士 · 代煎" to "待加工", "李先生 · 饮片" to "加工中", "赵女士 · 代煎" to "加工完成")
-    Column(Modifier.fillMaxSize().padding(16.dp)) { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("加工计划", mode == "加工计划") { mode = "加工计划" }; SegmentedButton("待领取", mode == "待领取") { mode = "待领取" } }; Spacer(Modifier.height(14.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("今日全部", "今日待加工", "逾期", "加工中", "明日").forEach { OutlinedButton({}, shape = RoundedCornerShape(6.dp)) { Text(it) } } }; Spacer(Modifier.height(14.dp)); tasks.forEach { (name, status) -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(name, fontWeight = FontWeight.SemiBold); Text("138****2468 · 张医生", color = Muted, fontSize = 12.sp) }; StatusPill(status) }; Spacer(Modifier.height(10.dp)); Text("第 1 批 · 7 剂 · 计划开工 2026-08-26", color = Muted, fontSize = 13.sp); Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({}, shape = RoundedCornerShape(6.dp)) { Text("详情") }; Button({}, shape = RoundedCornerShape(6.dp)) { Text(if (status == "待加工") "开始加工" else "查看工序") } } } } } }
+    var plans by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableStateOf(0) }
+    var busy by remember { mutableStateOf<Int?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(reload) { error = null; runCatching { withContext(Dispatchers.IO) { ApiClient.plans() } }.onSuccess { a -> plans = (0 until a.length()).map { a.getJSONObject(it) } }.onFailure { error = it.message ?: "加载加工计划失败" } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("加工计划", true) {}; OutlinedButton({ }, shape = RoundedCornerShape(6.dp)) { Text("待领取") } }
+        Spacer(Modifier.height(12.dp)); Text("今日加工计划", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink); Spacer(Modifier.height(10.dp))
+        if (plans == null && error == null) Text("加载中...", color = Muted)
+        if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
+        if (plans != null && plans!!.isEmpty()) Text("暂无加工计划", color = Muted)
+        plans.orEmpty().forEach { plan ->
+            val id = plan.optInt("id", 0); val status = plan.optInt("status", 0); val statusText = planStatus(status)
+            val prescription = plan.optJSONObject("prescription")
+            val customer = plan.optString("customerName", prescription?.optString("customerName", "客户") ?: "客户")
+            val phone = plan.optString("customerPhone", prescription?.optString("phone", "-") ?: "-")
+            Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(customer, fontWeight = FontWeight.SemiBold); Text(phone, color = Muted, fontSize = 12.sp) }; StatusPill(statusText) }
+                    Spacer(Modifier.height(8.dp)); Text("${plan.optInt("totalDose", 0)} 剂 · 计划日期 ${plan.optString("processDate", "-").take(10)}", color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton({ }, shape = RoundedCornerShape(6.dp)) { Text("详情") }
+                        if (id > 0 && status in 0..2) Button(enabled = busy == null, onClick = { busy = id; scope.launch { runCatching { withContext(Dispatchers.IO) { if (status == 0) ApiClient.transitionPlan(id, 1) else if (status == 1) ApiClient.transitionPlan(id, 2) else ApiClient.generatePackage(id) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "操作失败" }; busy = null } }, shape = RoundedCornerShape(6.dp)) { Text(if (status == 0) "开始加工" else if (status == 1) "加工完成" else "生成包裹") }
+                    }
+                }
+            }
+        }
+    }
 }
+
+private fun planStatus(status: Int): String = when (status) { 0 -> "待加工"; 1 -> "加工中"; 2 -> "加工完成"; 3 -> "待领取"; 4 -> "已领取"; 5 -> "已取消"; else -> "未知" }
 
 @Composable private fun StatusPill(text: String) { val color = when (text) { "加工中" -> Primary; "加工完成" -> Color(0xFF2B8A57); else -> Warning }; Surface(color = color.copy(alpha = .12f), shape = RoundedCornerShape(5.dp)) { Text(text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = color, fontSize = 12.sp) } }
 
@@ -231,9 +254,10 @@ private fun ProcessingScreen() {
 private fun PackagesScreen(onOpen: (PackageItem) -> Unit) {
     var keyword by remember { mutableStateOf("") }
     var remote by remember { mutableStateOf<List<PackageItem>?>(null) }
-    LaunchedEffect(Unit) { runCatching { withContext(Dispatchers.IO) { ApiClient.packages() } }.onSuccess { array -> remote = (0 until array.length()).map { i -> val o = array.getJSONObject(i); PackageItem(o.optString("itemName", "处方包裹"), o.optString("receiverName", "客户"), o.optString("pickupCode", "------"), if (o.optInt("status") == 1) "已领取" else "待领取", o.optString("createdAt", "-").replace("T", " ").take(16)) } } }
-    val list = remote ?: listOf(PackageItem("参苓白术散", "王女士", "620381", "待领取", "今天 09:42"), PackageItem("加味逍遥丸", "李先生", "194205", "待领取", "今天 08:16"), PackageItem("四物汤", "赵女士", "830174", "已领取", "昨天 16:20"))
-    Column(Modifier.fillMaxSize().padding(16.dp)) { OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("搜索姓名、手机号或取货码") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true); Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("全部", true) {}; OutlinedButton({}, shape = RoundedCornerShape(6.dp)) { Text("待领取") }; OutlinedButton({}, shape = RoundedCornerShape(6.dp)) { Text("已领取") } }; Spacer(Modifier.height(14.dp)); list.filter { keyword.isBlank() || it.name.contains(keyword) || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.name, fontWeight = FontWeight.SemiBold); Text("${item.customer} · 138****2468", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(9.dp)); Text("取货码：${item.code}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Primary); Text("录入：${item.time} · 门店：人民路店", color = Muted, fontSize = 12.sp) } } } }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { runCatching { withContext(Dispatchers.IO) { ApiClient.packages() } }.onSuccess { array -> remote = (0 until array.length()).map { i -> val o = array.getJSONObject(i); PackageItem(o.optString("itemName", "处方包裹"), o.optString("receiverName", "客户"), o.optString("pickupCode", "------"), if (o.optInt("status") == 1) "已领取" else "待领取", o.optString("createdAt", "-").replace("T", " ").take(16)) } }.onFailure { error = it.message ?: "加载包裹失败" } }
+    val list = remote.orEmpty()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("搜索姓名、手机号或取货码") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true); Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("全部", true) {}; OutlinedButton({}, shape = RoundedCornerShape(6.dp)) { Text("待领取") }; OutlinedButton({}, shape = RoundedCornerShape(6.dp)) { Text("已领取") } }; Spacer(Modifier.height(14.dp)); if (error != null) Text(error!!, color = Danger, fontSize = 13.sp); if (remote != null && list.isEmpty()) Text("暂无包裹", color = Muted); list.filter { keyword.isBlank() || it.name.contains(keyword) || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.name, fontWeight = FontWeight.SemiBold); Text(item.customer, color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(9.dp)); Text("取货码：${item.code}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Primary); Text("录入：${item.time}", color = Muted, fontSize = 12.sp) } } } }
 }
 
 @Composable
@@ -246,7 +270,7 @@ private fun FakeQr(value: String) { Canvas(Modifier.size(150.dp).background(Colo
 
 @Composable private fun HerbsScreen(go: (Screen) -> Unit) { Column(Modifier.fillMaxSize().padding(16.dp)) { SectionTitle("斗谱与库位"); Spacer(Modifier.height(12.dp)); listOf("药材库位", "库位布局", "药材绑定").forEach { label -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable {}, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Inventory, null, tint = Primary); Spacer(Modifier.width(12.dp)); Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold); Icon(Icons.Default.ChevronRight, null, tint = Muted) } } }; Spacer(Modifier.height(16.dp)); Text("库存运营", fontWeight = FontWeight.Bold); Spacer(Modifier.height(10.dp)); QuickAction("库存查询", Icons.Default.Inventory) { go(Screen.Inventory) } } }
 
-@Composable private fun ProfileScreen(onLogout: () -> Unit) { Column(Modifier.fillMaxSize().padding(16.dp)) { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Surface(Modifier.size(52.dp), shape = RoundedCornerShape(26.dp), color = Primary.copy(alpha = .14f)) { Box(contentAlignment = Alignment.Center) { Text("管", color = Primary, fontWeight = FontWeight.Bold, fontSize = 20.sp) } }; Spacer(Modifier.width(12.dp)); Column { Text("管理员", fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("全局管理员 · 全部门店", color = Muted, fontSize = 13.sp) } } }; Spacer(Modifier.height(14.dp)); listOf("手机号" to "138****2468", "用户名" to "admin", "微信绑定" to "已绑定").forEach { (label, value) -> InfoRow(label, value) }; Spacer(Modifier.height(24.dp)); OutlinedButton(onLogout, Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) { Text("退出登录") } } }
+@Composable private fun ProfileScreen(user: JSONObject?, onLogout: () -> Unit) { val displayName = user?.optString("nickname").orEmpty().ifBlank { user?.optString("username").orEmpty().ifBlank { "管理员" } }; val role = when (user?.optInt("role", 0)) { 0 -> "全局管理员"; 2 -> "门店管理员"; 3 -> "门店员工"; else -> "管理员" }; Column(Modifier.fillMaxSize().padding(16.dp)) { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Surface(Modifier.size(52.dp), shape = RoundedCornerShape(26.dp), color = Primary.copy(alpha = .14f)) { Box(contentAlignment = Alignment.Center) { Text(displayName.take(1), color = Primary, fontWeight = FontWeight.Bold, fontSize = 20.sp) } }; Spacer(Modifier.width(12.dp)); Column { Text(displayName, fontWeight = FontWeight.Bold, fontSize = 18.sp); Text(role, color = Muted, fontSize = 13.sp) } } }; Spacer(Modifier.height(14.dp)); listOf("手机号" to (user?.optString("phone").orEmpty().ifBlank { "-" }), "用户名" to (user?.optString("username").orEmpty().ifBlank { "-" }), "所属门店" to (user?.optJSONObject("store")?.optString("name").orEmpty().ifBlank { "全部门店" })).forEach { (label, value) -> InfoRow(label, value) }; Spacer(Modifier.height(24.dp)); OutlinedButton(onLogout, Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) { Text("退出登录") } } }
 @Composable private fun InfoRow(label: String, value: String) { Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { Text(label, modifier = Modifier.width(86.dp), color = Muted); Text(value, color = Ink); Spacer(Modifier.weight(1f)); Icon(Icons.Default.ChevronRight, null, tint = Muted) }; HorizontalDivider(color = Color(0xFFE5E6EB)) }
 
 @Composable private fun SearchField(placeholder: String) { OutlinedTextField("", {}, Modifier.fillMaxWidth(), placeholder = { Text(placeholder) }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true) }
