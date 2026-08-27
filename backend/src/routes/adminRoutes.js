@@ -225,9 +225,14 @@ export default async function adminRoutes(fastify) {
     "/herb-locations/move-import",
     importHerbLocationMovesController,
   );
-  fastify.post("/herb-locations/assignments", assignHerbLocationController);
+  fastify.post(
+    "/herb-locations/assignments",
+    storeStaffRoute,
+    assignHerbLocationController,
+  );
   fastify.put(
     "/herb-locations/assignments/:id",
+    storeStaffRoute,
     updateHerbLocationAssignmentController,
   );
   fastify.put("/herb-locations/herbs/:id", updateHerbController);

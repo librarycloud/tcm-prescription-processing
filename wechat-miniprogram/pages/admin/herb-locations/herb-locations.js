@@ -145,6 +145,7 @@ function decorateLocation(location, keyword) {
 Page({
   data: {
     activeTab: 'herbs',
+    user: {},
     isSuperAdmin: false,
     stores: [],
     storeIndex: 0,
@@ -177,7 +178,7 @@ Page({
   async onShow() {
     const user = getUser();
     const isSuperAdmin = Number(user.role) === 0;
-    this.setData({ isSuperAdmin });
+    this.setData({ user, isSuperAdmin });
     try {
       const stores = await getHerbLocationStores();
       const selectedStoreId = isSuperAdmin ? stores?.[0]?.id : user.storeId;

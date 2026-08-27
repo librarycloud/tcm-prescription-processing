@@ -57,11 +57,23 @@ test('admin route registration only admits staff to explicitly marked routes', a
   assert.notEqual(initialCount.statusCode, 403);
 
   for (const [method, url] of [
+    ['POST', '/admin/herb-locations/assignments'],
+    ['PUT', '/admin/herb-locations/assignments/1'],
+  ]) {
+    const response = await app.inject({
+      method, url, headers: { authorization: `Bearer ${token}` },
+    });
+    assert.notEqual(response.statusCode, 403, `${method} ${url} should permit staff herb location access`);
+  }
+
+  for (const [method, url] of [
     ['POST', '/admin/prescriptions'],
     ['POST', '/admin/yd-goods-check'],
     ['POST', '/admin/yd-goods-check/1/finish'],
     ['PUT', '/admin/yd-goods-check/items/1/location'],
     ['POST', '/admin/yd-goods-check/items/1/review'],
+    ['PUT', '/admin/herb-locations/herbs/1'],
+    ['DELETE', '/admin/herb-locations/assignments/1'],
   ]) {
     const response = await app.inject({
       method, url, headers: { authorization: `Bearer ${token}` },
