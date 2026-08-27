@@ -2,6 +2,7 @@ package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -34,8 +36,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -278,69 +279,77 @@ internal fun SearchBarField(
     onScan: (() -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(SearchControlHeight)
+            .background(Color.White, FieldShape)
+            .border(BorderStroke(1.dp, Border), FieldShape)
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
+        BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder, color = Muted, fontSize = 13.sp) },
-            leadingIcon = if (onScan == null) {
-                null
-            } else {
-                @Composable {
-                    IconButton(
-                        onClick = { onScan.invoke() },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.QrCodeScanner,
-                            contentDescription = "扫码",
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            },
-            trailingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (value.isNotEmpty()) {
+            textStyle = TextStyle(fontSize = 13.sp, color = Ink),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (onScan != null) {
                         IconButton(
-                            onClick = { onValueChange("") },
-                            modifier = Modifier.size(28.dp),
+                            onClick = { onScan.invoke() },
+                            modifier = Modifier.size(36.dp),
                         ) {
                             Icon(
-                                Icons.Default.Clear,
-                                contentDescription = "清除",
-                                tint = Muted,
-                                modifier = Modifier.size(16.dp),
+                                Icons.Default.QrCodeScanner,
+                                contentDescription = "扫码",
+                                tint = Primary,
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }
-                    IconButton(
-                        onClick = onSearch,
-                        modifier = Modifier.size(36.dp),
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart,
                     ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "搜索",
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp),
-                        )
+                        if (value.isEmpty()) {
+                            Text(placeholder, color = Muted, fontSize = 13.sp, maxLines = 1)
+                        }
+                        innerTextField()
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (value.isNotEmpty()) {
+                            IconButton(
+                                onClick = { onValueChange("") },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "清除",
+                                    tint = Muted,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = onSearch,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "搜索",
+                                tint = Primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             },
-            singleLine = true,
-            shape = FieldShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                focusedBorderColor = Primary,
-                unfocusedBorderColor = Border,
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            modifier = Modifier.fillMaxWidth().height(SearchControlHeight),
         )
     }
 }
