@@ -49,6 +49,15 @@ object ApiClient {
         return AdminSession(result.getString("token"), result.getJSONObject("user")).also { token = it.token }
     }
 
+    fun updateMe(payload: JSONObject): AdminSession {
+        val data = request("/user/me", "PUT", payload).getJSONObject("data")
+        val newToken = data.getString("token")
+        val newUser = data.getJSONObject("user")
+        return AdminSession(newToken, newUser).also { token = it.token }
+    }
+
+    fun me(): JSONObject = request("/user/me").getJSONObject("data")
+
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray {
         val query = buildList {

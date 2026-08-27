@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -22,6 +23,16 @@ class ScannerActivity : ComponentActivity() {
     private val scanner = BarcodeScanning.getClient()
     private lateinit var previewView: PreviewView
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            startCamera()
+        } else {
+            finish()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         previewView = PreviewView(this)
@@ -29,13 +40,8 @@ class ScannerActivity : ComponentActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST)
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == CAMERA_REQUEST && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startCamera() else finish()
     }
 
     private fun startCamera() {
@@ -73,6 +79,5 @@ class ScannerActivity : ComponentActivity() {
 
     companion object {
         const val SCAN_RESULT = "scan_result"
-        private const val CAMERA_REQUEST = 1001
     }
 }

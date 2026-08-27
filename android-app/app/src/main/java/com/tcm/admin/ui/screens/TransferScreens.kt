@@ -98,6 +98,11 @@ import java.time.LocalDate
 internal fun TransfersScreen() {
     var transfers by remember { mutableStateOf<List<JSONObject>?>(null) }
     var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var stats by remember { mutableStateOf<JSONObject?>(null) }
+    var keyword by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf<Int?>(null) }
+    var overdueOnly by remember { mutableStateOf(false) }
+    var selectedStoreId by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
     var createVisible by remember { mutableStateOf(false) }
@@ -112,19 +117,36 @@ internal fun TransfersScreen() {
     var returnItem by remember { mutableStateOf<JSONObject?>(null) }
     var returnQuantity by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(reload) {
+    LaunchedEffect(reload, keyword, statusFilter, overdueOnly, selectedStoreId) {
         error = null
-        runCatching { withContext(Dispatchers.IO) { Pair(ApiClient.transfers(), ApiClient.transferStores()) } }
-            .onSuccess { (transferValues, storeValues) ->
+        runCatching { withContext(Dispatchers.IO) { Triple(ApiClient.transfers(keyword, statusFilter, selectedStoreId.toIntOrNull(), overdueOnly), ApiClient.transferStores(), ApiClient.transferStats(selectedStoreId.toIntOrNull())) } }
+            .onSuccess { (transferValues, storeValues, summary) ->
                 transfers = (0 until transferValues.length()).map { transferValues.getJSONObject(it) }
                 stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
+                stats = summary
             }
             .onFailure { error = it.message ?: "加载门店调拨失败" }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("门店调拨"); Spacer(Modifier.weight(1f)); Button({ createVisible = true }, shape = RoundedCornerShape(6.dp)) { Text("新建调拨") } }
+        Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { SectionTitle("门店调拨"); Text("跨门店借调、归还和状态跟踪", color = Muted, fontSize = 13.sp) }; Button({ createVisible = true }, shape = RoundedCornerShape(6.dp)) { Text("新建调拨") } }
         Spacer(Modifier.height(14.dp))
-        if (transfers == null && error == null) Text("加载中...", color = Muted)
+        stats?.let { StatsGrid(listOf("借出中" to it.optInt("borrowing").toString(), "部分归还" to it.optInt("partReturned").toString(), "已逾期" to it.optInt("overdue").toString())) }
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("单号、门店、物品或批号") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SegmentedButton("全部状态", statusFilter == null && !overdueOnly) { statusFilter = null; overdueOnly = false }
+            SegmentedButton("借出中", statusFilter == 0 && !overdueOnly) { statusFilter = 0; overdueOnly = false }
+            SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly) { statusFilter = 1; overdueOnly = false }
+            SegmentedButton("已逾期", overdueOnly) { statusFilter = null; overdueOnly = true }
+        }
+        if (stores.size > 1) {
+            Spacer(Modifier.height(8.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentedButton("全部门店", selectedStoreId.isBlank()) { selectedStoreId = "" }
+                stores.forEach { store -> val id = store.opt("id")?.toString().orEmpty(); SegmentedButton(store.optString("name", "门店"), selectedStoreId == id) { selectedStoreId = id } }
+            }
+        }
+        Spacer(Modifier.height(12.dp)); if (transfers == null && error == null) Text("加载中...", color = Muted)
         if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
         if (transfers != null && transfers!!.isEmpty()) Text("暂无调拨单", color = Muted)
         transfers.orEmpty().forEach { transfer ->
@@ -135,6 +157,8 @@ internal fun TransfersScreen() {
                     Spacer(Modifier.height(8.dp))
                     Text("${transfer.optJSONObject("fromStore")?.optString("name") ?: "-"}  ->  ${transfer.optJSONObject("toStore")?.optString("name") ?: "-"}", color = Ink)
                     Text("${items.length()} 项 · ${transfer.optString("transferDate").take(10)} · 预计归还 ${transfer.optString("expectedReturnDate").take(10)}", color = Muted, fontSize = 12.sp)
+                    if (transfer.optBoolean("overdue")) Text("已超过预计归还日期", color = Danger, fontSize = 12.sp)
+                    if (transfer.optInt("outboundStatus") == 0) Text("待确认调出", color = Warning, fontSize = 12.sp)
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton({ scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transferDetail(transfer.optInt("id")) } }.onSuccess { detail = it }.onFailure { error = it.message ?: "加载调拨详情失败" } } }, shape = RoundedCornerShape(6.dp)) { Text("查看详情") }
                 }

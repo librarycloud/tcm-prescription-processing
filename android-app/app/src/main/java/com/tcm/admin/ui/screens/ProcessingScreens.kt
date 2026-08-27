@@ -1,15 +1,11 @@
 package com.tcm.admin
 
-import android.os.Bundle
 import android.app.Activity
 import android.content.Intent
-import androidx.activity.ComponentActivity
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,54 +15,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Assignment
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.AssignmentTurnedIn
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Store
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,30 +44,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+
 @Composable
 internal fun ProcessingScreenV2() {
-    var mode by remember { mutableStateOf("plans") }
-    var view by remember { mutableStateOf("today-all") }
+    var mode by remember { mutableStateOf("plans") } // "plans" | "pickup"
+    var activeView by remember { mutableStateOf("today-all") }
     var keyword by remember { mutableStateOf("") }
     var plans by remember { mutableStateOf<List<JSONObject>?>(null) }
     var pickupTasks by remember { mutableStateOf<List<PackageItem>?>(null) }
@@ -105,232 +70,879 @@ internal fun ProcessingScreenV2() {
     var selectedStoreId by remember { mutableStateOf("") }
     var stats by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var detailPlan by remember { mutableStateOf<JSONObject?>(null) }
-    var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
-    var busyId by remember { mutableStateOf<Int?>(null) }
+    var loading by remember { mutableStateOf(false) }
     var reload by remember { mutableStateOf(0) }
-    var createVisible by remember { mutableStateOf(false) }
-    var prescriptions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var processTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var prescriptionId by remember { mutableStateOf(0) }
-    var processTypeId by remember { mutableStateOf(0) }
-    var totalDose by remember { mutableStateOf("1") }
-    var processDate by remember { mutableStateOf(LocalDate.now().toString()) }
-    var bagCount by remember { mutableStateOf("1") }
-    var volumeMl by remember { mutableStateOf("200") }
+    var page by remember { mutableStateOf(1) }
+    var pages by remember { mutableStateOf(1) }
+
+    // Dialog states
+    var selectedPlan by remember { mutableStateOf<JSONObject?>(null) }
+    var editingPlan by remember { mutableStateOf<JSONObject?>(null) }
+    var createPlanVisible by remember { mutableStateOf(false) }
+    var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
+    var selectedPackageDetail by remember { mutableStateOf<PackageItem?>(null) }
+
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            keyword = value
+            reload++
+        }
+    }
+
     LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
+            .onSuccess { values ->
+                stores = (0 until values.length()).map { values.getJSONObject(it) }
+                if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
+            }
+    }
+
+    LaunchedEffect(reload, mode, activeView, selectedStoreId, keyword, page) {
+        error = null
+        loading = true
         runCatching {
             withContext(Dispatchers.IO) {
-                Triple(ApiClient.prescriptions(status = 0), ApiClient.dictionaries("ProcessType"), ApiClient.availableStores())
-            }
-        }.onSuccess { (p, types, storeValues) ->
-            prescriptions = (0 until p.length()).map { p.getJSONObject(it) }
-            processTypes = (0 until types.length()).map { types.getJSONObject(it) }
-            stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
-            prescriptionId = prescriptions.firstOrNull()?.optInt("id", 0) ?: 0
-            processTypeId = processTypes.firstOrNull()?.optInt("id", 0) ?: 0
-            if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
-        }.onFailure { error = it.message ?: "加载加工计划选项失败" }
-    }
-    LaunchedEffect(selectedStoreId, reload) {
-        runCatching { withContext(Dispatchers.IO) { ApiClient.stats(selectedStoreId.toIntOrNull()) } }
-            .onSuccess { stats = it }
-    }
-    LaunchedEffect(mode, view, keyword, selectedStoreId, reload) {
-        error = null
-        if (mode == "plans") {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.plans(view, keyword, selectedStoreId.toIntOrNull()) } }.onSuccess { a -> plans = (0 until a.length()).map { a.getJSONObject(it) } }.onFailure { error = it.message ?: "加载加工计划失败" }
-        } else {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.packages(source = "processing", dateScope = "pickup-workbench", keyword = keyword, storeId = selectedStoreId.toIntOrNull()) } }.onSuccess { a -> pickupTasks = (0 until a.length()).map { packageItem(a.getJSONObject(it)) } }.onFailure { error = it.message ?: "加载待领取任务失败" }
-        }
-    }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { SegmentedButton("加工计划", mode == "plans") { mode = "plans"; view = "today-all" }; SegmentedButton("待领取", mode == "pickup") { mode = "pickup" }; Spacer(Modifier.weight(1f)); if (mode == "plans") OutlinedButton({ createVisible = true }, shape = RoundedCornerShape(6.dp)) { Text("新建计划") } }
-        Spacer(Modifier.height(12.dp)); OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("姓名、手机号或备注") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
-        if (mode == "plans") {
-            stats?.let { value ->
-                Spacer(Modifier.height(12.dp))
-                StatsGrid(listOf("今日全部" to (value.optInt("waitingCount") + value.optInt("processingCount") + value.optInt("todayFinished")).toString(), "待加工" to value.optInt("waitingCount").toString(), "逾期未开工" to value.optInt("overdueCount").toString(), "加工中" to value.optInt("processingCount").toString(), "等待顾客" to value.optInt("waitingNoticeCount").toString(), "明日加工" to value.optInt("tomorrowWaitingCount").toString(), "全部" to value.optInt("processingPlanTotalCount").toString()))
-            }
-            Spacer(Modifier.height(10.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("today-all" to "今日全部", "today-waiting" to "待加工", "overdue" to "逾期", "processing" to "加工中", "notice" to "等待顾客", "tomorrow" to "明日加工", "all" to "全部").forEach { (key, label) -> SegmentedButton(label, view == key) { view = key } } }
-        }
-        if (stores.size > 1) {
-            Spacer(Modifier.height(10.dp)); Text("查询门店", color = Muted, fontSize = 12.sp)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SegmentedButton("全部门店", selectedStoreId.isBlank()) { selectedStoreId = "" }
-                stores.forEach { store ->
-                    val id = store.opt("id")?.toString().orEmpty()
-                    SegmentedButton(store.optString("name", "门店"), selectedStoreId == id) { selectedStoreId = id }
+                val storeIdInt = selectedStoreId.toIntOrNull()
+                val summary = ApiClient.processingStats(storeIdInt)
+                if (mode == "plans") {
+                    val paged = ApiClient.processingPlansPaged(
+                        view = activeView,
+                        keyword = keyword.trim(),
+                        storeId = storeIdInt,
+                        page = page,
+                        pageSize = 20,
+                    )
+                    Triple(summary, paged, null)
+                } else {
+                    val pickupData = ApiClient.pickupTasks(
+                        keyword = keyword.trim(),
+                        storeId = storeIdInt,
+                    )
+                    Triple(summary, null, pickupData)
                 }
             }
-        }
-        Spacer(Modifier.height(14.dp)); error?.let { Text(it, color = Danger, fontSize = 13.sp) }; if (plans == null && pickupTasks == null && error == null) Text("加载中...", color = Muted)
-        if (mode == "plans") {
-            val values = plans.orEmpty(); if (plans != null && values.isEmpty()) Text("暂无加工计划", color = Muted)
-            values.forEach { plan ->
-                val id = plan.optInt("id", 0); val status = plan.optInt("status", 0); val prescription = plan.optJSONObject("prescription"); val customer = prescription?.optString("customerName", "客户") ?: plan.optString("customerName", "客户"); val phone = prescription?.optString("phone", "-") ?: plan.optString("customerPhone", "-"); val processType = plan.optJSONObject("processType")?.optString("name", "加工") ?: "加工"; val store = plan.optJSONObject("store")?.optString("name", "") ?: ""
-                Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("$customer · $processType", fontWeight = FontWeight.SemiBold); Text("$phone${if (store.isNotBlank()) " · $store" else ""}", color = Muted, fontSize = 12.sp) }; StatusPill(planStatus(status)) }; Spacer(Modifier.height(8.dp)); Text("第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂 · ${plan.optString("processDate", "等待通知").take(10)}", color = Muted, fontSize = 13.sp); Text("取货方式：${when (plan.optInt("pickupMethod", 0)) { 0 -> "自提"; 1 -> "跑腿"; 2 -> "快递"; else -> "-" }}${if (plan.optBoolean("isUrgent")) " · 加急" else ""}", color = Muted, fontSize = 12.sp); plan.optString("processRemark", "").takeIf { it.isNotBlank() }?.let { Text("备注：$it", color = Muted, fontSize = 12.sp) }; Spacer(Modifier.height(10.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; when { status == 0 && plan.optInt("scheduleType", 1) == 2 -> Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.receiveNotice(id, JSONObject().put("processDate", LocalDate.now().toString())) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "安排加工失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("安排今天") }; status == 0 -> Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 1) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "开始加工失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("开始加工") }; status in 1..4 -> OutlinedButton({ workflowPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("工序详情") } }; if (status == 0) OutlinedButton(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.delayPlan(id, JSONObject().put("scheduleType", 1).put("processDate", LocalDate.now().plusDays(1).toString())) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "延期失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("延期明天") }; if (status == 2) Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.generatePackage(id) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "生成包裹失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("生成包裹") }; if (status == 1) OutlinedButton(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 5) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "取消失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("取消加工") } } } }
+        }.onSuccess { (summary, pagedPlans, pickupData) ->
+            stats = summary
+            if (pagedPlans != null) {
+                val list = pagedPlans.optJSONArray("list") ?: JSONArray()
+                plans = (0 until list.length()).map { list.getJSONObject(it) }
+                pages = pagedPlans.optJSONObject("pagination")?.optInt("pages", 1) ?: 1
             }
-        } else {
-            val values = pickupTasks.orEmpty(); if (pickupTasks != null && values.isEmpty()) Text("暂无待领取任务", color = Muted)
-            values.filter { keyword.isBlank() || it.customer.contains(keyword) || it.code.contains(keyword) }.forEach { item ->
-                Card(
-                    Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                    colors = CardDefaults.cardColors(Color.White),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("${item.customer} · ${item.name}", fontWeight = FontWeight.SemiBold)
-                                Text("${item.phone} · ${item.time}", color = Muted, fontSize = 12.sp)
-                            }
-                            StatusPill(item.status)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text("取货码：${item.code}", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                {
-                                    detailPlan = JSONObject().put("packageId", item.id).put("pickupCode", item.code).put("receiverName", item.customer).put("receiverPhone", item.phone)
-                                },
-                                shape = RoundedCornerShape(6.dp),
-                            ) { Text("详情") }
-                            if (item.statusCode == 0) {
-                                Button(
-                                    { workflowPlan = JSONObject().put("packageId", item.id).put("packageCode", item.code) },
-                                    shape = RoundedCornerShape(6.dp),
-                                ) { Text("核销") }
-                            }
-                        }
-                    }
+            if (pickupData != null) {
+                pickupTasks = (0 until pickupData.length()).map {
+                    val obj = pickupData.getJSONObject(it)
+                    val prescription = obj.optJSONObject("prescription")
+                    val processType = obj.optJSONObject("processType")
+                    val store = obj.optJSONObject("store")
+                    PackageItem(
+                        id = obj.optInt("id"),
+                        name = "${obj.optString("receiverName", "顾客")} · ${processType?.optString("name", "代煎") ?: "加工"}",
+                        customer = obj.optString("receiverName", "-"),
+                        phone = obj.optString("receiverPhone", "-"),
+                        code = obj.optString("pickupCode", "-"),
+                        method = pickupMethodLabel(obj.optInt("pickupMethod", 0)),
+                        status = if (obj.optInt("status") == 1) "已领取" else "待领取",
+                        statusCode = obj.optInt("status"),
+                        time = obj.optString("finishDate", "").take(16).replace("T", " "),
+                        store = store?.optString("name", "").orEmpty(),
+                        expressTrackingNo = obj.optString("expressTrackingNo", ""),
+                    )
                 }
             }
+            loading = false
+        }.onFailure {
+            error = it.message ?: "加载加工数据失败"
+            loading = false
         }
     }
-    detailPlan?.let { detail ->
-        if (detail.has("packageId")) {
-            PackageDetailDialogV2(
-                packageItem(JSONObject().put("id", detail.optInt("packageId")).put("pickupCode", detail.optString("pickupCode")).put("receiverName", detail.optString("receiverName")).put("receiverPhone", detail.optString("receiverPhone"))),
-                onClose = { detailPlan = null },
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        // Top Action Bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
+            ) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("扫码作业", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            Button(
+                onClick = { createPlanVisible = true },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("新建加工计划", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // Mode Switch: 加工计划 vs 待领取
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SegmentedButton(
+                label = "加工计划",
+                selected = mode == "plans",
+                onClick = { mode = "plans"; page = 1 },
+                modifier = Modifier.weight(1f),
             )
-        } else {
-            PlanDetailDialog(
-                detail,
-                onClose = { detailPlan = null },
-                onDelete = { id ->
-                    scope.launch {
-                        runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPlan(id) } }
-                            .onSuccess { detailPlan = null; reload++ }
-                            .onFailure { error = it.message ?: "删除加工计划失败" }
+            SegmentedButton(
+                label = "待领取任务",
+                selected = mode == "pickup",
+                onClick = { mode = "pickup"; page = 1 },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // In "plans" mode, show interactive stats grid
+        if (mode == "plans") {
+            val statItems = listOf(
+                "今日待加工" to (stat(stats, "waitingCount") to "today-all"),
+                "逾期未开工" to (stat(stats, "overdueCount") to "overdue"),
+                "加工中" to (stat(stats, "processingCount") to "processing"),
+                "今日完成" to (stat(stats, "todayFinished") to "today-finished"),
+                "等待顾客" to (stat(stats, "waitingNoticeCount") to "waiting-notice"),
+                "明日加工" to (stat(stats, "tomorrowWaitingCount") to "tomorrow-waiting"),
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                statItems.chunked(3).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.forEach { (label, pair) ->
+                            val (value, viewKey) = pair
+                            val isSelected = activeView == viewKey
+                            val isPositive = value != "0" && value != "-"
+                            val isAlert = label.contains("逾期") || label.contains("等待")
+
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(76.dp),
+                                shape = CardShape,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) PrimarySoft else Color.White,
+                                ),
+                                border = BorderStroke(
+                                    if (isSelected) 1.5.dp else 1.dp,
+                                    if (isSelected) Primary else Color(0xFFEBEEF5),
+                                ),
+                                onClick = {
+                                    activeView = if (activeView == viewKey) "all" else viewKey
+                                    page = 1
+                                },
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Text(
+                                        text = value,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = when {
+                                            !isPositive -> Ink
+                                            isAlert -> Danger
+                                            label.contains("完成") -> Success
+                                            else -> Primary
+                                        },
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Primary else Muted,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
+                                }
+                            }
+                        }
                     }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
+
+        // Search Field
+        SearchBarField(
+            value = keyword,
+            onValueChange = { keyword = it },
+            placeholder = "搜索顾客姓名、手机号或备注",
+            onSearch = { page = 1; reload++ },
+        )
+
+        // Store Chips
+        if (stores.size > 1) {
+            Spacer(Modifier.height(10.dp))
+            StoreChipsRow(
+                stores = stores,
+                selectedStoreId = selectedStoreId,
+                onSelectStore = { id ->
+                    selectedStoreId = id
+                    page = 1
+                    reload++
                 },
             )
         }
-    }
-    workflowPlan?.let { plan ->
-        if (plan.has("packageId")) {
-            PackageDetailDialogV2(
-                packageItem(JSONObject().put("id", plan.optInt("packageId")).put("pickupCode", plan.optString("packageCode")).put("receiverName", "客户")),
-                onClose = { workflowPlan = null },
-            )
-        } else {
-            WorkflowDialog(plan, onClose = { workflowPlan = null })
+
+        Spacer(Modifier.height(14.dp))
+
+        // Error Banner
+        if (error != null) {
+            Surface(
+                color = DangerSoft,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(0.5.dp, Danger.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            ) {
+                Text(error!!, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+            }
         }
+
+        // Loading
+        if (loading) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+            }
+        }
+
+        // Processing Plans List
+        if (mode == "plans" && !loading) {
+            if (plans == null || plans!!.isEmpty()) {
+                AppEmptyState("暂无加工计划")
+            } else {
+                plans!!.forEach { plan ->
+                    val prescription = plan.optJSONObject("prescription")
+                    val processType = plan.optJSONObject("processType")
+                    val store = plan.optJSONObject("store")
+                    val customerName = plan.optString("customerName").ifBlank { prescription?.optString("customerName", "-") ?: "-" }
+                    val phone = plan.optString("customerPhone").ifBlank { prescription?.optString("phone", "-") ?: "-" }
+                    val doctorName = plan.optString("doctorName").ifBlank { prescription?.optJSONObject("doctor")?.optString("name", "-") ?: "-" }
+                    val isUrgent = plan.optBoolean("isUrgent") || plan.optInt("isUrgent") == 1
+                    val status = plan.optInt("status")
+                    val batchNo = plan.optInt("batchNo", 1)
+                    val totalDose = plan.optInt("totalDose", 0)
+                    val bagCount = plan.optInt("bagCount", 0)
+                    val volumeMl = plan.optInt("volumeMl", 0)
+                    val pickupMethod = plan.optInt("pickupMethod", 0)
+                    val scheduleDate = plan.optString("scheduledDate", "").take(10)
+                    val isDecoction = processType?.optString("name")?.contains("煎") == true || plan.optString("processTypeName").contains("煎")
+                    val packageCreated = plan.optBoolean("packageCreated") || plan.optInt("packageId", 0) > 0
+
+                    AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                        // Header Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "$customerName · ${processType?.optString("name", "加工") ?: "加工"}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Ink,
+                                    )
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "${maskPhone(phone)} · 医生：$doctorName",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (isUrgent) UrgentBadge()
+                                StatusPill(planStatus(status))
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        HorizontalDivider(color = Color(0xFFF2F3F5))
+                        Spacer(Modifier.height(8.dp))
+
+                        // Detail Rows
+                        InfoRowItem("批次剂数", "第 $batchNo 批 · $totalDose 剂")
+                        if (isDecoction && bagCount > 0) {
+                            InfoRowItem("代煎规格", "$bagCount 袋 · ${volumeMl}ml")
+                        }
+                        InfoRowItem("取货方式", pickupMethodLabel(pickupMethod))
+                        InfoRowItem("计划开工", scheduleDate.ifBlank { "未安排" })
+                        store?.optString("name")?.takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("加工门店", it)
+                        }
+                        plan.optString("startDate").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("实际开工", it.take(16).replace("T", " "))
+                        }
+                        plan.optString("finishDate").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("完成时间", it.take(16).replace("T", " "))
+                        }
+                        plan.optString("remark").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("备注", it)
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // Scrollable Action Buttons Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                onClick = { selectedPlan = plan },
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            ) {
+                                Text("详情", fontSize = 12.sp)
+                            }
+
+                            if (status == 0) { // 待加工
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 1) } }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "开始加工失败" }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("开始加工", fontSize = 12.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.delayPlan(plan.optInt("id"), 1) } }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "延期失败" }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("延期明天", fontSize = 12.sp)
+                                }
+                            }
+
+                            if (status == 1) { // 加工中
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 2) } }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "完成加工失败" }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("加工完成", fontSize = 12.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = { workflowPlan = plan },
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("扫码工序", fontSize = 12.sp)
+                                }
+                            }
+
+                            if (status == 2 && !packageCreated) { // 完成但未生成包裹
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.generatePlanPackage(plan.optInt("id")) } }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "生成包裹失败" }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("生成包裹", fontSize = 12.sp)
+                                }
+                            }
+
+                            if (status != 5) {
+                                OutlinedButton(
+                                    onClick = { editingPlan = plan },
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("编辑", fontSize = 12.sp)
+                                }
+                            }
+
+                            if (status in listOf(0, 1)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.cancelPlan(plan.optInt("id"), "管理员取消") } }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "取消失败" }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("取消", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Pagination
+                if (pages > 1) {
+                    AppPagination(
+                        page = page,
+                        pages = pages,
+                        onPrev = { if (page > 1) page-- },
+                        onNext = { if (page < pages) page++ },
+                    )
+                }
+            }
+        }
+
+        // Pickup Tasks List
+        if (mode == "pickup" && !loading) {
+            if (pickupTasks == null || pickupTasks!!.isEmpty()) {
+                AppEmptyState("暂无待领取任务")
+            } else {
+                pickupTasks!!.forEach { item ->
+                    AppCard(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { selectedPackageDetail = item },
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = item.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Ink,
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "${item.customer} · ${maskPhone(item.phone)}",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                StatusPill(item.method)
+                                StatusPill(item.status)
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        HorizontalDivider(color = Color(0xFFF2F3F5))
+                        Spacer(Modifier.height(8.dp))
+
+                        // Large Pickup Code Highlight
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("取货码：", color = RegularText, fontSize = 13.sp)
+                            Text(
+                                text = item.code,
+                                color = Primary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+
+                        InfoRowItem("完成时间", item.time)
+                        if (item.store.isNotBlank()) {
+                            InfoRowItem("门店", item.store)
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                onClick = { selectedPackageDetail = item },
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            ) {
+                                Text("详情", fontSize = 12.sp)
+                            }
+
+                            if (item.statusCode == 0) {
+                                Spacer(Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "核销失败" }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                ) {
+                                    Text("核销领取", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
     }
-    if (createVisible) AlertDialog(onDismissRequest = { createVisible = false }, title = { Text("新建加工计划") }, text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text("处方", color = Muted, fontSize = 12.sp); prescriptions.take(8).forEach { prescription -> SegmentedButton("${prescription.optString("prescriptionNo")} · ${prescription.optString("customerName")}", prescriptionId == prescription.optInt("id")) { prescriptionId = prescription.optInt("id") } }; Spacer(Modifier.height(8.dp)); Text("加工类型", color = Muted, fontSize = 12.sp); processTypes.take(6).forEach { type -> SegmentedButton(type.optString("name"), processTypeId == type.optInt("id")) { processTypeId = type.optInt("id") } }; OutlinedTextField(totalDose, { totalDose = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("总剂数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true); OutlinedTextField(processDate, { processDate = it }, Modifier.fillMaxWidth(), label = { Text("加工日期 YYYY-MM-DD") }, singleLine = true); val decoction = processTypes.firstOrNull { it.optInt("id") == processTypeId }?.let { it.optString("code") == "DECOCTION" || it.optString("name") == "代煎" } == true; if (decoction) { OutlinedTextField(bagCount, { bagCount = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("袋数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true); OutlinedTextField(volumeMl, { volumeMl = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("每袋毫升数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true) } } }, confirmButton = { val decoction = processTypes.firstOrNull { it.optInt("id") == processTypeId }?.let { it.optString("code") == "DECOCTION" || it.optString("name") == "代煎" } == true; Button(enabled = prescriptionId > 0 && processTypeId > 0 && totalDose.toIntOrNull()?.let { it > 0 } == true && (!decoction || (bagCount.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true)), onClick = { val payload = JSONObject().put("prescriptionId", prescriptionId).put("processTypeId", processTypeId).put("totalDose", totalDose.toInt()).put("batchNo", 1).put("scheduleType", 1).put("processDate", processDate).put("pickupMethod", 0); if (decoction) { payload.put("bagCount", bagCount.toInt()); payload.put("volumeMl", volumeMl.toInt()) }; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.createProcessingPlan(payload) } }.onSuccess { createVisible = false; reload++ }.onFailure { error = it.message ?: "创建加工计划失败" } } }) { Text("创建") } }, dismissButton = { TextButton({ createVisible = false }) { Text("取消") } })
+
+    // Dialogs
+    selectedPlan?.let { plan ->
+        PlanDetailDialog(
+            plan = plan,
+            onClose = { selectedPlan = null },
+            onReload = { selectedPlan = null; reload++ },
+        )
+    }
+
+    if (createPlanVisible || editingPlan != null) {
+        ProcessingPlanFormDialog(
+            initial = editingPlan,
+            stores = stores,
+            onClose = { createPlanVisible = false; editingPlan = null },
+            onSaved = { createPlanVisible = false; editingPlan = null; reload++ },
+            onError = { error = it },
+        )
+    }
+
+    workflowPlan?.let { plan ->
+        WorkflowOperationDialog(
+            plan = plan,
+            onClose = { workflowPlan = null; reload++ },
+        )
+    }
+
+    selectedPackageDetail?.let { item ->
+        PackageDetailDialogV2(
+            item = item,
+            onDismiss = { selectedPackageDetail = null },
+            onReload = { selectedPackageDetail = null; reload++ },
+        )
+    }
 }
 
 @Composable
-private fun PlanDetailDialog(plan: JSONObject, onClose: () -> Unit, onDelete: (Int) -> Unit) {
+internal fun PlanDetailDialog(
+    plan: JSONObject,
+    onClose: () -> Unit,
+    onReload: () -> Unit,
+) {
     val prescription = plan.optJSONObject("prescription")
-    val customer = prescription?.optString("customerName", "客户") ?: plan.optString("customerName", "客户")
-    val text = listOf(
-        "顾客：$customer",
-        "手机号：${prescription?.optString("phone", "-") ?: "-"}",
-        "批次：第${plan.optInt("batchNo", 1)}批",
-        "剂数：${plan.optInt("totalDose", 0)}剂",
-        "状态：${planStatus(plan.optInt("status", 0))}",
-        "备注：${plan.optString("processRemark", plan.optString("remark", "-"))}",
-    ).joinToString("\n")
+    val processType = plan.optJSONObject("processType")
+    val store = plan.optJSONObject("store")
+    val customerName = plan.optString("customerName").ifBlank { prescription?.optString("customerName", "-") ?: "-" }
+    val phone = plan.optString("customerPhone").ifBlank { prescription?.optString("phone", "-") ?: "-" }
+    val status = plan.optInt("status")
+
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("加工计划详情") },
-        text = { Text(text, color = Ink) },
+        title = { Text("加工计划详情", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                InfoRowItem("顾客姓名", customerName)
+                InfoRowItem("联系电话", phone)
+                InfoRowItem("加工类型", processType?.optString("name", "加工") ?: "加工")
+                InfoRowItem("加工状态", planStatus(status), isBold = true, valueColor = Primary)
+                InfoRowItem("批次剂数", "第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂")
+                InfoRowItem("取货方式", pickupMethodLabel(plan.optInt("pickupMethod", 0)))
+                InfoRowItem("计划开工", plan.optString("scheduledDate", "-").take(10))
+                store?.optString("name")?.let { InfoRowItem("加工门店", it) }
+                plan.optString("startDate").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", it.take(16).replace("T", " ")) }
+                plan.optString("finishDate").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", it.take(16).replace("T", " ")) }
+                plan.optString("remark").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
+            }
+        },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (plan.optInt("status") == 0) OutlinedButton({ onDelete(plan.optInt("id")) }) { Text("删除", color = Danger) }
-                Button(onClose) { Text("关闭") }
+            Button(onClick = onClose) {
+                Text("关闭")
             }
         },
     )
 }
 
 @Composable
-private fun WorkflowDialog(plan: JSONObject, onClose: () -> Unit) {
-    var workflow by remember { mutableStateOf<JSONObject?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var equipmentCode by remember { mutableStateOf("") }
-    var portionNo by remember { mutableStateOf("1") }
-    var stage by remember { mutableStateOf(3) }
+internal fun ProcessingPlanFormDialog(
+    initial: JSONObject?,
+    stores: List<JSONObject>,
+    onClose: () -> Unit,
+    onSaved: () -> Unit,
+    onError: (String) -> Unit,
+) {
+    val isEdit = initial != null
+    var customerName by remember(initial) { mutableStateOf(initial?.optString("customerName").orEmpty()) }
+    var phone by remember(initial) { mutableStateOf(initial?.optString("customerPhone").orEmpty()) }
+    var totalDose by remember(initial) { mutableStateOf(initial?.optInt("totalDose", 7)?.toString() ?: "7") }
+    var bagCount by remember(initial) { mutableStateOf(initial?.optInt("bagCount", 14)?.toString() ?: "14") }
+    var volumeMl by remember(initial) { mutableStateOf(initial?.optInt("volumeMl", 200)?.toString() ?: "200") }
+    var pickupMethod by remember(initial) { mutableStateOf(initial?.optInt("pickupMethod", 0) ?: 0) }
+    var scheduledDate by remember(initial) { mutableStateOf(initial?.optString("scheduledDate", LocalDate.now().toString())?.take(10) ?: LocalDate.now().toString()) }
+    var isUrgent by remember(initial) { mutableStateOf(initial?.optBoolean("isUrgent") == true || initial?.optInt("isUrgent") == 1) }
+    var remark by remember(initial) { mutableStateOf(initial?.optString("remark").orEmpty()) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) scope.launch {
-            busy = true
-            runCatching { withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.use { input -> ApiClient.completeDispensing(plan.optInt("id"), "dispensing-${System.currentTimeMillis()}.jpg", context.contentResolver.getType(uri) ?: "image/jpeg", input.readBytes()) } ?: throw IllegalStateException("无法读取照片") } }
-                .onSuccess { workflow = it }
-                .onFailure { error = it.message ?: "上传调配照片失败" }
-            busy = false
-        }
-    }
-    LaunchedEffect(plan.optInt("id")) {
-        runCatching { withContext(Dispatchers.IO) { ApiClient.processingWorkflow(plan.optInt("id")) } }
-            .onSuccess { workflow = it }
-            .onFailure { error = it.message ?: "工序加载失败" }
-    }
-    val usages = workflow?.optJSONArray("equipmentUsages")
+
     AlertDialog(
-        onDismissRequest = onClose,
-        confirmButton = { Button(onClose) { Text("关闭") } },
-        title = { Text("工序详情") },
+        onDismissRequest = { if (!busy) onClose() },
+        title = { Text(if (isEdit) "编辑加工计划" else "新建加工计划", fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                when {
-                    error != null -> Text(error!!, color = Danger)
-                    workflow == null -> Text("加载中...", color = Muted)
-                    else -> {
-                        val records = usages ?: JSONArray()
-                        Text("当前阶段：${workflow!!.optInt("currentStage", 0)}", fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
-                        if (workflow!!.optString("dispensingCompletedAt").isBlank()) Button(enabled = !busy, onClick = { photoLauncher.launch("image/*") }, shape = RoundedCornerShape(6.dp)) { Text(if (busy) "上传中..." else "上传调配完成照片") }
-                        Text("扫码工序操作", fontWeight = FontWeight.SemiBold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { SegmentedButton("浸泡", stage == 3) { stage = 3 }; SegmentedButton("煎煮", stage == 4) { stage = 4 } }
-                        OutlinedTextField(equipmentCode, { equipmentCode = it }, Modifier.fillMaxWidth(), label = { Text("设备编号或二维码") }, singleLine = true)
-                        OutlinedTextField(portionNo, { portionNo = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(), label = { Text("分组编号") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                        Button(enabled = !busy && equipmentCode.isNotBlank() && portionNo.toIntOrNull()?.let { it > 0 } == true, onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.startEquipmentUsage(plan.optInt("id"), JSONObject().put("stage", stage).put("portionNo", portionNo.toInt()).put("equipmentCode", equipmentCode.trim()).put("requestId", "android-${System.currentTimeMillis()}")) } }.onSuccess { workflow = it }.onFailure { error = it.message ?: "开始工序失败" }; busy = false } }, shape = RoundedCornerShape(6.dp)) { Text(if (busy) "提交中..." else "开始工序") }
-                        Spacer(Modifier.height(8.dp))
-                        if (records.length() == 0) Text("暂无设备工序记录", color = Muted)
-                        for (i in 0 until records.length()) {
-                            val usage = records.getJSONObject(i)
-                            val usageStage = usage.optInt("stage")
-                            val stageText = when (usageStage) { 3 -> "浸泡"; 4 -> "煎煮"; 5 -> "打包"; else -> "工序" }
-                            val usageStatus = usage.optInt("status")
-                            val state = when (usageStatus) { 1 -> "进行中"; 3 -> "已作废"; else -> "已完成" }
-                            Text("第${usage.optInt("portionNo", 0)}组 · $stageText · $state", color = Ink)
-                            Text(usage.optString("startedAt", "-"), color = Muted, fontSize = 12.sp)
-                            if (usageStatus == 1) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (usageStage == 4) Button(enabled = !busy && equipmentCode.isNotBlank(), onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.startPackaging(plan.optInt("id"), usage.optInt("id"), JSONObject().put("equipmentCode", equipmentCode.trim()).put("requestId", "android-${System.currentTimeMillis()}")) } }.onSuccess { workflow = it }.onFailure { error = it.message ?: "开始打包失败" }; busy = false } }, shape = RoundedCornerShape(6.dp)) { Text("开始打包") }
-                                if (usageStage == 5) Button(enabled = !busy, onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.finishEquipmentUsage(plan.optInt("id"), usage.optInt("id")) } }.onSuccess { workflow = it }.onFailure { error = it.message ?: "完成打包失败" }; busy = false } }, shape = RoundedCornerShape(6.dp)) { Text("完成打包") }
-                                OutlinedButton(enabled = !busy, onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.voidEquipmentUsage(plan.optInt("id"), usage.optInt("id"), "安卓端撤销") } }.onSuccess { workflow = it }.onFailure { error = it.message ?: "撤销失败" }; busy = false } }, shape = RoundedCornerShape(6.dp)) { Text("撤销") }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                        }
-                        if (workflow!!.optBoolean("canCompleteWorkflow") || workflow!!.optBoolean("canFinalizeWorkflow")) Button(enabled = !busy, onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 2) } }.onSuccess { onClose() }.onFailure { error = it.message ?: "完成加工失败" }; busy = false } }, shape = RoundedCornerShape(6.dp)) { Text("完成加工") }
+                OutlinedTextField(
+                    value = customerName,
+                    onValueChange = { customerName = it },
+                    label = { Text("顾客姓名") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it.filter(Char::isDigit).take(11) },
+                    label = { Text("联系手机号") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = totalDose,
+                        onValueChange = { totalDose = it.filter(Char::isDigit) },
+                        label = { Text("总剂数") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    OutlinedTextField(
+                        value = bagCount,
+                        onValueChange = { bagCount = it.filter(Char::isDigit) },
+                        label = { Text("代煎袋数") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = scheduledDate,
+                    onValueChange = { scheduledDate = it },
+                    label = { Text("计划开工日期 (YYYY-MM-DD)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("取货方式", color = Muted, fontSize = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (method, label) ->
+                        SegmentedButton(label, pickupMethod == method) { pickupMethod = method }
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("加急处理", color = if (isUrgent) Danger else Ink, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.weight(1f))
+                    Switch(checked = isUrgent, onCheckedChange = { isUrgent = it })
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = { Text("加工要求与备注") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !busy && customerName.isNotBlank() && totalDose.toIntOrNull()?.let { it > 0 } == true,
+                onClick = {
+                    busy = true
+                    val payload = JSONObject()
+                        .put("customerName", customerName.trim())
+                        .put("customerPhone", phone.trim())
+                        .put("totalDose", totalDose.toIntOrNull() ?: 7)
+                        .put("bagCount", bagCount.toIntOrNull() ?: 14)
+                        .put("volumeMl", volumeMl.toIntOrNull() ?: 200)
+                        .put("pickupMethod", pickupMethod)
+                        .put("scheduledDate", scheduledDate.trim())
+                        .put("isUrgent", isUrgent)
+                        .put("remark", remark.trim())
+
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                if (isEdit) {
+                                    ApiClient.updatePlan(initial!!.optInt("id"), payload)
+                                } else {
+                                    ApiClient.createPlan(payload)
+                                }
+                            }
+                        }.onSuccess {
+                            onSaved()
+                        }.onFailure {
+                            onError(it.message ?: "保存计划失败")
+                        }
+                        busy = false
+                    }
+                },
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(if (busy) "保存中..." else "保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { if (!busy) onClose() }) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+internal fun WorkflowOperationDialog(
+    plan: JSONObject,
+    onClose: () -> Unit,
+) {
+    var workflow by remember { mutableStateOf<JSONObject?>(null) }
+    var stage by remember { mutableStateOf(3) } // 3=浸泡, 4=煎煮, 5=打包
+    var equipmentCode by remember { mutableStateOf("") }
+    var portionNo by remember { mutableStateOf("1") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(plan) {
+        runCatching { withContext(Dispatchers.IO) { ApiClient.planWorkflow(plan.optInt("id")) } }
+            .onSuccess { workflow = it }
+            .onFailure { error = it.message ?: "加载工序失败" }
+    }
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("工序操作与设备关联", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (error != null) {
+                    Text(error!!, color = Danger, fontSize = 12.sp)
+                    Spacer(Modifier.height(8.dp))
+                }
+                Text("工序阶段选择", color = Muted, fontSize = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SegmentedButton("浸泡", stage == 3) { stage = 3 }
+                    SegmentedButton("煎煮", stage == 4) { stage = 4 }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = equipmentCode,
+                    onValueChange = { equipmentCode = it },
+                    label = { Text("设备编号或二维码") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = portionNo,
+                    onValueChange = { portionNo = it.filter(Char::isDigit) },
+                    label = { Text("分组编号") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    enabled = !busy && equipmentCode.isNotBlank() && portionNo.toIntOrNull()?.let { it > 0 } == true,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.startEquipmentUsage(
+                                        plan.optInt("id"),
+                                        JSONObject()
+                                            .put("stage", stage)
+                                            .put("portionNo", portionNo.toInt())
+                                            .put("equipmentCode", equipmentCode.trim())
+                                            .put("requestId", "android-${System.currentTimeMillis()}"),
+                                    )
+                                }
+                            }.onSuccess {
+                                workflow = it
+                                equipmentCode = ""
+                            }.onFailure {
+                                error = it.message ?: "开始工序失败"
+                            }
+                            busy = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(if (busy) "提交中..." else "开始该阶段工序")
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onClose) {
+                Text("完成")
             }
         },
     )
