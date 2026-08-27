@@ -101,6 +101,9 @@ internal fun ProcessingScreenV2() {
     var keyword by remember { mutableStateOf("") }
     var plans by remember { mutableStateOf<List<JSONObject>?>(null) }
     var pickupTasks by remember { mutableStateOf<List<PackageItem>?>(null) }
+    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var selectedStoreId by remember { mutableStateOf("") }
+    var stats by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var detailPlan by remember { mutableStateOf<JSONObject?>(null) }
     var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
@@ -116,25 +119,58 @@ internal fun ProcessingScreenV2() {
     var bagCount by remember { mutableStateOf("1") }
     var volumeMl by remember { mutableStateOf("200") }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { runCatching { withContext(Dispatchers.IO) { Pair(ApiClient.prescriptions(status = 0), ApiClient.dictionaries("ProcessType")) } }.onSuccess { (p, types) -> prescriptions = (0 until p.length()).map { p.getJSONObject(it) }; processTypes = (0 until types.length()).map { types.getJSONObject(it) }; prescriptionId = prescriptions.firstOrNull()?.optInt("id", 0) ?: 0; processTypeId = processTypes.firstOrNull()?.optInt("id", 0) ?: 0 }.onFailure { error = it.message ?: "加载加工计划选项失败" } }
-    LaunchedEffect(mode, view, keyword, reload) {
+    LaunchedEffect(Unit) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                Triple(ApiClient.prescriptions(status = 0), ApiClient.dictionaries("ProcessType"), ApiClient.availableStores())
+            }
+        }.onSuccess { (p, types, storeValues) ->
+            prescriptions = (0 until p.length()).map { p.getJSONObject(it) }
+            processTypes = (0 until types.length()).map { types.getJSONObject(it) }
+            stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
+            prescriptionId = prescriptions.firstOrNull()?.optInt("id", 0) ?: 0
+            processTypeId = processTypes.firstOrNull()?.optInt("id", 0) ?: 0
+            if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
+        }.onFailure { error = it.message ?: "加载加工计划选项失败" }
+    }
+    LaunchedEffect(selectedStoreId, reload) {
+        runCatching { withContext(Dispatchers.IO) { ApiClient.stats(selectedStoreId.toIntOrNull()) } }
+            .onSuccess { stats = it }
+    }
+    LaunchedEffect(mode, view, keyword, selectedStoreId, reload) {
         error = null
         if (mode == "plans") {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.plans(view, keyword) } }.onSuccess { a -> plans = (0 until a.length()).map { a.getJSONObject(it) } }.onFailure { error = it.message ?: "加载加工计划失败" }
+            runCatching { withContext(Dispatchers.IO) { ApiClient.plans(view, keyword, selectedStoreId.toIntOrNull()) } }.onSuccess { a -> plans = (0 until a.length()).map { a.getJSONObject(it) } }.onFailure { error = it.message ?: "加载加工计划失败" }
         } else {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.packages(source = "processing", dateScope = "pickup-workbench", keyword = keyword) } }.onSuccess { a -> pickupTasks = (0 until a.length()).map { packageItem(a.getJSONObject(it)) } }.onFailure { error = it.message ?: "加载待领取任务失败" }
+            runCatching { withContext(Dispatchers.IO) { ApiClient.packages(source = "processing", dateScope = "pickup-workbench", keyword = keyword, storeId = selectedStoreId.toIntOrNull()) } }.onSuccess { a -> pickupTasks = (0 until a.length()).map { packageItem(a.getJSONObject(it)) } }.onFailure { error = it.message ?: "加载待领取任务失败" }
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { SegmentedButton("加工计划", mode == "plans") { mode = "plans"; view = "today-all" }; SegmentedButton("待领取", mode == "pickup") { mode = "pickup" }; Spacer(Modifier.weight(1f)); if (mode == "plans") OutlinedButton({ createVisible = true }, shape = RoundedCornerShape(6.dp)) { Text("新建计划") } }
         Spacer(Modifier.height(12.dp)); OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("姓名、手机号或备注") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
-        if (mode == "plans") { Spacer(Modifier.height(10.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("today-all" to "今日全部", "today-waiting" to "待加工", "overdue" to "逾期", "processing" to "加工中", "today-finished" to "今日完成", "tomorrow" to "明日").forEach { (key, label) -> SegmentedButton(label, view == key) { view = key } } } }
+        if (mode == "plans") {
+            stats?.let { value ->
+                Spacer(Modifier.height(12.dp))
+                StatsGrid(listOf("今日全部" to (value.optInt("waitingCount") + value.optInt("processingCount") + value.optInt("todayFinished")).toString(), "待加工" to value.optInt("waitingCount").toString(), "逾期未开工" to value.optInt("overdueCount").toString(), "加工中" to value.optInt("processingCount").toString(), "等待顾客" to value.optInt("waitingNoticeCount").toString(), "明日加工" to value.optInt("tomorrowWaitingCount").toString(), "全部" to value.optInt("processingPlanTotalCount").toString()))
+            }
+            Spacer(Modifier.height(10.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("today-all" to "今日全部", "today-waiting" to "待加工", "overdue" to "逾期", "processing" to "加工中", "notice" to "等待顾客", "tomorrow" to "明日加工", "all" to "全部").forEach { (key, label) -> SegmentedButton(label, view == key) { view = key } } }
+        }
+        if (stores.size > 1) {
+            Spacer(Modifier.height(10.dp)); Text("查询门店", color = Muted, fontSize = 12.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentedButton("全部门店", selectedStoreId.isBlank()) { selectedStoreId = "" }
+                stores.forEach { store ->
+                    val id = store.opt("id")?.toString().orEmpty()
+                    SegmentedButton(store.optString("name", "门店"), selectedStoreId == id) { selectedStoreId = id }
+                }
+            }
+        }
         Spacer(Modifier.height(14.dp)); error?.let { Text(it, color = Danger, fontSize = 13.sp) }; if (plans == null && pickupTasks == null && error == null) Text("加载中...", color = Muted)
         if (mode == "plans") {
             val values = plans.orEmpty(); if (plans != null && values.isEmpty()) Text("暂无加工计划", color = Muted)
             values.forEach { plan ->
                 val id = plan.optInt("id", 0); val status = plan.optInt("status", 0); val prescription = plan.optJSONObject("prescription"); val customer = prescription?.optString("customerName", "客户") ?: plan.optString("customerName", "客户"); val phone = prescription?.optString("phone", "-") ?: plan.optString("customerPhone", "-"); val processType = plan.optJSONObject("processType")?.optString("name", "加工") ?: "加工"; val store = plan.optJSONObject("store")?.optString("name", "") ?: ""
-                Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("$customer · $processType", fontWeight = FontWeight.SemiBold); Text("$phone${if (store.isNotBlank()) " · $store" else ""}", color = Muted, fontSize = 12.sp) }; StatusPill(planStatus(status)) }; Spacer(Modifier.height(8.dp)); Text("第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂 · ${plan.optString("processDate", "等待通知").take(10)}", color = Muted, fontSize = 13.sp); plan.optString("processRemark", "").takeIf { it.isNotBlank() }?.let { Text("备注：$it", color = Muted, fontSize = 12.sp) }; Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; when { status == 0 -> Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 1) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "开始加工失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("开始加工") }; status in 1..4 -> OutlinedButton({ workflowPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("工序详情") } }; if (status == 2) Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.generatePackage(id) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "生成包裹失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("生成包裹") }; if (status == 1) OutlinedButton(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 5) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "取消失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("取消加工") } } } }
+                Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("$customer · $processType", fontWeight = FontWeight.SemiBold); Text("$phone${if (store.isNotBlank()) " · $store" else ""}", color = Muted, fontSize = 12.sp) }; StatusPill(planStatus(status)) }; Spacer(Modifier.height(8.dp)); Text("第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂 · ${plan.optString("processDate", "等待通知").take(10)}", color = Muted, fontSize = 13.sp); Text("取货方式：${when (plan.optInt("pickupMethod", 0)) { 0 -> "自提"; 1 -> "跑腿"; 2 -> "快递"; else -> "-" }}${if (plan.optBoolean("isUrgent")) " · 加急" else ""}", color = Muted, fontSize = 12.sp); plan.optString("processRemark", "").takeIf { it.isNotBlank() }?.let { Text("备注：$it", color = Muted, fontSize = 12.sp) }; Spacer(Modifier.height(10.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton({ detailPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("详情") }; when { status == 0 && plan.optInt("scheduleType", 1) == 2 -> Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.receiveNotice(id, JSONObject().put("processDate", LocalDate.now().toString())) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "安排加工失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("安排今天") }; status == 0 -> Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 1) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "开始加工失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("开始加工") }; status in 1..4 -> OutlinedButton({ workflowPlan = plan }, shape = RoundedCornerShape(6.dp)) { Text("工序详情") } }; if (status == 0) OutlinedButton(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.delayPlan(id, JSONObject().put("scheduleType", 1).put("processDate", LocalDate.now().plusDays(1).toString())) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "延期失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("延期明天") }; if (status == 2) Button(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.generatePackage(id) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "生成包裹失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("生成包裹") }; if (status == 1) OutlinedButton(enabled = busyId == null, onClick = { busyId = id; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(id, 5) } }.onSuccess { reload++ }.onFailure { error = it.message ?: "取消失败" }; busyId = null } }, shape = RoundedCornerShape(6.dp)) { Text("取消加工") } } } }
             }
         } else {
             val values = pickupTasks.orEmpty(); if (pickupTasks != null && values.isEmpty()) Text("暂无待领取任务", color = Muted)

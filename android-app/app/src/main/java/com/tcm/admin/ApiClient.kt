@@ -49,7 +49,7 @@ object ApiClient {
         return AdminSession(result.getString("token"), result.getJSONObject("user")).also { token = it.token }
     }
 
-    fun stats(): JSONObject = request("/admin/stats").getJSONObject("data")
+    fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray {
         val query = buildList {
             add("page=1"); add("pageSize=100")
@@ -64,11 +64,12 @@ object ApiClient {
     fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
     fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
     fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
-    fun plans(view: String = "today-all", keyword: String = ""): JSONArray {
+    fun plans(view: String = "today-all", keyword: String = "", storeId: Int? = null): JSONArray {
         val query = buildList {
             add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
             add("page=1")
             add("pageSize=100")
+            storeId?.let { add("storeId=$it") }
             if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
         }.joinToString("&")
         return list(request("/admin/processing-plans?$query").getJSONObject("data"))
@@ -78,11 +79,14 @@ object ApiClient {
     fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
     fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
     fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
-    fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = ""): JSONArray {
+    fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {
         val query = buildList {
             add("page=1")
             add("pageSize=100")
+            add("sortBy=${java.net.URLEncoder.encode(sortBy, "UTF-8")}")
+            add("sortOrder=desc")
             status?.let { add("status=$it") }
+            storeId?.let { add("storeId=$it") }
             source?.let { add("source=${java.net.URLEncoder.encode(it, "UTF-8")}") }
             dateScope?.let { add("dateScope=${java.net.URLEncoder.encode(it, "UTF-8")}") }
             if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
@@ -94,12 +98,26 @@ object ApiClient {
     fun createPackage(payload: JSONObject): JSONObject = request("/admin/packages", "POST", payload).getJSONObject("data")
     fun updatePackage(id: Int, payload: JSONObject): JSONObject = request("/admin/packages/$id", "PUT", payload).getJSONObject("data")
     fun deletePackage(id: Int): JSONObject = request("/admin/packages/$id", "DELETE").getJSONObject("data")
-    fun inventory(keyword: String = ""): JSONArray = list(request("/admin/e6-pharmacy/products?page=1&pageSize=50${keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""}").getJSONObject("data"))
+    fun inventory(keyword: String = "", storeId: Int? = null): JSONArray = list(request(
+        "/admin/e6-pharmacy/products?page=1&pageSize=50" +
+            (storeId?.let { "&storeId=$it" } ?: "") +
+            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
+    ).getJSONObject("data"))
+    fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
     fun differences(): JSONObject = request("/admin/product-differences/stats").getJSONObject("data")
     fun differenceProducts(): JSONArray = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
     fun differenceLogs(): JSONArray = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
     fun stocktakings(): JSONArray = list(request("/admin/yd-goods-check?page=1&pageSize=30").getJSONObject("data"))
-    fun transfers(): JSONArray = list(request("/admin/store-transfers?page=1&pageSize=30").getJSONObject("data"))
+    fun transfers(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false): JSONArray {
+        val query = buildList {
+            add("page=1"); add("pageSize=100")
+            keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            if (overdue) add("overdue=1")
+        }.joinToString("&")
+        return list(request("/admin/store-transfers?$query").getJSONObject("data"))
+    }
+    fun transferStats(storeId: Int? = null): JSONObject = request("/admin/store-transfers/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun herbLocations(storeId: String? = null): JSONObject = request("/admin/herb-locations${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun stores(): JSONArray = request("/admin/herb-locations/stores").getJSONArray("data")
     fun assignHerbLocation(payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments", "POST", payload).getJSONObject("data")

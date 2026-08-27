@@ -170,6 +170,9 @@ internal fun PackageDetailDialogV2(item: PackageItem, onClose: () -> Unit) {
 internal fun PackagesScreenV3(onOpen: (PackageItem) -> Unit) {
     var keyword by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<Int?>(null) }
+    var sortBy by remember { mutableStateOf("createdAt") }
+    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var selectedStoreId by remember { mutableStateOf("") }
     var items by remember { mutableStateOf<List<PackageItem>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
@@ -183,18 +186,73 @@ internal fun PackagesScreenV3(onOpen: (PackageItem) -> Unit) {
     var tracking by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(keyword, status, reload) {
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
+            .onSuccess { values ->
+                stores = (0 until values.length()).map { values.getJSONObject(it) }
+                if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
+            }
+    }
+    LaunchedEffect(keyword, status, selectedStoreId, sortBy, reload) {
         error = null
-        runCatching { withContext(Dispatchers.IO) { ApiClient.packages(status = status, keyword = keyword) } }
+        runCatching {
+            withContext(Dispatchers.IO) {
+                ApiClient.packages(
+                    status = status,
+                    keyword = keyword,
+                    storeId = selectedStoreId.toIntOrNull(),
+                    sortBy = sortBy,
+                )
+            }
+        }
             .onSuccess { array -> items = (0 until array.length()).map { packageItem(array.getJSONObject(it)) } }
             .onFailure { error = it.message ?: "加载包裹失败" }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button({ form = true }) { Text("新增包裹") }; OutlinedButton({ verify = true }) { Text("取货码核销") } }
         Spacer(Modifier.height(10.dp)); OutlinedTextField(keyword, { keyword = it }, Modifier.fillMaxWidth(), placeholder = { Text("取货码、手机号、姓名、物品") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+        if (stores.size > 1) {
+            Spacer(Modifier.height(10.dp)); Text("查询门店", color = Muted, fontSize = 12.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentedButton("全部门店", selectedStoreId.isBlank()) { selectedStoreId = "" }
+                stores.forEach { store ->
+                    val id = store.opt("id")?.toString().orEmpty()
+                    SegmentedButton(store.optString("name", "门店"), selectedStoreId == id) { selectedStoreId = id }
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("全部", status == null) { status = null }; SegmentedButton("待取", status == 0) { status = 0 }; SegmentedButton("已取", status == 1) { status = 1 } }
+        Spacer(Modifier.height(8.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("排序", color = Muted, fontSize = 12.sp)
+            SegmentedButton("录入时间", sortBy == "createdAt") { sortBy = "createdAt" }
+            SegmentedButton("取货时间", sortBy == "pickedAt") { sortBy = "pickedAt" }
+        }
         Spacer(Modifier.height(12.dp)); error?.let { Text(it, color = Danger, fontSize = 13.sp) }; if (items == null && error == null) Text("加载中...", color = Muted); if (items != null && items!!.isEmpty()) Text("暂无包裹", color = Muted)
-        items.orEmpty().forEach { item -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(8.dp)) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.name, fontWeight = FontWeight.SemiBold); Text("${item.customer} · ${item.phone}", color = Muted, fontSize = 12.sp) }; StatusPill(item.status) }; Spacer(Modifier.height(8.dp)); Text("取货码：${item.code}", fontWeight = FontWeight.Bold, color = Primary, fontSize = 17.sp); Text("${item.method} · ${item.time}", color = Muted, fontSize = 12.sp) } } }
+        items.orEmpty().forEach { item ->
+            Card(
+                Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(item) },
+                colors = CardDefaults.cardColors(Color.White),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.name, fontWeight = FontWeight.SemiBold)
+                            Text("收件人：${item.customer} · ${item.phone}", color = Muted, fontSize = 12.sp)
+                        }
+                        StatusPill(item.status)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("取货码：${item.code}", fontWeight = FontWeight.Bold, color = Primary, fontSize = 17.sp)
+                    Text("${item.method}${item.store.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""}", color = Muted, fontSize = 12.sp)
+                    Text(if (sortBy == "pickedAt" && item.statusCode == 1) "取货时间：${item.time}" else "录入时间：${item.time}", color = Muted, fontSize = 12.sp)
+                    if (item.statusCode == 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("点击查看详情，可编辑或核销", color = Primary, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
     }
     if (form) AlertDialog(onDismissRequest = { if (!busy) form = false }, title = { Text("新增包裹") }, text = { Column { OutlinedTextField(itemName, { itemName = it }, Modifier.fillMaxWidth(), label = { Text("物品名称") }, singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(receiverName, { receiverName = it }, Modifier.fillMaxWidth(), label = { Text("收件人") }, singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(receiverPhone, { receiverPhone = it }, Modifier.fillMaxWidth(), label = { Text("手机号（可选）") }, singleLine = true); Spacer(Modifier.height(8.dp)); Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) -> SegmentedButton(label, method == key) { method = key } }; }; if (method == 2) OutlinedTextField(tracking, { tracking = it }, Modifier.fillMaxWidth(), label = { Text("快递单号") }, singleLine = true) } }, confirmButton = { Button(enabled = itemName.isNotBlank() && receiverName.isNotBlank() && !busy && (method != 2 || tracking.isNotBlank()), onClick = { busy = true; scope.launch { runCatching { withContext(Dispatchers.IO) { ApiClient.createPackage(JSONObject().put("itemName", itemName.trim()).put("receiverName", receiverName.trim()).put("receiverPhone", receiverPhone.trim()).put("pickupMethod", method).put("expressTrackingNo", tracking.trim())) } }.onSuccess { form = false; itemName = ""; receiverName = ""; receiverPhone = ""; tracking = ""; reload++ }.onFailure { error = it.message ?: "新增包裹失败" }; busy = false } }) { Text(if (busy) "提交中..." else "创建") } }, dismissButton = { TextButton({ if (!busy) form = false }) { Text("取消") } })
     if (verify) {
