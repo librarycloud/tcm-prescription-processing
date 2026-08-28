@@ -71,10 +71,18 @@ internal val WarningSoft: Color @Composable get() = MaterialTheme.colorScheme.se
 internal val Danger: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val DangerSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
 // Method-specific accents keep logistics labels visually distinct from workflow status labels.
+internal val Info: Color = Color(0xFF13B8B0)
+internal val InfoSoft: Color = Color(0xFFE6FFFB)
+internal val Indigo: Color = Color(0xFF597EF7)
+internal val IndigoSoft: Color = Color(0xFFF0F5FF)
+internal val Pink: Color = Color(0xFFD946A8)
+internal val PinkSoft: Color = Color(0xFFFFF0F6)
+internal val Brown: Color = Color(0xFFA16207)
+internal val BrownSoft: Color = Color(0xFFFEF3C7)
 private val RunnerColor = Color(0xFFE6A23C)
 private val RunnerSoftColor = Color(0xFFFFF1D6)
-private val CourierColor = Color(0xFF8E6BBE)
-private val CourierSoftColor = Color(0xFFF1E8FF)
+private val CourierColor = Color(0xFF8064AA)
+private val CourierSoftColor = Color(0xFFF0E9F8)
 internal val CardShape = RoundedCornerShape(10.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
@@ -161,9 +169,17 @@ internal fun StatusPill(
             Pair(RunnerColor, RunnerSoftColor)
         text == "快递" ->
             Pair(CourierColor, CourierSoftColor)
+        text in listOf("待加工", "待盘点") ->
+            Pair(Indigo, IndigoSoft)
+        text == "盘点中" ->
+            Pair(Pink, PinkSoft)
+        text in listOf("待出库", "借出中") ->
+            Pair(Brown, BrownSoft)
+        text == "部分归还" ->
+            Pair(Info, InfoSoft)
         text in listOf("实货少", "已取消", "逾期", "已逾期", "紧急", "特急", "加急") ->
             Pair(Danger, DangerSoft)
-        text in listOf("加工中", "实货多", "进行中", "待盘点", "盘点中") ->
+        text in listOf("加工中", "实货多", "进行中") ->
             Pair(Primary, PrimarySoft)
         else ->
             Pair(Warning, WarningSoft)

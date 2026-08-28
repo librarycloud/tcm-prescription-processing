@@ -515,7 +515,8 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                                 }
                             }
 
-                            if (status != 5) {
+                            // 完成、待领取、已领取和已取消的计划不再开放完整编辑。
+                            if (status in 0..1) {
                                 OutlinedButton(
                                     onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(plan)) },
                                     shape = RoundedCornerShape(6.dp),
@@ -745,6 +746,7 @@ internal fun ProcessingPlanFormScreen(
     onSaved: () -> Unit,
 ) {
     val isEdit = initial.has("id") && initial.optInt("id") > 0
+    val editLocked = isEdit && initial.optInt("status") !in 0..1
     val initialPrescription = initial.optJSONObject("prescription")
     var prescriptionId by remember(initial) {
         mutableStateOf(initial.optInt("prescriptionId", initialPrescription?.optInt("id", 0) ?: 0))
@@ -774,7 +776,7 @@ internal fun ProcessingPlanFormScreen(
     var remark by remember(initial) { mutableStateOf(initial.displayField("remark", "")) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(if (editLocked) "该加工计划已完成或进入领取流程，不能编辑" else null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -992,8 +994,9 @@ internal fun ProcessingPlanFormScreen(
         }
         Spacer(Modifier.height(16.dp))
         Button(
-            enabled = !busy && !loading && prescriptionId > 0 && processTypeId > 0 && totalDose.toIntOrNull()?.let { it > 0 } == true && (!isDecoction || (bagCount.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true)),
+            enabled = !editLocked && !busy && !loading && prescriptionId > 0 && processTypeId > 0 && totalDose.toIntOrNull()?.let { it > 0 } == true && (!isDecoction || (bagCount.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true)),
             onClick = {
+                if (editLocked) return@Button
                 busy = true
                 error = null
                 val payload = JSONObject()
@@ -1026,7 +1029,7 @@ internal fun ProcessingPlanFormScreen(
             shape = FieldShape,
             colors = ButtonDefaults.buttonColors(containerColor = Primary),
         ) {
-            Text(if (busy) "保存中..." else if (isEdit) "保存修改" else "创建加工计划", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(if (editLocked) "该计划不可编辑" else if (busy) "保存中..." else if (isEdit) "保存修改" else "创建加工计划", fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(20.dp))
     }

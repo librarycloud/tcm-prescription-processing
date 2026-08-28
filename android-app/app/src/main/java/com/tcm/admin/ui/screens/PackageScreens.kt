@@ -443,14 +443,16 @@ internal fun PackageDetailPage(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            OutlinedButton(
-                onClick = { onNavigate(ScreenTarget.PackageForm(pkg)) },
-                shape = FieldShape,
-                modifier = Modifier.weight(1f).height(46.dp),
-            ) {
-                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("编辑包裹")
+            if (pkg.statusCode == 0) {
+                OutlinedButton(
+                    onClick = { onNavigate(ScreenTarget.PackageForm(pkg)) },
+                    shape = FieldShape,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("编辑包裹")
+                }
             }
 
             if (pkg.statusCode == 0) {
