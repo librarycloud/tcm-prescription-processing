@@ -1,10 +1,17 @@
 package com.tcm.admin
 
+import android.Manifest
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.content.pm.PackageManager
+import android.provider.MediaStore
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +21,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -61,6 +70,30 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 
+private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
+
+private fun readProcessingPhoto(context: android.content.Context, uri: Uri): ByteArray {
+    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IllegalStateException("无法读取照片")
+    if (original.size <= MAX_PROCESSING_PHOTO_BYTES) return original
+
+    val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        ?: throw IllegalStateException("无法处理照片")
+    val qualities = intArrayOf(92, 84, 76, 68)
+    try {
+        for (quality in qualities) {
+            val output = java.io.ByteArrayOutputStream()
+            if (bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= MAX_PROCESSING_PHOTO_BYTES) {
+                return output.toByteArray()
+            }
+        }
+    } finally {
+        bitmap.recycle()
+    }
+    throw IllegalStateException("照片压缩后仍超过 5MB，请选择较小的照片")
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
     var mode by remember { mutableStateOf("plans") } // "plans" | "pickup"
@@ -79,7 +112,6 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 
     // Dialog states
     var selectedPlan by remember { mutableStateOf<JSONObject?>(null) }
-    var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -416,13 +448,11 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 
                         Spacer(Modifier.height(12.dp))
 
-                        // Scrollable Action Buttons Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
+                        // Actions wrap into one or two rows instead of requiring horizontal scrolling.
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             OutlinedButton(
                                 onClick = { selectedPlan = plan },
@@ -463,26 +493,12 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                             }
 
                             if (status == 1) { // 加工中
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 2) } }
-                                                .onSuccess { reload++ }
-                                                .onFailure { error = it.message ?: "完成加工失败" }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(6.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                ) {
-                                    Text("加工完成", fontSize = 12.sp)
-                                }
                                 OutlinedButton(
-                                    onClick = { workflowPlan = plan },
-                                    shape = RoundedCornerShape(6.dp),
+                                    onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(6.dp),
                                 ) {
-                                    Text("扫码工序", fontSize = 12.sp)
+                                    Text("流程操作", fontSize = 12.sp)
                                 }
                             }
 
@@ -652,13 +668,6 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
         )
     }
 
-    workflowPlan?.let { plan ->
-        WorkflowOperationDialog(
-            plan = plan,
-            onClose = { workflowPlan = null; reload++ },
-        )
-    }
-
     }
 }
 
@@ -810,7 +819,11 @@ internal fun ProcessingPlanFormScreen(
             Spacer(Modifier.height(14.dp))
             Text("加工方式 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 processTypes.forEach { item ->
                     SegmentedButton(item.displayField("name", "加工"), processTypeId == item.optInt("id"), { processTypeId = item.optInt("id") })
                 }
@@ -1128,6 +1141,277 @@ internal fun ProcessingPlanFormDialog(
             }
         },
     )
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun WorkflowOperationScreen(
+    plan: JSONObject,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var workflow by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var equipmentCode by remember { mutableStateOf("") }
+    var portionNo by remember { mutableStateOf("1") }
+    var stage by remember { mutableStateOf(3) }
+    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun createPhotoUri(): Uri? {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "tcm_dispensing_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/TCM")
+        }
+        return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+    }
+
+    fun reload() {
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { ApiClient.processingWorkflow(plan.optInt("id")) } }
+                .onSuccess { workflow = it; error = null }
+                .onFailure { error = it.message ?: "加载工序失败" }
+        }
+    }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = pendingPhotoUri
+        pendingPhotoUri = null
+        if (!success || uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    ApiClient.completeDispensing(
+                        plan.optInt("id"),
+                        "dispensing_${System.currentTimeMillis()}.jpg",
+                        "image/jpeg",
+                        readProcessingPhoto(context, uri),
+                    )
+                }
+            }.onSuccess { reload() }.onFailure { error = it.message ?: "照片上传失败" }
+            busy = false
+        }
+    }
+    val photoPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            pendingPhotoUri = createPhotoUri()
+            pendingPhotoUri?.let { photoLauncher.launch(it) } ?: run { error = "无法打开相机" }
+        } else {
+            error = "请允许使用相机后再拍照"
+        }
+    }
+    fun launchPhotoCapture() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            pendingPhotoUri = createPhotoUri()
+            pendingPhotoUri?.let { photoLauncher.launch(it) } ?: run { error = "无法打开相机" }
+        } else {
+            photoPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) equipmentCode = value
+    }
+
+    LaunchedEffect(plan) { reload() }
+
+    val detail = workflow
+    val usages = detail?.optJSONArray("equipmentUsages")?.let { array ->
+        (0 until array.length()).map { array.getJSONObject(it) }
+    }.orEmpty()
+    val photos = detail?.optJSONArray("photos")?.length() ?: 0
+    val status = detail?.optInt("status", plan.optInt("status")) ?: plan.optInt("status")
+    val currentStage = detail?.optInt("currentStage", 1) ?: 1
+    val isDecoction = detail?.optBoolean("isDecoction") == true || plan.optJSONObject("processType")?.displayField("name", "") == "代煎"
+    val activeDecoction = usages.firstOrNull { it.optInt("stage") == 4 && it.optInt("status") == 1 }
+    val activePackaging = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
+    val canUpload = status == 1 && currentStage in listOf(1, 2) && photos < 5
+    val canFinish = detail?.optBoolean("canCompleteWorkflow") == true || detail?.optBoolean("canFinalizeWorkflow") == true
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        AppCard {
+            SectionHeader(
+                "加工流程",
+                "${plan.displayField("planCode", "加工计划")} · ${plan.optJSONObject("prescription")?.displayField("customerName", "顾客") ?: "顾客"}",
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoRowItem("当前状态", planStatus(status), isBold = true, valueColor = Primary)
+            InfoRowItem("当前阶段", detail?.optInt("currentStage")?.let { processingStageLabel(it) } ?: "待加载")
+            InfoRowItem("调配照片", "$photos / 5 张")
+        }
+
+        if (error != null) {
+            Spacer(Modifier.height(10.dp))
+            Surface(color = DangerSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                Text(error!!, color = Danger, modifier = Modifier.padding(12.dp), fontSize = 13.sp)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        if (status == 0) {
+            Button(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 1) } }
+                            .onSuccess { reload() }.onFailure { error = it.message ?: "开始加工失败" }
+                        busy = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            ) { Text("开始调配") }
+        }
+
+        AppCard {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("1  调配", fontWeight = FontWeight.Bold, color = Ink)
+                Text(if (photos > 0) "已上传照片" else "待拍照完成", color = if (photos > 0) Success else Muted, fontSize = 13.sp)
+                if (canUpload) {
+                    Button(
+                        enabled = !busy,
+                        onClick = ::launchPhotoCapture,
+                        shape = FieldShape,
+                    ) { Text(if (photos > 0) "补充拍照" else "拍照并完成调配") }
+                }
+            }
+        }
+
+        if (isDecoction) {
+            listOf(3 to "2  浸泡", 4 to "3  煎煮", 5 to "4  打包").forEach { (step, title) ->
+                Spacer(Modifier.height(10.dp))
+                AppCard {
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                    Spacer(Modifier.height(8.dp))
+                    val stageUsages = usages.filter { it.optInt("stage") == step }
+                    if (stageUsages.isEmpty()) {
+                        Text(if (step == 3) "等待调配完成后开始" else "等待上一阶段完成", color = Muted, fontSize = 13.sp)
+                    } else {
+                        stageUsages.forEach { usage ->
+                            val equipment = usage.optJSONObject("equipment")?.displayField("name", "设备") ?: "设备"
+                            InfoRowItem("第 ${usage.optInt("portionNo", 1)} 组", "$equipment · ${if (usage.optInt("status") == 1) "进行中" else "已完成"}")
+                        }
+                    }
+                    if (step == 5 && activePackaging.isNotEmpty()) {
+                        Text("打包进行中，完成后再点击底部加工完成", color = Muted, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        AppCard {
+            Text("设备工序操作", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (isDecoction) {
+                    SegmentedButton("浸泡", stage == 3, { stage = 3 })
+                    SegmentedButton("煎煮", stage == 4, { stage = 4 })
+                    SegmentedButton("打包", stage == 5, { stage = 5 })
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = equipmentCode,
+                onValueChange = { equipmentCode = it },
+                label = { Text("设备编号或二维码") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = portionNo,
+                    onValueChange = { portionNo = it.filter(Char::isDigit) },
+                    label = { Text("分组") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = FieldShape,
+                )
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    shape = FieldShape,
+                ) { Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码设备"); Spacer(Modifier.width(4.dp)); Text("扫码") }
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(
+                enabled = !busy && equipmentCode.isNotBlank() && portionNo.toIntOrNull()?.let { it > 0 } == true,
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                if (stage == 5 && activeDecoction != null) {
+                                    ApiClient.startPackaging(plan.optInt("id"), activeDecoction.optInt("id"), JSONObject().put("equipmentCode", equipmentCode.trim()).put("requestId", "android-${System.currentTimeMillis()}"))
+                                } else {
+                                    ApiClient.startEquipmentUsage(plan.optInt("id"), JSONObject().put("stage", stage).put("portionNo", portionNo.toInt()).put("equipmentCode", equipmentCode.trim()).put("requestId", "android-${System.currentTimeMillis()}"))
+                                }
+                            }
+                        }.onSuccess { equipmentCode = ""; reload() }.onFailure { error = it.message ?: "开始工序失败" }
+                        busy = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            ) { Text(if (busy) "提交中..." else "开始${when (stage) { 3 -> "浸泡"; 4 -> "煎煮"; else -> "打包" }}") }
+        }
+
+        if (canFinish) {
+            Spacer(Modifier.height(10.dp))
+            Button(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                activePackaging.forEach { ApiClient.finishEquipmentUsage(plan.optInt("id"), it.optInt("id")) }
+                                ApiClient.transitionPlan(plan.optInt("id"), 2)
+                            }
+                        }.onSuccess { reload() }.onFailure { error = it.message ?: "完成加工失败" }
+                        busy = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Success),
+                shape = FieldShape,
+            ) { Text("加工完成") }
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth(),
+            shape = FieldShape,
+        ) { Text("返回加工计划") }
+        Spacer(Modifier.height(20.dp))
+    }
+}
+
+private fun processingStageLabel(stage: Int): String = when (stage) {
+    1 -> "调配中"
+    2 -> "调配完成"
+    3 -> "浸泡中"
+    4 -> "煎煮中"
+    5 -> "打包中"
+    6 -> "打包完成"
+    7 -> "加工完成"
+    else -> "待加工"
 }
 
 @Composable

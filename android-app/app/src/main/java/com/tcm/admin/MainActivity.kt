@@ -1,7 +1,6 @@
 package com.tcm.admin
 
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -57,7 +56,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -119,6 +117,39 @@ internal sealed class ScreenTarget {
     object TransferCreate : ScreenTarget()
 }
 
+/** Stable Material 3 roles for the pharmacy workspace. */
+private fun tcmLightColorScheme() = lightColorScheme(
+    primary = Color(0xFF2457A6),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFD9E2FF),
+    onPrimaryContainer = Color(0xFF001A41),
+    inversePrimary = Color(0xFFADC6FF),
+    secondary = Color(0xFF705C00),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFFFE287),
+    onSecondaryContainer = Color(0xFF241A00),
+    tertiary = Color(0xFF376A3E),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFB9F2B8),
+    onTertiaryContainer = Color(0xFF002108),
+    background = Color(0xFFF7FAF9),
+    onBackground = Color(0xFF191C1C),
+    surface = Color(0xFFF7FAF9),
+    surfaceTint = Color(0xFF2457A6),
+    onSurface = Color(0xFF191C1C),
+    surfaceVariant = Color(0xFFDCE5E3),
+    onSurfaceVariant = Color(0xFF3F4948),
+    inverseSurface = Color(0xFF2E3131),
+    inverseOnSurface = Color(0xFFEFF1F0),
+    outline = Color(0xFF6F7978),
+    outlineVariant = Color(0xFFBEC9C7),
+    scrim = Color(0xFF000000),
+    error = Color(0xFFBA1A1A),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+)
+
 @Composable
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
@@ -159,13 +190,7 @@ private fun TcmAdminApp() {
         navigateBack()
     }
 
-    val colorScheme = remember(appContext) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            dynamicLightColorScheme(appContext)
-        } else {
-            lightColorScheme()
-        }
-    }
+    val colorScheme = remember { tcmLightColorScheme() }
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -276,7 +301,10 @@ private fun TcmAdminApp() {
                     )
                 }
                 is ScreenTarget.WorkflowOperation -> DetailShell("工序操作", onBack = { navigateBack() }) {
-                    Text("请从加工工作台执行工序操作")
+                    WorkflowOperationScreen(
+                        plan = currentScreen.plan,
+                        onBack = { navigateBack() },
+                    )
                 }
                 is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
                     PackageDetailPage(pkg = currentScreen.item, onNavigate = ::navigateTo, onBack = { navigateBack() })

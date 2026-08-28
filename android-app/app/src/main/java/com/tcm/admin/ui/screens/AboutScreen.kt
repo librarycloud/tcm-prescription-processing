@@ -8,13 +8,17 @@ import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
@@ -34,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -218,7 +223,23 @@ internal fun AboutScreen() {
                 Spacer(Modifier.height(12.dp))
                 if (downloadId != null) {
                     if (downloadTotalBytes > 0L) {
-                        LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth(), color = Primary)
+                        // Use two clipped rectangles instead of the Material rounded indicator.
+                        // Rounded end caps can expose the white track at the join and at the tail.
+                        val progressShape = RoundedCornerShape(50)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(progressShape)
+                                .background(Color(0xFFE5E7EB)),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth((downloadProgress / 100f).coerceIn(0f, 1f))
+                                    .background(Primary),
+                            )
+                        }
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
                     }
