@@ -114,7 +114,7 @@
     <ConfirmDialog
       v-model="confirmVisible"
       title="再次确认核销"
-      :content="`确认将“${packageInfo?.itemName || '-'}”（取货码 ${packageInfo?.pickupCode || '-'}）按“${pickupMethodText(form.pickupMethod)}”方式核销吗？`"
+      :content="`确认将“${packageInfo?.itemName || '-'}”（取货码 ${formatPickupCode(packageInfo?.pickupCode) || '-'}）按“${pickupMethodText(form.pickupMethod)}”方式核销吗？`"
       confirm-type="success"
       :loading="verifyLoading"
       @confirm="handleVerify"

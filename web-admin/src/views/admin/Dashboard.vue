@@ -151,7 +151,9 @@
         <el-table-column v-if="userStore.isSuperAdmin" label="门店" align="center">
           <template #default="{ row }">{{ row.store?.name || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="pickupCode" label="取货码" align="center" />
+        <el-table-column prop="pickupCode" label="取货码" align="center">
+          <template #default="{ row }">{{ formatPickupCode(row.pickupCode) || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="receiverName" label="收件人" align="center" />
         <el-table-column prop="receiverPhone" label="手机号" align="center">
           <template #default="{ row }">{{ row.receiverPhone || '-' }}</template>

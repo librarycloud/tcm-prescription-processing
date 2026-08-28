@@ -2,6 +2,7 @@ import { PICKUP_METHOD_NAMES } from '../constants/notification.js';
 import { DICTIONARY_TYPES } from '../constants/processing.js';
 import { maskPhone } from './robotTemplateService.js';
 import { publishRobotNotificationEventSafely } from './robotNotificationService.js';
+import { formatPickupCode } from '../utils/format.js';
 
 async function resolveOperatorName(prisma, actor) {
   if (actor?.name || actor?.nickname) return actor.name || actor.nickname;
@@ -64,7 +65,7 @@ export async function publishPackageRobotEvent(prisma, eventCode, pkg, actor) {
       operatorName: resolvedOperatorName,
       storeName: pkg.store?.name,
       packageId: pkg.id,
-      pickupCode: pkg.pickupCode,
+      pickupCode: formatPickupCode(pkg.pickupCode),
       receiverName: pkg.receiverName,
       receiverPhoneMasked: maskPhone(pkg.receiverPhone),
       itemName: pkg.itemName,
@@ -100,7 +101,7 @@ export async function publishProcessingCompletedRobotEvent(prisma, plan, actor) 
       processType: plan.processType?.name,
       totalDose: plan.totalDose,
       bagCount: plan.bagCount,
-      pickupCode: plan.pickupCode || plan.package?.pickupCode,
+      pickupCode: formatPickupCode(plan.pickupCode || plan.package?.pickupCode),
       pickupMethod: PICKUP_METHOD_NAMES[Number(plan.pickupMethod)] || '-',
       notifyType: notifyTypeName,
       finishTime: dateTime(occurredAt)

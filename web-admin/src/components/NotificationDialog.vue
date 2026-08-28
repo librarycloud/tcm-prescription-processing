@@ -8,7 +8,7 @@
   >
     <div v-loading="loading" class="notification-dialog">
       <el-descriptions v-if="displayPackage" :column="2" border>
-        <el-descriptions-item label="取货码">{{ displayPackage.pickupCode }}</el-descriptions-item>
+        <el-descriptions-item label="取货码">{{ formatPickupCode(displayPackage.pickupCode) }}</el-descriptions-item>
         <el-descriptions-item label="取货方式">
           {{ pickupMethodText(displayPackage.pickupMethod) }}
         </el-descriptions-item>

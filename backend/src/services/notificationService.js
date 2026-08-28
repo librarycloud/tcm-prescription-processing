@@ -10,6 +10,7 @@ import { ensureEmailDefaults } from './emailSettingsService.js';
 import { renderEmailTemplate } from './emailTemplateService.js';
 import { decryptSetting } from '../utils/settingsEncryption.js';
 import { PICKUP_METHOD_NAMES } from '../constants/notification.js';
+import { formatPickupCode } from '../utils/format.js';
 
 const NOTIFICATION_PACKAGE_INCLUDE = {
   store: { select: { id: true, name: true, address: true, phone: true } }
@@ -278,7 +279,7 @@ async function sendPackageEmailNotification(prisma, actor, packageIdValue, paylo
 
   const values = {
     receiverName: packageData.receiverName,
-    pickupCode: packageData.pickupCode,
+    pickupCode: formatPickupCode(packageData.pickupCode),
     itemName: packageData.itemName,
     itemInfo: packageData.itemInfo || '',
     pickupMethod: PICKUP_METHOD_NAMES[Number(packageData.pickupMethod)] || '-',

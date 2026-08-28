@@ -1,5 +1,6 @@
 import { PICKUP_METHOD_NAMES, TEMPLATE_SOURCES } from '../constants/notification.js';
 import { AppError } from '../utils/appError.js';
+import { formatPickupCode } from '../utils/format.js';
 
 export function parseVariableMapping(value) {
   if (Array.isArray(value)) return value;
@@ -37,7 +38,7 @@ export function buildBusinessValues(packageData) {
   return {
     receiverName: String(packageData.receiverName || ''),
     receiverPhone: String(packageData.receiverPhone || ''),
-    pickupCode: String(packageData.pickupCode || ''),
+    pickupCode: formatPickupCode(packageData.pickupCode),
     itemName: String(packageData.itemName || ''),
     itemInfo: String(packageData.itemInfo || ''),
     pickupMethod: PICKUP_METHOD_NAMES[Number(packageData.pickupMethod)] || '',

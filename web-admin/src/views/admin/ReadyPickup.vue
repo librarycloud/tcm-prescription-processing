@@ -78,7 +78,7 @@
         </el-table-column>
         <el-table-column label="取货码" align="center">
           <template #default="{ row }">
-            <span class="pickup-code">{{ row.pickupCode || '-' }}</span>
+            <span class="pickup-code">{{ formatPickupCode(row.pickupCode) || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="归类" align="center">

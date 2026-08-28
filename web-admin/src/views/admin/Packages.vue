@@ -78,7 +78,9 @@
         <el-table-column v-if="userStore.isSuperAdmin" label="所属门店" align="center">
           <template #default="{ row }">{{ row.store?.name || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="pickupCode" label="取货码" align="center" />
+        <el-table-column prop="pickupCode" label="取货码" align="center">
+          <template #default="{ row }">{{ formatPickupCode(row.pickupCode) || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="itemName" label="物品名称" align="center">
           <template #default="{ row }">
             <span class="item-name-text" :title="row.itemName || ''">
@@ -130,7 +132,7 @@
     <ConfirmDialog
       v-model="deleteDialogVisible"
       title="确认删除包裹"
-      :content="`确认删除取货码 ${selectedPackage?.pickupCode || '-'} 的包裹“${selectedPackage?.itemName || '-'}”吗？删除后无法恢复。`"
+      :content="`确认删除取货码 ${formatPickupCode(selectedPackage?.pickupCode) || '-'} 的包裹“${selectedPackage?.itemName || '-'}”吗？删除后无法恢复。`"
       confirm-type="danger"
       :loading="deleteLoading"
       @confirm="handleDelete"
