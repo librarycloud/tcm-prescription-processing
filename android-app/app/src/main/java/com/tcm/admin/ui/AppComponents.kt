@@ -75,7 +75,7 @@ internal val PurpleSoft: Color @Composable get() = MaterialTheme.colorScheme.ter
 internal val CardShape = RoundedCornerShape(10.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
-internal val SearchControlHeight = 48.dp
+internal val SearchControlHeight = 44.dp
 
 internal fun displayText(value: Any?, fallback: String = "-"): String {
     val text = value?.toString()?.trim().orEmpty()
@@ -315,13 +315,13 @@ internal fun SearchBarField(
             .height(SearchControlHeight)
             .background(Color.White, FieldShape)
             .border(BorderStroke(1.dp, Border), FieldShape)
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            textStyle = TextStyle(fontSize = 13.sp, color = Ink),
+            textStyle = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, color = Ink),
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
@@ -349,7 +349,13 @@ internal fun SearchBarField(
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         if (value.isEmpty()) {
-                            Text(placeholder, color = Muted, fontSize = 13.sp, maxLines = 1)
+                            Text(
+                                text = placeholder,
+                                color = Muted,
+                                fontSize = 15.sp,
+                                lineHeight = 20.sp,
+                                maxLines = 1,
+                            )
                         }
                         innerTextField()
                     }
