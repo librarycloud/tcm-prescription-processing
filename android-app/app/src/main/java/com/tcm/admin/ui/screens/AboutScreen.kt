@@ -75,19 +75,21 @@ internal fun AboutScreen() {
     var downloadedUri by remember { mutableStateOf<Uri?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
 
-    suspend fun fetchLatest() {
+    suspend fun fetchLatest(): JSONObject? {
         checking = true
         error = null
-        runCatching { withContext(Dispatchers.IO) { ApiClient.androidAppVersion() } }
-            .onSuccess {
-                latest = it
+        val version = runCatching { withContext(Dispatchers.IO) { ApiClient.androidAppVersion() } }
+            .onSuccess { result ->
+                latest = result
                 updatePrefs.edit()
                     .putLong(LAST_UPDATE_CHECK_AT, System.currentTimeMillis())
-                    .putString(CACHED_UPDATE, it.toString())
+                    .putString(CACHED_UPDATE, result.toString())
                     .apply()
             }
             .onFailure { error = it.message ?: "检查更新失败" }
+            .getOrNull()
         checking = false
+        return version
     }
 
     LaunchedEffect(Unit) {
@@ -235,7 +237,24 @@ internal fun AboutScreen() {
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(onClick = { scope.launch { fetchLatest() } }, enabled = !checking, modifier = Modifier.weight(1f), shape = FieldShape) { Text("检查更新") }
-                        if (hasUpdate) Button(onClick = { startDownload(latest!!) }, modifier = Modifier.weight(1f), shape = FieldShape) { Text(if (forceUpdate) "立即更新" else "下载更新") }
+                        if (hasUpdate) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        // Always use the current release metadata for the download task and notification.
+                                        val version = fetchLatest() ?: return@launch
+                                        if (version.optInt("versionCode", BuildConfig.VERSION_CODE) > BuildConfig.VERSION_CODE) {
+                                            startDownload(version)
+                                        }
+                                    }
+                                },
+                                enabled = !checking,
+                                modifier = Modifier.weight(1f),
+                                shape = FieldShape,
+                            ) {
+                                Text(if (forceUpdate) "立即更新" else "下载更新")
+                            }
+                        }
                     }
                 }
                 downloadError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Danger, fontSize = 12.sp) }
