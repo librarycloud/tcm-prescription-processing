@@ -73,6 +73,12 @@ android {
         release {
             buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
             manifestPlaceholders["cleartextTraffic"] = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             if (signingStoreFile.exists() && signingStorePassword != null && signingKeyAlias != null && signingKeyPassword != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -80,13 +86,20 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
         // These vendor binaries do not contain strip-compatible symbol tables.
-        // Keep their symbols so AGP does not retry a failing native strip step.
-        jniLibs.keepDebugSymbols += setOf(
-            "**/libandroidx.graphics.path.so",
-            "**/libbarhopper_v3.so",
-            "**/libimage_processing_util_jni.so",
-            "**/libsurface_util_jni.so",
+        // Keep their symbols in debug builds without bloating release APKs.
+        variant.packaging.jniLibs.keepDebugSymbols.addAll(
+            setOf(
+                "**/libandroidx.graphics.path.so",
+                "**/libbarhopper_v3.so",
+                "**/libimage_processing_util_jni.so",
+                "**/libsurface_util_jni.so",
+            ),
         )
     }
 }
