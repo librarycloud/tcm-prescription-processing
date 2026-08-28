@@ -71,17 +71,32 @@ object ApiClient {
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun androidAppVersion(): JSONObject = request("/app/version/android").getJSONObject("data")
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray {
+        val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100)
+        return data.optJSONArray("list") ?: JSONArray()
+    }
+    fun prescriptionsPaged(
+        status: Int? = null,
+        keyword: String = "",
+        storeId: Int? = null,
+        doctorId: Int? = null,
+        page: Int = 1,
+        pageSize: Int = 15,
+    ): JSONObject {
         val query = buildList {
-            add("page=1"); add("pageSize=100")
+            add("page=$page"); add("pageSize=$pageSize")
             status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            doctorId?.let { add("doctorId=$it") }
             if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
         }.joinToString("&")
-        return list(request("/admin/prescriptions?$query").getJSONObject("data"))
+        return request("/admin/prescriptions?$query").getJSONObject("data")
     }
     fun prescriptionDetail(id: Int): JSONObject = request("/admin/prescriptions/$id").getJSONObject("data")
     fun createPrescription(payload: JSONObject): JSONObject = request("/admin/prescriptions", "POST", payload).getJSONObject("data")
     fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
     fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
+    fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject =
+        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes).getJSONObject("data")
+    fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
     fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
     fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
     fun plans(view: String = "today-all", keyword: String = "", storeId: Int? = null): JSONArray {

@@ -209,7 +209,7 @@ private fun TcmAdminApp() {
                     )
                 }
                 is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    PrescriptionsScreen(onNavigate = ::navigateTo)
+                    PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
                     ProcessingScreenV2(onNavigate = ::navigateTo)
@@ -246,13 +246,22 @@ private fun TcmAdminApp() {
                     InventoryScreen(initialQuery = currentScreen.initialQuery)
                 }
                 is ScreenTarget.PrescriptionDetail -> DetailShell("处方详情", onBack = { navigateBack() }) {
-                    PrescriptionDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
+                    PrescriptionDetailScreen(
+                        id = currentScreen.id,
+                        user = session?.user,
+                        onNavigate = ::navigateTo,
+                        onBack = { navigateBack() },
+                    )
                 }
                 is ScreenTarget.PrescriptionEdit -> DetailShell(
                     if (currentScreen.initial.has("id")) "编辑处方" else "新建处方",
                     onBack = { navigateBack() },
                 ) {
-                    PrescriptionFormScreen(initial = currentScreen.initial, onSaved = { navigateBack() })
+                    PrescriptionFormScreen(
+                        initial = currentScreen.initial,
+                        user = session?.user,
+                        onSaved = { navigateBack() },
+                    )
                 }
                 is ScreenTarget.ProcessingPlanDetail -> DetailShell("加工计划详情", onBack = { navigateBack() }) {
                     Text("请从加工工作台打开加工计划详情")
