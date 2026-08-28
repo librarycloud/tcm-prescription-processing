@@ -78,7 +78,17 @@ android {
             }
         }
     }
-    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // These vendor binaries do not contain strip-compatible symbol tables.
+        // Keep their symbols so AGP does not retry a failing native strip step.
+        jniLibs.keepDebugSymbols += setOf(
+            "**/libandroidx.graphics.path.so",
+            "**/libbarhopper_v3.so",
+            "**/libimage_processing_util_jni.so",
+            "**/libsurface_util_jni.so",
+        )
+    }
 }
 
 dependencies {
