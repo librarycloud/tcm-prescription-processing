@@ -79,6 +79,7 @@ internal fun AboutScreen() {
     var downloadTotalBytes by remember { mutableStateOf(0L) }
     var downloadedUri by remember { mutableStateOf<Uri?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
+    var downloadVersionName by remember { mutableStateOf("") }
 
     suspend fun fetchLatest(): JSONObject? {
         checking = true
@@ -117,7 +118,9 @@ internal fun AboutScreen() {
         }
         runCatching {
             val versionCode = version.optInt("versionCode", 0).coerceAtLeast(0)
-            val versionName = version.displayField("versionName", "latest")
+            val versionName = version.opt("versionName")?.toString()?.trim()
+                .orEmpty()
+                .ifBlank { "latest" }
                 .replace(Regex("[^A-Za-z0-9._-]"), "-")
                 .ifBlank { "latest" }
             val cacheKey = version.displayField("sha256", "")
@@ -129,12 +132,13 @@ internal fun AboutScreen() {
             val fileName = "app-release-v${versionCode}-${versionName}-${cacheKey}.apk"
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle("药房助手 $versionName")
-                .setDescription("正在下载应用更新")
+                .setDescription("版本 $versionName 下载完成后可安装")
                 .setMimeType("application/vnd.android.package-archive")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
             downloadedUri = null
             downloadError = null
+            downloadVersionName = versionName
             downloadProgress = 0
             downloadedBytes = 0L
             downloadTotalBytes = version.optLong("size", 0L).coerceAtLeast(0L)
@@ -254,7 +258,7 @@ internal fun AboutScreen() {
                         fontSize = 12.sp,
                     )
                 } else if (downloadedUri != null) {
-                    Button(onClick = { installDownloaded(context, downloadedUri!!) }, modifier = Modifier.fillMaxWidth(), shape = FieldShape) { Text("安装更新") }
+                    Button(onClick = { installDownloaded(context, downloadedUri!!) }, modifier = Modifier.fillMaxWidth(), shape = FieldShape) { Text("安装版本 ${downloadVersionName.ifBlank { "更新" }}") }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(onClick = { scope.launch { fetchLatest() } }, enabled = !checking, modifier = Modifier.weight(1f), shape = FieldShape) { Text("检查更新") }
