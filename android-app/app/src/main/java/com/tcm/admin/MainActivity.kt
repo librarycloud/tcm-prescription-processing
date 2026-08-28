@@ -119,36 +119,36 @@ internal sealed class ScreenTarget {
 
 /** Stable Material 3 roles for the pharmacy workspace. */
 private fun tcmLightColorScheme() = lightColorScheme(
-    // Element Plus primary blue.
-    primary = Color(0xFF409EFF),
+    // Modern Medical / Tech Blue palette
+    primary = Color(0xFF2563EB),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD9ECFF),
-    onPrimaryContainer = Color(0xFF0D3A66),
-    inversePrimary = Color(0xFF79BBFF),
-    secondary = Color(0xFFE6A23C),
+    primaryContainer = Color(0xFFEFF6FF),
+    onPrimaryContainer = Color(0xFF1E40AF),
+    inversePrimary = Color(0xFF93C5FD),
+    secondary = Color(0xFFF59E0B),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFFFF1D6),
-    onSecondaryContainer = Color(0xFF5A3700),
-    tertiary = Color(0xFF67C23A),
+    secondaryContainer = Color(0xFFFEF3C7),
+    onSecondaryContainer = Color(0xFF78350F),
+    tertiary = Color(0xFF10B981),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFE1F3D8),
-    onTertiaryContainer = Color(0xFF20520F),
-    background = Color(0xFFF7FAF9),
-    onBackground = Color(0xFF191C1C),
-    surface = Color(0xFFF7FAF9),
-    surfaceTint = Color(0xFF409EFF),
-    onSurface = Color(0xFF191C1C),
-    surfaceVariant = Color(0xFFDCE5E3),
-    onSurfaceVariant = Color(0xFF3F4948),
-    inverseSurface = Color(0xFF2E3131),
-    inverseOnSurface = Color(0xFFEFF1F0),
-    outline = Color(0xFF6F7978),
-    outlineVariant = Color(0xFFBEC9C7),
+    tertiaryContainer = Color(0xFFECFDF5),
+    onTertiaryContainer = Color(0xFF065F46),
+    background = Color(0xFFF8FAFC),
+    onBackground = Color(0xFF0F172A),
+    surface = Color(0xFFF8FAFC),
+    surfaceTint = Color(0xFF2563EB),
+    onSurface = Color(0xFF0F172A),
+    surfaceVariant = Color(0xFFE2E8F0),
+    onSurfaceVariant = Color(0xFF475569),
+    inverseSurface = Color(0xFF1E293B),
+    inverseOnSurface = Color(0xFFF1F5F9),
+    outline = Color(0xFFCBD5E1),
+    outlineVariant = Color(0xFFE2E8F0),
     scrim = Color(0xFF000000),
-    error = Color(0xFFF56C6C),
+    error = Color(0xFFEF4444),
     onError = Color.White,
-    errorContainer = Color(0xFFFFE6E6),
-    onErrorContainer = Color(0xFF6B1717),
+    errorContainer = Color(0xFFFEE2E2),
+    onErrorContainer = Color(0xFF7F1D1D),
 )
 
 @Composable
@@ -501,7 +501,7 @@ private fun MainShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val drawerWidth = LocalConfiguration.current.screenWidthDp.dp * 0.4f
+    val drawerWidth = 280.dp
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
@@ -516,59 +516,77 @@ private fun MainShell(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.fillMaxHeight().width(drawerWidth)) {
-                Spacer(Modifier.height(14.dp))
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-                    Text("药房助手", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
-                    Text("中药房管理", color = Muted, fontSize = 11.sp)
+            ModalDrawerSheet(
+                modifier = Modifier.fillMaxHeight().width(drawerWidth),
+                drawerContainerColor = Color.White,
+            ) {
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        modifier = Modifier.size(38.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Primary,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("药房助手", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink)
+                        Text("中药房移动工作台", color = Muted, fontSize = 12.sp)
+                    }
                 }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = CardBorderColor)
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider(Modifier.padding(horizontal = 8.dp))
-                Spacer(Modifier.height(4.dp))
 
-                DrawerItem("工作台概览", current is ScreenTarget.Dashboard) {
+                DrawerItem("工作台概览", current is ScreenTarget.Dashboard, Icons.AutoMirrored.Filled.Assignment) {
                     onSwitchTab(ScreenTarget.Dashboard)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("处方管理", current is ScreenTarget.Prescriptions) {
+                DrawerItem("处方管理", current is ScreenTarget.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {
                     onSwitchTab(ScreenTarget.Prescriptions)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("加工管理", current is ScreenTarget.Processing) {
+                DrawerItem("加工管理", current is ScreenTarget.Processing, Icons.Default.Sync) {
                     onSwitchTab(ScreenTarget.Processing)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("包裹管理", current is ScreenTarget.Packages) {
+                DrawerItem("包裹管理", current is ScreenTarget.Packages, Icons.Default.AssignmentTurnedIn) {
                     onSwitchTab(ScreenTarget.Packages)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("斗谱管理", current is ScreenTarget.Herbs) {
+                DrawerItem("斗谱管理", current is ScreenTarget.Herbs, Icons.Default.Inventory) {
                     onSwitchTab(ScreenTarget.Herbs)
                     scope.launch { drawerState.close() }
                 }
-                HorizontalDivider(Modifier.padding(vertical = 4.dp, horizontal = 8.dp))
-                DrawerItem("库存查询", false) {
+                HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
+                DrawerItem("库存查询", false, Icons.Default.Inventory) {
                     onNavigate(ScreenTarget.Inventory())
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("商品盘点", false) {
+                DrawerItem("商品盘点", false, Icons.Default.Tune) {
                     onNavigate(ScreenTarget.Stocktaking)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("库存差异", false) {
+                DrawerItem("库存差异", false, Icons.Default.Tune) {
                     onNavigate(ScreenTarget.Differences)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("门店调拨", false) {
+                DrawerItem("门店调拨", false, Icons.Default.Sync) {
                     onNavigate(ScreenTarget.Transfers)
                     scope.launch { drawerState.close() }
                 }
-                HorizontalDivider(Modifier.padding(vertical = 4.dp, horizontal = 8.dp))
-                DrawerItem("我的", current is ScreenTarget.Profile) {
+                HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
+                DrawerItem("我的", current is ScreenTarget.Profile, Icons.Default.AccountCircle) {
                     onSwitchTab(ScreenTarget.Profile)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("关于", current is ScreenTarget.About) {
+                DrawerItem("关于", current is ScreenTarget.About, Icons.Default.AccountCircle) {
                     onNavigate(ScreenTarget.About)
                     scope.launch { drawerState.close() }
                 }
@@ -595,16 +613,25 @@ private fun MainShell(
 }
 
 @Composable
-private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun DrawerItem(
+    label: String,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit,
+) {
     NavigationDrawerItem(
-        label = { Text(label, fontSize = 14.sp) },
+        label = { Text(label, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
+        icon = if (icon != null) { { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) } } else null,
         selected = selected,
         onClick = onClick,
-        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp).height(42.dp),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).height(44.dp),
         colors = NavigationDrawerItemDefaults.colors(
-            selectedContainerColor = Color.Transparent,
-            selectedTextColor = Primary,
-            unselectedTextColor = Muted,
+            selectedContainerColor = PrimarySoft,
+            selectedTextColor = PrimaryDark,
+            selectedIconColor = Primary,
+            unselectedTextColor = Ink,
+            unselectedIconColor = Muted,
         ),
     )
 }
@@ -614,18 +641,21 @@ private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun DetailShell(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    scrolledContainerColor = Color.White,
-                ),
-            )
+            Column {
+                TopAppBar(
+                    title = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.White,
+                        scrolledContainerColor = Color.White,
+                    ),
+                )
+                HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+            }
         },
         containerColor = PageBackground,
     ) { padding ->
@@ -638,23 +668,26 @@ private fun DetailShell(title: String, onBack: () -> Unit, content: @Composable 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
-    TopAppBar(
-        title = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp) },
-        navigationIcon = {
-            IconButton(onClick = onMenu) {
-                Icon(Icons.Default.Menu, contentDescription = "打开菜单")
-            }
-        },
-        actions = {
-            IconButton(onClick = onScan) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码搜索商品", tint = Primary)
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.White,
-            scrolledContainerColor = Color.White,
-        ),
-    )
+    Column {
+        TopAppBar(
+            title = { Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            navigationIcon = {
+                IconButton(onClick = onMenu) {
+                    Icon(Icons.Default.Menu, contentDescription = "打开菜单")
+                }
+            },
+            actions = {
+                IconButton(onClick = onScan) {
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码搜索商品", tint = Primary)
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.White,
+                scrolledContainerColor = Color.White,
+            ),
+        )
+        HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+    }
 }
 
 @Composable
@@ -666,33 +699,36 @@ private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit
         ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
         ScreenTarget.Profile to ("我的" to Icons.Default.AccountCircle),
     )
-    NavigationBar(
-        modifier = Modifier.navigationBarsPadding(),
-        containerColor = Color.White,
-        tonalElevation = 3.dp,
-    ) {
-        items.forEach { (target, pair) ->
-            val isSelected = when (target) {
-                is ScreenTarget.Dashboard -> current is ScreenTarget.Dashboard
-                is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
-                is ScreenTarget.Processing -> current is ScreenTarget.Processing
-                is ScreenTarget.Packages -> current is ScreenTarget.Packages
-                is ScreenTarget.Profile -> current is ScreenTarget.Profile
-                else -> false
+    Column {
+        HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+        NavigationBar(
+            modifier = Modifier.navigationBarsPadding(),
+            containerColor = Color.White,
+            tonalElevation = 0.dp,
+        ) {
+            items.forEach { (target, pair) ->
+                val isSelected = when (target) {
+                    is ScreenTarget.Dashboard -> current is ScreenTarget.Dashboard
+                    is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
+                    is ScreenTarget.Processing -> current is ScreenTarget.Processing
+                    is ScreenTarget.Packages -> current is ScreenTarget.Packages
+                    is ScreenTarget.Profile -> current is ScreenTarget.Profile
+                    else -> false
+                }
+                NavigationBarItem(
+                    selected = isSelected,
+                    onClick = { onSwitchTab(target) },
+                    icon = { Icon(pair.second, contentDescription = pair.first) },
+                    label = { Text(pair.first, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Primary,
+                        selectedTextColor = Primary,
+                        unselectedIconColor = Muted,
+                        unselectedTextColor = Muted,
+                        indicatorColor = PrimarySoft,
+                    ),
+                )
             }
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onSwitchTab(target) },
-                icon = { Icon(pair.second, contentDescription = pair.first) },
-                label = { Text(pair.first, fontSize = 11.sp) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Primary,
-                    selectedTextColor = Primary,
-                    unselectedIconColor = Muted,
-                    unselectedTextColor = Muted,
-                    indicatorColor = Color.Transparent,
-                ),
-            )
         }
     }
 }

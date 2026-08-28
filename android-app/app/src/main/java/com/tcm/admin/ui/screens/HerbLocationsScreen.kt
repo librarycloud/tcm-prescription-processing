@@ -203,7 +203,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                                     },
                                 shape = FieldShape,
                                 color = Color(0xFFF9FAFB),
-                                border = BorderStroke(1.dp, Color(0xFFEAECF0)),
+                                border = BorderStroke(1.dp, CardBorderColor),
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -354,7 +354,7 @@ internal fun HerbLocationAssignScreen(
                             Surface(
                                 color = Color(0xFFF9FAFB),
                                 shape = FieldShape,
-                                border = BorderStroke(1.dp, Color(0xFFEAECF0)),
+                                border = BorderStroke(1.dp, CardBorderColor),
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -494,7 +494,7 @@ internal fun HerbLocationAssignScreen(
                                 },
                                 shape = FieldShape,
                                 color = if (selectedHerbId == id) PrimarySoft else Color(0xFFF9FAFB),
-                                border = BorderStroke(1.dp, if (selectedHerbId == id) Primary else Color(0xFFEAECF0)),
+                                border = BorderStroke(1.dp, if (selectedHerbId == id) Primary else CardBorderColor),
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),

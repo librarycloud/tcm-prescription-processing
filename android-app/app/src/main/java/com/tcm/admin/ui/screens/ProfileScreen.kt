@@ -89,7 +89,7 @@ internal fun ProfileScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = CardShape,
-            border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+            border = BorderStroke(1.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Row(
@@ -132,7 +132,7 @@ internal fun ProfileScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = CardShape,
-            border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+            border = BorderStroke(1.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {

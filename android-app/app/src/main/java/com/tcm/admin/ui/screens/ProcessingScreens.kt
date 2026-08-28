@@ -242,12 +242,14 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                 selected = mode == "plans",
                 onClick = { mode = "plans"; page = 1 },
                 modifier = Modifier.weight(1f),
+                centerLabel = true,
             )
             SegmentedButton(
                 label = "待领取任务",
                 selected = mode == "pickup",
                 onClick = { mode = "pickup"; page = 1 },
                 modifier = Modifier.weight(1f),
+                centerLabel = true,
             )
         }
 
@@ -286,7 +288,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                                 ),
                                 border = BorderStroke(
                                     if (isSelected) 1.5.dp else 1.dp,
-                                    if (isSelected) Primary else Color(0xFFEBEEF5),
+                                    if (isSelected) Primary else CardBorderColor,
                                 ),
                                 onClick = {
                                     activeView = if (activeView == viewKey) "all" else viewKey

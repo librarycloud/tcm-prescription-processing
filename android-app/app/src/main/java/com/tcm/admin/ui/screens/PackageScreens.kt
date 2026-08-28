@@ -280,7 +280,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
                     Surface(
                         color = Color(0xFFF9FAFB),
                         shape = FieldShape,
-                        border = BorderStroke(1.dp, Color(0xFFEAECF0)),
+                        border = BorderStroke(1.dp, CardBorderColor),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
@@ -392,7 +392,7 @@ internal fun PackageDetailPage(
             Surface(
                 color = Color(0xFFF9FAFB),
                 shape = FieldShape,
-                border = BorderStroke(1.dp, Color(0xFFEAECF0)),
+                border = BorderStroke(1.dp, CardBorderColor),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(

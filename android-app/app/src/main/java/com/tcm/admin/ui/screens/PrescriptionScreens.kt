@@ -261,7 +261,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                         Surface(
                             color = Color(0xFFF9FAFB),
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, Color(0xFFEAECF0)),
+                            border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                         ) {
                             Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -290,7 +290,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                 (0 until plans.length()).forEach { index ->
                     val plan = plans.getJSONObject(index)
                     Spacer(Modifier.height(10.dp))
-                    Surface(color = Color(0xFFF9FAFB), shape = FieldShape, border = BorderStroke(1.dp, Color(0xFFEAECF0)), modifier = Modifier.fillMaxWidth()) {
+                    Surface(color = Color(0xFFF9FAFB), shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(10.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("第 ${plan.optInt("batchNo", index + 1)} 批 · ${plan.optJSONObject("processType")?.displayField("name") ?: "加工"}", fontWeight = FontWeight.SemiBold, color = Ink); StatusPill(planStatusLabel(plan.optInt("status"))) }
                             Spacer(Modifier.height(5.dp)); Text("剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  安排：${plan.displayField("processDate", "等待顾客通知").take(10)}", color = RegularText, fontSize = 12.sp)
@@ -351,7 +351,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
             Spacer(Modifier.height(10.dp)); OutlinedTextField(totalPrice, { totalPrice = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) }, Modifier.fillMaxWidth(), label = { Text("总价（可选）") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, shape = FieldShape)
             Spacer(Modifier.height(14.dp)); Text("主治医生 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp)); SelectChips(doctors, doctorId) { doctorId = it }
             Spacer(Modifier.height(14.dp)); Text("处方来源 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp)); SelectChips(sources, sourceId) { sourceId = it }
-            Spacer(Modifier.height(14.dp)); Surface(color = Color(0xFFF9FAFB), shape = FieldShape, border = BorderStroke(1.dp, Color(0xFFEAECF0)), modifier = Modifier.fillMaxWidth()) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("外方处方", color = Ink, fontWeight = FontWeight.Medium); Text("由外部医院或诊所开具", color = Muted, fontSize = 12.sp) }; Switch(external, { external = it }) } }
+            Spacer(Modifier.height(14.dp)); Surface(color = Color(0xFFF9FAFB), shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("外方处方", color = Ink, fontWeight = FontWeight.Medium); Text("由外部医院或诊所开具", color = Muted, fontSize = 12.sp) }; Switch(external, { external = it }) } }
             if (external) { Spacer(Modifier.height(10.dp)); OutlinedTextField(externalHospital, { externalHospital = it }, Modifier.fillMaxWidth(), label = { Text("外方医院") }, singleLine = true, shape = FieldShape); Spacer(Modifier.height(10.dp)); OutlinedTextField(externalDoctor, { externalDoctor = it }, Modifier.fillMaxWidth(), label = { Text("外方医生") }, singleLine = true, shape = FieldShape); Spacer(Modifier.height(10.dp)); OutlinedTextField(externalRemark, { externalRemark = it }, Modifier.fillMaxWidth(), label = { Text("外方备注") }, shape = FieldShape) }
             if (isEdit) { Spacer(Modifier.height(14.dp)); Text("处方状态", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("进行中", status == 0, onClick = { status = 0 }); SegmentedButton("已取消", status == 2, onClick = { status = 2 }) } }
             Spacer(Modifier.height(10.dp)); OutlinedTextField(remark, { remark = it }, Modifier.fillMaxWidth(), label = { Text("处方备注") }, shape = FieldShape)

@@ -1,7 +1,7 @@
 package com.tcm.admin
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,20 +51,50 @@ internal fun DashboardScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 18.dp),
     ) {
-        // Quick Actions
-        SectionHeader("快捷功能", "快速直达管理模块")
-        Spacer(Modifier.height(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickAction("处方管理", "查看、新建与管理处方", Icons.AutoMirrored.Filled.Assignment, Primary) { onNavigate(ScreenTarget.Prescriptions) }
-            QuickAction("E6商品库存", "查询商品批次、规格、条码与效期", Icons.Default.Inventory, Success) { onNavigate(ScreenTarget.Inventory()) }
-            QuickAction("商品盘点", "商品盘点计划与差异录入", Icons.AutoMirrored.Filled.CompareArrows, Indigo) { onNavigate(ScreenTarget.Stocktaking) }
-            QuickAction("库存差异", "登记与处理实货多/实货少差异", Icons.Default.Tune, Warning) { onNavigate(ScreenTarget.Differences) }
-            QuickAction("门店调拨", "跨门店物资借调与归还跟踪", Icons.Default.LocalShipping, Info) { onNavigate(ScreenTarget.Transfers) }
+        // Quick Actions - 单列长条卡片
+        SectionHeader("快捷功能", "快速直达药房业务管理模块")
+        Spacer(Modifier.height(14.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuickAction(
+                label = "处方管理",
+                subtitle = "查看、新建与管理患者处方及加工批次",
+                icon = Icons.AutoMirrored.Filled.Assignment,
+                iconColor = Primary,
+                onClick = { onNavigate(ScreenTarget.Prescriptions) }
+            )
+            QuickAction(
+                label = "E6商品库存",
+                subtitle = "查询商品批次、规格、条码与效期",
+                icon = Icons.Default.Inventory,
+                iconColor = Success,
+                onClick = { onNavigate(ScreenTarget.Inventory()) }
+            )
+            QuickAction(
+                label = "商品盘点",
+                subtitle = "商品盘点计划发起与实物差异录入",
+                icon = Icons.AutoMirrored.Filled.CompareArrows,
+                iconColor = Indigo,
+                onClick = { onNavigate(ScreenTarget.Stocktaking) }
+            )
+            QuickAction(
+                label = "库存差异",
+                subtitle = "登记与处理实货多/实货少差异记录",
+                icon = Icons.Default.Tune,
+                iconColor = Warning,
+                onClick = { onNavigate(ScreenTarget.Differences) }
+            )
+            QuickAction(
+                label = "门店调拨",
+                subtitle = "跨门店物资借调、出库与归还跟踪",
+                icon = Icons.Default.LocalShipping,
+                iconColor = Info,
+                onClick = { onNavigate(ScreenTarget.Transfers) }
+            )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
     }
 }
 
@@ -106,7 +136,7 @@ internal fun StatsGrid(
                             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         shape = CardShape,
-                        border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+                        border = BorderStroke(1.dp, CardBorderColor),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
                     ) {
                         Column(
@@ -152,47 +182,49 @@ internal fun QuickAction(
             .clickable(onClick = onClick),
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+        border = BorderStroke(1.dp, CardBorderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                color = iconColor.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.size(38.dp),
+                color = iconColor.copy(alpha = 0.10f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.size(42.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         icon,
                         contentDescription = null,
                         tint = iconColor,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = label,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     color = Ink,
-                    fontSize = 14.sp,
+                    fontSize = 15.sp,
                 )
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     color = Muted,
                     fontSize = 12.sp,
+                    lineHeight = 16.sp,
                 )
             }
             Icon(
                 Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Muted,
+                tint = Muted.copy(alpha = 0.7f),
                 modifier = Modifier.size(18.dp),
             )
         }

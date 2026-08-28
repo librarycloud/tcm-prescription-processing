@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -71,19 +72,20 @@ internal val WarningSoft: Color @Composable get() = MaterialTheme.colorScheme.se
 internal val Danger: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val DangerSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
 // Method-specific accents keep logistics labels visually distinct from workflow status labels.
-internal val Info: Color = Color(0xFF13B8B0)
-internal val InfoSoft: Color = Color(0xFFE6FFFB)
-internal val Indigo: Color = Color(0xFF597EF7)
-internal val IndigoSoft: Color = Color(0xFFF0F5FF)
-internal val Pink: Color = Color(0xFFD946A8)
-internal val PinkSoft: Color = Color(0xFFFFF0F6)
-internal val Brown: Color = Color(0xFFA16207)
+internal val Info: Color = Color(0xFF0EA5E9)
+internal val InfoSoft: Color = Color(0xFFE0F2FE)
+internal val Indigo: Color = Color(0xFF6366F1)
+internal val IndigoSoft: Color = Color(0xFFEEF2FF)
+internal val Pink: Color = Color(0xFFEC4899)
+internal val PinkSoft: Color = Color(0xFFFDF2F8)
+internal val Brown: Color = Color(0xFFD97706)
 internal val BrownSoft: Color = Color(0xFFFEF3C7)
-private val RunnerColor = Color(0xFFE6A23C)
-private val RunnerSoftColor = Color(0xFFFFF1D6)
-private val CourierColor = Color(0xFF8064AA)
-private val CourierSoftColor = Color(0xFFF0E9F8)
-internal val CardShape = RoundedCornerShape(10.dp)
+private val RunnerColor = Color(0xFFF59E0B)
+private val RunnerSoftColor = Color(0xFFFEF3C7)
+private val CourierColor = Color(0xFF8B5CF6)
+private val CourierSoftColor = Color(0xFFF5F3FF)
+internal val CardBorderColor = Color(0xFFE2E8F0)
+internal val CardShape = RoundedCornerShape(12.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
 internal val SearchControlHeight = 44.dp
@@ -227,11 +229,12 @@ internal fun SegmentedButton(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    centerLabel: Boolean = false,
 ) {
     if (selected) {
         Surface(
             onClick = onClick,
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(8.dp),
             color = Primary,
             shadowElevation = 1.dp,
             modifier = modifier,
@@ -241,15 +244,20 @@ internal fun SegmentedButton(
                 color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                modifier = if (centerLabel) {
+                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 6.5.dp)
+                } else {
+                    Modifier.padding(horizontal = 13.dp, vertical = 6.5.dp)
+                },
+                textAlign = if (centerLabel) TextAlign.Center else TextAlign.Start,
             )
         }
     } else {
         Surface(
             onClick = onClick,
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, Border),
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFF1F5F9),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             modifier = modifier,
         ) {
             Text(
@@ -257,7 +265,12 @@ internal fun SegmentedButton(
                 color = RegularText,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Normal,
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                modifier = if (centerLabel) {
+                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 6.5.dp)
+                } else {
+                    Modifier.padding(horizontal = 13.dp, vertical = 6.5.dp)
+                },
+                textAlign = if (centerLabel) TextAlign.Center else TextAlign.Start,
             )
         }
     }
@@ -273,7 +286,7 @@ internal fun AppCard(
         modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFEBEEF5)),
+        border = BorderStroke(1.dp, CardBorderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
         Column(
@@ -336,9 +349,8 @@ internal fun SearchBarField(
         modifier = modifier
             .fillMaxWidth()
             .height(SearchControlHeight)
-            .background(Color.White, FieldShape)
-            .border(BorderStroke(1.dp, Border), FieldShape)
-            .padding(horizontal = 4.dp),
+            .background(Color(0xFFF8FAFC), FieldShape)
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
@@ -368,7 +380,9 @@ internal fun SearchBarField(
                         }
                     }
                     Box(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 6.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         if (value.isEmpty()) {
@@ -452,33 +466,47 @@ internal fun AppEmptyState(
     message: String,
     modifier: Modifier = Modifier,
     icon: ImageVector = Icons.Default.Inbox,
+    onRetry: (() -> Unit)? = null,
+    retryText: String = "刷新数据",
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 36.dp),
+            .padding(vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
-            color = Color(0xFFF0F2F5),
+            color = PrimarySoft.copy(alpha = 0.6f),
             shape = CircleShape,
-            modifier = Modifier.size(54.dp),
+            modifier = Modifier.size(56.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     icon,
                     contentDescription = null,
-                    tint = Muted,
+                    tint = Primary,
                     modifier = Modifier.size(28.dp),
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         Text(
             text = message,
             color = Muted,
             fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
         )
+        if (onRetry != null) {
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onRetry,
+                shape = FieldShape,
+                modifier = Modifier.height(34.dp),
+                border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f)),
+            ) {
+                Text(retryText, fontSize = 12.sp, color = Primary)
+            }
+        }
     }
 }
 
@@ -537,15 +565,15 @@ internal fun InfoRowItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.5.dp),
+            .padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, color = Muted, fontSize = 12.sp)
+        Text(text = label, color = Muted, fontSize = 12.5.sp)
         Text(
             text = value,
             color = valueColor,
-            fontSize = 12.sp,
+            fontSize = 12.5.sp,
             fontWeight = if (isBold) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
