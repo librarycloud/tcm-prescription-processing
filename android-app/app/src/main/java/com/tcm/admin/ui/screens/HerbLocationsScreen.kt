@@ -668,7 +668,7 @@ private fun positionLabel(location: JSONObject): String {
     val layer = location.displayField("layerNo")
     val column = location.displayField("columnNo")
     return if (type == "D") {
-        "斗$unit · ${if (layer == "0") "顶层" else "${layer}行"} · $column列"
+        "斗$unit · ${if (layer == "0") "顶层" else "${layer}行"} · ${column}列"
     } else {
         "${locationTypeLabel(type)}$unit · $layer 层"
     }
