@@ -45,6 +45,10 @@ android {
         applicationId = "com.tcm.admin"
         minSdk = 31
         targetSdk = 36
+        // The admin client is distributed only to 64-bit ARM phones.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
         // The admin client ships Chinese UI with English fallback only.
         resourceConfigurations += setOf("zh", "en")
         versionCode = providers.gradleProperty("VERSION_CODE")
