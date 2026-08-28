@@ -113,6 +113,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 
     // Dialog states
     var selectedPlan by remember { mutableStateOf<JSONObject?>(null) }
+    var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -505,13 +506,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 
                             if (status == 2 && !packageCreated) { // 完成但未生成包裹
                                 Button(
-                                    onClick = {
-                                        scope.launch {
-                                            runCatching { withContext(Dispatchers.IO) { ApiClient.generatePlanPackage(plan.optInt("id")) } }
-                                                .onSuccess { reload++ }
-                                                .onFailure { error = it.message ?: "生成包裹失败" }
-                                        }
-                                    },
+                                    onClick = { generatePackagePlan = plan },
                                     shape = RoundedCornerShape(6.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Success),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -669,6 +664,38 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
         )
     }
 
+    generatePackagePlan?.let { plan ->
+        AlertDialog(
+            onDismissRequest = { generatePackagePlan = null },
+            title = { Text("生成包裹") },
+            text = {
+                Text("该加工计划已完成，确认生成待领取包裹吗？")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val planId = plan.optInt("id")
+                        generatePackagePlan = null
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) { ApiClient.generatePlanPackage(planId) }
+                            }
+                                .onSuccess { reload++ }
+                                .onFailure { error = it.message ?: "生成包裹失败" }
+                        }
+                    },
+                ) {
+                    Text("确认")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { generatePackagePlan = null }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
     }
 }
 
@@ -753,11 +780,15 @@ internal fun ProcessingPlanFormScreen(
     LaunchedEffect(Unit) {
         runCatching {
             withContext(Dispatchers.IO) {
-                Triple(
-                    ApiClient.prescriptions(keyword = ""),
-                    ApiClient.dictionaries("ProcessType"),
-                    ApiClient.dictionaries("NotifyType"),
-                )
+                val prescriptionData = if (isEdit) {
+                    JSONArray().apply {
+                        initialPrescription?.let { put(it) }
+                            ?: prescriptionId.takeIf { it > 0 }?.let { put(ApiClient.prescriptionDetail(it)) }
+                    }
+                } else {
+                    ApiClient.prescriptions(keyword = "")
+                }
+                Triple(prescriptionData, ApiClient.dictionaries("ProcessType"), ApiClient.dictionaries("NotifyType"))
             }
         }.onSuccess { (prescriptionData, processData, notifyData) ->
             prescriptions = (0 until prescriptionData.length()).map { prescriptionData.getJSONObject(it) }
@@ -788,15 +819,6 @@ internal fun ProcessingPlanFormScreen(
             Spacer(Modifier.height(14.dp))
             Text("选择处方 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = prescriptionKeyword,
-                onValueChange = { prescriptionKeyword = it },
-                label = { Text("搜索处方编号、姓名或手机号") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = FieldShape,
-            )
-            Spacer(Modifier.height(8.dp))
             if (selectedPrescription != null) {
                 Surface(color = PrimarySoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -808,13 +830,24 @@ internal fun ProcessingPlanFormScreen(
                 }
                 Spacer(Modifier.height(6.dp))
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                visiblePrescriptions.forEach { item ->
-                    SegmentedButton(
-                        label = "${item.displayField("customerName", "顾客")} · ${item.displayField("prescriptionNo", "处方")}",
-                        selected = prescriptionId == item.optInt("id"),
-                        onClick = { prescriptionId = item.optInt("id") },
-                    )
+            if (!isEdit) {
+                OutlinedTextField(
+                    value = prescriptionKeyword,
+                    onValueChange = { prescriptionKeyword = it },
+                    label = { Text("搜索处方编号、姓名或手机号") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    visiblePrescriptions.forEach { item ->
+                        SegmentedButton(
+                            label = "${item.displayField("customerName", "顾客")} · ${item.displayField("prescriptionNo", "处方")}",
+                            selected = prescriptionId == item.optInt("id"),
+                            onClick = { prescriptionId = item.optInt("id") },
+                        )
+                    }
                 }
             }
 
@@ -1437,7 +1470,7 @@ internal fun WorkflowOperationScreen(
             ) { Text(if (busy) "提交中..." else "开始${when (stage) { 3 -> "浸泡"; 4 -> "煎煮"; else -> "打包" }}") }
         }
 
-        if (canFinish) {
+        if (status == 1 && canFinish) {
             Spacer(Modifier.height(10.dp))
             Button(
                 enabled = !busy,
