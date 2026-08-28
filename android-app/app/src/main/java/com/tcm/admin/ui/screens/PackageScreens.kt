@@ -311,7 +311,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
                             Column {
                                 Text("取货码", color = Muted, fontSize = 11.sp)
                                 Text(
-                                    text = item.code,
+                                    text = formatPickupCode(item.code),
                                     color = PrimaryDark,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
@@ -422,7 +422,7 @@ internal fun PackageDetailPage(
                     FakeQr(pkg.pickupQrContent.ifBlank { pkg.code })
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "取货码：${pkg.code}",
+                        text = "取货码：${formatPickupCode(pkg.code)}",
                         color = PrimaryDark,
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,

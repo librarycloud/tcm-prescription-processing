@@ -84,6 +84,16 @@ internal fun displayText(value: Any?, fallback: String = "-"): String {
 
 internal fun JSONObject.displayField(key: String, fallback: String = "-"): String = displayText(opt(key), fallback)
 
+/** Formats the six-digit pickup code for display without changing the value sent to APIs. */
+internal fun formatPickupCode(value: String): String {
+    val text = value.trim()
+    return if (text.matches(Regex("\\d{6}"))) {
+        "${text.substring(0, 3)}-${text.substring(3)}"
+    } else {
+        text
+    }
+}
+
 internal fun quantityText(value: Any?, fallback: String = "-"): String {
     val raw = value?.toString()?.trim().orEmpty()
     if (raw.isBlank() || raw == "null") return fallback

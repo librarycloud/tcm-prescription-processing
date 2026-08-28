@@ -157,7 +157,7 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
         items.orEmpty().forEach { p ->
             val doctor = p.optJSONObject("doctor")?.displayField("name") ?: "-"
             val source = p.optJSONObject("source")?.displayField("name") ?: "-"
-            val store = p.optJSONObject("store")?.optString("name", "") ?: ""
+            val store = p.optJSONObject("store")?.displayField("name", "") ?: ""
             val createdAt = p.displayField("createdAt").replace("T", " ").take(16)
             val statusCode = p.optInt("status")
             val isExternal = p.optInt("isExternal") == 1
@@ -196,7 +196,7 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
 
                 Spacer(Modifier.height(10.dp))
 
-                InfoRowItem(label = "联系电话", value = maskPhone(p.optString("phone")))
+                InfoRowItem(label = "联系电话", value = maskPhone(p.displayField("phone", "")))
                 InfoRowItem(label = "主治医生", value = doctor)
                 InfoRowItem(label = "处方来源", value = source)
                 if (store.isNotBlank()) {
@@ -276,7 +276,7 @@ internal fun PrescriptionDetailScreen(
         p?.let { detail ->
             val doctor = detail.optJSONObject("doctor")?.displayField("name") ?: "-"
             val source = detail.optJSONObject("source")?.displayField("name") ?: "-"
-            val store = detail.optJSONObject("store")?.optString("name", "") ?: ""
+            val store = detail.optJSONObject("store")?.displayField("name", "") ?: ""
             val createdAt = detail.displayField("createdAt").replace("T", " ").take(16)
             val statusCode = detail.optInt("status")
             val isExternal = detail.optInt("isExternal") == 1
@@ -300,7 +300,7 @@ internal fun PrescriptionDetailScreen(
                 Spacer(Modifier.height(12.dp))
 
                 InfoRowItem(label = "处方单号", value = detail.displayField("prescriptionNo"))
-                InfoRowItem(label = "联系手机", value = maskPhone(detail.optString("phone")))
+                InfoRowItem(label = "联系手机", value = maskPhone(detail.displayField("phone", "")))
                 InfoRowItem(label = "主治医生", value = doctor)
                 InfoRowItem(label = "处方来源", value = source)
                 if (store.isNotBlank()) InfoRowItem(label = "所属门店", value = store)
@@ -356,7 +356,7 @@ internal fun PrescriptionDetailScreen(
                                         color = Ink,
                                     )
                                     Text(
-                                        text = "${quantityText(item.opt("quantity"), "0")} ${item.optString("unit", "g")}",
+                                        text = "${quantityText(item.opt("quantity"), "0")} ${item.displayField("unit", "g")}",
                                         color = Primary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,

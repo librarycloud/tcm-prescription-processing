@@ -211,7 +211,7 @@ private fun TcmAdminApp() {
                     PrescriptionsScreen(onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    ProcessingScreenV2()
+                    ProcessingScreenV2(onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
                     PackagesScreen(onNavigate = ::navigateTo)

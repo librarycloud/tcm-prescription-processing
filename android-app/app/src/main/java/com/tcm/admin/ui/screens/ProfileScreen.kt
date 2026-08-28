@@ -139,7 +139,7 @@ internal fun ProfileScreen(
                 ProfileDetailRow(
                     icon = Icons.Default.Person,
                     label = "用户名",
-                    value = user?.optString("username").orEmpty().ifBlank { "-" },
+                    value = user?.displayField("username") ?: "-",
                 )
                 HorizontalDivider(color = Color(0xFFF2F3F5))
                 ProfileDetailRow(
@@ -151,7 +151,8 @@ internal fun ProfileScreen(
                 ProfileDetailRow(
                     icon = Icons.Default.Business,
                     label = "所属门店",
-                    value = user?.optJSONObject("store")?.optString("name").orEmpty().ifBlank { "全部门店（全局权限）" },
+                    value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
+                        ?: "全部门店（全局权限）",
                 )
                 HorizontalDivider(color = Color(0xFFF2F3F5))
                 ProfileDetailRow(

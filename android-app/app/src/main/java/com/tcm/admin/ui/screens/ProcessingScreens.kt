@@ -62,7 +62,7 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 @Composable
-internal fun ProcessingScreenV2() {
+internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
     var mode by remember { mutableStateOf("plans") } // "plans" | "pickup"
     var activeView by remember { mutableStateOf("today-all") }
     var keyword by remember { mutableStateOf("") }
@@ -163,7 +163,8 @@ internal fun ProcessingScreenV2() {
         }
     }
 
-    Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -310,7 +311,7 @@ internal fun ProcessingScreenV2() {
                         val chipWeight = Modifier.weight(1f)
                         row.forEach { store ->
                             val id = store.optString("id")
-                            SegmentedButton(store.optString("name", "门店"), selectedStoreId == id, { selectedStoreId = id; page = 1; reload++ }, chipWeight)
+                            SegmentedButton(store.displayField("name", "门店"), selectedStoreId == id, { selectedStoreId = id; page = 1; reload++ }, chipWeight)
                         }
                         repeat(3 - row.size) { Spacer(chipWeight) }
                     }
@@ -358,8 +359,8 @@ internal fun ProcessingScreenV2() {
                     val bagCount = plan.optInt("bagCount", 0)
                     val volumeMl = plan.optInt("volumeMl", 0)
                     val pickupMethod = plan.optInt("pickupMethod", 0)
-                    val scheduleDate = plan.optString("scheduledDate", "").take(10)
-                    val isDecoction = processType?.optString("name")?.contains("煎") == true || plan.optString("processTypeName").contains("煎")
+                    val scheduleDate = plan.displayField("scheduledDate", "").take(10)
+                    val isDecoction = processType?.displayField("name", "")?.contains("煎") == true || plan.displayField("processTypeName", "").contains("煎")
                     val packageCreated = plan.optBoolean("packageCreated") || plan.optInt("packageId", 0) > 0
 
                     AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -590,7 +591,7 @@ internal fun ProcessingScreenV2() {
                         ) {
                             Text("取货码：", color = RegularText, fontSize = 13.sp)
                             Text(
-                                text = item.code,
+                                text = formatPickupCode(item.code),
                                 color = Primary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
@@ -640,8 +641,8 @@ internal fun ProcessingScreenV2() {
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-    }
+            Spacer(Modifier.height(16.dp))
+        }
 
     // Dialogs
     selectedPlan?.let { plan ->
@@ -669,16 +670,21 @@ internal fun ProcessingScreenV2() {
         )
     }
 
-    selectedPackageDetail?.let { item ->
-        PackageDetailPage(
-            pkg = item,
-            onNavigate = { target ->
-                if (target is ScreenTarget.PackageVerify) {
-                    selectedPackageDetail = null
-                }
-            },
-            onBack = { selectedPackageDetail = null },
-        )
+        selectedPackageDetail?.let { item ->
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = PageBackground,
+            ) {
+                PackageDetailPage(
+                    pkg = item,
+                    onNavigate = { target ->
+                        selectedPackageDetail = null
+                        onNavigate(target)
+                    },
+                    onBack = { selectedPackageDetail = null },
+                )
+            }
+        }
     }
 }
 

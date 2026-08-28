@@ -98,7 +98,7 @@ internal fun AboutScreen() {
     }
 
     fun startDownload(version: JSONObject) {
-        val rawUrl = version.optString("apkUrl").trim()
+        val rawUrl = version.displayField("apkUrl", "").trim()
         if (rawUrl.isBlank()) {
             downloadError = "暂未配置下载地址"
             return
@@ -109,11 +109,19 @@ internal fun AboutScreen() {
             BuildConfig.API_BASE_URL.trimEnd('/') + "/" + rawUrl.trimStart('/')
         }
         runCatching {
-            val fileName = url.substringBefore('?').substringAfterLast('/').ifBlank {
-                "app-release-${version.optString("versionName", "latest")}.apk"
-            }
-            val request = DownloadManager.Request(Uri.parse(url))
-                .setTitle("药房助手 ${version.optString("versionName")}")
+            val versionCode = version.optInt("versionCode", 0).coerceAtLeast(0)
+            val versionName = version.displayField("versionName", "latest")
+                .replace(Regex("[^A-Za-z0-9._-]"), "-")
+                .ifBlank { "latest" }
+            val cacheKey = version.displayField("sha256", "")
+                .replace(Regex("[^A-Za-z0-9._-]"), "-")
+                .ifBlank { versionCode.toString() }
+                .take(16)
+            val separator = if (url.contains('?')) "&" else "?"
+            val downloadUrl = "$url${separator}versionCode=$versionCode&cacheKey=${java.net.URLEncoder.encode(cacheKey, "UTF-8")}"
+            val fileName = "app-release-v${versionCode}-${versionName}-${cacheKey}.apk"
+            val request = DownloadManager.Request(Uri.parse(downloadUrl))
+                .setTitle("药房助手 $versionName")
                 .setDescription("正在下载应用更新")
                 .setMimeType("application/vnd.android.package-archive")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -193,13 +201,13 @@ internal fun AboutScreen() {
                     checking -> Text("正在检查最新版本...", color = Muted, fontSize = 13.sp)
                     error != null -> Text(error!!, color = Danger, fontSize = 13.sp)
                     latest != null && hasUpdate -> {
-                        Text("发现新版本 ${latest!!.optString("versionName")}", color = Primary, fontWeight = FontWeight.SemiBold)
-                        latest!!.optString("publishedAt").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
+                        Text("发现新版本 ${latest!!.displayField("versionName")}", color = Primary, fontWeight = FontWeight.SemiBold)
+                        latest!!.displayField("publishedAt", "").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
                         val notes = latest!!.optJSONArray("releaseNotes")
                         if (notes != null && notes.length() > 0) {
                             Spacer(Modifier.height(6.dp))
                             Text("更新内容", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            (0 until notes.length()).forEach { Text("• ${notes.optString(it)}", color = Muted, fontSize = 12.sp) }
+                            (0 until notes.length()).forEach { Text("• ${displayText(notes.opt(it), "")}", color = Muted, fontSize = 12.sp) }
                         }
                         if (forceUpdate) Text("此版本为必需更新", color = Danger, fontSize = 12.sp)
                     }

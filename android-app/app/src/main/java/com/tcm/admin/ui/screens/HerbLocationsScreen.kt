@@ -149,7 +149,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
             (0 until units.length()).forEach { uIndex ->
                 val unit = units.getJSONObject(uIndex)
                 val unitNo = unit.displayField("unitNo")
-                val unitType = unit.optString("type")
+                val unitType = unit.displayField("type")
                 val locations = unit.optJSONArray("locations") ?: JSONArray()
 
                 AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -321,7 +321,7 @@ internal fun HerbLocationAssignScreen(
                         Text("当前位置", color = Muted, fontSize = 11.sp)
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            location.optString("code"),
+                            location.displayField("code"),
                             color = Ink,
                             fontSize = 19.sp,
                             fontWeight = FontWeight.Bold,
@@ -334,7 +334,7 @@ internal fun HerbLocationAssignScreen(
                         shape = RoundedCornerShape(6.dp),
                     ) {
                         Text(
-                            locationTypeLabel(location.optString("type")),
+                            locationTypeLabel(location.displayField("type")),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             color = PrimaryDark,
                             fontSize = 11.sp,
@@ -364,7 +364,7 @@ internal fun HerbLocationAssignScreen(
                                 ) {
                                     Column(Modifier.weight(1f)) {
                                         Text(herb.displayField("name"), color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                        val detail = listOf(herb.optString("code"), herb.optString("specification"))
+                                        val detail = listOf(herb.displayField("code", ""), herb.displayField("specification", ""))
                                             .filter { it.isNotBlank() }
                                             .joinToString(" · ")
                                         if (detail.isNotBlank()) Text(detail, color = Muted, fontSize = 11.sp)
@@ -399,7 +399,7 @@ internal fun HerbLocationAssignScreen(
 
         AppCard {
             SectionHeader(
-                title = if (existingLocation) "配置货位 ${location.optString("code")}" else "配置药材",
+                title = if (existingLocation) "配置货位 ${location.displayField("code")}" else "配置药材",
                 subtitle = if (existingLocation) "位置：${positionLabel(location)}" else "先设置位置，再搜索匹配药材",
             )
 
@@ -663,12 +663,12 @@ private fun buildLocationCode(type: String, unitNo: String, layerNo: String, col
 }
 
 private fun positionLabel(location: JSONObject): String {
-    val type = location.optString("type")
-    val unit = location.opt("unitNo") ?: "-"
-    val layer = location.opt("layerNo") ?: "-"
-    val column = location.opt("columnNo")
+    val type = location.displayField("type")
+    val unit = location.displayField("unitNo")
+    val layer = location.displayField("layerNo")
+    val column = location.displayField("columnNo")
     return if (type == "D") {
-        "斗$unit · ${if (layer.toString() == "0") "顶层" else "${layer}行"} · ${column ?: "-"}列"
+        "斗$unit · ${if (layer == "0") "顶层" else "${layer}行"} · $column列"
     } else {
         "${locationTypeLabel(type)}$unit · $layer 层"
     }
