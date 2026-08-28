@@ -3,7 +3,7 @@
     <template #header>
       <div class="qr-header">
         <span>{{ title }}</span>
-        <el-tag v-if="content" type="primary" effect="plain">{{ content }}</el-tag>
+        <el-tag v-if="showContent && content" type="primary" effect="plain">{{ content }}</el-tag>
       </div>
     </template>
 
@@ -26,6 +26,10 @@ const props = defineProps({
   content: {
     type: String,
     default: ''
+  },
+  showContent: {
+    type: Boolean,
+    default: true
   }
 });
 

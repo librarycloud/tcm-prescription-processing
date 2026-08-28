@@ -51,7 +51,7 @@
         </div>
       </el-card>
 
-      <QRCodeCard :content="detail.pickupQrContent || detail.pickupCode" />
+      <QRCodeCard :content="detail.pickupQrContent || detail.pickupCode" :show-content="false" />
     </div>
 
     <PrintDialog v-model="printVisible" :package-info="detail" />
