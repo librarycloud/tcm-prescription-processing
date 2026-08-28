@@ -12,6 +12,11 @@ on:
       - E6Sync/**
       - .github/workflows/build-e6sync.yml
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag, for example v1.0.0
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -56,3 +61,32 @@ jobs:
           path: ${{ matrix.output }}
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Publish E6Sync Release
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: E6Sync-Server2008
+          path: package/E6Sync-Server2008
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd package
+          zip -r "../E6Sync-Server2008-${{ inputs.release_tag }}.zip" E6Sync-Server2008
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: E6Sync ${{ inputs.release_tag }}
+          generate_release_notes: true
+          files: E6Sync-Server2008-${{ inputs.release_tag }}.zip
