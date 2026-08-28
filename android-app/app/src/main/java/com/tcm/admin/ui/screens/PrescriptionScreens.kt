@@ -127,24 +127,24 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
         SearchBarField(keyword, { keyword = it }, "搜索患者、手机、处方号或医生", onSearch = { page = 1; reload++ })
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegmentedButton("全部", status == null) { status = null; page = 1 }
-            SegmentedButton("进行中", status == 0) { status = 0; page = 1 }
-            SegmentedButton("已完成", status == 1) { status = 1; page = 1 }
-            SegmentedButton("已取消", status == 2) { status = 2; page = 1 }
+            SegmentedButton("全部", status == null, onClick = { status = null; page = 1 })
+            SegmentedButton("进行中", status == 0, onClick = { status = 0; page = 1 })
+            SegmentedButton("已完成", status == 1, onClick = { status = 1; page = 1 })
+            SegmentedButton("已取消", status == 2, onClick = { status = 2; page = 1 })
         }
         if (doctors.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SegmentedButton("全部医生", doctorId == null) { doctorId = null; page = 1 }
+                SegmentedButton("全部医生", doctorId == null, onClick = { doctorId = null; page = 1 })
                 doctors.forEach { doctor ->
                     val doctorValue = doctor.optInt("id")
-                    SegmentedButton(doctor.displayField("name", "医生"), doctorId == doctorValue) { doctorId = doctorValue; page = 1 }
+                    SegmentedButton(doctor.displayField("name", "医生"), doctorId == doctorValue, onClick = { doctorId = doctorValue; page = 1 })
                 }
             }
         }
         if (isSuperAdmin(user) && stores.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            StoreChipsRow(stores, selectedStoreId) { selectedStoreId = it; page = 1 }
+            StoreChipsRow(stores, selectedStoreId, onSelectStore = { selectedStoreId = it; page = 1 })
         }
         Spacer(Modifier.height(14.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
@@ -353,7 +353,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
             Spacer(Modifier.height(14.dp)); Text("处方来源 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp)); SelectChips(sources, sourceId) { sourceId = it }
             Spacer(Modifier.height(14.dp)); Surface(color = Color(0xFFF9FAFB), shape = FieldShape, border = BorderStroke(1.dp, Color(0xFFEAECF0)), modifier = Modifier.fillMaxWidth()) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("外方处方", color = Ink, fontWeight = FontWeight.Medium); Text("由外部医院或诊所开具", color = Muted, fontSize = 12.sp) }; Switch(external, { external = it }) } }
             if (external) { Spacer(Modifier.height(10.dp)); OutlinedTextField(externalHospital, { externalHospital = it }, Modifier.fillMaxWidth(), label = { Text("外方医院") }, singleLine = true, shape = FieldShape); Spacer(Modifier.height(10.dp)); OutlinedTextField(externalDoctor, { externalDoctor = it }, Modifier.fillMaxWidth(), label = { Text("外方医生") }, singleLine = true, shape = FieldShape); Spacer(Modifier.height(10.dp)); OutlinedTextField(externalRemark, { externalRemark = it }, Modifier.fillMaxWidth(), label = { Text("外方备注") }, shape = FieldShape) }
-            if (isEdit) { Spacer(Modifier.height(14.dp)); Text("处方状态", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("进行中", status == 0) { status = 0 }; SegmentedButton("已取消", status == 2) { status = 2 } } }
+            if (isEdit) { Spacer(Modifier.height(14.dp)); Text("处方状态", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { SegmentedButton("进行中", status == 0, onClick = { status = 0 }); SegmentedButton("已取消", status == 2, onClick = { status = 2 }) } }
             Spacer(Modifier.height(10.dp)); OutlinedTextField(remark, { remark = it }, Modifier.fillMaxWidth(), label = { Text("处方备注") }, shape = FieldShape)
         }
         error?.let { Spacer(Modifier.height(10.dp)); Text(it, color = Danger, fontSize = 13.sp) }
@@ -374,7 +374,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
 
 @Composable
 private fun SelectChips(values: List<JSONObject>, selectedId: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { values.forEach { value -> val itemId = value.optInt("id"); SegmentedButton(value.displayField("name", "未命名"), selectedId == itemId) { onSelect(itemId) } } }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { values.forEach { value -> val itemId = value.optInt("id"); SegmentedButton(value.displayField("name", "未命名"), selectedId == itemId, onClick = { onSelect(itemId) }) } }
 }
 
 private fun attachmentSizeText(bytes: Long): String = when { bytes < 1024 -> "$bytes B"; bytes < 1024 * 1024 -> "${bytes / 1024} KB"; else -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1024.0 / 1024.0) }
