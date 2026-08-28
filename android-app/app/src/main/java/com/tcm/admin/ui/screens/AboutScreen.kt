@@ -46,6 +46,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+private const val UPDATE_PREFS = "android_update_check"
+private const val LAST_UPDATE_CHECK_AT = "last_update_check_at"
+private const val CACHED_UPDATE = "cached_update"
+private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+
 @Composable
 internal fun AboutScreen() {
     val context = LocalContext.current
@@ -53,7 +58,14 @@ internal fun AboutScreen() {
     val downloadManager = remember(context) {
         context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     }
-    var latest by remember { mutableStateOf<JSONObject?>(null) }
+    val updatePrefs = remember(context) {
+        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+    }
+    var latest by remember(updatePrefs) {
+        mutableStateOf(updatePrefs.getString(CACHED_UPDATE, null)?.let { value ->
+            runCatching { JSONObject(value) }.getOrNull()
+        })
+    }
     var checking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var downloadId by remember { mutableStateOf<Long?>(null) }
@@ -67,12 +79,23 @@ internal fun AboutScreen() {
         checking = true
         error = null
         runCatching { withContext(Dispatchers.IO) { ApiClient.androidAppVersion() } }
-            .onSuccess { latest = it }
+            .onSuccess {
+                latest = it
+                updatePrefs.edit()
+                    .putLong(LAST_UPDATE_CHECK_AT, System.currentTimeMillis())
+                    .putString(CACHED_UPDATE, it.toString())
+                    .apply()
+            }
             .onFailure { error = it.message ?: "检查更新失败" }
         checking = false
     }
 
-    LaunchedEffect(Unit) { fetchLatest() }
+    LaunchedEffect(Unit) {
+        val lastCheckedAt = updatePrefs.getLong(LAST_UPDATE_CHECK_AT, 0L)
+        val shouldCheck = lastCheckedAt <= 0L ||
+            System.currentTimeMillis() - lastCheckedAt >= UPDATE_CHECK_INTERVAL_MS
+        if (shouldCheck) fetchLatest()
+    }
 
     fun startDownload(version: JSONObject) {
         val rawUrl = version.optString("apkUrl").trim()
