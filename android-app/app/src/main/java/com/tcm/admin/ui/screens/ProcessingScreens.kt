@@ -79,8 +79,6 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 
     // Dialog states
     var selectedPlan by remember { mutableStateOf<JSONObject?>(null) }
-    var editingPlan by remember { mutableStateOf<JSONObject?>(null) }
-    var createPlanVisible by remember { mutableStateOf(false) }
     var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
@@ -184,15 +182,17 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                 Spacer(Modifier.width(6.dp))
                 Text("扫码作业", fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
-            Button(
-                onClick = { createPlanVisible = true },
-                modifier = Modifier.weight(1f).height(CompactControlHeight),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("新建加工计划", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            if (mode != "pickup") {
+                Button(
+                    onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject())) },
+                    modifier = Modifier.weight(1f).height(CompactControlHeight),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("新建加工计划", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
             }
         }
 
@@ -505,7 +505,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 
                             if (status != 5) {
                                 OutlinedButton(
-                                    onClick = { editingPlan = plan },
+                                    onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(plan)) },
                                     shape = RoundedCornerShape(6.dp),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 ) {
@@ -652,16 +652,6 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
         )
     }
 
-    if (createPlanVisible || editingPlan != null) {
-        ProcessingPlanFormDialog(
-            initial = editingPlan,
-            stores = stores,
-            onClose = { createPlanVisible = false; editingPlan = null },
-            onSaved = { createPlanVisible = false; editingPlan = null; reload++ },
-            onError = { error = it },
-        )
-    }
-
     workflowPlan?.let { plan ->
         WorkflowOperationDialog(
             plan = plan,
@@ -709,6 +699,289 @@ internal fun PlanDetailDialog(
             }
         },
     )
+}
+
+@Composable
+internal fun ProcessingPlanFormScreen(
+    initial: JSONObject,
+    onSaved: () -> Unit,
+) {
+    val isEdit = initial.has("id") && initial.optInt("id") > 0
+    val initialPrescription = initial.optJSONObject("prescription")
+    var prescriptionId by remember(initial) {
+        mutableStateOf(initial.optInt("prescriptionId", initialPrescription?.optInt("id", 0) ?: 0))
+    }
+    var processTypeId by remember(initial) {
+        mutableStateOf(initial.optInt("processTypeId", initial.optJSONObject("processType")?.optInt("id", 0) ?: 0))
+    }
+    var prescriptionKeyword by remember { mutableStateOf("") }
+    var prescriptions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var processTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var notifyTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var totalDose by remember(initial) { mutableStateOf(initial.optInt("totalDose", 1).toString()) }
+    var bagCount by remember(initial) { mutableStateOf(initial.optInt("bagCount", 2).toString()) }
+    var volumeMl by remember(initial) { mutableStateOf(initial.optInt("volumeMl", 200).toString()) }
+    var usageMethod by remember(initial) { mutableStateOf(initial.displayField("usageMethod", "")) }
+    var pickupMethod by remember(initial) { mutableStateOf(initial.optInt("pickupMethod", 0)) }
+    var expressAddress by remember(initial) { mutableStateOf(initial.displayField("expressAddress", "")) }
+    var scheduleType by remember(initial) { mutableStateOf(initial.optInt("scheduleType", 1)) }
+    var processDate by remember(initial) {
+        mutableStateOf(initial.displayField("processDate", "").take(10).ifBlank { LocalDate.now().toString() })
+    }
+    var priority by remember(initial) { mutableStateOf(initial.optInt("priority", 0)) }
+    var notifyType by remember(initial) { mutableStateOf(initial.optInt("notifyType", 0)) }
+    var notifyStatus by remember(initial) { mutableStateOf(initial.optInt("notifyStatus", 0)) }
+    var paymentStatus by remember(initial) { mutableStateOf(initial.optInt("paymentStatus", 1)) }
+    var processRemark by remember(initial) { mutableStateOf(initial.displayField("processRemark", "")) }
+    var remark by remember(initial) { mutableStateOf(initial.displayField("remark", "")) }
+    var loading by remember { mutableStateOf(true) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                Triple(
+                    ApiClient.prescriptions(keyword = ""),
+                    ApiClient.dictionaries("ProcessType"),
+                    ApiClient.dictionaries("NotifyType"),
+                )
+            }
+        }.onSuccess { (prescriptionData, processData, notifyData) ->
+            prescriptions = (0 until prescriptionData.length()).map { prescriptionData.getJSONObject(it) }
+            processTypes = (0 until processData.length()).map { processData.getJSONObject(it) }
+            notifyTypes = (0 until notifyData.length()).map { notifyData.getJSONObject(it) }
+            if (processTypeId == 0 && processTypes.isNotEmpty()) processTypeId = processTypes.first().optInt("id")
+            if (notifyType == 0) notifyType = notifyTypes.firstOrNull { it.displayField("code", "") == "NONE" }?.optInt("id", 0) ?: 0
+            loading = false
+        }.onFailure {
+            error = it.message ?: "加载加工计划选项失败"
+            loading = false
+        }
+    }
+
+    val selectedPrescription = prescriptions.firstOrNull { it.optInt("id") == prescriptionId } ?: initialPrescription
+    val selectedProcessType = processTypes.firstOrNull { it.optInt("id") == processTypeId }
+    val isDecoction = selectedProcessType?.displayField("code", "") == "DECOCTION" || selectedProcessType?.displayField("name", "") == "代煎"
+    val visiblePrescriptions = prescriptions.filter { item ->
+        val query = prescriptionKeyword.trim()
+        query.isBlank() || listOf(item.displayField("prescriptionNo", ""), item.displayField("customerName", ""), item.displayField("phone", "")).any { it.contains(query, ignoreCase = true) }
+    }.take(30)
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+    ) {
+        AppCard {
+            SectionHeader(if (isEdit) "编辑加工计划" else "新建加工计划", "按照 Web 管理端字段填写加工任务")
+            Spacer(Modifier.height(14.dp))
+            Text("选择处方 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = prescriptionKeyword,
+                onValueChange = { prescriptionKeyword = it },
+                label = { Text("搜索处方编号、姓名或手机号") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+            Spacer(Modifier.height(8.dp))
+            if (selectedPrescription != null) {
+                Surface(color = PrimarySoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "已选：${selectedPrescription.displayField("prescriptionNo", "处方")} · ${selectedPrescription.displayField("customerName", "顾客")}",
+                        color = PrimaryDark,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                visiblePrescriptions.forEach { item ->
+                    SegmentedButton(
+                        label = "${item.displayField("customerName", "顾客")} · ${item.displayField("prescriptionNo", "处方")}",
+                        selected = prescriptionId == item.optInt("id"),
+                        onClick = { prescriptionId = item.optInt("id") },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("加工方式 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                processTypes.forEach { item ->
+                    SegmentedButton(item.displayField("name", "加工"), processTypeId == item.optInt("id"), { processTypeId = item.optInt("id") })
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = totalDose,
+                    onValueChange = { totalDose = it.filter(Char::isDigit) },
+                    label = { Text("剂数 *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = FieldShape,
+                )
+                if (isDecoction) {
+                    OutlinedTextField(
+                        value = bagCount,
+                        onValueChange = { bagCount = it.filter(Char::isDigit) },
+                        label = { Text("袋数 *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = FieldShape,
+                    )
+                }
+            }
+            if (isDecoction) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = volumeMl,
+                    onValueChange = { volumeMl = it.filter(Char::isDigit) },
+                    label = { Text("每袋毫升数 *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("取货方式 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (value, label) ->
+                    SegmentedButton(label, pickupMethod == value, { pickupMethod = value })
+                }
+            }
+            if (pickupMethod == 1 || pickupMethod == 2) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = expressAddress,
+                    onValueChange = { expressAddress = it.take(500) },
+                    label = { Text("配送地址（可选）") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("调度设置", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentedButton("指定日期", scheduleType == 1, { scheduleType = 1 })
+                SegmentedButton("等待通知", scheduleType == 2, { scheduleType = 2 })
+                SegmentedButton("普通", priority == 0, { priority = 0 })
+                SegmentedButton("加急", priority == 1, { priority = 1 })
+            }
+            if (scheduleType == 1) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = processDate,
+                    onValueChange = { processDate = it },
+                    label = { Text("计划开工日期（YYYY-MM-DD）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("提醒与收费", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                notifyTypes.forEach { item ->
+                    SegmentedButton(item.displayField("name", "不提醒"), notifyType == item.optInt("id"), { notifyType = item.optInt("id") })
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentedButton("未通知", notifyStatus == 0, { notifyStatus = 0 })
+                SegmentedButton("已通知", notifyStatus == 1, { notifyStatus = 1 })
+                SegmentedButton("未收费", paymentStatus == 0, { paymentStatus = 0 })
+                SegmentedButton("已收费", paymentStatus == 1, { paymentStatus = 1 })
+            }
+
+            Spacer(Modifier.height(14.dp))
+            OutlinedTextField(
+                value = usageMethod,
+                onValueChange = { usageMethod = it.take(200) },
+                label = { Text("服用方法（可选）") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = processRemark,
+                onValueChange = { processRemark = it.take(500) },
+                label = { Text("加工备注") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = remark,
+                onValueChange = { remark = it.take(500) },
+                label = { Text("备注") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+        }
+
+        if (loading) {
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Primary, modifier = Modifier.size(30.dp)) }
+        }
+        if (error != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(error!!, color = Danger, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            enabled = !busy && !loading && prescriptionId > 0 && processTypeId > 0 && totalDose.toIntOrNull()?.let { it > 0 } == true && (!isDecoction || (bagCount.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true)),
+            onClick = {
+                busy = true
+                error = null
+                val payload = JSONObject()
+                    .put("prescriptionId", prescriptionId)
+                    .put("processTypeId", processTypeId)
+                    .put("totalDose", totalDose.toIntOrNull() ?: 1)
+                    .put("bagCount", if (isDecoction) bagCount.toIntOrNull() ?: 1 else JSONObject.NULL)
+                    .put("volumeMl", if (isDecoction) volumeMl.toIntOrNull() ?: 200 else JSONObject.NULL)
+                    .put("usageMethod", usageMethod.trim())
+                    .put("pickupMethod", pickupMethod)
+                    .put("expressAddress", expressAddress.trim())
+                    .put("scheduleType", scheduleType)
+                    .put("processDate", if (scheduleType == 1) processDate.trim() else JSONObject.NULL)
+                    .put("priority", priority)
+                    .put("notifyType", if (notifyType > 0) notifyType else JSONObject.NULL)
+                    .put("notifyStatus", notifyStatus)
+                    .put("paymentStatus", paymentStatus)
+                    .put("processRemark", processRemark.trim())
+                    .put("remark", remark.trim())
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            if (isEdit) ApiClient.updatePlan(initial.optInt("id"), payload) else ApiClient.createPlan(payload)
+                        }
+                    }.onSuccess { onSaved() }.onFailure { error = it.message ?: "保存加工计划失败" }
+                    busy = false
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+        ) {
+            Text(if (busy) "保存中..." else if (isEdit) "保存修改" else "创建加工计划", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(20.dp))
+    }
 }
 
 @Composable
