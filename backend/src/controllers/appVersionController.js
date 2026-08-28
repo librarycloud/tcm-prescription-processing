@@ -10,6 +10,7 @@ import { ok } from "../utils/response.js";
 const releaseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../data/releases");
 
 export async function androidVersionController(_request, reply) {
+  reply.header("Cache-Control", "no-store, no-cache, must-revalidate").header("Pragma", "no-cache");
   return ok(reply, await getAndroidAppVersion());
 }
 
@@ -35,6 +36,8 @@ export async function androidReleaseController(request, reply) {
   }
   reply
     .type("application/vnd.android.package-archive")
+    .header("Cache-Control", "no-store, no-cache, must-revalidate")
+    .header("Pragma", "no-cache")
     .header("Content-Disposition", `attachment; filename=\"${filename}\"`);
   return reply.send(createReadStream(filePath));
 }
