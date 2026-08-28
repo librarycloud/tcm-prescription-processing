@@ -204,7 +204,7 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
                 }
                 InfoRowItem(label = "创建时间", value = createdAt)
 
-                val remark = p.optString("remark", "")
+                val remark = p.displayField("remark", "")
                 if (remark.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Surface(
@@ -307,7 +307,7 @@ internal fun PrescriptionDetailScreen(
                 InfoRowItem(label = "处方属性", value = if (isExternal) "外方" else "本院方")
                 InfoRowItem(label = "录入时间", value = createdAt)
 
-                val remark = detail.optString("remark", "")
+                val remark = detail.displayField("remark", "")
                 if (remark.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
                     Surface(
@@ -390,9 +390,9 @@ internal fun PrescriptionFormScreen(
     onSaved: () -> Unit,
 ) {
     val isEdit = initial.has("id") && initial.optInt("id") > 0
-    var customer by remember(initial) { mutableStateOf(initial.optString("customerName")) }
-    var phone by remember(initial) { mutableStateOf(initial.optString("phone")) }
-    var remark by remember(initial) { mutableStateOf(initial.optString("remark")) }
+    var customer by remember(initial) { mutableStateOf(initial.displayField("customerName", "")) }
+    var phone by remember(initial) { mutableStateOf(initial.displayField("phone", "")) }
+    var remark by remember(initial) { mutableStateOf(initial.displayField("remark", "")) }
     var doctorId by remember(initial) { mutableStateOf(initial.optInt("doctorId", 0)) }
     var sourceId by remember(initial) { mutableStateOf(initial.optInt("sourceId", 0)) }
     var external by remember(initial) { mutableStateOf(initial.optInt("isExternal") == 1) }
@@ -461,7 +461,7 @@ internal fun PrescriptionFormScreen(
                 doctors.forEach { d ->
                     val id = d.optInt("id")
                     SegmentedButton(
-                        label = d.optString("name", "医生"),
+                        label = d.displayField("name", "医生"),
                         selected = doctorId == id,
                         onClick = { doctorId = id },
                     )
@@ -479,7 +479,7 @@ internal fun PrescriptionFormScreen(
                 sources.forEach { s ->
                     val id = s.optInt("id")
                     SegmentedButton(
-                        label = s.optString("name", "来源"),
+                        label = s.displayField("name", "来源"),
                         selected = sourceId == id,
                         onClick = { sourceId = id },
                     )

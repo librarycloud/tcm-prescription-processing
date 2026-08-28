@@ -2,6 +2,7 @@ package com.tcm.admin
 
 import android.app.Activity
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -99,6 +100,10 @@ internal fun InventoryScreen(initialQuery: String = "") {
             error = it.message ?: "加载库存失败"
             loading = false
         }
+    }
+
+    BackHandler(enabled = selectedProduct != null) {
+        selectedProduct = null
     }
 
     Column(
@@ -379,10 +384,10 @@ internal fun InventoryScreen(initialQuery: String = "") {
 
                     products!!.forEach { product ->
                         val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
-                        val unit = product.optString("unit", "")
-                        val spec = product.optString("specification", "")
-                        val barcode = product.optString("barcode", "")
-                        val manufacturer = product.optString("manufacturer", "")
+                        val unit = product.displayField("unit", "")
+                        val spec = product.displayField("specification", "")
+                        val barcode = product.displayField("barcode", "")
+                        val manufacturer = product.displayField("manufacturer", "")
 
                         AppCard(
                             modifier = Modifier.padding(bottom = 10.dp),

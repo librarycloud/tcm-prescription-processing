@@ -64,7 +64,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
-                if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString()
+                if (stores.size == 1) selectedStoreId = stores.first().displayField("id", "")
             }
     }
 
@@ -276,18 +276,18 @@ internal fun HerbLocationAssignScreen(
     storeId: Int?,
     onSaved: () -> Unit,
 ) {
-    val existingLocation = location.optString("code").isNotBlank()
+    val existingLocation = location.displayField("code", "").isNotBlank()
     var selectedHerbId by remember { mutableStateOf(0) }
     var editingHerbId by remember { mutableStateOf<Int?>(null) }
     var herbName by remember { mutableStateOf("") }
     var herbCode by remember { mutableStateOf("") }
     var specification by remember { mutableStateOf("") }
     var herbKeyword by remember { mutableStateOf("") }
-    var locationType by remember { mutableStateOf(location.optString("type").ifBlank { "D" }) }
-    var unitNo by remember { mutableStateOf(location.opt("unitNo")?.toString().orEmpty()) }
-    var layerNo by remember { mutableStateOf(location.opt("layerNo")?.toString().orEmpty()) }
-    var columnNo by remember { mutableStateOf(location.opt("columnNo")?.toString().orEmpty()) }
-    var slotNo by remember { mutableStateOf(location.opt("slotNo")?.toString() ?: "1") }
+    var locationType by remember { mutableStateOf(location.displayField("type", "").ifBlank { "D" }) }
+    var unitNo by remember { mutableStateOf(location.displayField("unitNo", "")) }
+    var layerNo by remember { mutableStateOf(location.displayField("layerNo", "")) }
+    var columnNo by remember { mutableStateOf(location.displayField("columnNo", "")) }
+    var slotNo by remember { mutableStateOf(location.displayField("slotNo", "").ifBlank { "1" }) }
     var herbs by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -369,8 +369,8 @@ internal fun HerbLocationAssignScreen(
                                             .joinToString(" · ")
                                         if (detail.isNotBlank()) Text(detail, color = Muted, fontSize = 11.sp)
                                     }
-                                    herb.opt("slotNo")?.takeIf { it.toString().isNotBlank() }?.let {
-                                        Text("第${it}格", color = Muted, fontSize = 11.sp)
+                                    herb.displayField("slotNo", "").takeIf { it.isNotBlank() }?.let { slot ->
+                                        Text("第${slot}格", color = Muted, fontSize = 11.sp)
                                     }
                                     Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
@@ -378,9 +378,9 @@ internal fun HerbLocationAssignScreen(
                                             editingHerbId = herb.optInt("id").takeIf { it > 0 }
                                             selectedHerbId = 0
                                             herbKeyword = ""
-                                            herbName = herb.optString("name")
-                                            herbCode = herb.optString("code")
-                                            specification = herb.optString("specification")
+                                            herbName = herb.displayField("name", "")
+                                            herbCode = herb.displayField("code", "")
+                                            specification = herb.displayField("specification", "")
                                         },
                                         shape = RoundedCornerShape(5.dp),
                                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 3.dp),
@@ -472,7 +472,11 @@ internal fun HerbLocationAssignScreen(
                 )
                 val needle = herbKeyword.trim().lowercase()
                 val filteredHerbs = herbs.filter { herb ->
-                    needle.isNotBlank() && listOf(herb.optString("name"), herb.optString("code"), herb.optString("specification"))
+                    needle.isNotBlank() && listOf(
+                        herb.displayField("name", ""),
+                        herb.displayField("code", ""),
+                        herb.displayField("specification", ""),
+                    )
                         .any { it.lowercase().contains(needle) }
                 }.take(12)
                 if (filteredHerbs.isNotEmpty()) {
@@ -484,9 +488,9 @@ internal fun HerbLocationAssignScreen(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     editingHerbId = null
                                     selectedHerbId = id
-                                    herbName = herb.optString("name")
-                                    herbCode = herb.optString("code")
-                                    specification = herb.optString("specification")
+                                    herbName = herb.displayField("name", "")
+                                    herbCode = herb.displayField("code", "")
+                                    specification = herb.displayField("specification", "")
                                 },
                                 shape = FieldShape,
                                 color = if (selectedHerbId == id) PrimarySoft else Color(0xFFF9FAFB),
@@ -499,7 +503,10 @@ internal fun HerbLocationAssignScreen(
                                     Column(Modifier.weight(1f)) {
                                     Text(herb.displayField("name"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                         Text(
-                                            listOf(herb.optString("code"), herb.optString("specification")).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "已有药材" },
+                                            listOf(
+                                                herb.displayField("code", ""),
+                                                herb.displayField("specification", ""),
+                                            ).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "已有药材" },
                                             color = Muted,
                                             fontSize = 11.sp,
                                         )
@@ -510,9 +517,9 @@ internal fun HerbLocationAssignScreen(
                                             editingHerbId = id.takeIf { it > 0 }
                                             selectedHerbId = 0
                                             herbKeyword = ""
-                                            herbName = herb.optString("name")
-                                            herbCode = herb.optString("code")
-                                            specification = herb.optString("specification")
+                                            herbName = herb.displayField("name", "")
+                                            herbCode = herb.displayField("code", "")
+                                            specification = herb.displayField("specification", "")
                                         },
                                         shape = RoundedCornerShape(5.dp),
                                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 3.dp),
@@ -569,7 +576,7 @@ internal fun HerbLocationAssignScreen(
                 shape = FieldShape,
             )
 
-            if (existingLocation && location.optString("type") == "D") {
+            if (existingLocation && location.displayField("type", "") == "D") {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = slotNo,
@@ -595,7 +602,7 @@ internal fun HerbLocationAssignScreen(
                 (existingLocation || buildLocationCode(locationType, unitNo, layerNo, columnNo, slotNo).isNotBlank()) && !busy,
             onClick = {
                 busy = true
-                val code = if (existingLocation) location.optString("code") else buildLocationCode(locationType, unitNo, layerNo, columnNo, slotNo)
+                val code = if (existingLocation) location.displayField("code", "") else buildLocationCode(locationType, unitNo, layerNo, columnNo, slotNo)
                 val payload = JSONObject()
                 storeId?.let { payload.put("storeId", it) }
                 payload.put("name", herbName.trim())

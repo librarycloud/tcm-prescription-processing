@@ -61,8 +61,8 @@ internal fun ProfileScreen(
     onSessionUpdated: (AdminSession) -> Unit,
     onLogout: () -> Unit,
 ) {
-    val displayName = user?.optString("nickname").orEmpty().ifBlank {
-        user?.optString("username").orEmpty().ifBlank { "管理员" }
+    val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
+        user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
     }
     val role = when (user?.optInt("role", 0)) {
         0 -> "全局管理员"
@@ -71,9 +71,9 @@ internal fun ProfileScreen(
         else -> "管理员"
     }
     var editVisible by remember { mutableStateOf(false) }
-    var nickname by remember(user?.toString()) { mutableStateOf(user?.optString("nickname").orEmpty()) }
-    var username by remember(user?.toString()) { mutableStateOf(user?.optString("username").orEmpty()) }
-    var phone by remember(user?.toString()) { mutableStateOf(user?.optString("phone").orEmpty()) }
+    var nickname by remember(user?.toString()) { mutableStateOf(user?.displayField("nickname", "").orEmpty()) }
+    var username by remember(user?.toString()) { mutableStateOf(user?.displayField("username", "").orEmpty()) }
+    var phone by remember(user?.toString()) { mutableStateOf(user?.displayField("phone", "").orEmpty()) }
     var password by remember { mutableStateOf("") }
     var saveError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -145,7 +145,7 @@ internal fun ProfileScreen(
                 ProfileDetailRow(
                     icon = Icons.Default.Phone,
                     label = "手机号",
-                    value = maskPhone(user?.optString("phone")),
+                    value = maskPhone(user?.displayField("phone", "")),
                 )
                 HorizontalDivider(color = Color(0xFFF2F3F5))
                 ProfileDetailRow(
@@ -167,9 +167,9 @@ internal fun ProfileScreen(
 
         OutlinedButton(
             onClick = {
-                nickname = user?.optString("nickname").orEmpty()
-                username = user?.optString("username").orEmpty()
-                phone = user?.optString("phone").orEmpty()
+                nickname = user?.displayField("nickname", "").orEmpty()
+                username = user?.displayField("username", "").orEmpty()
+                phone = user?.displayField("phone", "").orEmpty()
                 password = ""
                 saveError = null
                 editVisible = true

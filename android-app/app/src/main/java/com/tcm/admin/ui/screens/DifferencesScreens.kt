@@ -210,7 +210,7 @@ internal fun DifferencesScreen() {
             if (logs != null && logs!!.isEmpty()) AppEmptyState("暂无差异流水记录")
             logs.orEmpty().forEach { log ->
                 val product = log.optJSONObject("product") ?: JSONObject()
-                val opType = log.optString("operationType")
+                val opType = log.displayField("operationType", "")
                 val qty = log.optDouble("quantity", 0.0)
 
                 AppCard(modifier = Modifier.padding(bottom = 10.dp)) {

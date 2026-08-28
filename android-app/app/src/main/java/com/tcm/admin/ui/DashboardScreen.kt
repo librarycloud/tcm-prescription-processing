@@ -53,29 +53,6 @@ internal fun DashboardScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        // Page Heading
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "工作台概览",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Ink,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "实时掌握处方、加工和包裹最新状态",
-                    color = Muted,
-                    fontSize = 13.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
         // Quick Actions
         SectionHeader("快捷功能", "快速直达管理模块")
         Spacer(Modifier.height(10.dp))

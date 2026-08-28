@@ -82,7 +82,6 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
     var editingPlan by remember { mutableStateOf<JSONObject?>(null) }
     var createPlanVisible by remember { mutableStateOf(false) }
     var workflowPlan by remember { mutableStateOf<JSONObject?>(null) }
-    var selectedPackageDetail by remember { mutableStateOf<PackageItem?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -151,8 +150,8 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                         statusCode = obj.optInt("status"),
                         time = obj.displayField("finishDate", "").take(16).replace("T", " "),
                         store = store?.displayField("name", "") ?: "",
-                        expressTrackingNo = obj.optString("expressTrackingNo", ""),
-                        pickupQrContent = obj.optString("pickupQrContent", ""),
+                        expressTrackingNo = obj.displayField("expressTrackingNo", ""),
+                        pickupQrContent = obj.displayField("pickupQrContent", ""),
                     )
                 }
             }
@@ -310,7 +309,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         val chipWeight = Modifier.weight(1f)
                         row.forEach { store ->
-                            val id = store.optString("id")
+                            val id = store.displayField("id", "")
                             SegmentedButton(store.displayField("name", "门店"), selectedStoreId == id, { selectedStoreId = id; page = 1; reload++ }, chipWeight)
                         }
                         repeat(3 - row.size) { Spacer(chipWeight) }
@@ -554,7 +553,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                 pickupTasks!!.forEach { item ->
                     AppCard(
                         modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { selectedPackageDetail = item },
+                        onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -611,7 +610,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             OutlinedButton(
-                                onClick = { selectedPackageDetail = item },
+                                onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
                                 shape = RoundedCornerShape(6.dp),
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             ) {
@@ -670,21 +669,6 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
         )
     }
 
-        selectedPackageDetail?.let { item ->
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = PageBackground,
-            ) {
-                PackageDetailPage(
-                    pkg = item,
-                    onNavigate = { target ->
-                        selectedPackageDetail = null
-                        onNavigate(target)
-                    },
-                    onBack = { selectedPackageDetail = null },
-                )
-            }
-        }
     }
 }
 
@@ -736,15 +720,17 @@ internal fun ProcessingPlanFormDialog(
     onError: (String) -> Unit,
 ) {
     val isEdit = initial != null
-    var customerName by remember(initial) { mutableStateOf(initial?.optString("customerName").orEmpty()) }
-    var phone by remember(initial) { mutableStateOf(initial?.optString("customerPhone").orEmpty()) }
+    var customerName by remember(initial) { mutableStateOf(initial?.displayField("customerName", "").orEmpty()) }
+    var phone by remember(initial) { mutableStateOf(initial?.displayField("customerPhone", "").orEmpty()) }
     var totalDose by remember(initial) { mutableStateOf(initial?.optInt("totalDose", 7)?.toString() ?: "7") }
     var bagCount by remember(initial) { mutableStateOf(initial?.optInt("bagCount", 14)?.toString() ?: "14") }
     var volumeMl by remember(initial) { mutableStateOf(initial?.optInt("volumeMl", 200)?.toString() ?: "200") }
     var pickupMethod by remember(initial) { mutableStateOf(initial?.optInt("pickupMethod", 0) ?: 0) }
-    var scheduledDate by remember(initial) { mutableStateOf(initial?.optString("scheduledDate", LocalDate.now().toString())?.take(10) ?: LocalDate.now().toString()) }
+    var scheduledDate by remember(initial) {
+        mutableStateOf(initial?.displayField("scheduledDate", "").orEmpty().take(10).ifBlank { LocalDate.now().toString() })
+    }
     var isUrgent by remember(initial) { mutableStateOf(initial?.optBoolean("isUrgent") == true || initial?.optInt("isUrgent") == 1) }
-    var remark by remember(initial) { mutableStateOf(initial?.optString("remark").orEmpty()) }
+    var remark by remember(initial) { mutableStateOf(initial?.displayField("remark", "").orEmpty()) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 

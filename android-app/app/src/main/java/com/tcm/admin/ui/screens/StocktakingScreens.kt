@@ -437,7 +437,7 @@ internal fun StocktakingDetailScreen(
                         if (!isStoreStaff) OutlinedButton(
                             onClick = {
                                 locationItem = item
-                                locationValue = item.optString("countLocationName")
+                                locationValue = item.displayField("countLocationName", "")
                             },
                             shape = FieldShape,
                             enabled = item.optInt("id", 0) > 0,
@@ -449,7 +449,7 @@ internal fun StocktakingDetailScreen(
                             onClick = {
                                 countItem = item
                                 countValue = if (isStoreStaff) "" else quantityText(if (isRecount) recountQty ?: firstQty else firstQty, "")
-                                countBatchNo = item.optString("batchNo")
+                                countBatchNo = item.displayField("batchNo", "")
                             },
                             shape = FieldShape,
                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -527,7 +527,7 @@ internal fun StocktakingDetailScreen(
                                             JSONObject()
                                                 .put("productId", item.optInt("productId"))
                                                 .put("batchNo", countBatchNo.trim())
-                                                .put("locationName", item.optString("systemLocationName", item.optString("locationName")))
+                                                .put("locationName", item.displayField("systemLocationName", item.displayField("locationName", "")))
                                                 .put("firstCountQty", value),
                                         )
                                     }
@@ -632,7 +632,7 @@ internal fun StocktakingDetailScreen(
                                 val candidateRecount = nullableDouble(candidate, "recountQty")
                                 val candidateFirst = nullableDouble(candidate, "firstCountQty")
                                 countValue = quantityText(if (candidate.optInt("checkStatus", 0) == 2) candidateRecount ?: candidateFirst else candidateFirst, "")
-                                countBatchNo = candidate.optString("batchNo")
+                                countBatchNo = candidate.displayField("batchNo", "")
                                 candidateVisible = false
                             },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
