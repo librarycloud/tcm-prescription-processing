@@ -131,8 +131,8 @@ internal fun AboutScreen() {
             val downloadUrl = "$url${separator}versionCode=$versionCode&cacheKey=${java.net.URLEncoder.encode(cacheKey, "UTF-8")}"
             val fileName = "app-release-v${versionCode}-${versionName}-${cacheKey}.apk"
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
-                .setTitle("药房助手 $versionName")
-                .setDescription("版本 $versionName 下载完成后可安装")
+                .setTitle("药房助手更新 v$versionName")
+                .setDescription("药房助手 v$versionName 下载完成")
                 .setMimeType("application/vnd.android.package-archive")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
