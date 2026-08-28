@@ -45,6 +45,8 @@ android {
         applicationId = "com.tcm.admin"
         minSdk = 31
         targetSdk = 36
+        // The admin client ships Chinese UI with English fallback only.
+        resourceConfigurations += setOf("zh", "en")
         versionCode = providers.gradleProperty("VERSION_CODE")
             .map(String::toInt)
             .orElse(1)
@@ -100,6 +102,12 @@ androidComponents {
                 "**/libimage_processing_util_jni.so",
                 "**/libsurface_util_jni.so",
             ),
+        )
+    }
+    onVariants(selector().withBuildType("release")) { variant ->
+        // Release is distributed as one phone APK; emulator-only ABIs are unnecessary.
+        variant.packaging.jniLibs.excludes.addAll(
+            setOf("**/x86/**", "**/x86_64/**"),
         )
     }
 }
