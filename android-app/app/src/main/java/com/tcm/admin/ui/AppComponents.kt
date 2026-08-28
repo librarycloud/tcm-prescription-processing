@@ -70,8 +70,11 @@ internal val Warning: Color @Composable get() = MaterialTheme.colorScheme.second
 internal val WarningSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
 internal val Danger: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val DangerSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
-internal val Purple: Color @Composable get() = MaterialTheme.colorScheme.tertiary
-internal val PurpleSoft: Color @Composable get() = MaterialTheme.colorScheme.tertiaryContainer
+// Method-specific accents keep logistics labels visually distinct from workflow status labels.
+private val RunnerColor = Color(0xFFE6A23C)
+private val RunnerSoftColor = Color(0xFFFFF1D6)
+private val CourierColor = Color(0xFF8E6BBE)
+private val CourierSoftColor = Color(0xFFF1E8FF)
 internal val CardShape = RoundedCornerShape(10.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
@@ -152,12 +155,16 @@ internal fun StatusPill(
     val (color, bgColor) = when {
         text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销") ->
             Pair(Success, SuccessSoft)
+        text == "自提" ->
+            Pair(Primary, PrimarySoft)
+        text == "跑腿" ->
+            Pair(RunnerColor, RunnerSoftColor)
+        text == "快递" ->
+            Pair(CourierColor, CourierSoftColor)
         text in listOf("实货少", "已取消", "逾期", "已逾期", "紧急", "特急", "加急") ->
             Pair(Danger, DangerSoft)
-        text in listOf("加工中", "实货多", "自提", "进行中", "待盘点", "盘点中") ->
+        text in listOf("加工中", "实货多", "进行中", "待盘点", "盘点中") ->
             Pair(Primary, PrimarySoft)
-        text in listOf("跑腿", "快递") ->
-            Pair(Purple, PurpleSoft)
         else ->
             Pair(Warning, WarningSoft)
     }

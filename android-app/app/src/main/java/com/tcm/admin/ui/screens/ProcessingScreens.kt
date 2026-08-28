@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -1159,6 +1160,9 @@ internal fun WorkflowOperationScreen(
     var portionNo by remember { mutableStateOf("1") }
     var stage by remember { mutableStateOf(3) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var previewPhotoId by remember { mutableStateOf(0) }
+    var photoDeleting by remember { mutableStateOf(false) }
 
     fun createPhotoUri(): Uri? {
         val values = ContentValues().apply {
@@ -1226,10 +1230,14 @@ internal fun WorkflowOperationScreen(
     val photos = detail?.optJSONArray("photos")?.length() ?: 0
     val status = detail?.optInt("status", plan.optInt("status")) ?: plan.optInt("status")
     val currentStage = detail?.optInt("currentStage", 1) ?: 1
-    val isDecoction = detail?.optBoolean("isDecoction") == true || plan.optJSONObject("processType")?.displayField("name", "") == "代煎"
+    val processType = detail?.optJSONObject("processType") ?: plan.optJSONObject("processType")
+    val processTypeCode = processType?.displayField("code", "") ?: plan.displayField("processTypeCode", "")
+    val processTypeName = processType?.displayField("name", "") ?: plan.displayField("processTypeName", "")
+    val hasEquipmentWorkflow = processTypeCode == "DECOCTION" || processTypeName == "代煎" || processTypeName.contains("膏方") || processTypeName.contains("膏剂")
+    val isDecoction = detail?.optBoolean("isDecoction") == true || processTypeCode == "DECOCTION" || processTypeName == "代煎"
     val activeDecoction = usages.firstOrNull { it.optInt("stage") == 4 && it.optInt("status") == 1 }
     val activePackaging = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
-    val canUpload = status == 1 && currentStage in listOf(1, 2) && photos < 5
+    val canUpload = status == 1 && currentStage in listOf(1, 2) && photos < 3
     val canFinish = detail?.optBoolean("canCompleteWorkflow") == true || detail?.optBoolean("canFinalizeWorkflow") == true
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -1241,7 +1249,7 @@ internal fun WorkflowOperationScreen(
             Spacer(Modifier.height(10.dp))
             InfoRowItem("当前状态", planStatus(status), isBold = true, valueColor = Primary)
             InfoRowItem("当前阶段", detail?.optInt("currentStage")?.let { processingStageLabel(it) } ?: "待加载")
-            InfoRowItem("调配照片", "$photos / 5 张")
+            InfoRowItem("调配照片", "$photos / 3 张")
         }
 
         if (error != null) {
@@ -1286,7 +1294,63 @@ internal fun WorkflowOperationScreen(
             }
         }
 
-        if (isDecoction) {
+        if (photos > 0) {
+            Spacer(Modifier.height(10.dp))
+            AppCard {
+                Text("调配照片", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                Spacer(Modifier.height(8.dp))
+                val photoItems = detail?.optJSONArray("photos")
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (photoItems != null) {
+                        (0 until photoItems.length()).forEach { index ->
+                            val photoId = photoItems.optJSONObject(index)?.optInt("id", 0) ?: 0
+                            if (photoId > 0) {
+                                OutlinedButton(
+                                    enabled = !busy,
+                                    onClick = {
+                                        busy = true
+                                        scope.launch {
+                                            runCatching {
+                                                withContext(Dispatchers.IO) {
+                                                    val bytes = ApiClient.processingPhoto(plan.optInt("id"), photoId)
+                                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                                }
+                                            }.onSuccess {
+                                                previewBitmap = it
+                                                previewPhotoId = photoId
+                                            }.onFailure { error = it.message ?: "照片加载失败" }
+                                            busy = false
+                                        }
+                                    },
+                                    shape = FieldShape,
+                                ) { Text("查看照片 ${index + 1}") }
+                                if (status == 1 && currentStage in listOf(1, 2)) {
+                                    OutlinedButton(
+                                        enabled = !photoDeleting && !busy,
+                                        onClick = {
+                                            photoDeleting = true
+                                            scope.launch {
+                                                runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPhoto(plan.optInt("id"), photoId) } }
+                                                    .onSuccess { reload() }
+                                                    .onFailure { error = it.message ?: "照片删除失败" }
+                                                photoDeleting = false
+                                            }
+                                        },
+                                        shape = FieldShape,
+                                    ) { Text("删除") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (hasEquipmentWorkflow) {
             listOf(3 to "2  浸泡", 4 to "3  煎煮", 5 to "4  打包").forEach { (step, title) ->
                 Spacer(Modifier.height(10.dp))
                 AppCard {
@@ -1309,7 +1373,7 @@ internal fun WorkflowOperationScreen(
         }
 
         Spacer(Modifier.height(10.dp))
-        AppCard {
+        if (hasEquipmentWorkflow) AppCard {
             Text("设备工序操作", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
             Spacer(Modifier.height(8.dp))
             FlowRow(
@@ -1317,7 +1381,7 @@ internal fun WorkflowOperationScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (isDecoction) {
+                if (hasEquipmentWorkflow) {
                     SegmentedButton("浸泡", stage == 3, { stage = 3 })
                     SegmentedButton("煎煮", stage == 4, { stage = 4 })
                     SegmentedButton("打包", stage == 5, { stage = 5 })
@@ -1401,6 +1465,25 @@ internal fun WorkflowOperationScreen(
             shape = FieldShape,
         ) { Text("返回加工计划") }
         Spacer(Modifier.height(20.dp))
+    }
+
+    previewBitmap?.let { bitmap ->
+        AlertDialog(
+            onDismissRequest = { previewBitmap = null },
+            title = { Text("调配照片") },
+            text = {
+                Column {
+                    androidx.compose.foundation.Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "调配照片 $previewPhotoId",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { previewBitmap = null }) { Text("关闭") }
+            },
+        )
     }
 }
 

@@ -131,6 +131,8 @@ object ApiClient {
     fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
     fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
     fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
+    fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
+    fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
     fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {
         val query = buildList {
             add("page=1")
@@ -360,5 +362,19 @@ object ApiClient {
         if (response.code == 401) token = null
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "请求失败"))
         return json
+    }
+
+    private fun requestBytes(path: String): ByteArray {
+        val requestBuilder = Request.Builder()
+            .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
+            .header("Accept", "image/*")
+        token?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        val response = client.newCall(requestBuilder.get().build()).execute()
+        if (!response.isSuccessful) {
+            val message = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(message) }.getOrNull()
+            throw IllegalStateException(json?.optString("message")?.takeIf { it.isNotBlank() } ?: "照片加载失败")
+        }
+        return response.body?.bytes() ?: throw IllegalStateException("照片内容为空")
     }
 }

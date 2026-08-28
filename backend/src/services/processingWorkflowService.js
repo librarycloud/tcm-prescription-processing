@@ -1,7 +1,7 @@
 import { AppError } from "../utils/appError.js";
 import { randomUUID } from "node:crypto";
 import { isSuperAdmin } from "../constants/roles.js";
-import { PLAN_STATUS, PROCESS_TYPE_CODES } from "../constants/processing.js";
+import { PLAN_STATUS, requiresEquipmentWorkflow } from "../constants/processing.js";
 import {
   EQUIPMENT_STATUS,
   EQUIPMENT_TYPE,
@@ -73,10 +73,7 @@ function workflowInclude() {
 }
 
 function isDecoction(plan) {
-  return (
-    plan.processType?.code === PROCESS_TYPE_CODES.DECOCTION ||
-    plan.processType?.name === "代煎"
-  );
+  return requiresEquipmentWorkflow(plan.processType);
 }
 
 function workflowCompletionState(
