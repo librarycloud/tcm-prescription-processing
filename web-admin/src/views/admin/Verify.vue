@@ -48,7 +48,10 @@
         />
 
         <div class="result-content">
-          <QRCodeCard :content="packageInfo.pickupQrContent || packageInfo.pickupCode" />
+          <QRCodeCard
+            :content="packageInfo.pickupQrContent || packageInfo.pickupCode"
+            :show-content="false"
+          />
           <div>
             <div class="detail-grid">
               <div class="detail-item">
