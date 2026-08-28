@@ -155,7 +155,7 @@ object ApiClient {
     fun differences(): JSONArray = differenceProducts()
     fun productCatalog(keyword: String = ""): JSONArray = list(request(
         "/admin/products?page=1&pageSize=100" +
-            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), \"UTF-8\")}" } ?: "")
+            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
     ).getJSONObject("data"))
     fun differenceSummary(storeId: Int? = null): JSONObject {
         val summary = request("/admin/product-differences/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
