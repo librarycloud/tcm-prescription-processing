@@ -184,7 +184,7 @@ internal fun SegmentedButton(
         ) {
             Text(
                 text = label,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
@@ -194,8 +194,8 @@ internal fun SegmentedButton(
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(6.dp),
-            color = Color.White,
-            border = BorderStroke(1.dp, Color(0xFFE5E6EB)),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, Border),
             modifier = modifier,
         ) {
             Text(

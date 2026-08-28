@@ -155,6 +155,7 @@ export async function listGoodsChecks(prisma, actor, query = {}) {
 }
 
 export async function createGoodsCheck(prisma, actor, payload = {}) {
+  assertManager(actor);
   const storeId = await resolveBusinessStoreId(prisma, actor, payload.storeId);
   const checkName = text(payload.checkName);
   if (!checkName) throw new AppError("盘点名称不能为空", 400);

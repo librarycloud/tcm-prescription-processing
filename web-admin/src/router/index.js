@@ -79,7 +79,7 @@ const routes = [
         path: 'yd-goods-checks',
         name: 'YdGoodsChecks',
         component: () => import('@/views/admin/YdGoodsChecks.vue'),
-        meta: { title: '药店商品盘点', icon: 'Finished', allowedRoles: [0, 2] }
+        meta: { title: '药店商品盘点', icon: 'Finished', allowedRoles: [0, 2, 3] }
       },
       {
         path: 'prescriptions/:id',

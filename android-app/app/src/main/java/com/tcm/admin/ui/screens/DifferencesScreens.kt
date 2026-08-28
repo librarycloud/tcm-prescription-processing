@@ -47,6 +47,7 @@ internal fun DifferencesScreen() {
     var tab by remember { mutableStateOf("current") }
     var stats by remember { mutableStateOf<JSONObject?>(null) }
     var products by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var registerProducts by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var logs by remember { mutableStateOf<List<JSONObject>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
@@ -56,6 +57,7 @@ internal fun DifferencesScreen() {
     var registerType by remember { mutableStateOf("PRE_RECEIPT") }
     var registerProduct by remember { mutableStateOf<JSONObject?>(null) }
     var registerQuantity by remember { mutableStateOf("") }
+    var registerKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(reload, tab) {
@@ -70,6 +72,18 @@ internal fun DifferencesScreen() {
             logs = (0 until logList.length()).map { logList.getJSONObject(it) }
         }.onFailure {
             error = it.message ?: "加载库存差异失败"
+        }
+    }
+
+    LaunchedEffect(registerVisible) {
+        if (registerVisible && registerProducts.isEmpty()) {
+            runCatching {
+                withContext(Dispatchers.IO) { ApiClient.productCatalog() }
+            }.onSuccess { values ->
+                registerProducts = (0 until values.length()).map { values.getJSONObject(it) }
+            }.onFailure {
+                error = it.message ?: "加载商品目录失败"
+            }
         }
     }
 
@@ -250,18 +264,11 @@ internal fun DifferencesScreen() {
                         scope.launch {
                             runCatching {
                                 withContext(Dispatchers.IO) {
-                                    ApiClient.registerDifference(
+                                    ApiClient.writeOffDifference(
                                         JSONObject()
-                                            .put("operationType", opType)
-                                            .put("businessDate", LocalDate.now().toString())
-                                            .put(
-                                                "items",
-                                                JSONArray().put(
-                                                    JSONObject()
-                                                        .put("productId", product.optInt("id"))
-                                                        .put("quantity", qty),
-                                                ),
-                                            ),
+                                            .put("productId", product.optInt("id"))
+                                            .put("quantity", qty)
+                                            .put("businessDate", LocalDate.now().toString()),
                                     )
                                 }
                             }.onSuccess {
@@ -298,7 +305,19 @@ internal fun DifferencesScreen() {
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    products.orEmpty().take(8).forEach { product ->
+                    OutlinedTextField(
+                        value = registerKeyword,
+                        onValueChange = { registerKeyword = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("搜索商品") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    registerProducts.filter { product ->
+                        val keyword = registerKeyword.trim()
+                        keyword.isBlank() || product.optString("name").contains(keyword, ignoreCase = true) || product.optString("productCode").contains(keyword, ignoreCase = true)
+                    }.take(12).forEach { product ->
                         OutlinedButton(
                             onClick = { registerProduct = product },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -346,6 +365,7 @@ internal fun DifferencesScreen() {
                                     registerVisible = false
                                     registerProduct = null
                                     registerQuantity = ""
+                                    registerKeyword = ""
                                     reload++
                                 }.onFailure {
                                     error = it.message ?: "登记差异失败"

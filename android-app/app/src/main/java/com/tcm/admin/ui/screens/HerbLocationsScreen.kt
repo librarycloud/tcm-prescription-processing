@@ -278,6 +278,7 @@ internal fun HerbLocationAssignScreen(
 ) {
     val existingLocation = location.optString("code").isNotBlank()
     var selectedHerbId by remember { mutableStateOf(0) }
+    var editingHerbId by remember { mutableStateOf<Int?>(null) }
     var herbName by remember { mutableStateOf("") }
     var herbCode by remember { mutableStateOf("") }
     var specification by remember { mutableStateOf("") }
@@ -371,6 +372,22 @@ internal fun HerbLocationAssignScreen(
                                     herb.opt("slotNo")?.takeIf { it.toString().isNotBlank() }?.let {
                                         Text("第${it}格", color = Muted, fontSize = 11.sp)
                                     }
+                                    Spacer(Modifier.width(6.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            editingHerbId = herb.optInt("id").takeIf { it > 0 }
+                                            selectedHerbId = 0
+                                            herbKeyword = ""
+                                            herbName = herb.optString("name")
+                                            herbCode = herb.optString("code")
+                                            specification = herb.optString("specification")
+                                        },
+                                        shape = RoundedCornerShape(5.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 3.dp),
+                                        modifier = Modifier.height(30.dp),
+                                    ) {
+                                        Text("编辑", fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }
@@ -436,7 +453,12 @@ internal fun HerbLocationAssignScreen(
                 Spacer(Modifier.height(14.dp))
             }
 
-            Text("搜索匹配药材", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Text(
+                if (editingHerbId != null) "编辑已有药材" else "搜索匹配药材",
+                color = Ink,
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+            )
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = herbKeyword,
@@ -459,6 +481,7 @@ internal fun HerbLocationAssignScreen(
                         val id = herb.optInt("id")
                         Surface(
                             modifier = Modifier.fillMaxWidth().clickable {
+                                editingHerbId = null
                                 selectedHerbId = id
                                 herbName = herb.optString("name")
                                 herbCode = herb.optString("code")
@@ -484,7 +507,9 @@ internal fun HerbLocationAssignScreen(
             }
 
             Spacer(Modifier.height(12.dp))
-            Text("或填写新增药材信息", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            if (editingHerbId == null) {
+                Text("或填写新增药材信息", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            }
             Spacer(Modifier.height(6.dp))
 
             OutlinedTextField(
@@ -548,21 +573,27 @@ internal fun HerbLocationAssignScreen(
             onClick = {
                 busy = true
                 val code = if (existingLocation) location.optString("code") else buildLocationCode(locationType, unitNo, layerNo, columnNo, slotNo)
-                val payload = JSONObject().put("locationCode", code)
+                val payload = JSONObject()
                 storeId?.let { payload.put("storeId", it) }
-                if (selectedHerbId > 0) {
-                    payload.put("herbId", selectedHerbId)
-                } else {
-                    payload.put("name", herbName.trim())
-                        .put("code", herbCode.trim())
-                        .put("specification", specification.trim())
+                payload.put("name", herbName.trim())
+                    .put("code", herbCode.trim())
+                    .put("specification", specification.trim())
+                if (editingHerbId == null) {
+                    payload.put("locationCode", code)
+                    if (selectedHerbId > 0) {
+                        payload.remove("name")
+                        payload.remove("code")
+                        payload.remove("specification")
+                        payload.put("herbId", selectedHerbId)
+                    }
+                    if (locationType == "D") slotNo.toIntOrNull()?.let { payload.put("slotNo", it) }
                 }
-                if (locationType == "D") slotNo.toIntOrNull()?.let { payload.put("slotNo", it) }
 
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
-                            ApiClient.assignHerbLocation(payload)
+                            editingHerbId?.let { ApiClient.updateHerb(it, payload) }
+                                ?: ApiClient.assignHerbLocation(payload)
                         }
                     }.onSuccess {
                         onSaved()

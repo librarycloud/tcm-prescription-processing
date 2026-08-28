@@ -2,7 +2,7 @@
   <div class="page yd-check-page">
     <div class="page-header">
       <div><h1 class="page-title">药店商品盘点</h1><p class="page-subtitle">按门店记录初盘、复盘和库存调整依据</p></div>
-      <div class="header-actions"><el-button type="primary" :icon="Plus" @click="openCreate">新建盘点</el-button></div>
+      <div class="header-actions"><el-button v-if="userStore.isManager" type="primary" :icon="Plus" @click="openCreate">新建盘点</el-button></div>
     </div>
 
     <el-card shadow="never">
@@ -35,10 +35,12 @@
         <div><strong>{{ selectedCheck.checkName }}</strong><span class="muted">{{ selectedCheck.store?.name || '' }}</span></div>
         <div class="header-actions">
           <el-button size="small" type="primary" :icon="Plus" @click="openCandidateDialog">新增盘点记录</el-button>
-          <el-button size="small" :icon="Download" @click="download('all')">导出全部</el-button>
-          <el-button size="small" @click="download('recount')">导出待复盘</el-button>
-          <el-button size="small" type="warning" @click="download('adjustment')">导出需调整库存</el-button>
-          <el-button v-if="selectedCheck.status !== 2" size="small" type="success" @click="finish">结束盘点</el-button>
+          <template v-if="userStore.isManager">
+            <el-button size="small" :icon="Download" @click="download('all')">导出全部</el-button>
+            <el-button size="small" @click="download('recount')">导出待复盘</el-button>
+            <el-button size="small" type="warning" @click="download('adjustment')">导出需调整库存</el-button>
+            <el-button v-if="selectedCheck.status !== 2" size="small" type="success" @click="finish">结束盘点</el-button>
+          </template>
         </div>
       </div>
       <el-form class="filters detail-filters" inline @submit.prevent="loadItems">
@@ -70,7 +72,7 @@
         <el-table-column label="复盘" align="right"><template #default="{ row }">{{ row.recountQty === null ? '-' : qty(row.recountQty) }}</template></el-table-column>
         <el-table-column label="差异" align="right"><template #default="{ row }"><strong :class="{ danger: row.difference }">{{ row.difference === null ? '-' : qty(row.difference) }}</strong></template></el-table-column>
         <el-table-column label="状态"><template #default="{ row }">{{ statusText(row.checkStatus, row.needsAdjustment) }}</template></el-table-column>
-        <el-table-column label="操作" min-width="240" fixed="right"><template #default="{ row }"><el-button v-if="row.recountQty === null" link type="primary" :icon="Edit" :disabled="row.reviewStatus === 1" @click="openCount(row)">{{ row.firstCountQty !== null ? '复盘' : '盘点' }}</el-button><span v-else class="muted-action">已复盘</span><el-button link type="primary" @click="openLocation(row)">货位</el-button><el-button link type="success" :disabled="row.reviewStatus === 1" @click="review(row)">二次确认</el-button></template></el-table-column>
+        <el-table-column label="操作" min-width="240" fixed="right"><template #default="{ row }"><el-button v-if="row.recountQty === null" link type="primary" :icon="Edit" :disabled="row.reviewStatus === 1" @click="openCount(row)">{{ row.firstCountQty !== null ? '复盘' : '盘点' }}</el-button><span v-else class="muted-action">已复盘</span><el-button v-if="userStore.isManager" link type="primary" @click="openLocation(row)">货位</el-button><el-button v-if="userStore.isManager" link type="success" :disabled="row.reviewStatus === 1" @click="review(row)">二次确认</el-button></template></el-table-column>
       </el-table>
       <Pagination v-model:page="itemPagination.page" v-model:page-size="itemPagination.pageSize" :total="itemPagination.total" />
     </el-card>
@@ -79,7 +81,7 @@
       <el-form label-width="90px"><el-form-item label="门店" required><el-select v-model="createForm.storeId" :disabled="!userStore.isSuperAdmin" placeholder="选择门店"><el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" /></el-select></el-form-item><el-form-item label="盘点名称" required><el-input v-model="createForm.checkName" placeholder="如：2026年7月临时盘点" /></el-form-item><el-form-item label="盘点类型"><el-select v-model="createForm.checkType"><el-option label="临时盘点" :value="1" /><el-option label="季度盘点" :value="2" /><el-option label="年度盘点" :value="3" /></el-select></el-form-item><el-form-item label="商品分类"><el-select v-model="createForm.categoryCodes" multiple filterable collapse-tags collapse-tags-tooltip clearable placeholder="不选择表示全部分类"><el-option v-for="item in categoryMappings" :key="item.categoryCode" :label="`${item.categoryCode} / ${item.categoryName}`" :value="item.categoryCode" /></el-select></el-form-item></el-form>
       <template #footer><el-button @click="planDialog = false">取消</el-button><el-button type="primary" @click="savePlan">{{ editingCheck ? '保存' : '创建' }}</el-button></template>
     </el-dialog>
-    <el-dialog v-model="countDialog" :title="countForm.mode === 'recount' ? '复盘' : '初盘'" width="420px"><el-form label-width="90px"><el-form-item label="商品">{{ countForm.product?.productCode }} {{ countForm.product?.name }}</el-form-item><el-form-item label="批号"><el-input v-if="countForm.manualBatch" v-model="countForm.batchNo" placeholder="输入新增批号" /><span v-else>{{ countForm.batchNo || '-' }}</span></el-form-item><el-form-item label="系统数量">{{ qty(countForm.systemQty) }}</el-form-item><el-form-item v-if="countForm.mode === 'initial'" label="盘点货位"><el-input v-model="countForm.location" placeholder="没有变化可留空" /></el-form-item><el-form-item :label="countForm.mode === 'recount' ? '复盘数量' : '初盘数量'"><el-input-number v-model="countForm.qty" :min="0" :precision="3" controls-position="right" /></el-form-item></el-form><template #footer><el-button @click="countDialog = false">取消</el-button><el-button type="primary" @click="saveCount">保存</el-button></template></el-dialog>
+    <el-dialog v-model="countDialog" :title="countForm.mode === 'recount' ? '复盘' : '初盘'" width="420px"><el-form label-width="90px"><el-form-item label="商品">{{ countForm.product?.productCode }} {{ countForm.product?.name }}</el-form-item><el-form-item label="批号"><el-input v-if="countForm.manualBatch" v-model="countForm.batchNo" placeholder="输入新增批号" /><span v-else>{{ countForm.batchNo || '-' }}</span></el-form-item><el-form-item v-if="userStore.isManager" label="系统数量">{{ qty(countForm.systemQty) }}</el-form-item><el-form-item v-if="countForm.mode === 'initial'" label="盘点货位"><el-input v-model="countForm.location" placeholder="没有变化可留空" /></el-form-item><el-form-item :label="countForm.mode === 'recount' ? '复盘数量' : '初盘数量'"><el-input-number v-model="countForm.qty" :min="0" :precision="3" controls-position="right" /></el-form-item></el-form><template #footer><el-button @click="countDialog = false">取消</el-button><el-button type="primary" @click="saveCount">保存</el-button></template></el-dialog>
     <el-drawer v-model="candidateDialog" class="candidate-drawer" title="新增盘点记录" direction="rtl" size="min(1240px, 92vw)">
       <el-form class="filters candidate-filters" inline @submit.prevent="loadCandidates">
         <el-input v-model.trim="candidateKeyword" clearable placeholder="商品编号、名称、条码" @keyup.enter="loadCandidates" />
@@ -115,7 +117,7 @@
           <el-table-column label="有效期" min-width="105"><template #default="{ row }">{{ dateOnly(row.expiryDate) }}</template></el-table-column>
           <el-table-column label="零售价" min-width="90" align="right"><template #default="{ row }">{{ price(row.price) }}</template></el-table-column>
           <el-table-column label="状态" min-width="90"><template #default="{ row }">{{ statusText(row.checkStatus, row.needsAdjustment) }}</template></el-table-column>
-          <el-table-column label="操作" min-width="220" fixed="right"><template #default="{ row }"><el-button v-if="row.recountQty === null" link type="primary" :icon="Edit" :disabled="row.reviewStatus === 1" @click="openCount(row)">{{ row.firstCountQty !== null ? '复盘' : '盘点' }}</el-button><span v-else class="muted-action">已复盘</span><el-button v-if="row.id" link type="primary" @click="openLocation(row)">货位</el-button><el-button v-if="row.id" link type="success" :disabled="row.reviewStatus === 1 || row.firstCountQty === null" @click="review(row)">二次确认</el-button></template></el-table-column>
+          <el-table-column label="操作" min-width="220" fixed="right"><template #default="{ row }"><el-button v-if="row.recountQty === null" link type="primary" :icon="Edit" :disabled="row.reviewStatus === 1" @click="openCount(row)">{{ row.firstCountQty !== null ? '复盘' : '盘点' }}</el-button><span v-else class="muted-action">已复盘</span><el-button v-if="userStore.isManager && row.id" link type="primary" @click="openLocation(row)">货位</el-button><el-button v-if="userStore.isManager && row.id" link type="success" :disabled="row.reviewStatus === 1 || row.firstCountQty === null" @click="review(row)">二次确认</el-button></template></el-table-column>
         </el-table>
       </template>
     </el-drawer>

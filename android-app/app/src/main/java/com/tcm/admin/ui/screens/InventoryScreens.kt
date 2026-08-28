@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -298,9 +299,9 @@ internal fun InventoryScreen(initialQuery: String = "") {
                 val batchNo = item.optString("batchNo", "-")
                 val location = item.optString("locationName").ifBlank { item.optString("locationCode", "-") }
                 val qty = item.optDouble("quantity", 0.0)
-                val prodDate = item.optString("productionDate", "").take(10)
-                val expDate = item.optString("expiryDate", "").take(10)
-                val inDate = item.optString("inboundDate", "").take(10)
+                val prodDate = inventoryDate(item, "productionDate")
+                val expDate = inventoryDate(item, "expiryDate", "expirationDate", "expireDate")
+                val inDate = inventoryDate(item, "inboundDate", "receivedAt")
 
                 AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
                     Row(
@@ -349,6 +350,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                             color = Muted,
                             fontSize = 10.sp,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = "有效期：${expDate.ifBlank { "-" }}",
@@ -356,6 +358,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                             color = if (expDate.isNotBlank()) Danger else Muted,
                             fontSize = 10.sp,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = "入库：${inDate.ifBlank { "-" }}",
@@ -363,6 +366,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                             color = Muted,
                             fontSize = 10.sp,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -437,4 +441,12 @@ internal fun InventoryScreen(initialQuery: String = "") {
 
         Spacer(Modifier.height(16.dp))
     }
+}
+
+private fun inventoryDate(item: JSONObject, vararg keys: String): String {
+    return keys.asSequence()
+        .mapNotNull { key -> item.opt(key)?.takeIf { it != JSONObject.NULL }?.toString() }
+        .firstOrNull { value -> value.isNotBlank() && value != "null" }
+        ?.take(10)
+        .orEmpty()
 }

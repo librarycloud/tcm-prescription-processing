@@ -266,7 +266,7 @@ export default async function adminRoutes(fastify) {
   fastify.get("/e6-pharmacy/barcode-template", e6PharmacyBarcodeTemplateController);
   fastify.post("/e6-pharmacy/barcode-import", importE6PharmacyBarcodesController);
   fastify.get("/yd-goods-check", storeStaffRoute, listGoodsChecksController);
-  fastify.post("/yd-goods-check", createGoodsCheckController);
+  fastify.post("/yd-goods-check", { preHandler: verifyManager }, createGoodsCheckController);
   fastify.put("/yd-goods-check/:id", storeStaffRoute, updateGoodsCheckController);
   fastify.delete("/yd-goods-check/:id", storeStaffRoute, deleteGoodsCheckController);
   fastify.get("/yd-goods-check/:id", storeStaffRoute, goodsCheckDetailController);

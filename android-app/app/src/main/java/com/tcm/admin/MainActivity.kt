@@ -285,10 +285,14 @@ private fun TcmAdminApp() {
                     )
                 }
                 is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }) {
-                    StocktakingScreen(onNavigate = ::navigateTo)
+                    StocktakingScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }) {
-                    StocktakingDetailScreen(checkId = currentScreen.checkId, onBack = { navigateBack() })
+                    StocktakingDetailScreen(
+                        checkId = currentScreen.checkId,
+                        user = session?.user,
+                        onBack = { navigateBack() },
+                    )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }) {
                     DifferencesScreen()
