@@ -90,9 +90,9 @@ android {
 }
 
 androidComponents {
-    onVariants(selector().withBuildType("debug")) { variant ->
+    onVariants(selector().all()) { variant ->
         // These vendor binaries do not contain strip-compatible symbol tables.
-        // Keep their symbols in debug builds without bloating release APKs.
+        // Keep their symbols in every variant so AGP skips the failed strip step.
         variant.packaging.jniLibs.keepDebugSymbols.addAll(
             setOf(
                 "**/libandroidx.graphics.path.so",
