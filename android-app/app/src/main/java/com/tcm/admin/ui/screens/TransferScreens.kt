@@ -197,7 +197,7 @@ internal fun TransfersScreen() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = transfer.optString("transferNo"),
+                        text = transfer.displayField("transferNo"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Ink,
@@ -220,7 +220,7 @@ internal fun TransfersScreen() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = transfer.optJSONObject("fromStore")?.optString("name") ?: "-",
+                            text = transfer.optJSONObject("fromStore")?.displayField("name") ?: "-",
                             fontWeight = FontWeight.SemiBold,
                             color = Ink,
                             fontSize = 13.sp,
@@ -234,7 +234,7 @@ internal fun TransfersScreen() {
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = transfer.optJSONObject("toStore")?.optString("name") ?: "-",
+                            text = transfer.optJSONObject("toStore")?.displayField("name") ?: "-",
                             fontWeight = FontWeight.SemiBold,
                             color = Ink,
                             fontSize = 13.sp,
@@ -250,11 +250,11 @@ internal fun TransfersScreen() {
                 )
                 InfoRowItem(
                     label = "调拨日期",
-                    value = transfer.optString("transferDate").take(10),
+                            value = transfer.displayField("transferDate").take(10),
                 )
                 InfoRowItem(
                     label = "预计归还",
-                    value = transfer.optString("expectedReturnDate").take(10),
+                            value = transfer.displayField("expectedReturnDate").take(10),
                     valueColor = if (isOverdue) Danger else Ink,
                     isBold = isOverdue,
                 )
@@ -310,7 +310,7 @@ internal fun TransfersScreen() {
                     ) {
                         stores.forEach { store ->
                             val id = store.opt("id")?.toString().orEmpty()
-                            SegmentedButton(store.optString("name"), fromStoreId == id, onClick = { fromStoreId = id })
+                            SegmentedButton(store.displayField("name", "门店"), fromStoreId == id, onClick = { fromStoreId = id })
                         }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -322,7 +322,7 @@ internal fun TransfersScreen() {
                     ) {
                         stores.forEach { store ->
                             val id = store.opt("id")?.toString().orEmpty()
-                            SegmentedButton(store.optString("name"), toStoreId == id, onClick = { toStoreId = id })
+                            SegmentedButton(store.displayField("name", "门店"), toStoreId == id, onClick = { toStoreId = id })
                         }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -427,20 +427,20 @@ internal fun TransfersScreen() {
 
         AlertDialog(
             onDismissRequest = { detail = null },
-            title = { Text(transfer.optString("transferNo"), fontWeight = FontWeight.Bold) },
+            title = { Text(transfer.displayField("transferNo"), fontWeight = FontWeight.Bold) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(
-                        "${transfer.optJSONObject("fromStore")?.optString("name") ?: "-"}  ->  ${transfer.optJSONObject("toStore")?.optString("name") ?: "-"}",
+                        "${transfer.optJSONObject("fromStore")?.displayField("name") ?: "-"}  ->  ${transfer.optJSONObject("toStore")?.displayField("name") ?: "-"}",
                         color = Muted,
                         fontSize = 13.sp,
                     )
                     Spacer(Modifier.height(10.dp))
                     (0 until items.length()).forEach { index ->
                         val item = items.getJSONObject(index)
-                        Text(item.optString("itemName"), fontWeight = FontWeight.SemiBold)
+                        Text(item.displayField("itemName", "物资"), fontWeight = FontWeight.SemiBold)
                         Text(
-                            "${item.opt("quantity") ?: 0} ${item.optString("unit")} · 已归还 ${item.opt("returnedQuantity") ?: 0}",
+                            "${quantityText(item.opt("quantity"), "0")} ${item.displayField("unit")} · 已归还 ${quantityText(item.opt("returnedQuantity"), "0")}",
                             color = Muted,
                             fontSize = 12.sp,
                         )
@@ -450,7 +450,7 @@ internal fun TransfersScreen() {
                             OutlinedButton(
                                 onClick = {
                                     returnItem = item
-                                    returnQuantity = available.toString()
+                                    returnQuantity = quantityText(available, "0")
                                 },
                                 shape = RoundedCornerShape(6.dp),
                             ) {
@@ -464,7 +464,7 @@ internal fun TransfersScreen() {
                     pendingReturn?.let { record ->
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "待确认归还：${record.opt("quantity") ?: 0} · ${record.optString("returnDate").take(10)}",
+                            "待确认归还：${quantityText(record.opt("quantity"), "0")} · ${record.displayField("returnDate").take(10)}",
                             color = Warning,
                             fontSize = 13.sp,
                         )
@@ -538,7 +538,7 @@ internal fun TransfersScreen() {
             title = { Text("申请归还", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text(item.optString("itemName"), fontWeight = FontWeight.SemiBold)
+                    Text(item.displayField("itemName", "物资"), fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = returnQuantity,

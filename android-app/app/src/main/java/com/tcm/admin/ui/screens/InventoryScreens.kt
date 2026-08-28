@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -186,7 +185,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
         selectedProduct?.let { product ->
             val inventories = product.optJSONArray("inventories") ?: JSONArray()
             val totalQuantity = product.optDouble("totalQuantity", 0.0)
-            val unit = product.optString("unit", "")
+            val unit = product.displayField("unit", "")
             val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
 
             Row(
@@ -220,21 +219,21 @@ internal fun InventoryScreen(initialQuery: String = "") {
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = product.optString("name", "商品"),
+                            text = product.displayField("name", "商品"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Ink,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "编码：${product.optString("productCode", "-")}",
+                            text = "编码：${product.displayField("productCode")}",
                             color = Muted,
                             fontSize = 12.sp,
                         )
                     }
                     if (!retailPrice.isNullOrBlank()) {
                         Text(
-                            text = "¥$retailPrice",
+                            text = "¥${priceText(retailPrice)}",
                             color = Danger,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
@@ -246,10 +245,10 @@ internal fun InventoryScreen(initialQuery: String = "") {
                 HorizontalDivider(color = Color(0xFFF2F3F5))
                 Spacer(Modifier.height(8.dp))
 
-                InfoRowItem("条形码", product.optString("barcode").ifBlank { "-" })
-                InfoRowItem("规格", product.optString("specification").ifBlank { "-" })
+                InfoRowItem("条形码", product.displayField("barcode"))
+                InfoRowItem("规格", product.displayField("specification"))
                 InfoRowItem("单位", unit.ifBlank { "-" })
-                InfoRowItem("生产厂商", product.optString("manufacturer").ifBlank { "-" })
+                InfoRowItem("生产厂商", product.displayField("manufacturer"))
 
                 Spacer(Modifier.height(10.dp))
 
@@ -265,7 +264,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                     ) {
                         Text("总库存：", color = RegularText, fontSize = 13.sp)
                         Text(
-                            text = "$totalQuantity $unit",
+                            text = "${quantityText(totalQuantity)} $unit",
                             color = PrimaryDark,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
@@ -294,10 +293,10 @@ internal fun InventoryScreen(initialQuery: String = "") {
 
             for (i in 0 until inventories.length()) {
                 val item = inventories.getJSONObject(i)
-                val storeName = item.optJSONObject("store")?.optString("name")
-                    ?: item.optString("storeName", "")
-                val batchNo = item.optString("batchNo", "-")
-                val location = item.optString("locationName").ifBlank { item.optString("locationCode", "-") }
+                val storeName = item.optJSONObject("store")?.displayField("name", "")
+                    ?: item.displayField("storeName", "")
+                val batchNo = item.displayField("batchNo")
+                val location = item.displayField("locationName", "").ifBlank { item.displayField("locationCode") }
                 val qty = item.optDouble("quantity", 0.0)
                 val prodDate = inventoryDate(item, "productionDate")
                 val expDate = inventoryDate(item, "expiryDate", "expirationDate", "expireDate")
@@ -329,7 +328,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                             )
                         }
                         Text(
-                            text = "$qty $unit",
+                            text = "${quantityText(qty)} $unit",
                             color = Primary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
@@ -344,30 +343,23 @@ internal fun InventoryScreen(initialQuery: String = "") {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(
-                            text = "生产：${prodDate.ifBlank { "-" }}",
-                            modifier = Modifier.weight(1f),
-                            color = Muted,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "有效期：${expDate.ifBlank { "-" }}",
-                            modifier = Modifier.weight(1f),
-                            color = if (expDate.isNotBlank()) Danger else Muted,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "入库：${inDate.ifBlank { "-" }}",
-                            modifier = Modifier.weight(1f),
-                            color = Muted,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("生产", color = Muted, fontSize = 9.sp)
+                            Text(prodDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("有效期", color = Muted, fontSize = 9.sp)
+                            Text(
+                                expDate.ifBlank { "-" },
+                                color = if (expDate.isNotBlank()) Danger else Muted,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("入库", color = Muted, fontSize = 9.sp)
+                            Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
+                        }
                     }
                 }
             }
@@ -402,7 +394,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        text = "${product.optString("productCode", "-")} · ${product.optString("name", "商品")}",
+                                        text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
                                         color = Ink,
@@ -421,7 +413,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                                 }
                                 if (!retailPrice.isNullOrBlank()) {
                                     Text(
-                                        text = "¥$retailPrice",
+                                        text = "¥${priceText(retailPrice)}",
                                         color = Danger,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp,

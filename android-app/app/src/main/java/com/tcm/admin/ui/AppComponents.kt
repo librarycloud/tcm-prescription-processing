@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 // ==================== Color Palette ====================
 internal val PageBackground: Color @Composable get() = MaterialTheme.colorScheme.background
@@ -74,6 +76,25 @@ internal val CardShape = RoundedCornerShape(10.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
 internal val SearchControlHeight = 48.dp
+
+internal fun displayText(value: Any?, fallback: String = "-"): String {
+    val text = value?.toString()?.trim().orEmpty()
+    return if (text.isBlank() || text.equals("null", ignoreCase = true)) fallback else text
+}
+
+internal fun JSONObject.displayField(key: String, fallback: String = "-"): String = displayText(opt(key), fallback)
+
+internal fun quantityText(value: Any?, fallback: String = "-"): String {
+    val raw = value?.toString()?.trim().orEmpty()
+    if (raw.isBlank() || raw == "null") return fallback
+    return runCatching { BigDecimal(raw).stripTrailingZeros().toPlainString() }.getOrDefault(fallback)
+}
+
+internal fun priceText(value: Any?, fallback: String = "-"): String {
+    val raw = value?.toString()?.trim().orEmpty()
+    if (raw.isBlank() || raw == "null") return fallback
+    return runCatching { BigDecimal(raw).setScale(2, RoundingMode.HALF_UP).toPlainString() }.getOrDefault(fallback)
+}
 
 // ==================== Helper Mappings ====================
 internal fun planStatus(status: Int): String = when (status) {

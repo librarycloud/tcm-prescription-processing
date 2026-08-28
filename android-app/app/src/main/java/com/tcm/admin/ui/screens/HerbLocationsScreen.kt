@@ -148,7 +148,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
 
             (0 until units.length()).forEach { uIndex ->
                 val unit = units.getJSONObject(uIndex)
-                val unitNo = unit.opt("unitNo")?.toString() ?: "-"
+                val unitNo = unit.displayField("unitNo")
                 val unitType = unit.optString("type")
                 val locations = unit.optJSONArray("locations") ?: JSONArray()
 
@@ -194,7 +194,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                         (0 until locations.length()).forEach { lIndex ->
                             val loc = locations.getJSONObject(lIndex)
                             val herbs = loc.optJSONArray("herbs") ?: JSONArray()
-                            val code = loc.optString("code")
+                            val code = loc.displayField("code")
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -238,7 +238,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                                         }
                                         Spacer(Modifier.height(3.dp))
                                         Text(
-                                            text = locationTypeLabel(loc.optString("type")),
+                                            text = locationTypeLabel(loc.displayField("type")),
                                             color = Muted,
                                             fontSize = 11.sp,
                                         )
@@ -247,7 +247,7 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
                                             Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
                                         } else {
                                             val herbNames = (0 until herbs.length())
-                                                .map { herbs.getJSONObject(it).optString("name") }
+                                                .map { herbs.getJSONObject(it).displayField("name") }
                                                 .joinToString("、")
                                             Text(
                                                 text = herbNames,
@@ -363,7 +363,7 @@ internal fun HerbLocationAssignScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(herb.optString("name"), color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(herb.displayField("name"), color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                         val detail = listOf(herb.optString("code"), herb.optString("specification"))
                                             .filter { it.isNotBlank() }
                                             .joinToString(" · ")
@@ -459,51 +459,74 @@ internal fun HerbLocationAssignScreen(
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
             )
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = herbKeyword,
-                onValueChange = { herbKeyword = it; if (it.isBlank()) selectedHerbId = 0 },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("药材名称、编码") },
-                placeholder = { Text("输入关键词筛选已有药材") },
-                singleLine = true,
-                shape = FieldShape,
-            )
-            val needle = herbKeyword.trim().lowercase()
-            val filteredHerbs = herbs.filter { herb ->
-                needle.isNotBlank() && listOf(herb.optString("name"), herb.optString("code"), herb.optString("specification"))
-                    .any { it.lowercase().contains(needle) }
-            }.take(12)
-            if (filteredHerbs.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    filteredHerbs.forEach { herb ->
-                        val id = herb.optInt("id")
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                editingHerbId = null
-                                selectedHerbId = id
-                                herbName = herb.optString("name")
-                                herbCode = herb.optString("code")
-                                specification = herb.optString("specification")
-                            },
-                            shape = FieldShape,
-                            color = if (selectedHerbId == id) PrimarySoft else Color(0xFFF9FAFB),
-                            border = BorderStroke(1.dp, if (selectedHerbId == id) Primary else Color(0xFFEAECF0)),
-                        ) {
-                            Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                                Text(herb.optString("name"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                Text(
-                                    listOf(herb.optString("code"), herb.optString("specification")).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "已有药材" },
-                                    color = Muted,
-                                    fontSize = 11.sp,
-                                )
+            if (editingHerbId == null) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = herbKeyword,
+                    onValueChange = { herbKeyword = it; if (it.isBlank()) selectedHerbId = 0 },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("药材名称、编码") },
+                    placeholder = { Text("输入关键词筛选已有药材") },
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+                val needle = herbKeyword.trim().lowercase()
+                val filteredHerbs = herbs.filter { herb ->
+                    needle.isNotBlank() && listOf(herb.optString("name"), herb.optString("code"), herb.optString("specification"))
+                        .any { it.lowercase().contains(needle) }
+                }.take(12)
+                if (filteredHerbs.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        filteredHerbs.forEach { herb ->
+                            val id = herb.optInt("id")
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    editingHerbId = null
+                                    selectedHerbId = id
+                                    herbName = herb.optString("name")
+                                    herbCode = herb.optString("code")
+                                    specification = herb.optString("specification")
+                                },
+                                shape = FieldShape,
+                                color = if (selectedHerbId == id) PrimarySoft else Color(0xFFF9FAFB),
+                                border = BorderStroke(1.dp, if (selectedHerbId == id) Primary else Color(0xFFEAECF0)),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                    Text(herb.displayField("name"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text(
+                                            listOf(herb.optString("code"), herb.optString("specification")).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "已有药材" },
+                                            color = Muted,
+                                            fontSize = 11.sp,
+                                        )
+                                    }
+                                    Spacer(Modifier.width(6.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            editingHerbId = id.takeIf { it > 0 }
+                                            selectedHerbId = 0
+                                            herbKeyword = ""
+                                            herbName = herb.optString("name")
+                                            herbCode = herb.optString("code")
+                                            specification = herb.optString("specification")
+                                        },
+                                        shape = RoundedCornerShape(5.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 3.dp),
+                                        modifier = Modifier.height(30.dp),
+                                    ) {
+                                        Text("编辑", fontSize = 11.sp)
+                                    }
+                                }
                             }
                         }
                     }
+                } else if (herbKeyword.isNotBlank()) {
+                    Text("没有匹配的已有药材，可继续填写新增药材", color = Muted, fontSize = 12.sp)
                 }
-            } else if (herbKeyword.isNotBlank()) {
-                Text("没有匹配的已有药材，可继续填写新增药材", color = Muted, fontSize = 12.sp)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -607,7 +630,15 @@ internal fun HerbLocationAssignScreen(
             shape = FieldShape,
             colors = ButtonDefaults.buttonColors(containerColor = Primary),
         ) {
-            Text(if (busy) "正在保存..." else "确认保存货位配置", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(
+                when {
+                    busy -> "正在保存..."
+                    editingHerbId != null -> "保存药材修改"
+                    else -> "确认保存货位配置"
+                },
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
 
         Spacer(Modifier.height(16.dp))

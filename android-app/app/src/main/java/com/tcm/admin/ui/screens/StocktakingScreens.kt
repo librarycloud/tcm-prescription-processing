@@ -155,7 +155,7 @@ internal fun StocktakingScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = check.optString("checkNo").ifBlank { check.optString("id", "-") },
+                        text = check.displayField("checkNo", check.displayField("id")),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Ink,
@@ -166,7 +166,7 @@ internal fun StocktakingScreen(
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    text = check.optString("checkName", check.optString("name", "未命名盘点")),
+                        text = check.displayField("checkName", check.displayField("name", "未命名盘点")),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
                     color = Ink,
@@ -326,7 +326,7 @@ internal fun StocktakingDetailScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = selected.optString("checkName", "盘点明细"),
+                        text = selected.displayField("checkName", "盘点明细"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = Ink,
@@ -336,7 +336,7 @@ internal fun StocktakingDetailScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                Text("单号：${selected.optString("checkNo")}", color = Muted, fontSize = 12.sp)
+                Text("单号：${selected.displayField("checkNo")}", color = Muted, fontSize = 12.sp)
 
                 Spacer(Modifier.height(10.dp))
 
@@ -385,8 +385,8 @@ internal fun StocktakingDetailScreen(
                 val effectiveQty = recountQty ?: firstQty
                 val systemQty = if (recountQty != null) item.optDouble("recountSystemQty", item.optDouble("systemQty", 0.0)) else item.optDouble("systemQty", 0.0)
                 val diffQty = effectiveQty?.let { item.optDouble("difference", it - systemQty) }
-                val systemLocation = item.optString("systemLocationName")
-                val countLocation = item.optString("countLocationName")
+                val systemLocation = item.displayField("systemLocationName", "")
+                val countLocation = item.displayField("countLocationName", "")
                 val canCount = firstQty == null || isRecount
 
                 AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
@@ -397,21 +397,21 @@ internal fun StocktakingDetailScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "${product.optString("productCode", "-")} · ${product.optString("name", "商品")}",
+                                text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                 fontWeight = FontWeight.Bold,
                                 color = Ink,
                                 fontSize = 14.sp,
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "批号：${item.optString("batchNo").ifBlank { "-" }} · 系统货位：${systemLocation.ifBlank { "未设置" }}" +
+                                text = "批号：${item.displayField("batchNo")} · 系统货位：${systemLocation.ifBlank { "未设置" }}" +
                                     (countLocation.takeIf { it.isNotBlank() }?.let { " · 盘点货位：$it" } ?: ""),
                                 color = Muted,
                                 fontSize = 12.sp,
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                text = "系统库存：$systemQty · 初盘：${firstQty ?: "未盘"} · 复盘：${recountQty ?: "-"}",
+                                text = "系统库存：${quantityText(systemQty, "0")} · 初盘：${quantityText(firstQty)} · 复盘：${quantityText(recountQty)}",
                                 color = RegularText,
                                 fontSize = 12.sp,
                             )
@@ -448,7 +448,7 @@ internal fun StocktakingDetailScreen(
                         Button(
                             onClick = {
                                 countItem = item
-                                countValue = if (isStoreStaff) "" else (if (isRecount) recountQty ?: firstQty else firstQty)?.toString() ?: ""
+                                countValue = if (isStoreStaff) "" else quantityText(if (isRecount) recountQty ?: firstQty else firstQty, "")
                                 countBatchNo = item.optString("batchNo")
                             },
                             shape = FieldShape,
@@ -486,7 +486,7 @@ internal fun StocktakingDetailScreen(
             text = {
                 Column {
                     Text(
-                        "${product.optString("productCode", "-")} · ${product.optString("name", "商品")}",
+                        "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                         fontWeight = FontWeight.Bold,
                         color = Ink,
                     )
@@ -631,7 +631,7 @@ internal fun StocktakingDetailScreen(
                                 countItem = candidate
                                 val candidateRecount = nullableDouble(candidate, "recountQty")
                                 val candidateFirst = nullableDouble(candidate, "firstCountQty")
-                                countValue = (if (candidate.optInt("checkStatus", 0) == 2) candidateRecount ?: candidateFirst else candidateFirst)?.toString() ?: ""
+                                countValue = quantityText(if (candidate.optInt("checkStatus", 0) == 2) candidateRecount ?: candidateFirst else candidateFirst, "")
                                 countBatchNo = candidate.optString("batchNo")
                                 candidateVisible = false
                             },
@@ -640,12 +640,12 @@ internal fun StocktakingDetailScreen(
                         ) {
                             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
                                 Text(
-                                    text = "${product.optString("productCode", "-")} · ${product.optString("name", "商品")}",
+                                    text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                     fontWeight = FontWeight.Bold,
                                     color = Ink,
                                 )
                                 Text(
-                                    text = "批号：${candidate.optString("batchNo").ifBlank { "-" }} · 货位：${candidate.optString("locationName").ifBlank { "-" }}",
+                                    text = "批号：${candidate.displayField("batchNo")} · 货位：${candidate.displayField("locationName")}",
                                     color = Muted,
                                     fontSize = 12.sp,
                                 )

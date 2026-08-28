@@ -91,7 +91,7 @@ internal fun DashboardScreen(
     }
 }
 
-internal fun stat(stats: JSONObject?, key: String): String = stats?.opt(key)?.toString() ?: "-"
+internal fun stat(stats: JSONObject?, key: String): String = stats?.displayField(key) ?: "-"
 
 @Composable
 internal fun SectionTitle(text: String) {

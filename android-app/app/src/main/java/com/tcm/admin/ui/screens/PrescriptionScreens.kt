@@ -155,10 +155,10 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
         if (items != null && items!!.isEmpty()) AppEmptyState("暂无处方记录")
 
         items.orEmpty().forEach { p ->
-            val doctor = p.optJSONObject("doctor")?.optString("name", "-") ?: "-"
-            val source = p.optJSONObject("source")?.optString("name", "-") ?: "-"
+            val doctor = p.optJSONObject("doctor")?.displayField("name") ?: "-"
+            val source = p.optJSONObject("source")?.displayField("name") ?: "-"
             val store = p.optJSONObject("store")?.optString("name", "") ?: ""
-            val createdAt = p.optString("createdAt").replace("T", " ").take(16)
+            val createdAt = p.displayField("createdAt").replace("T", " ").take(16)
             val statusCode = p.optInt("status")
             val isExternal = p.optInt("isExternal") == 1
 
@@ -170,7 +170,7 @@ internal fun PrescriptionsScreen(onNavigate: (ScreenTarget) -> Unit) {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = p.optString("customerName", "患者"),
+                            text = p.displayField("customerName", "患者"),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Ink,
@@ -274,10 +274,10 @@ internal fun PrescriptionDetailScreen(
         if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
 
         p?.let { detail ->
-            val doctor = detail.optJSONObject("doctor")?.optString("name", "-") ?: "-"
-            val source = detail.optJSONObject("source")?.optString("name", "-") ?: "-"
+            val doctor = detail.optJSONObject("doctor")?.displayField("name") ?: "-"
+            val source = detail.optJSONObject("source")?.displayField("name") ?: "-"
             val store = detail.optJSONObject("store")?.optString("name", "") ?: ""
-            val createdAt = detail.optString("createdAt").replace("T", " ").take(16)
+            val createdAt = detail.displayField("createdAt").replace("T", " ").take(16)
             val statusCode = detail.optInt("status")
             val isExternal = detail.optInt("isExternal") == 1
             val items = detail.optJSONArray("items") ?: JSONArray()
@@ -289,7 +289,7 @@ internal fun PrescriptionDetailScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = detail.optString("customerName", "患者"),
+                        text = detail.displayField("customerName", "患者"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = Ink,
@@ -299,7 +299,7 @@ internal fun PrescriptionDetailScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                InfoRowItem(label = "处方单号", value = detail.optString("prescriptionNo", "-"))
+                InfoRowItem(label = "处方单号", value = detail.displayField("prescriptionNo"))
                 InfoRowItem(label = "联系手机", value = maskPhone(detail.optString("phone")))
                 InfoRowItem(label = "主治医生", value = doctor)
                 InfoRowItem(label = "处方来源", value = source)
@@ -350,13 +350,13 @@ internal fun PrescriptionDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        text = "${idx + 1}. ${item.optString("herbName", "药材")}",
+                                        text = "${idx + 1}. ${item.displayField("herbName", "药材")}",
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp,
                                         color = Ink,
                                     )
                                     Text(
-                                        text = "${item.opt("quantity") ?: 0} ${item.optString("unit", "g")}",
+                                        text = "${quantityText(item.opt("quantity"), "0")} ${item.optString("unit", "g")}",
                                         color = Primary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,

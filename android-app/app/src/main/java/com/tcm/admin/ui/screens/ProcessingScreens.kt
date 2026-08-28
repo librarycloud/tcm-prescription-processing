@@ -142,15 +142,15 @@ internal fun ProcessingScreenV2() {
                     val store = obj.optJSONObject("store")
                     PackageItem(
                         id = obj.optInt("id"),
-                        name = "${obj.optString("receiverName", "顾客")} · ${processType?.optString("name", "代煎") ?: "加工"}",
-                        customer = obj.optString("receiverName", "-"),
-                        phone = obj.optString("receiverPhone", "-"),
-                        code = obj.optString("pickupCode", "-"),
+                        name = "${obj.displayField("receiverName", "顾客")} · ${processType?.displayField("name", "代煎") ?: "加工"}",
+                        customer = obj.displayField("receiverName"),
+                        phone = obj.displayField("receiverPhone"),
+                        code = obj.displayField("pickupCode"),
                         method = pickupMethodLabel(obj.optInt("pickupMethod", 0)),
                         status = if (obj.optInt("status") == 1) "已领取" else "待领取",
                         statusCode = obj.optInt("status"),
-                        time = obj.optString("finishDate", "").take(16).replace("T", " "),
-                        store = store?.optString("name", "").orEmpty(),
+                        time = obj.displayField("finishDate", "").take(16).replace("T", " "),
+                        store = store?.displayField("name", "") ?: "",
                         expressTrackingNo = obj.optString("expressTrackingNo", ""),
                         pickupQrContent = obj.optString("pickupQrContent", ""),
                     )
@@ -348,9 +348,9 @@ internal fun ProcessingScreenV2() {
                     val prescription = plan.optJSONObject("prescription")
                     val processType = plan.optJSONObject("processType")
                     val store = plan.optJSONObject("store")
-                    val customerName = plan.optString("customerName").ifBlank { prescription?.optString("customerName", "-") ?: "-" }
-                    val phone = plan.optString("customerPhone").ifBlank { prescription?.optString("phone", "-") ?: "-" }
-                    val doctorName = plan.optString("doctorName").ifBlank { prescription?.optJSONObject("doctor")?.optString("name", "-") ?: "-" }
+                    val customerName = plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "-" }
+                    val phone = plan.displayField("customerPhone", "").ifBlank { prescription?.displayField("phone") ?: "-" }
+                    val doctorName = plan.displayField("doctorName", "").ifBlank { prescription?.optJSONObject("doctor")?.displayField("name") ?: "-" }
                     val isUrgent = plan.optBoolean("isUrgent") || plan.optInt("isUrgent") == 1
                     val status = plan.optInt("status")
                     val batchNo = plan.optInt("batchNo", 1)
@@ -371,7 +371,7 @@ internal fun ProcessingScreenV2() {
                             Column(Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "$customerName · ${processType?.optString("name", "加工") ?: "加工"}",
+                                        text = "$customerName · ${processType?.displayField("name", "加工") ?: "加工"}",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp,
                                         color = Ink,
@@ -401,16 +401,16 @@ internal fun ProcessingScreenV2() {
                         }
                         InfoRowItem("取货方式", pickupMethodLabel(pickupMethod))
                         InfoRowItem("计划开工", scheduleDate.ifBlank { "未安排" })
-                        store?.optString("name")?.takeIf { it.isNotBlank() }?.let {
+                        store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let {
                             InfoRowItem("加工门店", it)
                         }
-                        plan.optString("startDate").takeIf { it.isNotBlank() }?.let {
+                        plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let {
                             InfoRowItem("实际开工", it.take(16).replace("T", " "))
                         }
-                        plan.optString("finishDate").takeIf { it.isNotBlank() }?.let {
+                        plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let {
                             InfoRowItem("完成时间", it.take(16).replace("T", " "))
                         }
-                        plan.optString("remark").takeIf { it.isNotBlank() }?.let {
+                        plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
                             InfoRowItem("备注", it)
                         }
 
@@ -691,8 +691,8 @@ internal fun PlanDetailDialog(
     val prescription = plan.optJSONObject("prescription")
     val processType = plan.optJSONObject("processType")
     val store = plan.optJSONObject("store")
-    val customerName = plan.optString("customerName").ifBlank { prescription?.optString("customerName", "-") ?: "-" }
-    val phone = plan.optString("customerPhone").ifBlank { prescription?.optString("phone", "-") ?: "-" }
+    val customerName = plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "-" }
+    val phone = plan.displayField("customerPhone", "").ifBlank { prescription?.displayField("phone") ?: "-" }
     val status = plan.optInt("status")
 
     AlertDialog(
@@ -702,15 +702,15 @@ internal fun PlanDetailDialog(
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 InfoRowItem("顾客姓名", customerName)
                 InfoRowItem("联系电话", phone)
-                InfoRowItem("加工类型", processType?.optString("name", "加工") ?: "加工")
+                InfoRowItem("加工类型", processType?.displayField("name", "加工") ?: "加工")
                 InfoRowItem("加工状态", planStatus(status), isBold = true, valueColor = Primary)
                 InfoRowItem("批次剂数", "第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂")
                 InfoRowItem("取货方式", pickupMethodLabel(plan.optInt("pickupMethod", 0)))
-                InfoRowItem("计划开工", plan.optString("scheduledDate", "-").take(10))
-                store?.optString("name")?.let { InfoRowItem("加工门店", it) }
-                plan.optString("startDate").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", it.take(16).replace("T", " ")) }
-                plan.optString("finishDate").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", it.take(16).replace("T", " ")) }
-                plan.optString("remark").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
+                InfoRowItem("计划开工", plan.displayField("scheduledDate").take(10))
+                store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("加工门店", it) }
+                plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", it.take(16).replace("T", " ")) }
+                plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", it.take(16).replace("T", " ")) }
+                plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
             }
         },
         confirmButton = {

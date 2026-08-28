@@ -21,25 +21,25 @@ internal data class PackageItem(
 
 internal fun packageItem(value: JSONObject): PackageItem {
     val statusCode = value.optInt("status", 0)
-    val store = value.optJSONObject("store")?.optString("name", "") ?: ""
+    val store = value.optJSONObject("store")?.displayField("name", "") ?: ""
     val methodCode = value.optInt("pickupMethod", 0)
     val method = when (methodCode) { 0 -> "自提"; 1 -> "跑腿"; 2 -> "快递"; else -> "未设置" }
     val status = when (statusCode) { 0 -> "待领取"; 1 -> "已领取"; else -> "已关闭" }
-    val timestamp = value.optString(if (statusCode == 1) "pickedAt" else "createdAt", "").ifBlank { value.optString("createdAt", "-") }
+    val timestamp = value.displayField(if (statusCode == 1) "pickedAt" else "createdAt", "").ifBlank { value.displayField("createdAt") }
     return PackageItem(
-        name = value.optString("itemName", "包裹"),
-        customer = value.optString("receiverName", "客户"),
-        code = value.optString("pickupCode", "-"),
+        name = value.displayField("itemName", "包裹"),
+        customer = value.displayField("receiverName", "客户"),
+        code = value.displayField("pickupCode"),
         status = status,
         time = timestamp.replace("T", " ").take(16),
         id = value.optInt("id", 0),
-        phone = value.optString("receiverPhone", "-"),
+        phone = value.displayField("receiverPhone"),
         store = store,
         method = method,
-        info = value.optString("itemInfo", ""),
+        info = value.displayField("itemInfo", ""),
         statusCode = statusCode,
         methodCode = methodCode,
-        expressTrackingNo = value.optString("expressTrackingNo", ""),
-        pickupQrContent = value.optString("pickupQrContent", ""),
+        expressTrackingNo = value.displayField("expressTrackingNo", ""),
+        pickupQrContent = value.displayField("pickupQrContent", ""),
     )
 }

@@ -114,8 +114,8 @@ internal fun DifferencesScreen() {
         stats?.let { s ->
             StatsGrid(
                 listOf(
-                    "先到货未入库" to s.optDouble("preReceiptQuantity", 0.0).toString(),
-                    "先出货未销库" to s.optDouble("preShipmentQuantity", 0.0).toString(),
+                    "先到货未入库" to quantityText(s.optDouble("preReceiptQuantity", 0.0)),
+                    "先出货未销库" to quantityText(s.optDouble("preShipmentQuantity", 0.0)),
                     "差异商品数" to s.optInt("affectedProducts", 0).toString(),
                 ),
             )
@@ -138,19 +138,19 @@ internal fun DifferencesScreen() {
             products.orEmpty().forEach { product ->
                 val preReceipt = product.optDouble("preReceiptQuantity", 0.0)
                 val preShipment = product.optDouble("preShipmentQuantity", 0.0)
-                val unit = product.optString("unit")
+                val unit = product.displayField("unit")
 
                 AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "${product.optString("productCode", "-")} · ${product.optString("name", "商品")}",
+                                text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                 fontWeight = FontWeight.Bold,
                                 color = Ink,
                                 fontSize = 14.sp,
                             )
                             Spacer(Modifier.height(2.dp))
-                            Text("规格：${product.optString("specification", "-")} · 生产厂商：${product.optString("manufacturer", "-")}", color = Muted, fontSize = 12.sp)
+                            Text("规格：${product.displayField("specification")} · 生产厂商：${product.displayField("manufacturer")}", color = Muted, fontSize = 12.sp)
                         }
                     }
 
@@ -171,9 +171,9 @@ internal fun DifferencesScreen() {
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
-                                    Text("先到货：+$preReceipt $unit", color = Success, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("先到货：+${quantityText(preReceipt)} $unit", color = Success, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                                     TextButton(
-                                        onClick = { writeOff = Pair(product, "WRITE_OFF_RECEIPT"); writeOffQuantity = preReceipt.toString() },
+                                        onClick = { writeOff = Pair(product, "WRITE_OFF_RECEIPT"); writeOffQuantity = quantityText(preReceipt, "0") },
                                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                     ) {
                                         Text("入库销账", fontSize = 11.sp)
@@ -192,9 +192,9 @@ internal fun DifferencesScreen() {
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
-                                    Text("先出货：-$preShipment $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                                     TextButton(
-                                        onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = preShipment.toString() },
+                                        onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
                                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                     ) {
                                         Text("销库销账", fontSize = 11.sp)
@@ -217,13 +217,13 @@ internal fun DifferencesScreen() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "${product.optString("productCode", "-")} · ${product.optString("name", "商品")}",
+                                text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                 fontWeight = FontWeight.SemiBold,
                                 color = Ink,
                                 fontSize = 14.sp,
                             )
                             Text(
-                                text = "${log.optString("businessDate", "").take(10)} · ${log.optJSONObject("operator")?.optString("username", "-") ?: "-"}",
+                                text = "${log.displayField("businessDate").take(10)} · ${log.optJSONObject("operator")?.displayField("username") ?: "-"}",
                                 color = Muted,
                                 fontSize = 12.sp,
                             )
@@ -231,7 +231,7 @@ internal fun DifferencesScreen() {
                         StatusPill(diffOperationLabel(opType))
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("变动数量：$qty ${product.optString("unit")}", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("变动数量：${quantityText(qty)} ${product.displayField("unit")}", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -244,13 +244,13 @@ internal fun DifferencesScreen() {
             title = { Text(if (isReceipt) "入库销账" else "销库销账") },
             text = {
                 Column {
-                    Text("${product.optString("productCode")} · ${product.optString("name")}", fontWeight = FontWeight.Bold)
+                    Text("${product.displayField("productCode")} · ${product.displayField("name", "商品")}", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = writeOffQuantity,
                         onValueChange = { writeOffQuantity = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("销账数量 (${product.optString("unit")})") },
+                        label = { Text("销账数量 (${product.displayField("unit")})") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         shape = RoundedCornerShape(8.dp),
@@ -323,7 +323,7 @@ internal fun DifferencesScreen() {
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                             shape = RoundedCornerShape(6.dp),
                         ) {
-                            Text(if (registerProduct?.optInt("id") == product.optInt("id")) "已选：${product.optString("name")}" else product.optString("name"))
+                            Text(if (registerProduct?.optInt("id") == product.optInt("id")) "已选：${product.displayField("name", "商品")}" else product.displayField("name", "商品"))
                         }
                     }
                     Spacer(Modifier.height(6.dp))
