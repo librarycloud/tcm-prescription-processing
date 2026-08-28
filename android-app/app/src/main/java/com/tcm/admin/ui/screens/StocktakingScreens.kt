@@ -268,30 +268,16 @@ internal fun StocktakingScreen(
 internal fun StocktakingDetailScreen(
     checkId: Int,
     user: JSONObject? = null,
+    onNavigate: (ScreenTarget) -> Unit,
     onBack: () -> Unit,
 ) {
     var check by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
-    var countItem by remember { mutableStateOf<JSONObject?>(null) }
-    var countValue by remember { mutableStateOf("") }
-    var countBatchNo by remember { mutableStateOf("") }
-    var candidateVisible by remember { mutableStateOf(false) }
-    var candidateKeyword by remember { mutableStateOf("") }
-    var candidates by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var locationItem by remember { mutableStateOf<JSONObject?>(null) }
     var locationValue by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val isStoreStaff = user?.optInt("role", -1) == 3
-
-    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
-        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
-            candidateKeyword = value
-            candidateVisible = true
-        }
-    }
 
     LaunchedEffect(checkId, reload) {
         runCatching {
@@ -353,7 +339,7 @@ internal fun StocktakingDetailScreen(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { candidateVisible = true },
+                        onClick = { onNavigate(ScreenTarget.StocktakingEntry(checkId)) },
                         modifier = Modifier.weight(1f),
                         shape = FieldShape,
                         colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -363,7 +349,7 @@ internal fun StocktakingDetailScreen(
                         Text("录入盘点")
                     }
                     OutlinedButton(
-                        onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                        onClick = { onNavigate(ScreenTarget.StocktakingEntry(checkId)) },
                         shape = FieldShape,
                     ) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -447,9 +433,7 @@ internal fun StocktakingDetailScreen(
                         if (!isStoreStaff) Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                countItem = item
-                                countValue = if (isStoreStaff) "" else quantityText(if (isRecount) recountQty ?: firstQty else firstQty, "")
-                                countBatchNo = item.displayField("batchNo", "")
+                                onNavigate(ScreenTarget.StocktakingEntry(checkId, item))
                             },
                             shape = FieldShape,
                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -474,81 +458,6 @@ internal fun StocktakingDetailScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-    }
-
-    countItem?.let { item ->
-        val itemId = item.optInt("id", item.optInt("checkItemId", 0))
-        val isRecount = itemId > 0 && item.optInt("checkStatus", 0) == 2
-        val product = item.optJSONObject("product") ?: JSONObject()
-        AlertDialog(
-            onDismissRequest = { countItem = null },
-            title = { Text(if (isRecount) "录入复盘数量" else "录入初盘数量", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text(
-                        "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
-                        fontWeight = FontWeight.Bold,
-                        color = Ink,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = countBatchNo,
-                        onValueChange = { countBatchNo = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("批号") },
-                        singleLine = true,
-                        shape = FieldShape,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = countValue,
-                        onValueChange = { countValue = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(if (isRecount) "复盘数量" else "初盘数量") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        shape = FieldShape,
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    enabled = countValue.toDoubleOrNull() != null,
-                    onClick = {
-                        val value = countValue.toDoubleOrNull() ?: return@Button
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    if (isRecount) {
-                                        ApiClient.recountGoodsCheckItem(itemId, JSONObject().put("recountQty", value))
-                                    } else {
-                                        ApiClient.addGoodsCheckItem(
-                                            checkId,
-                                            JSONObject()
-                                                .put("productId", item.optInt("productId"))
-                                                .put("batchNo", countBatchNo.trim())
-                                                .put("locationName", item.displayField("systemLocationName", item.displayField("locationName", "")))
-                                                .put("firstCountQty", value),
-                                        )
-                                    }
-                                }
-                            }.onSuccess {
-                                countItem = null
-                                reload++
-                            }.onFailure {
-                                error = it.message ?: "录入实盘失败"
-                            }
-                        }
-                    },
-                    shape = FieldShape,
-                ) {
-                    Text("保存")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { countItem = null }) { Text("取消") }
-            },
-        )
     }
 
     locationItem?.let { item ->
@@ -599,67 +508,193 @@ internal fun StocktakingDetailScreen(
         )
     }
 
-    if (candidateVisible) {
-        AlertDialog(
-            onDismissRequest = { candidateVisible = false },
-            title = { Text("搜索盘点商品", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+}
+
+@Composable
+internal fun StocktakingEntryScreen(
+    checkId: Int,
+    initialItem: JSONObject? = null,
+    onSaved: () -> Unit,
+) {
+    var selectedItem by remember(initialItem) { mutableStateOf(initialItem) }
+    var keyword by remember { mutableStateOf("") }
+    var candidates by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var batchNo by remember(initialItem) { mutableStateOf(initialItem?.displayField("batchNo", "").orEmpty()) }
+    var value by remember(initialItem) {
+        mutableStateOf(
+            initialItem?.let {
+                val recount = nullableDouble(it, "recountQty")
+                val first = nullableDouble(it, "firstCountQty")
+                quantityText(if (it.optInt("checkStatus", 0) == 2) recount ?: first else first, "")
+            }.orEmpty(),
+        )
+    }
+    var loading by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    fun search() {
+        loading = true
+        error = null
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { ApiClient.searchGoodsCheckCandidates(checkId, keyword.trim()) }
+            }.onSuccess { values ->
+                candidates = (0 until values.length()).map { values.getJSONObject(it) }
+            }.onFailure { error = it.message ?: "搜索商品失败" }
+            loading = false
+        }
+    }
+
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
+            keyword = scanned
+            search()
+        }
+    }
+    val isRecount = selectedItem?.let { it.optInt("checkStatus", 0) == 2 && it.optInt("id", 0) > 0 } == true
+    val product = selectedItem?.optJSONObject("product") ?: JSONObject()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppCard {
+            SectionHeader(
+                title = if (isRecount) "录入复盘数量" else "录入初盘数量",
+                subtitle = if (selectedItem == null) "搜索并选择本次盘点的商品批次" else "请核对批号后填写实际盘点数量",
+            )
+            if (selectedItem == null) {
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     SearchBarField(
-                        value = candidateKeyword,
-                        onValueChange = { candidateKeyword = it },
-                        placeholder = "输入商品名称、编码或条码",
-                        onSearch = {
-                            scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        ApiClient.searchGoodsCheckCandidates(checkId, candidateKeyword.trim())
-                                    }
-                                }.onSuccess { values ->
-                                    candidates = (0 until values.length()).map { values.getJSONObject(it) }
-                                }.onFailure {
-                                    error = it.message ?: "搜索商品失败"
-                                }
-                            }
-                        },
+                        value = keyword,
+                        onValueChange = { keyword = it },
+                        placeholder = "商品名称、编码或条码",
+                        onSearch = ::search,
+                        modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                        shape = FieldShape,
+                        modifier = Modifier.size(48.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码搜索", modifier = Modifier.size(20.dp))
+                    }
+                }
+                if (loading) {
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
+                }
+                error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = Danger, fontSize = 12.sp)
+                }
+                if (!loading && candidates.isEmpty() && keyword.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    AppEmptyState("暂无匹配的盘点商品")
+                }
+                if (candidates.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("匹配批次", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp))
                     candidates.forEach { candidate ->
-                        val product = candidate.optJSONObject("product") ?: JSONObject()
+                        val candidateProduct = candidate.optJSONObject("product") ?: JSONObject()
                         OutlinedButton(
                             onClick = {
-                                countItem = candidate
-                                val candidateRecount = nullableDouble(candidate, "recountQty")
-                                val candidateFirst = nullableDouble(candidate, "firstCountQty")
-                                countValue = quantityText(if (candidate.optInt("checkStatus", 0) == 2) candidateRecount ?: candidateFirst else candidateFirst, "")
-                                countBatchNo = candidate.displayField("batchNo", "")
-                                candidateVisible = false
+                                selectedItem = candidate
+                                batchNo = candidate.displayField("batchNo", "")
+                                val recount = nullableDouble(candidate, "recountQty")
+                                val first = nullableDouble(candidate, "firstCountQty")
+                                value = quantityText(if (candidate.optInt("checkStatus", 0) == 2) recount ?: first else first, "")
                             },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                             shape = FieldShape,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 9.dp),
                         ) {
                             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                                Text(
-                                    text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
-                                    fontWeight = FontWeight.Bold,
-                                    color = Ink,
-                                )
-                                Text(
-                                    text = "批号：${candidate.displayField("batchNo")} · 货位：${candidate.displayField("locationName")}",
-                                    color = Muted,
-                                    fontSize = 12.sp,
-                                )
+                                Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink)
+                                Text("批号：${candidate.displayField("batchNo")} · 货位：${candidate.displayField("locationName")}", color = Muted, fontSize = 12.sp)
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                Button(onClick = { candidateVisible = false }, shape = FieldShape) {
-                    Text("关闭")
+            } else {
+                Spacer(Modifier.height(12.dp))
+                Surface(color = PrimarySoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("${product.displayField("productCode")} · ${product.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text("系统货位：${selectedItem!!.displayField("systemLocationName", selectedItem!!.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
+                        Text("系统库存：${quantityText(selectedItem!!.optDouble("systemQty", 0.0), "0")} ${product.displayField("unit")}", color = Muted, fontSize = 12.sp)
+                    }
                 }
-            },
-        )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = batchNo,
+                    onValueChange = { batchNo = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("批号") },
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isRecount) "复盘数量" else "初盘数量") },
+                    supportingText = { Text("请输入实际盘点数量，支持小数") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+            }
+        }
+
+        if (selectedItem != null) {
+            Button(
+                onClick = {
+                    val item = selectedItem ?: return@Button
+                    val amount = value.toDoubleOrNull() ?: return@Button
+                    saving = true
+                    error = null
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                if (isRecount) {
+                                    ApiClient.recountGoodsCheckItem(item.optInt("id", item.optInt("checkItemId", 0)), JSONObject().put("recountQty", amount))
+                                } else {
+                                    ApiClient.addGoodsCheckItem(
+                                        checkId,
+                                        JSONObject()
+                                            .put("productId", item.optInt("productId"))
+                                            .put("batchNo", batchNo.trim())
+                                            .put("locationName", item.displayField("systemLocationName", item.displayField("locationName", "")))
+                                            .put("firstCountQty", amount),
+                                    )
+                                }
+                            }
+                        }.onSuccess { onSaved() }
+                            .onFailure { error = it.message ?: "录入实盘失败" }
+                        saving = false
+                    }
+                },
+                enabled = !saving && value.toDoubleOrNull() != null,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = FieldShape,
+            ) {
+                Text(if (saving) "保存中..." else "保存${if (isRecount) "复盘" else "初盘"}")
+            }
+            error?.let { Text(it, color = Danger, fontSize = 12.sp) }
+        }
     }
 }
 

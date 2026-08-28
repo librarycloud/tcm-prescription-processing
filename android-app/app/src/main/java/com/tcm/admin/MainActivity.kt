@@ -111,6 +111,7 @@ internal sealed class ScreenTarget {
     data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
+    data class StocktakingEntry(val checkId: Int, val item: JSONObject? = null) : ScreenTarget()
     object Differences : ScreenTarget()
     data class DifferenceRegister(val defaultProduct: JSONObject? = null) : ScreenTarget()
     object Transfers : ScreenTarget()
@@ -260,7 +261,10 @@ private fun TcmAdminApp() {
                     if (currentScreen.initial.has("id")) "编辑加工计划" else "新建加工计划",
                     onBack = { navigateBack() },
                 ) {
-                    Text("请从加工工作台新建或编辑加工计划")
+                    ProcessingPlanFormScreen(
+                        initial = currentScreen.initial,
+                        onSaved = { navigateBack() },
+                    )
                 }
                 is ScreenTarget.WorkflowOperation -> DetailShell("工序操作", onBack = { navigateBack() }) {
                     Text("请从加工工作台执行工序操作")
@@ -291,7 +295,15 @@ private fun TcmAdminApp() {
                     StocktakingDetailScreen(
                         checkId = currentScreen.checkId,
                         user = session?.user,
+                        onNavigate = ::navigateTo,
                         onBack = { navigateBack() },
+                    )
+                }
+                is ScreenTarget.StocktakingEntry -> DetailShell("录入盘点", onBack = { navigateBack() }) {
+                    StocktakingEntryScreen(
+                        checkId = currentScreen.checkId,
+                        initialItem = currentScreen.item,
+                        onSaved = { navigateBack() },
                     )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }) {
