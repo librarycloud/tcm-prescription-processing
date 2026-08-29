@@ -381,7 +381,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                         Column(Modifier.padding(12.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text("第 ${plan.optInt("batchNo", index + 1)} 批 · ${processType?.displayField("name") ?: "代煎"}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 14.sp)
-                                StatusPill(planStatusLabel(plan.optInt("status")))
+                                StatusPill(planStatus(plan.optInt("status")))
                             }
                             Spacer(Modifier.height(6.dp))
                             Text("剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  安排：${plan.displayField("processDate", "等待安排").take(10)}", color = RegularText, fontSize = 12.sp)
@@ -616,8 +616,9 @@ private fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri) {
     val name = cursor?.use {
         if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null
     } ?: "prescription_${System.currentTimeMillis()}"
+    val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
-    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, bytes)
+    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, mimeType, bytes)
 }
 
 private fun attachmentSizeText(size: Long): String = when {

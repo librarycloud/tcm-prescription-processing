@@ -17,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -1209,8 +1211,6 @@ internal fun ProcessingPlanFormDialog(
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-@Composable
-@OptIn(ExperimentalLayoutApi::class)
 internal fun WorkflowOperationScreen(
     plan: JSONObject,
     onNavigatePrescription: ((Int) -> Unit)? = null,
@@ -1368,10 +1368,10 @@ internal fun WorkflowOperationScreen(
     val detail = workflow
     val prescription = detail?.optJSONObject("prescription") ?: plan.optJSONObject("prescription")
     val prescriptionId = plan.optInt("prescriptionId", prescription?.optInt("id", 0) ?: 0)
-    val customerName = detail?.displayField("customerName", "").ifBlank {
+    val customerName = detail?.displayField("customerName", "").orEmpty().ifBlank {
         plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "顾客" }
     }
-    val planCode = detail?.displayField("planCode", "").ifBlank { plan.displayField("planCode", "加工计划") }
+    val planCode = detail?.displayField("planCode", "").orEmpty().ifBlank { plan.displayField("planCode", "加工计划") }
     val batchNo = detail?.optInt("batchNo", plan.optInt("batchNo", 1)) ?: 1
     val totalDose = detail?.optInt("totalDose", plan.optInt("totalDose", 0)) ?: 0
     val bagCount = detail?.optInt("bagCount", plan.optInt("bagCount", 0)) ?: 0
