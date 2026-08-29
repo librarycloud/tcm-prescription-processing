@@ -32,7 +32,10 @@
           <template #default="{ row }">{{ row.phone || '-' }}</template>
         </el-table-column>
         <el-table-column v-if="userStore.isSuperAdmin" label="门店管理员" align="center">
-          <template #default="{ row }">{{ row._count?.users || 0 }}</template>
+          <template #default="{ row }">{{ row.adminCount || 0 }}</template>
+        </el-table-column>
+        <el-table-column v-if="userStore.isSuperAdmin" label="门店员工" align="center">
+          <template #default="{ row }">{{ row.staffCount || 0 }}</template>
         </el-table-column>
         <el-table-column v-if="userStore.isSuperAdmin" label="包裹数量" align="center">
           <template #default="{ row }">{{ row._count?.packages || 0 }}</template>

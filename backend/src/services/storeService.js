@@ -68,6 +68,23 @@ function storeInclude() {
   return { _count: { select: { admins: true, packages: true, herbs: true, herbLocations: true } } };
 }
 
+async function countStoreAdminRoles(prisma, storeIds) {
+  if (!storeIds.length || !prisma.admin?.groupBy) return new Map();
+  const rows = await prisma.admin.groupBy({
+    by: ["storeId", "role"],
+    where: { storeId: { in: storeIds }, role: { in: [2, 3] } },
+    _count: { _all: true },
+  });
+  return rows.reduce((counts, row) => {
+    const key = Number(row.storeId);
+    const current = counts.get(key) || { adminCount: 0, staffCount: 0 };
+    if (Number(row.role) === 2) current.adminCount = row._count._all;
+    if (Number(row.role) === 3) current.staffCount = row._count._all;
+    counts.set(key, current);
+    return counts;
+  }, new Map());
+}
+
 export async function listStores(prisma, query) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 10), 100);
@@ -95,8 +112,12 @@ export async function listStores(prisma, query) {
     }),
     prisma.store.count({ where }),
   ]);
+  const roleCounts = await countStoreAdminRoles(prisma, list.map((store) => store.id));
   return {
-    list,
+    list: list.map((store) => ({
+      ...store,
+      ...(roleCounts.get(store.id) || { adminCount: 0, staffCount: 0 }),
+    })),
     pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
   };
 }

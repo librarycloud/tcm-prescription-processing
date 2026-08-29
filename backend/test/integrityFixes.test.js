@@ -50,6 +50,9 @@ test("store list counts administrators from the admins relation", async () => {
       },
       count: async () => 0,
     },
+    admin: {
+      groupBy: async () => [],
+    },
   };
 
   await listStores(prisma, {});
@@ -57,6 +60,26 @@ test("store list counts administrators from the admins relation", async () => {
   assert.deepEqual(include, {
     _count: { select: { admins: true, packages: true, herbs: true, herbLocations: true } },
   });
+});
+
+test("store list exposes separate administrator and staff counts", async () => {
+  const prisma = {
+    store: {
+      findMany: async () => [{ id: 3, _count: { admins: 3 } }],
+      count: async () => 1,
+    },
+    admin: {
+      groupBy: async () => [
+        { storeId: 3, role: 2, _count: { _all: 1 } },
+        { storeId: 3, role: 3, _count: { _all: 2 } },
+      ],
+    },
+  };
+
+  const result = await listStores(prisma, {});
+  assert.equal(result.list[0].adminCount, 1);
+  assert.equal(result.list[0].staffCount, 2);
+  assert.equal(result.list[0]._count.admins, 3);
 });
 
 test("optional business phones normalize blanks and still reject malformed values", () => {
