@@ -209,6 +209,32 @@ object ApiClient {
         return request("/admin/yd-goods-check?$query").getJSONObject("data")
     }
     fun prescriptionSources(): JSONArray = dictionaries("PrescriptionSource")
+    fun processTypes(): JSONArray = dictionaries("ProcessType")
+    fun e6Imports(
+        keyword: String = "",
+        orderDate: String = "",
+        status: Int? = null,
+        cashierName: String = "",
+        storeId: Int? = null,
+        page: Int = 1,
+        pageSize: Int = 20,
+    ): JSONObject {
+        val query = buildList {
+            add("page=$page")
+            add("pageSize=$pageSize")
+            status?.let { add("status=$it") }
+            storeId?.let { add("storeId=$it") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+            if (orderDate.isNotBlank()) add("orderDate=${java.net.URLEncoder.encode(orderDate, "UTF-8")}")
+            if (cashierName.isNotBlank()) add("cashierName=${java.net.URLEncoder.encode(cashierName.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/e6/imports?$query").getJSONObject("data")
+    }
+    fun e6ImportDetail(id: Int): JSONObject = request("/admin/e6/imports/$id").getJSONObject("data")
+    fun confirmE6Import(id: Int, payload: JSONObject): JSONObject = request("/admin/e6/imports/$id/confirm", "POST", payload).getJSONObject("data")
+    fun mergeE6Imports(payload: JSONObject): JSONObject = request("/admin/e6/imports/merge", "POST", payload).getJSONObject("data")
+    fun rejectE6Import(id: Int, reason: String): JSONObject = request("/admin/e6/imports/$id/reject", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    fun revalidateE6Import(id: Int): JSONObject = request("/admin/e6/imports/$id/revalidate", "POST").getJSONObject("data")
     fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject {
         val root = herbLocations(storeId?.toString())
         val allLocations = root.optJSONArray("locations") ?: JSONArray()

@@ -242,12 +242,12 @@ internal fun SegmentedButton(
             Text(
                 text = label,
                 color = MaterialTheme.colorScheme.onPrimary,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = if (centerLabel) {
-                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 6.5.dp)
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp)
                 } else {
-                    Modifier.padding(horizontal = 13.dp, vertical = 6.5.dp)
+                    Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                 },
                 textAlign = if (centerLabel) TextAlign.Center else TextAlign.Start,
             )
@@ -263,12 +263,12 @@ internal fun SegmentedButton(
             Text(
                 text = label,
                 color = RegularText,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Normal,
                 modifier = if (centerLabel) {
-                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 6.5.dp)
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp)
                 } else {
-                    Modifier.padding(horizontal = 13.dp, vertical = 6.5.dp)
+                    Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                 },
                 textAlign = if (centerLabel) TextAlign.Center else TextAlign.Start,
             )
@@ -566,7 +566,7 @@ internal fun InfoRowItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 1.5.dp),
+            .padding(vertical = 0.5.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

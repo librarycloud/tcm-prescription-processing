@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,9 +62,9 @@ import org.json.JSONObject
 internal fun ProfileScreen(
     user: JSONObject?,
     onOpenDetails: () -> Unit,
+    onOpenAbout: () -> Unit,
     onEntered: () -> Unit,
     onSessionUpdated: (AdminSession) -> Unit,
-    onLogout: () -> Unit,
 ) {
     val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
         user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
@@ -109,24 +110,25 @@ internal fun ProfileScreen(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(12.dp))
         OutlinedButton(
-            onClick = onLogout,
+            onClick = onOpenAbout,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = FieldShape,
-            border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
         ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("退出登录", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text("检查新版本（${BuildConfig.VERSION_NAME}）", fontSize = 15.sp, fontWeight = FontWeight.Medium)
         }
+
+        Spacer(Modifier.height(28.dp))
     }
 }
 
 @Composable
 internal fun ProfileDetailScreen(
     user: JSONObject?,
+    onLogout: () -> Unit,
     onSessionUpdated: (AdminSession) -> Unit,
 ) {
     val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
@@ -254,6 +256,18 @@ internal fun ProfileDetailScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+            border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("退出登录", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
     }
 
     if (editVisible) {

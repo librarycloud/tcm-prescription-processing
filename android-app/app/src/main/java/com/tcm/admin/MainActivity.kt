@@ -94,6 +94,7 @@ internal sealed class ScreenTarget {
     object Login : ScreenTarget()
     object Dashboard : ScreenTarget()
     object Prescriptions : ScreenTarget()
+    object E6Imports : ScreenTarget()
     data class PrescriptionDetail(val id: Int) : ScreenTarget()
     data class PrescriptionEdit(val initial: JSONObject = JSONObject()) : ScreenTarget()
     object Processing : ScreenTarget()
@@ -270,6 +271,9 @@ private fun TcmAdminApp() {
                 is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
+                is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                    E6ImportsScreen(user = session?.user, onNavigate = ::navigateTo)
+                }
                 is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     ProcessingScreenV2(
                         user = session?.user,
@@ -286,6 +290,7 @@ private fun TcmAdminApp() {
                     ProfileScreen(
                         user = session?.user,
                         onOpenDetails = { navigateTo(ScreenTarget.ProfileDetail) },
+                        onOpenAbout = { navigateTo(ScreenTarget.About) },
                         onEntered = ::checkForAppUpdateIfDue,
                         onSessionUpdated = { updated ->
                             ApiClient.saveSession(appContext, updated)
@@ -307,6 +312,15 @@ private fun TcmAdminApp() {
                 is ScreenTarget.ProfileDetail -> DetailShell("个人资料", onBack = { navigateBack() }) {
                     ProfileDetailScreen(
                         user = session?.user,
+                        onLogout = {
+                            ApiClient.clearSession(appContext)
+                            session = null
+                            stats = null
+                            dashboardStores = emptyList()
+                            dashboardStoreId = ""
+                            backStack.clear()
+                            backStack.add(ScreenTarget.Login)
+                        },
                         onSessionUpdated = { updated ->
                             ApiClient.saveSession(appContext, updated)
                             session = updated

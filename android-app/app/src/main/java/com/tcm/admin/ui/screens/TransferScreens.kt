@@ -5,6 +5,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -191,7 +192,10 @@ internal fun TransfersScreen(
             val outboundStatus = transfer.optInt("outboundStatus")
             val isOverdue = transfer.optBoolean("overdue")
 
-            AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
+            AppCard(
+                modifier = Modifier.padding(bottom = 12.dp),
+                onClick = { onNavigate(ScreenTarget.TransferDetail(transfer.optInt("id"))) },
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -266,18 +270,6 @@ internal fun TransfersScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    OutlinedButton(
-                        onClick = { onNavigate(ScreenTarget.TransferDetail(transfer.optInt("id"))) },
-                        shape = FieldShape,
-                    ) {
-                        Text("查看详情")
-                    }
-                }
             }
         }
 
@@ -525,19 +517,21 @@ internal fun TransferDetailScreen(
                         fontSize = 14.sp,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 InfoRowItem("已确认归还", "${quantityText(item.opt("returnedQuantity"), "0")} ${item.displayField("unit")}")
                 InfoRowItem("待确认归还", "${quantityText(item.opt("pendingReturnQuantity"), "0")} ${item.displayField("unit")}", valueColor = Warning)
                 InfoRowItem("剩余待归还", "${quantityText(item.opt("remainingQuantity"), "0")} ${item.displayField("unit")}", isBold = true)
                 if (permissions?.optBoolean("canSubmitReturn") == true && item.optDouble("availableReturnQuantity") > 0) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     OutlinedButton(
                         onClick = {
                             returnItem = item
                             returnQuantity = quantityText(item.opt("availableReturnQuantity"), "0")
                         },
+                        modifier = Modifier.height(34.dp),
                         shape = FieldShape,
-                    ) { Text("申请归还") }
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    ) { Text("申请归还", fontSize = 12.sp) }
                 }
             }
         }
@@ -560,7 +554,7 @@ internal fun TransferDetailScreen(
                         Text(record.displayField("itemName", "物资"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                         StatusPill(if (confirmed) "已确认" else "待确认")
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     InfoRowItem("归还数量", quantityText(record.opt("quantity"), "0"))
                     InfoRowItem("归还日期", record.displayField("returnDate").take(10))
                     InfoRowItem("发起人", transferOperatorLabel(record.optJSONObject("operator")))
@@ -570,7 +564,7 @@ internal fun TransferDetailScreen(
                     val recordRemark = displayText(record.opt("remark"))
                     if (recordRemark != "-") InfoRowItem("备注", recordRemark)
                     if (!confirmed && permissions?.optBoolean("canConfirmReturn") == true) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         Button(
                             onClick = {
                                 saving = true
@@ -580,9 +574,11 @@ internal fun TransferDetailScreen(
                                         .onFailure { saving = false; error = it.message ?: "确认归还失败" }
                                 }
                             },
+                            modifier = Modifier.height(34.dp),
                             enabled = !saving,
                             shape = FieldShape,
-                        ) { Text("确认归还") }
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        ) { Text("确认归还", fontSize = 12.sp) }
                     }
                 }
             }
@@ -590,7 +586,7 @@ internal fun TransferDetailScreen(
 
         if (permissions?.optBoolean("canConfirmOutbound") == true || permissions?.optBoolean("canCancel") == true) {
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (permissions?.optBoolean("canConfirmOutbound") == true) {
                     Button(
                         onClick = {
@@ -601,9 +597,11 @@ internal fun TransferDetailScreen(
                                     .onFailure { saving = false; error = it.message ?: "确认调出失败" }
                             }
                         },
+                        modifier = Modifier.height(34.dp),
                         enabled = !saving,
                         shape = FieldShape,
-                    ) { Text("确认调出") }
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    ) { Text("确认调出", fontSize = 12.sp) }
                 }
                 if (permissions?.optBoolean("canCancel") == true) {
                     OutlinedButton(
@@ -615,10 +613,12 @@ internal fun TransferDetailScreen(
                                     .onFailure { saving = false; error = it.message ?: "取消调拨失败" }
                             }
                         },
+                        modifier = Modifier.height(34.dp),
                         enabled = !saving,
                         shape = FieldShape,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                    ) { Text("取消调拨") }
+                    ) { Text("取消调拨", fontSize = 12.sp) }
                 }
             }
         }

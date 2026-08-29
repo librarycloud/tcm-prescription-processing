@@ -405,7 +405,10 @@ internal fun ProcessingScreenV2(
                     val isDecoction = processType?.displayField("name", "")?.contains("煎") == true || plan.displayField("processTypeName", "").contains("煎")
                     val packageCreated = plan.optBoolean("packageCreated") || plan.optInt("packageId", 0) > 0
 
-                    AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                    AppCard(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { selectedPlan = plan },
+                    ) {
                         // Header Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -467,14 +470,6 @@ internal fun ProcessingScreenV2(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            OutlinedButton(
-                                onClick = { selectedPlan = plan },
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
-                                Text("详情", fontSize = 12.sp)
-                            }
-
                             // 关联处方查看
                             val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
                             if (prescriptionId > 0) {
@@ -646,14 +641,6 @@ internal fun ProcessingScreenV2(
                             horizontalArrangement = Arrangement.End,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            OutlinedButton(
-                                onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
-                                Text("详情", fontSize = 12.sp)
-                            }
-
                             if (item.statusCode == 0) {
                                 Spacer(Modifier.width(8.dp))
                                 Button(

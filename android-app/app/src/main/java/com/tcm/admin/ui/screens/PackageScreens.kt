@@ -337,12 +337,6 @@ internal fun PackagesScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                         }
-                        OutlinedButton(
-                            onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                            shape = FieldShape,
-                        ) {
-                            Text("查看详情")
-                        }
                     }
                 }
             }

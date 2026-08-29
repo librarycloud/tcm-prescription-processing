@@ -65,6 +65,13 @@ internal fun DashboardScreen(
                 onClick = { onNavigate(ScreenTarget.Prescriptions) }
             )
             QuickAction(
+                label = "E6诊所处方导入",
+                subtitle = "核对E6订单并确认生成处方与加工计划",
+                icon = Icons.Default.Sync,
+                iconColor = Info,
+                onClick = { onNavigate(ScreenTarget.E6Imports) }
+            )
+            QuickAction(
                 label = "E6商品库存",
                 subtitle = "查询商品批次、规格、条码与效期",
                 icon = Icons.Default.Inventory,

@@ -175,13 +175,6 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(
-                        onClick = { onNavigate(ScreenTarget.PrescriptionDetail(item.optInt("id"))) },
-                        shape = FieldShape,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    ) { Text("详情", fontSize = 12.sp) }
-
                     if (!readOnly && item.optInt("status") == 0) {
                         Spacer(Modifier.width(6.dp))
                         Button(
