@@ -296,15 +296,7 @@ private fun TcmAdminApp() {
                             ApiClient.saveSession(appContext, updated)
                             session = updated
                         },
-                    ) {
-                        ApiClient.clearSession(appContext)
-                        session = null
-                        stats = null
-                        dashboardStores = emptyList()
-                        dashboardStoreId = ""
-                        backStack.clear()
-                        backStack.add(ScreenTarget.Login)
-                    }
+                    )
                 }
                 is ScreenTarget.About -> DetailShell("关于药房助手", onBack = { navigateBack() }) {
                     AboutScreen { hasAppUpdate = it }
