@@ -51,7 +51,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable
-internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
+internal fun HerbsScreen(
+    user: JSONObject?,
+    onNavigate: (ScreenTarget) -> Unit,
+) {
+    val showStore = user?.optInt("role", -1) == 0
     var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selectedStoreId by remember { mutableStateOf<String?>(null) }
     var data by remember { mutableStateOf<JSONObject?>(null) }
@@ -60,7 +64,8 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showStore) {
+        if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
@@ -107,13 +112,14 @@ internal fun HerbsScreen(onNavigate: (ScreenTarget) -> Unit) {
         Spacer(Modifier.height(14.dp))
 
         // Store Chips
-        StoreChipsRow(
-            stores = stores,
-            selectedStoreId = selectedStoreId.orEmpty(),
-            onSelectStore = { selectedStoreId = it.ifBlank { null } },
-        )
-
-        if (stores.size > 1) Spacer(Modifier.height(10.dp))
+        if (showStore && stores.size > 1) {
+            StoreChipsRow(
+                stores = stores,
+                selectedStoreId = selectedStoreId.orEmpty(),
+                onSelectStore = { selectedStoreId = it.ifBlank { null } },
+            )
+            Spacer(Modifier.height(10.dp))
+        }
 
         // Search bar
         SearchBarField(

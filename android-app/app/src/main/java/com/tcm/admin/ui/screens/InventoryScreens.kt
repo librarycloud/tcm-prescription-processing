@@ -53,7 +53,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable
-internal fun InventoryScreen(initialQuery: String = "") {
+internal fun InventoryScreen(
+    user: JSONObject?,
+    initialQuery: String = "",
+) {
+    val showStore = user?.optInt("role", -1) == 0
     var query by remember(initialQuery) { mutableStateOf(initialQuery) }
     var products by remember { mutableStateOf<List<JSONObject>?>(null) }
     var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -72,7 +76,8 @@ internal fun InventoryScreen(initialQuery: String = "") {
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showStore) {
+        if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
@@ -145,7 +150,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
         )
 
         // Store Chips
-        if (stores.size > 1) {
+        if (showStore && stores.size > 1) {
             Spacer(Modifier.height(10.dp))
             StoreChipsRow(
                 stores = stores,
@@ -320,7 +325,7 @@ internal fun InventoryScreen(initialQuery: String = "") {
                                     color = Ink,
                                     fontSize = 14.sp,
                                 )
-                                if (storeName.isNotBlank()) {
+                                if (showStore && storeName.isNotBlank()) {
                                     Spacer(Modifier.width(8.dp))
                                     StatusPill(storeName)
                                 }

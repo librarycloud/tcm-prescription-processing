@@ -55,7 +55,11 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 @Composable
-internal fun TransfersScreen() {
+internal fun TransfersScreen(
+    user: JSONObject?,
+    onNavigate: (ScreenTarget) -> Unit,
+) {
+    val showStore = user?.optInt("role", -1) == 0
     var transfers by remember { mutableStateOf<List<JSONObject>?>(null) }
     var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var stats by remember { mutableStateOf<JSONObject?>(null) }
@@ -65,7 +69,6 @@ internal fun TransfersScreen() {
     var selectedStoreId by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
-    var detail by remember { mutableStateOf<JSONObject?>(null) }
     var createVisible by remember { mutableStateOf(false) }
     var fromStoreId by remember { mutableStateOf("") }
     var toStoreId by remember { mutableStateOf("") }
@@ -74,8 +77,6 @@ internal fun TransfersScreen() {
     var itemSpecification by remember { mutableStateOf("") }
     var itemQuantity by remember { mutableStateOf("1") }
     var itemUnit by remember { mutableStateOf("") }
-    var returnItem by remember { mutableStateOf<JSONObject?>(null) }
-    var returnQuantity by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(reload, keyword, statusFilter, overdueOnly, selectedStoreId) {
@@ -83,9 +84,9 @@ internal fun TransfersScreen() {
         runCatching {
             withContext(Dispatchers.IO) {
                 Triple(
-                    ApiClient.transfers(keyword, statusFilter, selectedStoreId.toIntOrNull(), overdueOnly),
+                    ApiClient.transfers(keyword, statusFilter, selectedStoreId.takeIf { showStore }?.toIntOrNull(), overdueOnly),
                     ApiClient.transferStores(),
-                    ApiClient.transferStats(selectedStoreId.toIntOrNull()),
+                    ApiClient.transferStats(selectedStoreId.takeIf { showStore }?.toIntOrNull()),
                 )
             }
         }.onSuccess { (transferValues, storeValues, summary) ->
@@ -169,7 +170,7 @@ internal fun TransfersScreen() {
             })
         }
 
-        if (stores.size > 1) {
+        if (showStore && stores.size > 1) {
             Spacer(Modifier.height(8.dp))
             StoreChipsRow(
                 stores = stores,
@@ -271,16 +272,7 @@ internal fun TransfersScreen() {
                     horizontalArrangement = Arrangement.End,
                 ) {
                     OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        ApiClient.transferDetail(transfer.optInt("id"))
-                                    }
-                                }.onSuccess { detail = it }
-                                    .onFailure { error = it.message ?: "加载调拨详情失败" }
-                            }
-                        },
+                        onClick = { onNavigate(ScreenTarget.TransferDetail(transfer.optInt("id"))) },
                         shape = FieldShape,
                     ) {
                         Text("查看详情")
@@ -417,121 +409,226 @@ internal fun TransfersScreen() {
         )
     }
 
-    // Transfer Detail Dialog
-    detail?.let { transfer ->
-        val items = transfer.optJSONArray("items") ?: JSONArray()
-        val canConfirm = transfer.optJSONObject("permissions")?.optBoolean("canConfirmOutbound") == true
-        val pendingReturn = transfer.optJSONArray("returnRecords")?.let { records ->
-            (0 until records.length()).map { records.getJSONObject(it) }.firstOrNull { it.optInt("status") == 0 }
-        }
+}
 
-        AlertDialog(
-            onDismissRequest = { detail = null },
-            title = { Text(transfer.displayField("transferNo"), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+@Composable
+internal fun TransferDetailScreen(
+    id: Int,
+    onBack: () -> Unit,
+) {
+    var transfer by remember(id) { mutableStateOf<JSONObject?>(null) }
+    var error by remember(id) { mutableStateOf<String?>(null) }
+    var reload by remember(id) { mutableStateOf(0) }
+    var returnItem by remember { mutableStateOf<JSONObject?>(null) }
+    var returnQuantity by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(id, reload) {
+        error = null
+        runCatching { withContext(Dispatchers.IO) { ApiClient.transferDetail(id) } }
+            .onSuccess { transfer = it }
+            .onFailure { error = it.message ?: "加载调拨详情失败" }
+    }
+
+    val current = transfer
+    if (current == null) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (error == null) AppEmptyState("正在加载调拨详情...")
+            else Text(error!!, color = Danger, fontSize = 13.sp)
+        }
+        return
+    }
+
+    val items = current.optJSONArray("items") ?: JSONArray()
+    val records = current.optJSONArray("returnRecords") ?: JSONArray()
+    val permissions = current.optJSONObject("permissions")
+    val isOverdue = current.optBoolean("overdue")
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        AppCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(current.displayField("transferNo"), color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Spacer(Modifier.height(3.dp))
                     Text(
-                        "${transfer.optJSONObject("fromStore")?.displayField("name") ?: "-"}  ->  ${transfer.optJSONObject("toStore")?.displayField("name") ?: "-"}",
+                        "${current.optJSONObject("fromStore")?.displayField("name") ?: "-"}  ->  ${current.optJSONObject("toStore")?.displayField("name") ?: "-"}",
                         color = Muted,
                         fontSize = 13.sp,
                     )
-                    Spacer(Modifier.height(10.dp))
-                    (0 until items.length()).forEach { index ->
-                        val item = items.getJSONObject(index)
-                        Text(item.displayField("itemName", "物资"), fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "${quantityText(item.opt("quantity"), "0")} ${item.displayField("unit")} · 已归还 ${quantityText(item.opt("returnedQuantity"), "0")}",
-                            color = Muted,
-                            fontSize = 12.sp,
-                        )
-                        val available = item.optDouble("availableReturnQuantity", 0.0)
-                        if (available > 0 && transfer.optJSONObject("permissions")?.optBoolean("canSubmitReturn") == true) {
-                            Spacer(Modifier.height(4.dp))
-                            OutlinedButton(
-                                onClick = {
-                                    returnItem = item
-                                    returnQuantity = quantityText(available, "0")
-                                },
-                                shape = RoundedCornerShape(6.dp),
-                            ) {
-                                Text("申请归还")
+                }
+                StatusPill(if (isOverdue) "已逾期" else transferStatusLabel(current.optInt("status"), current.optInt("outboundStatus")))
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        SectionHeader("调拨信息")
+        Spacer(Modifier.height(8.dp))
+        AppCard {
+            InfoRowItem("调拨日期", current.displayField("transferDate").take(10))
+            InfoRowItem(
+                "预计归还",
+                current.displayField("expectedReturnDate").take(10),
+                valueColor = if (isOverdue) Danger else Ink,
+                isBold = isOverdue,
+            )
+            InfoRowItem("创建人", transferOperatorLabel(current.optJSONObject("creator")))
+            InfoRowItem("创建时间", transferDateTime(current.opt("createdAt")))
+            val remark = displayText(current.opt("remark"))
+            if (remark != "-") InfoRowItem("备注", remark)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        SectionHeader("借出确认")
+        Spacer(Modifier.height(8.dp))
+        AppCard {
+            val confirmed = current.optInt("outboundStatus") == 1
+            InfoRowItem(
+                "状态",
+                if (confirmed) "已确认调出" else "待确认调出",
+                valueColor = if (confirmed) Success else Warning,
+                isBold = true,
+            )
+            InfoRowItem("确认人", transferOperatorLabel(current.optJSONObject("outboundConfirmer")))
+            InfoRowItem("确认时间", transferDateTime(current.opt("outboundConfirmedAt")))
+        }
+
+        Spacer(Modifier.height(12.dp))
+        SectionHeader("调拨明细")
+        Spacer(Modifier.height(8.dp))
+        (0 until items.length()).forEach { index ->
+            val item = items.getJSONObject(index)
+            AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.displayField("itemName", "物资"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        val meta = listOf(item.displayField("specification", ""), item.displayField("batchNo", "")).filter { it.isNotBlank() }
+                        if (meta.isNotEmpty()) Text(meta.joinToString(" · "), color = Muted, fontSize = 12.sp)
+                    }
+                    Text(
+                        "${quantityText(item.opt("quantity"), "0")} ${item.displayField("unit")}",
+                        color = Ink,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                InfoRowItem("已确认归还", "${quantityText(item.opt("returnedQuantity"), "0")} ${item.displayField("unit")}")
+                InfoRowItem("待确认归还", "${quantityText(item.opt("pendingReturnQuantity"), "0")} ${item.displayField("unit")}", valueColor = Warning)
+                InfoRowItem("剩余待归还", "${quantityText(item.opt("remainingQuantity"), "0")} ${item.displayField("unit")}", isBold = true)
+                if (permissions?.optBoolean("canSubmitReturn") == true && item.optDouble("availableReturnQuantity") > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            returnItem = item
+                            returnQuantity = quantityText(item.opt("availableReturnQuantity"), "0")
+                        },
+                        shape = FieldShape,
+                    ) { Text("申请归还") }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        SectionHeader("归还记录")
+        Spacer(Modifier.height(8.dp))
+        if (records.length() == 0) {
+            AppCard { AppEmptyState("暂无归还记录") }
+        } else {
+            (0 until records.length()).forEach { index ->
+                val record = records.getJSONObject(index)
+                val confirmed = record.optInt("status") == 1
+                AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(record.displayField("itemName", "物资"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        StatusPill(if (confirmed) "已确认" else "待确认")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    InfoRowItem("归还数量", quantityText(record.opt("quantity"), "0"))
+                    InfoRowItem("归还日期", record.displayField("returnDate").take(10))
+                    InfoRowItem("发起人", transferOperatorLabel(record.optJSONObject("operator")))
+                    InfoRowItem("发起时间", transferDateTime(record.opt("createdAt")))
+                    InfoRowItem("确认人", transferOperatorLabel(record.optJSONObject("confirmer")))
+                    InfoRowItem("确认时间", transferDateTime(record.opt("confirmedAt")))
+                    val recordRemark = displayText(record.opt("remark"))
+                    if (recordRemark != "-") InfoRowItem("备注", recordRemark)
+                    if (!confirmed && permissions?.optBoolean("canConfirmReturn") == true) {
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                saving = true
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(id, record.optInt("id")) } }
+                                        .onSuccess { saving = false; reload++ }
+                                        .onFailure { saving = false; error = it.message ?: "确认归还失败" }
+                                }
+                            },
+                            enabled = !saving,
+                            shape = FieldShape,
+                        ) { Text("确认归还") }
+                    }
+                }
+            }
+        }
+
+        if (permissions?.optBoolean("canConfirmOutbound") == true || permissions?.optBoolean("canCancel") == true) {
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (permissions?.optBoolean("canConfirmOutbound") == true) {
+                    Button(
+                        onClick = {
+                            saving = true
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { ApiClient.confirmOutbound(id) } }
+                                    .onSuccess { saving = false; reload++ }
+                                    .onFailure { saving = false; error = it.message ?: "确认调出失败" }
                             }
-                        }
-                        if (index < items.length() - 1) {
-                            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color(0xFFF2F3F5))
-                        }
-                    }
-                    pendingReturn?.let { record ->
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            "待确认归还：${quantityText(record.opt("quantity"), "0")} · ${record.displayField("returnDate").take(10)}",
-                            color = Warning,
-                            fontSize = 13.sp,
-                        )
-                    }
+                        },
+                        enabled = !saving,
+                        shape = FieldShape,
+                    ) { Text("确认调出") }
                 }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (canConfirm) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    runCatching {
-                                        withContext(Dispatchers.IO) { ApiClient.confirmOutbound(transfer.optInt("id")) }
-                                    }.onSuccess { detail = null; reload++ }
-                                        .onFailure { error = it.message ?: "确认调出失败" }
-                                }
-                            },
-                            shape = FieldShape,
-                        ) {
-                            Text("确认调出")
-                        }
-                    }
-                    if (pendingReturn != null && transfer.optJSONObject("permissions")?.optBoolean("canConfirmReturn") == true) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    runCatching {
-                                        withContext(Dispatchers.IO) { ApiClient.confirmReturn(transfer.optInt("id"), pendingReturn.optInt("id")) }
-                                    }.onSuccess { detail = null; reload++ }
-                                        .onFailure { error = it.message ?: "确认归还失败" }
-                                }
-                            },
-                            shape = FieldShape,
-                        ) {
-                            Text("确认归还")
-                        }
-                    }
-                    if (transfer.optJSONObject("permissions")?.optBoolean("canCancel") == true) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    runCatching {
-                                        withContext(Dispatchers.IO) { ApiClient.cancelTransfer(transfer.optInt("id"), "安卓端取消") }
-                                    }.onSuccess { detail = null; reload++ }
-                                        .onFailure { error = it.message ?: "取消调拨失败" }
-                                }
-                            },
-                            shape = FieldShape,
-                        ) {
-                            Text("取消")
-                        }
-                    }
-                    OutlinedButton(onClick = { detail = null }, shape = FieldShape) {
-                        Text("关闭")
-                    }
+                if (permissions?.optBoolean("canCancel") == true) {
+                    OutlinedButton(
+                        onClick = {
+                            saving = true
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { ApiClient.cancelTransfer(id, "安卓端取消") } }
+                                    .onSuccess { saving = false; onBack() }
+                                    .onFailure { saving = false; error = it.message ?: "取消调拨失败" }
+                            }
+                        },
+                        enabled = !saving,
+                        shape = FieldShape,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                    ) { Text("取消调拨") }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { detail = null }) {
-                    Text("关闭")
-                }
-            },
-        )
+            }
+        }
+        if (error != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(error!!, color = Danger, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(16.dp))
     }
 
-    // Return Dialog
     returnItem?.let { item ->
         AlertDialog(
             onDismissRequest = { returnItem = null },
@@ -553,38 +650,40 @@ internal fun TransfersScreen() {
             },
             confirmButton = {
                 Button(
-                    enabled = returnQuantity.toDoubleOrNull()?.let { it > 0 } == true,
+                    enabled = !saving && returnQuantity.toDoubleOrNull()?.let { it > 0 } == true,
                     onClick = {
-                        val transferId = detail?.optInt("id") ?: 0
+                        saving = true
                         scope.launch {
                             runCatching {
                                 withContext(Dispatchers.IO) {
                                     ApiClient.addTransferReturns(
-                                        transferId,
+                                        id,
                                         JSONObject()
                                             .put("returnDate", LocalDate.now().toString())
-                                            .put(
-                                                "items",
-                                                JSONArray().put(
-                                                    JSONObject()
-                                                        .put("transferItemId", item.optInt("id"))
-                                                        .put("quantity", returnQuantity.toDouble()),
-                                                ),
-                                            ),
+                                            .put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()))),
                                     )
                                 }
-                            }.onSuccess { returnItem = null; detail = null; reload++ }
-                                .onFailure { error = it.message ?: "提交归还失败" }
+                            }.onSuccess { saving = false; returnItem = null; reload++ }
+                                .onFailure { saving = false; error = it.message ?: "提交归还失败" }
                         }
                     },
                     shape = FieldShape,
-                ) {
-                    Text("提交")
-                }
+                ) { Text("提交") }
             },
-            dismissButton = {
-                TextButton(onClick = { returnItem = null }) { Text("取消") }
-            },
+            dismissButton = { TextButton(onClick = { returnItem = null }) { Text("取消") } },
         )
     }
+}
+
+private fun transferOperatorLabel(operator: JSONObject?): String = operator?.let {
+    listOf(
+        it.displayField("nickname", ""),
+        it.displayField("name", ""),
+        it.displayField("phone", ""),
+    ).firstOrNull { value -> value.isNotBlank() } ?: "-"
+} ?: "-"
+
+private fun transferDateTime(value: Any?): String {
+    val text = displayText(value)
+    return if (text == "-") text else text.replace("T", " ").replace("Z", "").take(16)
 }

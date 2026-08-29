@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +60,8 @@ import org.json.JSONObject
 @Composable
 internal fun ProfileScreen(
     user: JSONObject?,
+    onOpenDetails: () -> Unit,
+    onEntered: () -> Unit,
     onSessionUpdated: (AdminSession) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -70,6 +74,71 @@ internal fun ProfileScreen(
         3 -> "门店员工"
         else -> "管理员"
     }
+
+    LaunchedEffect(Unit) { onEntered() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetails),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = CardShape,
+            border = BorderStroke(1.dp, CardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(modifier = Modifier.size(56.dp), shape = CircleShape, color = PrimarySoft) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(displayName.take(1), color = Primary, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(displayName, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+                    Spacer(Modifier.height(4.dp))
+                    StatusPill(text = role)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = "查看个人资料", tint = Muted)
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+        OutlinedButton(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+            border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("退出登录", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+internal fun ProfileDetailScreen(
+    user: JSONObject?,
+    onSessionUpdated: (AdminSession) -> Unit,
+) {
+    val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
+        user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
+    }
+    val role = when (user?.optInt("role", 0)) {
+        0 -> "全局管理员"
+        2 -> "门店管理员"
+        3 -> "门店员工"
+        else -> "管理员"
+    }
+    val isSuperAdmin = user?.optInt("role", -1) == 0
     var editVisible by remember { mutableStateOf(false) }
     var nickname by remember(user?.toString()) { mutableStateOf(user?.displayField("nickname", "").orEmpty()) }
     var username by remember(user?.toString()) { mutableStateOf(user?.displayField("username", "").orEmpty()) }
@@ -148,13 +217,15 @@ internal fun ProfileScreen(
                     value = maskPhone(user?.displayField("phone", "")),
                 )
                 HorizontalDivider(color = Color(0xFFF2F3F5))
-                ProfileDetailRow(
-                    icon = Icons.Default.Business,
-                    label = "所属门店",
-                    value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
-                        ?: "全部门店（全局权限）",
-                )
-                HorizontalDivider(color = Color(0xFFF2F3F5))
+                if (isSuperAdmin) {
+                    ProfileDetailRow(
+                        icon = Icons.Default.Business,
+                        label = "所属门店",
+                        value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
+                            ?: "全部门店（全局权限）",
+                    )
+                    HorizontalDivider(color = Color(0xFFF2F3F5))
+                }
                 ProfileDetailRow(
                     icon = Icons.Default.Shield,
                     label = "权限角色",
@@ -182,23 +253,6 @@ internal fun ProfileScreen(
             Text("编辑资料", fontSize = 15.sp, fontWeight = FontWeight.Medium)
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        // Logout Button
-        OutlinedButton(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = FieldShape,
-            border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f)),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Danger,
-            ),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("退出登录", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-        }
-        
         Spacer(Modifier.height(16.dp))
     }
 

@@ -57,7 +57,9 @@ private const val CACHED_UPDATE = "cached_update"
 private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
 
 @Composable
-internal fun AboutScreen() {
+internal fun AboutScreen(
+    onUpdateAvailabilityChanged: (Boolean) -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val downloadManager = remember(context) {
@@ -87,6 +89,7 @@ internal fun AboutScreen() {
         val version = runCatching { withContext(Dispatchers.IO) { ApiClient.androidAppVersion() } }
             .onSuccess { result ->
                 latest = result
+                onUpdateAvailabilityChanged(result.optInt("versionCode", 0) > BuildConfig.VERSION_CODE)
                 updatePrefs.edit()
                     .putLong(LAST_UPDATE_CHECK_AT, System.currentTimeMillis())
                     .putString(CACHED_UPDATE, result.toString())

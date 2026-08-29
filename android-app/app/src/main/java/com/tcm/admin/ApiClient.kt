@@ -208,7 +208,7 @@ object ApiClient {
         val query = buildList { add("page=$page"); add("pageSize=$pageSize"); storeId?.let { add("storeId=$it") } }.joinToString("&")
         return request("/admin/yd-goods-check?$query").getJSONObject("data")
     }
-    fun prescriptionSources(): JSONArray = dictionaries("prescription-source")
+    fun prescriptionSources(): JSONArray = dictionaries("PrescriptionSource")
     fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject {
         val root = herbLocations(storeId?.toString())
         val allLocations = root.optJSONArray("locations") ?: JSONArray()

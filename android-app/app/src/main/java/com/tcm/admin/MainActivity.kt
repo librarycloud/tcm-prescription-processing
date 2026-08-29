@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -106,6 +107,7 @@ internal sealed class ScreenTarget {
     object Herbs : ScreenTarget()
     data class HerbLocationAssign(val location: JSONObject, val storeId: Int?) : ScreenTarget()
     object Profile : ScreenTarget()
+    object ProfileDetail : ScreenTarget()
     object About : ScreenTarget()
     data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
@@ -167,6 +169,17 @@ private fun TcmAdminApp() {
     var dashboardStoreId by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
+    val updatePreferences = remember(appContext) {
+        appContext.getSharedPreferences("android_update_check", android.content.Context.MODE_PRIVATE)
+    }
+    var hasAppUpdate by remember(updatePreferences) {
+        mutableStateOf(
+            updatePreferences.getString("cached_update", null)
+                ?.let { value -> runCatching { JSONObject(value).optInt("versionCode", 0) }.getOrDefault(0) }
+                ?.let { versionCode -> versionCode > BuildConfig.VERSION_CODE }
+                ?: false,
+        )
+    }
 
     val scope = rememberCoroutineScope()
 
@@ -186,6 +199,25 @@ private fun TcmAdminApp() {
     fun switchTab(target: ScreenTarget) {
         backStack.clear()
         backStack.add(target)
+    }
+
+    fun checkForAppUpdateIfDue() {
+        val lastCheckedAt = updatePreferences.getLong("last_update_check_at", 0L)
+        val due = lastCheckedAt <= 0L ||
+            System.currentTimeMillis() - lastCheckedAt >= 24L * 60L * 60L * 1000L
+        if (!due) return
+
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { ApiClient.androidAppVersion() }
+            }.onSuccess { version ->
+                updatePreferences.edit()
+                    .putLong("last_update_check_at", System.currentTimeMillis())
+                    .putString("cached_update", version.toString())
+                    .apply()
+                hasAppUpdate = version.optInt("versionCode", 0) > BuildConfig.VERSION_CODE
+            }
+        }
     }
 
     BackHandler(enabled = backStack.size > 1) {
@@ -225,7 +257,7 @@ private fun TcmAdminApp() {
                 }
 
                 // Main Navigation Tabs
-                is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     DashboardScreen(
                         onNavigate = ::navigateTo,
                         stats = stats,
@@ -235,21 +267,26 @@ private fun TcmAdminApp() {
                         onSelectStore = { dashboardStoreId = it },
                     )
                 }
-                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
-                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    ProcessingScreenV2(onNavigate = ::navigateTo)
+                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                    ProcessingScreenV2(
+                        user = session?.user,
+                        onNavigate = ::navigateTo,
+                    )
                 }
-                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    PackagesScreen(onNavigate = ::navigateTo)
+                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                    PackagesScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
-                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
-                    HerbsScreen(onNavigate = ::navigateTo)
+                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                    HerbsScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
-                is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo) {
+                is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     ProfileScreen(
                         user = session?.user,
+                        onOpenDetails = { navigateTo(ScreenTarget.ProfileDetail) },
+                        onEntered = ::checkForAppUpdateIfDue,
                         onSessionUpdated = { updated ->
                             ApiClient.saveSession(appContext, updated)
                             session = updated
@@ -265,12 +302,24 @@ private fun TcmAdminApp() {
                     }
                 }
                 is ScreenTarget.About -> DetailShell("关于药房助手", onBack = { navigateBack() }) {
-                    AboutScreen()
+                    AboutScreen { hasAppUpdate = it }
+                }
+                is ScreenTarget.ProfileDetail -> DetailShell("个人资料", onBack = { navigateBack() }) {
+                    ProfileDetailScreen(
+                        user = session?.user,
+                        onSessionUpdated = { updated ->
+                            ApiClient.saveSession(appContext, updated)
+                            session = updated
+                        },
+                    )
                 }
 
                 // Sub-screens & Details (Page navigation instead of dialogs)
                 is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }) {
-                    InventoryScreen(initialQuery = currentScreen.initialQuery)
+                    InventoryScreen(
+                        user = session?.user,
+                        initialQuery = currentScreen.initialQuery,
+                    )
                 }
                 is ScreenTarget.PrescriptionDetail -> DetailShell("处方详情", onBack = { navigateBack() }) {
                     PrescriptionDetailScreen(
@@ -302,14 +351,20 @@ private fun TcmAdminApp() {
                         onSaved = { navigateBack() },
                     )
                 }
-                is ScreenTarget.WorkflowOperation -> DetailShell("工序操作", onBack = { navigateBack() }) {
+                is ScreenTarget.WorkflowOperation -> DetailShell("工序详情", onBack = { navigateBack() }) {
                     WorkflowOperationScreen(
                         plan = currentScreen.plan,
+                        onNavigatePrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
                         onBack = { navigateBack() },
                     )
                 }
                 is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
-                    PackageDetailPage(pkg = currentScreen.item, onNavigate = ::navigateTo, onBack = { navigateBack() })
+                    PackageDetailPage(
+                        pkg = currentScreen.item,
+                        showStore = session?.user?.optInt("role", -1) == 0,
+                        onNavigate = ::navigateTo,
+                        onBack = { navigateBack() },
+                    )
                 }
                 is ScreenTarget.PackageForm -> DetailShell(
                     if (currentScreen.initial != null) "编辑包裹" else "创建包裹",
@@ -352,13 +407,13 @@ private fun TcmAdminApp() {
                     DifferencesScreen()
                 }
                 is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }) {
-                    TransfersScreen()
+                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
                 is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
-                    TransfersScreen()
+                    TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
                 }
                 is ScreenTarget.TransferCreate -> DetailShell("新建门店调拨", onBack = { navigateBack() }) {
-                    TransfersScreen()
+                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
             }
         }
@@ -497,6 +552,7 @@ private fun MainShell(
     current: ScreenTarget,
     onSwitchTab: (ScreenTarget) -> Unit,
     onNavigate: (ScreenTarget) -> Unit,
+    showUpdateBadge: Boolean,
     content: @Composable () -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -587,7 +643,7 @@ private fun MainShell(
                     onSwitchTab(ScreenTarget.Profile)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("关于", current is ScreenTarget.About, Icons.Default.AccountCircle) {
+                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", current is ScreenTarget.About, Icons.Default.AccountCircle, showBadge = showUpdateBadge) {
                     onNavigate(ScreenTarget.About)
                     scope.launch { drawerState.close() }
                 }
@@ -618,10 +674,19 @@ private fun DrawerItem(
     label: String,
     selected: Boolean,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    showBadge: Boolean = false,
     onClick: () -> Unit,
 ) {
     NavigationDrawerItem(
-        label = { Text(label, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
+        label = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                if (showBadge) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(Modifier.size(8.dp), shape = CircleShape, color = Danger) {}
+                }
+            }
+        },
         icon = if (icon != null) { { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) } } else null,
         selected = selected,
         onClick = onClick,

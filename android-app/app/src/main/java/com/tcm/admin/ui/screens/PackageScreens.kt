@@ -87,7 +87,11 @@ private fun FakeQr(value: String) {
 }
 
 @Composable
-internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
+internal fun PackagesScreen(
+    user: JSONObject?,
+    onNavigate: (ScreenTarget) -> Unit,
+) {
+    val showStore = user?.optInt("role", -1) == 0
     var status by remember { mutableStateOf<Int?>(null) } // null=全部, 0=待取, 1=已取
     var sortBy by remember { mutableStateOf("createdAt") } // "createdAt" | "pickedAt"
     var keyword by remember { mutableStateOf("") }
@@ -110,7 +114,8 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showStore) {
+        if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
@@ -211,7 +216,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
             SegmentedButton("已领取", status == 1, onClick = { status = 1; page = 1 })
         }
 
-        if (stores.size > 1) {
+        if (showStore && stores.size > 1) {
             Spacer(Modifier.height(8.dp))
             StoreChipsRow(
                 stores = stores,
@@ -311,7 +316,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
 
                     Spacer(Modifier.height(8.dp))
 
-                    if (item.store.isNotBlank()) {
+                    if (showStore && item.store.isNotBlank()) {
                         InfoRowItem(label = "所属门店", value = item.store)
                     }
                     InfoRowItem(label = "记录时间", value = item.time)
@@ -359,6 +364,7 @@ internal fun PackagesScreen(onNavigate: (ScreenTarget) -> Unit) {
 @Composable
 internal fun PackageDetailPage(
     pkg: PackageItem,
+    showStore: Boolean,
     onNavigate: (ScreenTarget) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -416,7 +422,7 @@ internal fun PackageDetailPage(
             InfoRowItem(label = "收件客户", value = pkg.customer)
             InfoRowItem(label = "联系电话", value = maskPhone(pkg.phone))
             InfoRowItem(label = "取货方式", value = pkg.method)
-            if (pkg.store.isNotBlank()) InfoRowItem(label = "所属门店", value = pkg.store)
+            if (showStore && pkg.store.isNotBlank()) InfoRowItem(label = "所属门店", value = pkg.store)
             InfoRowItem(label = "包裹状态", value = pkg.status)
             InfoRowItem(label = "时间记录", value = pkg.time)
 

@@ -349,8 +349,9 @@ internal fun SearchBarField(
         modifier = modifier
             .fillMaxWidth()
             .height(SearchControlHeight)
-            .background(Color(0xFFF8FAFC), FieldShape)
-            .padding(horizontal = 6.dp),
+            .background(Color(0xFFF1F5F9), FieldShape)
+            .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), FieldShape)
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
@@ -565,7 +566,7 @@ internal fun InfoRowItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .padding(vertical = 1.5.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

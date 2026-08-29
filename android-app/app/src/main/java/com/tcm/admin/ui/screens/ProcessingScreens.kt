@@ -96,7 +96,11 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
+internal fun ProcessingScreenV2(
+    user: JSONObject?,
+    onNavigate: (ScreenTarget) -> Unit = {},
+) {
+    val showStore = user?.optInt("role", -1) == 0
     var mode by remember { mutableStateOf("plans") } // "plans" | "pickup"
     var activeView by remember { mutableStateOf("today-all") }
     var keyword by remember { mutableStateOf("") }
@@ -126,7 +130,8 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showStore) {
+        if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
@@ -337,7 +342,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
         )
 
         // Store chips stay compact and wrap naturally below the search field.
-        if (stores.size > 1) {
+        if (showStore && stores.size > 1) {
             Spacer(Modifier.height(8.dp))
             val storeOptions = listOf(JSONObject().put("id", "").put("name", "全部")) + stores
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -394,7 +399,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                     val bagCount = plan.optInt("bagCount", 0)
                     val volumeMl = plan.optInt("volumeMl", 0)
                     val pickupMethod = plan.optInt("pickupMethod", 0)
-                    val scheduleDate = plan.displayField("scheduledDate", "").take(10)
+                    val scheduleDate = plan.displayField("processDate", "").take(10)
                     val isDecoction = processType?.displayField("name", "")?.contains("煎") == true || plan.displayField("processTypeName", "").contains("煎")
                     val packageCreated = plan.optBoolean("packageCreated") || plan.optInt("packageId", 0) > 0
 
@@ -437,8 +442,10 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                         }
                         InfoRowItem("取货方式", pickupMethodLabel(pickupMethod))
                         InfoRowItem("计划开工", scheduleDate.ifBlank { "未安排" })
-                        store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let {
-                            InfoRowItem("加工门店", it)
+                        if (showStore) {
+                            store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let {
+                                InfoRowItem("加工门店", it)
+                            }
                         }
                         plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let {
                             InfoRowItem("实际开工", it.take(16).replace("T", " "))
@@ -464,6 +471,27 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             ) {
                                 Text("详情", fontSize = 12.sp)
+                            }
+
+                            // 关联处方查看
+                            val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
+                            if (prescriptionId > 0) {
+                                OutlinedButton(
+                                    onClick = { onNavigate(ScreenTarget.PrescriptionDetail(prescriptionId)) },
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) {
+                                    Text("处方", fontSize = 12.sp)
+                                }
+                            }
+
+                            // 无论进行中还是已完成，均可查看/操作工序详情
+                            OutlinedButton(
+                                onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(6.dp),
+                            ) {
+                                Text(if (status == 1) "流程操作" else "工序详情", fontSize = 12.sp)
                             }
 
                             if (status == 0) { // 待加工
@@ -496,15 +524,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                                 }
                             }
 
-                            if (status == 1) { // 加工中
-                                OutlinedButton(
-                                    onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(6.dp),
-                                ) {
-                                    Text("流程操作", fontSize = 12.sp)
-                                }
-                            }
+
 
                             if (status == 2 && !packageCreated) { // 完成但未生成包裹
                                 Button(
@@ -613,7 +633,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
                         }
 
                         InfoRowItem("完成时间", item.time)
-                        if (item.store.isNotBlank()) {
+                        if (showStore && item.store.isNotBlank()) {
                             InfoRowItem("门店", item.store)
                         }
 
@@ -662,6 +682,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
     selectedPlan?.let { plan ->
         PlanDetailDialog(
             plan = plan,
+            showStore = showStore,
             onClose = { selectedPlan = null },
             onReload = { selectedPlan = null; reload++ },
         )
@@ -705,6 +726,7 @@ internal fun ProcessingScreenV2(onNavigate: (ScreenTarget) -> Unit = {}) {
 @Composable
 internal fun PlanDetailDialog(
     plan: JSONObject,
+    showStore: Boolean,
     onClose: () -> Unit,
     onReload: () -> Unit,
 ) {
@@ -726,8 +748,10 @@ internal fun PlanDetailDialog(
                 InfoRowItem("加工状态", planStatus(status), isBold = true, valueColor = Primary)
                 InfoRowItem("批次剂数", "第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂")
                 InfoRowItem("取货方式", pickupMethodLabel(plan.optInt("pickupMethod", 0)))
-                InfoRowItem("计划开工", plan.displayField("scheduledDate").take(10))
-                store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("加工门店", it) }
+                InfoRowItem("计划开工", plan.displayField("processDate", "未安排").take(10))
+                if (showStore) {
+                    store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("加工门店", it) }
+                }
                 plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", it.take(16).replace("T", " ")) }
                 plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", it.take(16).replace("T", " ")) }
                 plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
@@ -1185,8 +1209,11 @@ internal fun ProcessingPlanFormDialog(
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun WorkflowOperationScreen(
     plan: JSONObject,
+    onNavigatePrescription: ((Int) -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1194,13 +1221,19 @@ internal fun WorkflowOperationScreen(
     var workflow by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var equipmentCode by remember { mutableStateOf("") }
-    var portionNo by remember { mutableStateOf("1") }
-    var stage by remember { mutableStateOf(3) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var previewPhotoId by remember { mutableStateOf(0) }
     var photoDeleting by remember { mutableStateOf(false) }
+
+    // Exception handling state
+    var exceptionTargetUsage by remember { mutableStateOf<JSONObject?>(null) }
+    var exceptionDialogType by remember { mutableStateOf<Int?>(null) } // 1: 撤销误扫, 2: 故障换机
+    var exceptionReason by remember { mutableStateOf("") }
+    var exceptionEquipmentCode by remember { mutableStateOf("") }
+
+    // Active scanning state (which action triggered scanner: "soaking", "decoction_$portion", "packaging_$usageId", "fault_swap")
+    var scanningAction by remember { mutableStateOf<String?>(null) }
 
     fun createPhotoUri(): Uri? {
         val values = ContentValues().apply {
@@ -1238,6 +1271,7 @@ internal fun WorkflowOperationScreen(
             busy = false
         }
     }
+
     val photoPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             pendingPhotoUri = createPhotoUri()
@@ -1246,6 +1280,7 @@ internal fun WorkflowOperationScreen(
             error = "请允许使用相机后再拍照"
         }
     }
+
     fun launchPhotoCapture() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             pendingPhotoUri = createPhotoUri()
@@ -1254,40 +1289,188 @@ internal fun WorkflowOperationScreen(
             photoPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
+
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
-        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) equipmentCode = value
+        val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        val action = scanningAction
+        scanningAction = null
+        if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank() && action != null) {
+            when {
+                action == "soaking" -> {
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val currentUsages = workflow?.optJSONArray("equipmentUsages")?.let { arr ->
+                                    (0 until arr.length()).map { arr.getJSONObject(it) }
+                                }.orEmpty()
+                                val usedPortions = currentUsages.filter { it.optInt("stage") == 3 }.map { it.optInt("portionNo", 1) }
+                                val portionNo = if (usedPortions.isNotEmpty()) (usedPortions.maxOrNull() ?: 0) + 1 else 1
+                                ApiClient.startEquipmentUsage(
+                                    plan.optInt("id"),
+                                    JSONObject()
+                                        .put("stage", 3)
+                                        .put("portionNo", portionNo)
+                                        .put("equipmentCode", scanned)
+                                        .put("requestId", "android-${System.currentTimeMillis()}"),
+                                )
+                            }
+                        }.onSuccess { reload() }.onFailure { error = it.message ?: "扫码浸泡失败" }
+                        busy = false
+                    }
+                }
+                action.startsWith("decoction_") -> {
+                    val portionNo = action.removePrefix("decoction_").toIntOrNull() ?: 1
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.startEquipmentUsage(
+                                    plan.optInt("id"),
+                                    JSONObject()
+                                        .put("stage", 4)
+                                        .put("portionNo", portionNo)
+                                        .put("equipmentCode", scanned)
+                                        .put("requestId", "android-${System.currentTimeMillis()}"),
+                                )
+                            }
+                        }.onSuccess { reload() }.onFailure { error = it.message ?: "扫锅煎煮失败" }
+                        busy = false
+                    }
+                }
+                action.startsWith("packaging_") -> {
+                    val usageId = action.removePrefix("packaging_").toIntOrNull() ?: 0
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.startPackaging(
+                                    plan.optInt("id"),
+                                    usageId,
+                                    JSONObject()
+                                        .put("equipmentCode", scanned)
+                                        .put("requestId", "android-${System.currentTimeMillis()}"),
+                                )
+                            }
+                        }.onSuccess { reload() }.onFailure { error = it.message ?: "扫包装机失败" }
+                        busy = false
+                    }
+                }
+                action == "fault_swap" -> {
+                    exceptionEquipmentCode = scanned
+                }
+            }
+        }
     }
 
     LaunchedEffect(plan) { reload() }
 
     val detail = workflow
+    val prescription = detail?.optJSONObject("prescription") ?: plan.optJSONObject("prescription")
+    val prescriptionId = plan.optInt("prescriptionId", prescription?.optInt("id", 0) ?: 0)
+    val customerName = detail?.displayField("customerName", "").ifBlank {
+        plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "顾客" }
+    }
+    val planCode = detail?.displayField("planCode", "").ifBlank { plan.displayField("planCode", "加工计划") }
+    val batchNo = detail?.optInt("batchNo", plan.optInt("batchNo", 1)) ?: 1
+    val totalDose = detail?.optInt("totalDose", plan.optInt("totalDose", 0)) ?: 0
+    val bagCount = detail?.optInt("bagCount", plan.optInt("bagCount", 0)) ?: 0
+    val volumeMl = detail?.optInt("volumeMl", plan.optInt("volumeMl", 0)) ?: 0
+    val processType = detail?.optJSONObject("processType") ?: plan.optJSONObject("processType")
+    val processTypeCode = processType?.displayField("code", "") ?: plan.displayField("processTypeCode", "")
+    val processTypeName = processType?.displayField("name", "") ?: plan.displayField("processTypeName", "代煎")
+    val isDecoction = detail?.optBoolean("isDecoction") == true || processTypeCode == "DECOCTION" || processTypeName.contains("煎")
+
     val usages = detail?.optJSONArray("equipmentUsages")?.let { array ->
         (0 until array.length()).map { array.getJSONObject(it) }
     }.orEmpty()
-    val photos = detail?.optJSONArray("photos")?.length() ?: 0
+    val activeSoakings = usages.filter { it.optInt("stage") == 3 && it.optInt("status") == 1 }
+    val activeDecoctions = usages.filter { it.optInt("stage") == 4 && it.optInt("status") == 1 }
+    val activePackagings = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
+    val usageHistory = usages.filter { it.optInt("status") != 1 }
+
+    val photos = detail?.optJSONArray("photos")
+    val photoCount = photos?.length() ?: 0
     val status = detail?.optInt("status", plan.optInt("status")) ?: plan.optInt("status")
     val currentStage = detail?.optInt("currentStage", 1) ?: 1
-    val processType = detail?.optJSONObject("processType") ?: plan.optJSONObject("processType")
-    val processTypeCode = processType?.displayField("code", "") ?: plan.displayField("processTypeCode", "")
-    val processTypeName = processType?.displayField("name", "") ?: plan.displayField("processTypeName", "")
-    val hasEquipmentWorkflow = processTypeCode == "DECOCTION" || processTypeName == "代煎" || processTypeName.contains("膏方") || processTypeName.contains("膏剂")
-    val isDecoction = detail?.optBoolean("isDecoction") == true || processTypeCode == "DECOCTION" || processTypeName == "代煎"
-    val activeDecoction = usages.firstOrNull { it.optInt("stage") == 4 && it.optInt("status") == 1 }
-    val activePackaging = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
-    val canUpload = status == 1 && currentStage in listOf(1, 2) && photos < 3
+    val canUpload = status == 1 && currentStage in listOf(1, 2) && photoCount < 3
     val canFinish = detail?.optBoolean("canCompleteWorkflow") == true || detail?.optBoolean("canFinalizeWorkflow") == true
+    val exceptions = detail?.optJSONArray("workflowExceptions")?.let { arr ->
+        (0 until arr.length()).map { arr.getJSONObject(it) }
+    }.orEmpty()
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        // Top Summary Card - 顶部显示加工方式、剂数、代煎显示袋数毫升数
         AppCard {
-            SectionHeader(
-                "加工流程",
-                "${plan.displayField("planCode", "加工计划")} · ${plan.optJSONObject("prescription")?.displayField("customerName", "顾客") ?: "顾客"}",
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(customerName, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink)
+                    Text("$planCode · 第 $batchNo 批", color = Muted, fontSize = 12.sp)
+                }
+                StatusPill(processingStageLabel(currentStage))
+            }
             Spacer(Modifier.height(10.dp))
-            InfoRowItem("当前状态", planStatus(status), isBold = true, valueColor = Primary)
-            InfoRowItem("当前阶段", detail?.optInt("currentStage")?.let { processingStageLabel(it) } ?: "待加载")
-            InfoRowItem("调配照片", "$photos / 3 张")
+            HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFF1F5F9),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("加工方式", color = Muted, fontSize = 11.sp)
+                        Text(processTypeName, fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFF1F5F9),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("处方剂数", color = Muted, fontSize = 11.sp)
+                        Text("$totalDose 剂", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                    }
+                }
+                if (isDecoction) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFF1F5F9),
+                        modifier = Modifier.weight(1.2f),
+                    ) {
+                        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("代煎规格", color = Muted, fontSize = 11.sp)
+                            Text("$bagCount 袋 / $volumeMl ml", fontWeight = FontWeight.SemiBold, color = PrimaryDark, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            if (prescriptionId > 0) {
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    OutlinedButton(
+                        onClick = {
+                            if (onNavigatePrescription != null) {
+                                onNavigatePrescription(prescriptionId)
+                            }
+                        },
+                        shape = FieldShape,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    ) {
+                        Text("查看对应处方", fontSize = 12.sp)
+                    }
+                }
+            }
         }
 
         if (error != null) {
@@ -1297,186 +1480,472 @@ internal fun WorkflowOperationScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
         if (status == 0) {
+            Spacer(Modifier.height(12.dp))
             Button(
                 enabled = !busy,
                 onClick = {
                     busy = true
                     scope.launch {
                         runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 1) } }
-                            .onSuccess { reload() }.onFailure { error = it.message ?: "开始加工失败" }
+                            .onSuccess { reload() }.onFailure { error = it.message ?: "开始调配失败" }
                         busy = false
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(44.dp),
                 shape = FieldShape,
-            ) { Text("开始调配") }
+                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+            ) { Text("开始调配", fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
         }
 
+        // STEP 1: 调配
+        Spacer(Modifier.height(12.dp))
         AppCard {
-            FlowRow(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("1  调配", fontWeight = FontWeight.Bold, color = Ink)
-                Text(if (photos > 0) "已上传照片" else "待拍照完成", color = if (photos > 0) Success else Muted, fontSize = 13.sp)
-                if (canUpload) {
-                    Button(
-                        enabled = !busy,
-                        onClick = ::launchPhotoCapture,
-                        shape = FieldShape,
-                    ) { Text(if (photos > 0) "补充拍照" else "拍照并完成调配") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimarySoft,
+                        modifier = Modifier.size(24.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("1", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text("调配", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                 }
+                Text(if (photoCount > 0) "已完成调配" else "待调配拍照", color = if (photoCount > 0) Success else Muted, fontSize = 12.sp)
             }
-        }
+            Spacer(Modifier.height(6.dp))
+            Text("称量调配完成后拍照留存凭证", color = Muted, fontSize = 12.sp)
 
-        if (photos > 0) {
-            Spacer(Modifier.height(10.dp))
-            AppCard {
-                Text("调配照片", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
-                Spacer(Modifier.height(8.dp))
-                val photoItems = detail?.optJSONArray("photos")
+            if (photoCount > 0 && photos != null) {
+                Spacer(Modifier.height(10.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    if (photoItems != null) {
-                        (0 until photoItems.length()).forEach { index ->
-                            val photoId = photoItems.optJSONObject(index)?.optInt("id", 0) ?: 0
-                            if (photoId > 0) {
+                    (0 until photos.length()).forEach { index ->
+                        val photoId = photos.optJSONObject(index)?.optInt("id", 0) ?: 0
+                        if (photoId > 0) {
+                            OutlinedButton(
+                                enabled = !busy,
+                                onClick = {
+                                    busy = true
+                                    scope.launch {
+                                        runCatching {
+                                            withContext(Dispatchers.IO) {
+                                                val bytes = ApiClient.processingPhoto(plan.optInt("id"), photoId)
+                                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                            }
+                                        }.onSuccess {
+                                            previewBitmap = it
+                                            previewPhotoId = photoId
+                                        }.onFailure { error = it.message ?: "照片加载失败" }
+                                        busy = false
+                                    }
+                                },
+                                shape = FieldShape,
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            ) { Text("查看照片 ${index + 1}", fontSize = 12.sp) }
+
+                            if (status == 1 && currentStage in listOf(1, 2)) {
                                 OutlinedButton(
-                                    enabled = !busy,
+                                    enabled = !photoDeleting && !busy,
                                     onClick = {
-                                        busy = true
+                                        photoDeleting = true
                                         scope.launch {
-                                            runCatching {
-                                                withContext(Dispatchers.IO) {
-                                                    val bytes = ApiClient.processingPhoto(plan.optInt("id"), photoId)
-                                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                                }
-                                            }.onSuccess {
-                                                previewBitmap = it
-                                                previewPhotoId = photoId
-                                            }.onFailure { error = it.message ?: "照片加载失败" }
-                                            busy = false
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPhoto(plan.optInt("id"), photoId) } }
+                                                .onSuccess { reload() }
+                                                .onFailure { error = it.message ?: "照片删除失败" }
+                                            photoDeleting = false
                                         }
                                     },
                                     shape = FieldShape,
-                                ) { Text("查看照片 ${index + 1}") }
-                                if (status == 1 && currentStage in listOf(1, 2)) {
-                                    OutlinedButton(
-                                        enabled = !photoDeleting && !busy,
-                                        onClick = {
-                                            photoDeleting = true
-                                            scope.launch {
-                                                runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPhoto(plan.optInt("id"), photoId) } }
-                                                    .onSuccess { reload() }
-                                                    .onFailure { error = it.message ?: "照片删除失败" }
-                                                photoDeleting = false
-                                            }
-                                        },
-                                        shape = FieldShape,
-                                    ) { Text("删除") }
-                                }
+                                    modifier = Modifier.height(32.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                ) { Text("删除", fontSize = 12.sp) }
                             }
                         }
                     }
                 }
             }
-        }
 
-        if (hasEquipmentWorkflow) {
-            listOf(3 to "2  浸泡", 4 to "3  煎煮", 5 to "4  打包").forEach { (step, title) ->
+            if (canUpload) {
                 Spacer(Modifier.height(10.dp))
-                AppCard {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
-                    Spacer(Modifier.height(8.dp))
-                    val stageUsages = usages.filter { it.optInt("stage") == step }
-                    if (stageUsages.isEmpty()) {
-                        Text(if (step == 3) "等待调配完成后开始" else "等待上一阶段完成", color = Muted, fontSize = 13.sp)
-                    } else {
-                        stageUsages.forEach { usage ->
-                            val equipment = usage.optJSONObject("equipment")?.displayField("name", "设备") ?: "设备"
-                            InfoRowItem("第 ${usage.optInt("portionNo", 1)} 组", "$equipment · ${if (usage.optInt("status") == 1) "进行中" else "已完成"}")
-                        }
-                    }
-                    if (step == 5 && activePackaging.isNotEmpty()) {
-                        Text("打包进行中，完成后再点击底部加工完成", color = Muted, fontSize = 12.sp)
-                    }
-                }
+                Button(
+                    enabled = !busy,
+                    onClick = ::launchPhotoCapture,
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    shape = FieldShape,
+                ) { Text(if (photoCount > 0) "补充调配照片" else "拍照并完成调配", fontSize = 13.sp) }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-        if (hasEquipmentWorkflow) AppCard {
-            Text("设备工序操作", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
-            Spacer(Modifier.height(8.dp))
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (hasEquipmentWorkflow) {
-                    SegmentedButton("浸泡", stage == 3, { stage = 3 })
-                    SegmentedButton("煎煮", stage == 4, { stage = 4 })
-                    SegmentedButton("打包", stage == 5, { stage = 5 })
+        // STEP 2: 浸泡（代煎流程）
+        if (isDecoction) {
+            Spacer(Modifier.height(12.dp))
+            AppCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = PrimarySoft,
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("2", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                    }
+                    Text(if (status == 2) "浸泡已完成" else "可连续扫描浸泡桶或煎药锅", color = Muted, fontSize = 12.sp)
                 }
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = equipmentCode,
-                onValueChange = { equipmentCode = it },
-                label = { Text("设备编号或二维码") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = FieldShape,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = portionNo,
-                    onValueChange = { portionNo = it.filter(Char::isDigit) },
-                    label = { Text("分组") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    shape = FieldShape,
-                )
-                OutlinedButton(
-                    enabled = !busy,
-                    onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                    shape = FieldShape,
-                ) { Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码设备"); Spacer(Modifier.width(4.dp)); Text("扫码") }
-            }
-            Spacer(Modifier.height(10.dp))
-            Button(
-                enabled = !busy && equipmentCode.isNotBlank() && portionNo.toIntOrNull()?.let { it > 0 } == true,
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                if (stage == 5 && activeDecoction != null) {
-                                    ApiClient.startPackaging(plan.optInt("id"), activeDecoction.optInt("id"), JSONObject().put("equipmentCode", equipmentCode.trim()).put("requestId", "android-${System.currentTimeMillis()}"))
-                                } else {
-                                    ApiClient.startEquipmentUsage(plan.optInt("id"), JSONObject().put("stage", stage).put("portionNo", portionNo.toInt()).put("equipmentCode", equipmentCode.trim()).put("requestId", "android-${System.currentTimeMillis()}"))
+                Spacer(Modifier.height(8.dp))
+
+                if (activeSoakings.isNotEmpty()) {
+                    activeSoakings.forEach { item ->
+                        val equipment = item.optJSONObject("equipment")?.displayField("name", "浸泡设备") ?: "浸泡设备"
+                        val operator = item.optJSONObject("operator")?.let { op ->
+                            op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
+                        } ?: "-"
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                                    Text("操作人：$operator · 开始：${item.displayField("startedAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                                }
+                                if (status == 1) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            exceptionTargetUsage = item
+                                            exceptionReason = ""
+                                            exceptionEquipmentCode = ""
+                                            exceptionDialogType = 0 // show selection sheet
+                                        },
+                                        modifier = Modifier.height(30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        shape = FieldShape,
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Warning),
+                                    ) { Text("异常处理", fontSize = 11.sp) }
                                 }
                             }
-                        }.onSuccess { equipmentCode = ""; reload() }.onFailure { error = it.message ?: "开始工序失败" }
-                        busy = false
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = FieldShape,
-            ) { Text(if (busy) "提交中..." else "开始${when (stage) { 3 -> "浸泡"; 4 -> "煎煮"; else -> "打包" }}") }
+                }
+
+                if (status == 1) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        enabled = !busy,
+                        onClick = {
+                            scanningAction = "soaking"
+                            scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        },
+                        modifier = Modifier.fillMaxWidth().height(38.dp),
+                        shape = FieldShape,
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("扫码添加浸泡桶", fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // STEP 3: 煎煮
+            Spacer(Modifier.height(12.dp))
+            AppCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = PrimarySoft,
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("3", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                    }
+                    Text(if (status == 2) "煎煮已完成" else "等待或进行煎煮", color = Muted, fontSize = 12.sp)
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // Waiting soaking portions ready to start decoction
+                if (status == 1 && activeSoakings.isNotEmpty()) {
+                    activeSoakings.forEach { item ->
+                        val equipment = item.optJSONObject("equipment")?.displayField("name", "浸泡桶") ?: "浸泡桶"
+                        val portion = item.optInt("portionNo", 1)
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 $portion 组 · 等待转煎煮", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                                    Text("浸泡桶：$equipment", color = Muted, fontSize = 11.sp)
+                                }
+                                Button(
+                                    enabled = !busy,
+                                    onClick = {
+                                        scanningAction = "decoction_$portion"
+                                        scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                                    },
+                                    modifier = Modifier.height(30.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    shape = FieldShape,
+                                ) { Text("扫锅煎煮", fontSize = 12.sp) }
+                            }
+                        }
+                    }
+                }
+
+                // Active decoctions
+                if (activeDecoctions.isNotEmpty()) {
+                    activeDecoctions.forEach { item ->
+                        val equipment = item.optJSONObject("equipment")?.displayField("name", "煎药机") ?: "煎药机"
+                        val operator = item.optJSONObject("operator")?.let { op ->
+                            op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
+                        } ?: "-"
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment · 煎煮中", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                                    Text("操作人：$operator · 开始：${item.displayField("startedAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                                }
+                                if (status == 1) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            exceptionTargetUsage = item
+                                            exceptionReason = ""
+                                            exceptionEquipmentCode = ""
+                                            exceptionDialogType = 0
+                                        },
+                                        modifier = Modifier.height(30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        shape = FieldShape,
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Warning),
+                                    ) { Text("异常处理", fontSize = 11.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (activeSoakings.isEmpty() && activeDecoctions.isEmpty() && status != 2) {
+                    Text("暂无进行中的煎煮", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
+
+            // STEP 4: 打包
+            Spacer(Modifier.height(12.dp))
+            AppCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = PrimarySoft,
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("4", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                    }
+                    Text(if (status == 2) "全部分组已打包" else "扫描包装机开始打包", color = Muted, fontSize = 12.sp)
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // Waiting decoction portions ready to start packaging
+                if (status == 1 && activeDecoctions.isNotEmpty()) {
+                    activeDecoctions.forEach { item ->
+                        val equipment = item.optJSONObject("equipment")?.displayField("name", "煎药机") ?: "煎药机"
+                        val usageId = item.optInt("id")
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 ${item.optInt("portionNo", 1)} 组 · 等待打包", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                                    Text("煎药机：$equipment", color = Muted, fontSize = 11.sp)
+                                }
+                                Button(
+                                    enabled = !busy,
+                                    onClick = {
+                                        scanningAction = "packaging_$usageId"
+                                        scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                                    },
+                                    modifier = Modifier.height(30.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    shape = FieldShape,
+                                ) { Text("扫包装机打包", fontSize = 12.sp) }
+                            }
+                        }
+                    }
+                }
+
+                // Active packagings
+                if (activePackagings.isNotEmpty()) {
+                    activePackagings.forEach { item ->
+                        val equipment = item.optJSONObject("equipment")?.displayField("name", "包装机") ?: "包装机"
+                        val operator = item.optJSONObject("operator")?.let { op ->
+                            op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
+                        } ?: "-"
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment · 打包中", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                                    Text("操作人：$operator · 开始：${item.displayField("startedAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (activeDecoctions.isEmpty() && activePackagings.isEmpty() && status != 2) {
+                    Text("等待煎煮完成后扫描包装机", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
         }
 
+        // 设备工序记录（底部工序历史）
+        if (usageHistory.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            AppCard {
+                Text("设备工序记录", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                Spacer(Modifier.height(8.dp))
+                usageHistory.forEach { item ->
+                    val stageText = when (item.optInt("stage")) { 3 -> "浸泡"; 4 -> "煎煮"; 5 -> "打包"; else -> "设备" }
+                    val equipment = item.optJSONObject("equipment")?.displayField("name", "设备") ?: "设备"
+                    val statusText = when (item.optInt("status")) { 2 -> "已完成"; 3 -> "已作废"; else -> "进行中" }
+                    val operator = item.optJSONObject("operator")?.let { op ->
+                        op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
+                    } ?: "-"
+                    val voidReason = item.displayField("voidReason", "")
+
+                    Surface(
+                        color = Color(0xFFF8FAFC),
+                        shape = FieldShape,
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("$stageText · 第 ${item.optInt("portionNo", 1)} 组 · $equipment", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                                Text(statusText, color = if (item.optInt("status") == 2) Success else Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "时间：${item.displayField("startedAt", "").take(16).replace("T", " ")} → ${item.displayField("endedAt", "").take(16).replace("T", " ").ifBlank { "完成" }}",
+                                color = Muted,
+                                fontSize = 11.sp,
+                            )
+                            Text("操作人：$operator", color = Muted, fontSize = 11.sp)
+                            if (voidReason.isNotBlank()) {
+                                Text("作废原因：$voidReason", color = Danger, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 异常处理记录
+        if (exceptions.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            AppCard {
+                Text("异常处理记录", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                Spacer(Modifier.height(8.dp))
+                exceptions.forEach { ex ->
+                    val typeText = when (ex.optInt("type")) { 1 -> "误扫撤销"; 2 -> "设备故障换机"; else -> "人工补录" }
+                    val operator = ex.optJSONObject("operator")?.let { op ->
+                        op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
+                    } ?: "-"
+                    Surface(
+                        color = DangerSoft.copy(alpha = 0.5f),
+                        shape = FieldShape,
+                        border = BorderStroke(1.dp, Danger.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text("$typeText · ${ex.displayField("reason", "无原因说明")}", fontWeight = FontWeight.SemiBold, color = Danger, fontSize = 12.5.sp)
+                            Spacer(Modifier.height(2.dp))
+                            Text("操作人：$operator · 时间：${ex.displayField("createdAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Finish Bar
         if (status == 1 && canFinish) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             Button(
                 enabled = !busy,
                 onClick = {
@@ -1484,27 +1953,29 @@ internal fun WorkflowOperationScreen(
                     scope.launch {
                         runCatching {
                             withContext(Dispatchers.IO) {
-                                activePackaging.forEach { ApiClient.finishEquipmentUsage(plan.optInt("id"), it.optInt("id")) }
+                                activePackagings.forEach { ApiClient.finishEquipmentUsage(plan.optInt("id"), it.optInt("id")) }
                                 ApiClient.transitionPlan(plan.optInt("id"), 2)
                             }
                         }.onSuccess { reload() }.onFailure { error = it.message ?: "完成加工失败" }
                         busy = false
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(46.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Success),
                 shape = FieldShape,
-            ) { Text("加工完成") }
+            ) { Text("加工完成", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         }
-        Spacer(Modifier.height(10.dp))
+
+        Spacer(Modifier.height(14.dp))
         OutlinedButton(
             onClick = onBack,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
             shape = FieldShape,
-        ) { Text("返回加工计划") }
+        ) { Text("返回加工计划列表") }
         Spacer(Modifier.height(20.dp))
     }
 
+    // Photo Preview Dialog
     previewBitmap?.let { bitmap ->
         AlertDialog(
             onDismissRequest = { previewBitmap = null },
@@ -1523,7 +1994,155 @@ internal fun WorkflowOperationScreen(
             },
         )
     }
+
+    // Exception handling selection & dialogs
+    if (exceptionDialogType == 0 && exceptionTargetUsage != null) {
+        AlertDialog(
+            onDismissRequest = { exceptionDialogType = null; exceptionTargetUsage = null },
+            title = { Text("工序异常处理") },
+            text = { Text("请选择需要对当前设备进行的处理操作：") },
+            confirmButton = {
+                Button(
+                    onClick = { exceptionDialogType = 1 },
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) { Text("撤销误扫") }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { exceptionDialogType = 2 },
+                    colors = ButtonDefaults.buttonColors(containerColor = Warning),
+                ) { Text("设备故障换机") }
+            },
+        )
+    }
+
+    // 1. 撤销误扫确认框
+    if (exceptionDialogType == 1 && exceptionTargetUsage != null) {
+        val target = exceptionTargetUsage!!
+        AlertDialog(
+            onDismissRequest = { if (!busy) { exceptionDialogType = null; exceptionTargetUsage = null } },
+            title = { Text("撤销误扫记录") },
+            text = {
+                Column {
+                    Text("请填写撤销误扫原因：", color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = exceptionReason,
+                        onValueChange = { exceptionReason = it },
+                        placeholder = { Text("如：误扫其他批次设备") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = FieldShape,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !busy && exceptionReason.isNotBlank(),
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.voidEquipmentUsage(plan.optInt("id"), target.optInt("id"), exceptionReason.trim())
+                                }
+                            }.onSuccess {
+                                exceptionDialogType = null
+                                exceptionTargetUsage = null
+                                reload()
+                            }.onFailure { error = it.message ?: "撤销失败" }
+                            busy = false
+                        }
+                    },
+                ) { Text(if (busy) "提交中..." else "确认撤销") }
+            },
+            dismissButton = {
+                TextButton(onClick = { exceptionDialogType = null; exceptionTargetUsage = null }, enabled = !busy) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    // 2. 设备故障换机确认框
+    if (exceptionDialogType == 2 && exceptionTargetUsage != null) {
+        val target = exceptionTargetUsage!!
+        AlertDialog(
+            onDismissRequest = { if (!busy) { exceptionDialogType = null; exceptionTargetUsage = null } },
+            title = { Text("设备故障换机") },
+            text = {
+                Column {
+                    Text("故障原因：", color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = exceptionReason,
+                        onValueChange = { exceptionReason = it },
+                        placeholder = { Text("请填写故障原因") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = FieldShape,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("新设备编号：", color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = exceptionEquipmentCode,
+                            onValueChange = { exceptionEquipmentCode = it },
+                            placeholder = { Text("扫描或输入新设备") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            shape = FieldShape,
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                scanningAction = "fault_swap"
+                                scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                            },
+                            shape = FieldShape,
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !busy && exceptionReason.isNotBlank() && exceptionEquipmentCode.isNotBlank(),
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.transferFaultyEquipment(
+                                        plan.optInt("id"),
+                                        target.optInt("id"),
+                                        JSONObject()
+                                            .put("reason", exceptionReason.trim())
+                                            .put("equipmentCode", exceptionEquipmentCode.trim())
+                                            .put("requestId", "android-${System.currentTimeMillis()}"),
+                                    )
+                                }
+                            }.onSuccess {
+                                exceptionDialogType = null
+                                exceptionTargetUsage = null
+                                reload()
+                            }.onFailure { error = it.message ?: "换机失败" }
+                            busy = false
+                        }
+                    },
+                ) { Text(if (busy) "提交中..." else "确认换机") }
+            },
+            dismissButton = {
+                TextButton(onClick = { exceptionDialogType = null; exceptionTargetUsage = null }, enabled = !busy) {
+                    Text("取消")
+                }
+            },
+        )
+    }
 }
+
 
 private fun processingStageLabel(stage: Int): String = when (stage) {
     1 -> "调配中"
