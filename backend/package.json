@@ -44,6 +44,10 @@
     "seed": "node prisma/seed.js"
   },
   "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "mariadb": "3.5.3",
     "uuid": "11.1.1"
   },
   "allowScripts": {
