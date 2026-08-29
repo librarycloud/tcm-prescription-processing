@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -59,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -95,6 +97,8 @@ internal sealed class ScreenTarget {
     object Dashboard : ScreenTarget()
     object Prescriptions : ScreenTarget()
     object E6Imports : ScreenTarget()
+    data class E6ImportDetail(val id: Int) : ScreenTarget()
+    data class E6ImportConfirm(val initial: JSONObject, val mergeIds: List<Int> = emptyList()) : ScreenTarget()
     data class PrescriptionDetail(val id: Int) : ScreenTarget()
     data class PrescriptionEdit(val initial: JSONObject = JSONObject()) : ScreenTarget()
     object Processing : ScreenTarget()
@@ -109,6 +113,7 @@ internal sealed class ScreenTarget {
     data class HerbLocationAssign(val location: JSONObject, val storeId: Int?) : ScreenTarget()
     object Profile : ScreenTarget()
     object ProfileDetail : ScreenTarget()
+    object Settings : ScreenTarget()
     object About : ScreenTarget()
     data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
@@ -155,6 +160,33 @@ private fun tcmLightColorScheme() = lightColorScheme(
     onErrorContainer = Color(0xFF7F1D1D),
 )
 
+private fun tcmDarkColorScheme() = darkColorScheme(
+    primary = Color(0xFF93C5FD),
+    onPrimary = Color(0xFF0B1B33),
+    primaryContainer = Color(0xFF1E3A5F),
+    onPrimaryContainer = Color(0xFFD6E8FF),
+    secondary = Color(0xFFFBBF24),
+    onSecondary = Color(0xFF2A1A00),
+    secondaryContainer = Color(0xFF5C4300),
+    onSecondaryContainer = Color(0xFFFFE8A3),
+    tertiary = Color(0xFF6EE7B7),
+    onTertiary = Color(0xFF002117),
+    tertiaryContainer = Color(0xFF14532D),
+    onTertiaryContainer = Color(0xFFB8F5D6),
+    background = Color(0xFF0F172A),
+    onBackground = Color(0xFFE2E8F0),
+    surface = Color(0xFF111827),
+    onSurface = Color(0xFFE5E7EB),
+    surfaceVariant = Color(0xFF1F2937),
+    onSurfaceVariant = Color(0xFFCBD5E1),
+    outline = Color(0xFF475569),
+    outlineVariant = Color(0xFF334155),
+    error = Color(0xFFFCA5A5),
+    onError = Color(0xFF450A0A),
+    errorContainer = Color(0xFF7F1D1D),
+    onErrorContainer = Color(0xFFFEE2E2),
+)
+
 @Composable
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
@@ -172,6 +204,12 @@ private fun TcmAdminApp() {
     var loginLoading by remember { mutableStateOf(false) }
     val updatePreferences = remember(appContext) {
         appContext.getSharedPreferences("android_update_check", android.content.Context.MODE_PRIVATE)
+    }
+    val settingsPreferences = remember(appContext) {
+        appContext.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+    }
+    var themeMode by remember(settingsPreferences) {
+        mutableStateOf(settingsPreferences.getString("theme_mode", "system") ?: "system")
     }
     var hasAppUpdate by remember(updatePreferences) {
         mutableStateOf(
@@ -225,7 +263,11 @@ private fun TcmAdminApp() {
         navigateBack()
     }
 
-    val colorScheme = remember { tcmLightColorScheme() }
+    val colorScheme = when (themeMode) {
+        "dark" -> tcmDarkColorScheme()
+        "light" -> tcmLightColorScheme()
+        else -> if (isSystemInDarkTheme()) tcmDarkColorScheme() else tcmLightColorScheme()
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -274,6 +316,23 @@ private fun TcmAdminApp() {
                 is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     E6ImportsScreen(user = session?.user, onNavigate = ::navigateTo)
                 }
+                is ScreenTarget.E6ImportDetail -> DetailShell("E6订单详情", onBack = { navigateBack() }) {
+                    E6ImportDetailScreen(
+                        id = currentScreen.id,
+                        onConfirm = { item -> navigateTo(ScreenTarget.E6ImportConfirm(item)) },
+                        onPrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
+                    )
+                }
+                is ScreenTarget.E6ImportConfirm -> DetailShell("确认导入并生成加工计划", onBack = { navigateBack() }) {
+                    E6ImportConfirmScreen(
+                        initial = currentScreen.initial,
+                        mergeIds = currentScreen.mergeIds,
+                        onDone = {
+                            navigateBack()
+                            if (backStack.lastOrNull() is ScreenTarget.E6ImportDetail) navigateBack()
+                        },
+                    )
+                }
                 is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
                     ProcessingScreenV2(
                         user = session?.user,
@@ -290,6 +349,7 @@ private fun TcmAdminApp() {
                     ProfileScreen(
                         user = session?.user,
                         onOpenDetails = { navigateTo(ScreenTarget.ProfileDetail) },
+                        onOpenSettings = { navigateTo(ScreenTarget.Settings) },
                         onOpenAbout = { navigateTo(ScreenTarget.About) },
                         onEntered = ::checkForAppUpdateIfDue,
                         onSessionUpdated = { updated ->
@@ -316,6 +376,15 @@ private fun TcmAdminApp() {
                         onSessionUpdated = { updated ->
                             ApiClient.saveSession(appContext, updated)
                             session = updated
+                        },
+                    )
+                }
+                is ScreenTarget.Settings -> DetailShell("设置", onBack = { navigateBack() }) {
+                    SettingsScreen(
+                        selectedTheme = themeMode,
+                        onThemeSelected = { mode ->
+                            themeMode = mode
+                            settingsPreferences.edit().putString("theme_mode", mode).apply()
                         },
                     )
                 }

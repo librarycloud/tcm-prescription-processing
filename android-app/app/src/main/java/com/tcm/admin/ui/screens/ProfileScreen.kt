@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,8 +34,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +65,7 @@ import org.json.JSONObject
 internal fun ProfileScreen(
     user: JSONObject?,
     onOpenDetails: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onEntered: () -> Unit,
     onSessionUpdated: (AdminSession) -> Unit,
@@ -86,7 +90,7 @@ internal fun ProfileScreen(
     ) {
         Card(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetails),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
             border = BorderStroke(1.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
@@ -112,6 +116,17 @@ internal fun ProfileScreen(
 
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("设置", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
             onClick = onOpenAbout,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = FieldShape,
@@ -122,6 +137,56 @@ internal fun ProfileScreen(
         }
 
         Spacer(Modifier.height(28.dp))
+    }
+}
+
+@Composable
+internal fun SettingsScreen(
+    selectedTheme: String,
+    onThemeSelected: (String) -> Unit,
+) {
+    val options = listOf(
+        "system" to "跟随系统",
+        "light" to "亮色",
+        "dark" to "暗色",
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        Text("外观", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(8.dp))
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                options.forEachIndexed { index, (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onThemeSelected(value) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = selectedTheme == value,
+                            onClick = { onThemeSelected(value) },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, color = Ink, fontSize = 15.sp)
+                    }
+                    if (index < options.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -158,7 +223,7 @@ internal fun ProfileDetailScreen(
     ) {
         // User Profile Header Card
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
             border = BorderStroke(1.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
@@ -201,7 +266,7 @@ internal fun ProfileDetailScreen(
 
         // Account Details Card
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
             border = BorderStroke(1.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),

@@ -71,6 +71,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Duration
+import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.LocalDate
 
 private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
@@ -436,33 +439,36 @@ internal fun ProcessingScreenV2(
                             }
                         }
 
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(6.dp))
                         HorizontalDivider(color = Color(0xFFF2F3F5))
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(5.dp))
 
                         // Detail Rows
-                        InfoRowItem("批次剂数", "第 $batchNo 批 · $totalDose 剂")
+                        InfoRowItem("批次剂数", "第 $batchNo 批 · $totalDose 剂", verticalPadding = 0.dp)
                         if (isDecoction && bagCount > 0) {
-                            InfoRowItem("代煎规格", "$bagCount 袋 · ${volumeMl}ml")
+                            InfoRowItem("代煎规格", "$bagCount 袋 · ${volumeMl}ml", verticalPadding = 0.dp)
                         }
-                        InfoRowItem("取货方式", pickupMethodLabel(pickupMethod))
-                        InfoRowItem("计划开工", scheduleDate.ifBlank { "未安排" })
+                        InfoRowItem("取货方式", pickupMethodLabel(pickupMethod), verticalPadding = 0.dp)
+                        InfoRowItem("计划开工", scheduleDate.ifBlank { "未安排" }, verticalPadding = 0.dp)
                         if (showStore) {
                             store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let {
-                                InfoRowItem("加工门店", it)
+                                InfoRowItem("加工门店", it, verticalPadding = 0.dp)
                             }
                         }
                         plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let {
-                            InfoRowItem("实际开工", it.take(16).replace("T", " "))
+                            InfoRowItem("实际开工", it.take(16).replace("T", " "), verticalPadding = 0.dp)
                         }
                         plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let {
-                            InfoRowItem("完成时间", it.take(16).replace("T", " "))
+                            InfoRowItem("完成时间", it.take(16).replace("T", " "), verticalPadding = 0.dp)
                         }
                         plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
-                            InfoRowItem("备注", it)
+                            InfoRowItem("备注", it, verticalPadding = 0.dp)
+                        }
+                        plan.displayField("processRemark", "").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("加工备注", it, verticalPadding = 0.dp)
                         }
 
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(8.dp))
 
                         // Actions wrap into one or two rows instead of requiring horizontal scrolling.
                         FlowRow(
@@ -678,11 +684,30 @@ internal fun ProcessingScreenV2(
     }
 
     generatePackagePlan?.let { plan ->
+        var packageRemark by remember(plan) {
+            mutableStateOf(
+                plan.displayField("processRemark", "")
+                    .ifBlank { plan.displayField("remark", "") },
+            )
+        }
         AlertDialog(
             onDismissRequest = { generatePackagePlan = null },
             title = { Text("生成包裹") },
             text = {
-                Text("该加工计划已完成，确认生成待领取包裹吗？")
+                Column {
+                    Text("该加工计划已完成，确认生成待领取包裹吗？")
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = packageRemark,
+                        onValueChange = { packageRemark = it.take(500) },
+                        label = { Text("包裹备注") },
+                        placeholder = { Text("可填写代煎、配送或取货说明") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = FieldShape,
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
@@ -691,7 +716,12 @@ internal fun ProcessingScreenV2(
                         generatePackagePlan = null
                         scope.launch {
                             runCatching {
-                                withContext(Dispatchers.IO) { ApiClient.generatePlanPackage(planId) }
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.generatePlanPackage(
+                                        planId,
+                                        JSONObject().put("itemInfo", packageRemark.trim()),
+                                    )
+                                }
                             }
                                 .onSuccess { reload++ }
                                 .onFailure { error = it.message ?: "生成包裹失败" }
@@ -744,6 +774,7 @@ internal fun PlanDetailDialog(
                 plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", it.take(16).replace("T", " ")) }
                 plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", it.take(16).replace("T", " ")) }
                 plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
+                plan.displayField("processRemark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("加工备注", it) }
             }
         },
         confirmButton = {
@@ -1599,7 +1630,7 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Text(if (status == 2) "浸泡已完成" else "可连续扫描浸泡桶或煎药锅", color = Muted, fontSize = 12.sp)
+                    Text(if (status == 2) "浸泡已完成" else "可连续扫描浸泡桶或煎药锅", color = if (status == 2) Success else Muted, fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1682,7 +1713,7 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Text(if (status == 2) "煎煮已完成" else "等待或进行煎煮", color = Muted, fontSize = 12.sp)
+                    Text(if (status == 2) "煎煮已完成" else "等待或进行煎煮", color = if (status == 2) Success else Muted, fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1787,7 +1818,7 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Text(if (status == 2) "全部分组已打包" else "扫描包装机开始打包", color = Muted, fontSize = 12.sp)
+                    Text(if (status == 2) "全部分组已打包" else "扫描包装机开始打包", color = if (status == 2) Success else Muted, fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1883,9 +1914,13 @@ internal fun WorkflowOperationScreen(
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text("$stageText · 第 ${item.optInt("portionNo", 1)} 组 · $equipment", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
-                                Text(statusText, color = if (item.optInt("status") == 2) Success else Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(statusText, color = if (item.optInt("status") == 2) Success else Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("用时 " + processingDuration(item.displayField("startedAt", ""), item.displayField("endedAt", "")), color = PrimaryDark, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
                             Spacer(Modifier.height(2.dp))
                             Text(
@@ -2140,6 +2175,20 @@ private fun processingStageLabel(stage: Int): String = when (stage) {
     6 -> "打包完成"
     7 -> "加工完成"
     else -> "待加工"
+}
+
+private fun processingDuration(start: String, end: String): String {
+    if (start.isBlank()) return "-"
+    val started = runCatching { Instant.parse(start) }
+        .recoverCatching { OffsetDateTime.parse(start).toInstant() }
+        .getOrNull() ?: return "-"
+    val finished = if (end.isBlank()) Instant.now() else {
+        runCatching { Instant.parse(end) }
+            .recoverCatching { OffsetDateTime.parse(end).toInstant() }
+            .getOrNull() ?: return "-"
+    }
+    val minutes = Duration.between(started, finished).toMinutes().coerceAtLeast(0)
+    return if (minutes < 60) minutes.toString() + "分钟" else (minutes / 60).toString() + "小时" + (minutes % 60).toString() + "分钟"
 }
 
 @Composable

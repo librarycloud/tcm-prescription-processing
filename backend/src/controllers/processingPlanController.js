@@ -93,6 +93,7 @@ export async function generatePackageController(request, reply) {
       request.server.prisma,
       request.user,
       request.params.id,
+      request.body || {},
     ),
     "包裹生成成功",
   );

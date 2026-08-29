@@ -320,6 +320,9 @@ internal fun PackagesScreen(
                         InfoRowItem(label = "所属门店", value = item.store)
                     }
                     InfoRowItem(label = "记录时间", value = item.time)
+                    item.info.takeIf { it.isNotBlank() }?.let {
+                        InfoRowItem(label = "备注", value = it)
+                    }
 
                     Spacer(Modifier.height(12.dp))
 
@@ -417,6 +420,7 @@ internal fun PackageDetailPage(
             InfoRowItem(label = "联系电话", value = maskPhone(pkg.phone))
             InfoRowItem(label = "取货方式", value = pkg.method)
             if (showStore && pkg.store.isNotBlank()) InfoRowItem(label = "所属门店", value = pkg.store)
+            if (pkg.expressTrackingNo.isNotBlank()) InfoRowItem(label = "快递单号", value = pkg.expressTrackingNo)
             InfoRowItem(label = "包裹状态", value = pkg.status)
             InfoRowItem(label = "时间记录", value = pkg.time)
 
@@ -428,7 +432,7 @@ internal fun PackageDetailPage(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        text = "物品内容：${pkg.info}",
+                        text = "备注：${pkg.info}",
                         color = RegularText,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(10.dp),
@@ -491,10 +495,11 @@ internal fun PackageFormScreen(
 ) {
     val isEdit = initial != null && initial.id > 0
     var itemName by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
+    var itemInfo by remember(initial) { mutableStateOf(initial?.info.orEmpty()) }
     var receiverName by remember(initial) { mutableStateOf(initial?.customer.orEmpty()) }
     var receiverPhone by remember(initial) { mutableStateOf(initial?.phone?.takeIf { it != "-" }.orEmpty()) }
     var method by remember(initial) { mutableStateOf(initial?.methodCode ?: 0) }
-    var tracking by remember(initial) { mutableStateOf("") }
+    var tracking by remember(initial) { mutableStateOf(initial?.expressTrackingNo.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -508,7 +513,7 @@ internal fun PackageFormScreen(
         AppCard {
             SectionHeader(
                 title = if (isEdit) "编辑包裹信息" else "创建自提/代发包裹",
-                subtitle = "录入物品名称与收件人联系方式",
+                subtitle = "录入物品、备注与收件人联系方式",
             )
 
             Spacer(Modifier.height(14.dp))
@@ -519,6 +524,19 @@ internal fun PackageFormScreen(
                 label = { Text("物品名称 *") },
                 placeholder = { Text("如：中药汤剂 14袋") },
                 singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = itemInfo,
+                onValueChange = { itemInfo = it.take(500) },
+                label = { Text("备注") },
+                placeholder = { Text("如：请冷藏、分装或配送说明") },
+                minLines = 2,
+                maxLines = 4,
                 modifier = Modifier.fillMaxWidth(),
                 shape = FieldShape,
             )
@@ -582,6 +600,7 @@ internal fun PackageFormScreen(
                 busy = true
                 val payload = JSONObject()
                     .put("itemName", itemName.trim())
+                    .put("itemInfo", itemInfo.trim())
                     .put("receiverName", receiverName.trim())
                     .put("receiverPhone", receiverPhone.trim())
                     .put("pickupMethod", method)

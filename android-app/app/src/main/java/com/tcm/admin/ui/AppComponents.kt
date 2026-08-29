@@ -146,7 +146,7 @@ internal fun transferStatusLabel(status: Int, outboundStatus: Int): String = whe
 }
 
 internal fun maskPhone(phone: String?): String {
-    if (phone.isNullOrBlank()) return "-"
+    if (phone.isNullOrBlank() || phone.trim().equals("null", ignoreCase = true)) return "-"
     val cleaned = phone.trim()
     return if (cleaned.length == 11) {
         cleaned.substring(0, 3) + "****" + cleaned.substring(7)
@@ -562,11 +562,12 @@ internal fun InfoRowItem(
     modifier: Modifier = Modifier,
     valueColor: Color = Ink,
     isBold: Boolean = false,
+    verticalPadding: Dp = 0.dp,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 0.5.dp),
+            .padding(vertical = verticalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

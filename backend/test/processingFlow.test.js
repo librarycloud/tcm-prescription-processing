@@ -284,12 +284,14 @@ test("a finished plan can defer package creation and generate it later", async (
     prisma,
     storeAdmin,
     finished.id,
+    { itemInfo: "请冷藏，分两袋交付" },
   );
 
   assert.equal(ready.status, 3);
   assert.equal(state.packageCreates, 1);
   assert.equal(state.package.processingPlanId, finished.id);
   assert.equal(state.package.itemName, "代煎 7剂 14袋");
+  assert.equal(state.package.itemInfo, "请冷藏，分两袋交付");
   assert.equal(state.userUpserts, 1);
   await assert.rejects(
     () => generateProcessingPlanPackage(prisma, storeAdmin, finished.id),

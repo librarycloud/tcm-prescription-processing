@@ -849,7 +849,7 @@ function processingPackageItemName(plan) {
   return parts.join(" ");
 }
 
-async function createPackageForPlan(prisma, actor, plan) {
+async function createPackageForPlan(prisma, actor, plan, packageRemark) {
   const existingPackage = await packageRepository.findUnique(prisma, {
     where: { processingPlanId: plan.id },
     select: { id: true },
@@ -879,12 +879,17 @@ async function createPackageForPlan(prisma, actor, plan) {
   }
 
   const pickupCode = plan.pickupCode || await generateUniquePickupCode(prisma);
+  const itemInfo = packageRemark === undefined
+    ? plan.processRemark || plan.remark || null
+    : String(packageRemark || "").trim() || null;
+  if (itemInfo && itemInfo.length > 500)
+    throw new AppError("包裹备注不能超过 500 个字符", 400);
   return packageRepository.create(prisma, {
     data: {
       storeId: plan.storeId,
       pickupCode,
       itemName: processingPackageItemName(plan),
-      itemInfo: plan.processRemark || plan.remark || null,
+      itemInfo,
       receiverName: prescription.customerName,
       receiverPhone: normalizedPhone,
       pickupMethod: plan.pickupMethod,
@@ -969,14 +974,15 @@ async function finishProcessingPlan(
   }
 }
 
-export async function generateProcessingPlanPackage(prisma, actor, id) {
+export async function generateProcessingPlanPackage(prisma, actor, id, payload = {}) {
   const current = await getPlan(prisma, actor, id);
   if (current.status !== PLAN_STATUS.FINISHED)
     throw new AppError("仅已完成且未生成包裹的加工计划可生成包裹", 409);
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const pkg = await createPackageForPlan(tx, actor, current);
+      const packageRemark = payload.itemInfo !== undefined ? payload.itemInfo : payload.remark;
+      const pkg = await createPackageForPlan(tx, actor, current, packageRemark);
       const updated = await processingPlanRepository.update(tx, {
         where: { id: current.id },
         data: {
