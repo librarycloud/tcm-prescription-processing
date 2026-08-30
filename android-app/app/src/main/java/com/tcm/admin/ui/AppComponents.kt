@@ -295,7 +295,7 @@ internal fun AppCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             content = content,
         )
     }

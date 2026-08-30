@@ -80,6 +80,13 @@ import java.time.LocalDate
 
 private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
 
+private fun todayAllStat(stats: JSONObject?): String {
+    if (stats == null) return "-"
+    return listOf("waitingCount", "processingCount", "todayFinished")
+        .sumOf { stats.optInt(it, 0) }
+        .toString()
+}
+
 private fun readProcessingPhoto(context: android.content.Context, uri: Uri): ByteArray {
     val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         ?: throw IllegalStateException("无法读取照片")
@@ -110,6 +117,7 @@ internal fun ProcessingScreenV2(
     val showStore = user?.optInt("role", -1) == 0
     var mode by remember { mutableStateOf("plans") } // "plans" | "pickup"
     var activeView by remember { mutableStateOf("today-all") }
+    var pickupStatus by remember { mutableStateOf(0) } // 0=待领取, 1=已领取
     var keyword by remember { mutableStateOf("") }
     var plans by remember { mutableStateOf<List<JSONObject>?>(null) }
     var pickupTasks by remember { mutableStateOf<List<PackageItem>?>(null) }
@@ -146,7 +154,7 @@ internal fun ProcessingScreenV2(
             }
     }
 
-    LaunchedEffect(reload, mode, activeView, selectedStoreId, keyword, page) {
+    LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page) {
         error = null
         loading = true
         runCatching {
@@ -164,6 +172,7 @@ internal fun ProcessingScreenV2(
                     Triple<JSONObject, JSONObject?, JSONArray?>(summary, paged, null)
                 } else {
                     val pickupData = ApiClient.pickupTasks(
+                        status = pickupStatus,
                         keyword = keyword.trim(),
                         storeId = storeIdInt,
                     )
@@ -244,7 +253,7 @@ internal fun ProcessingScreenV2(
 
         Spacer(Modifier.height(14.dp))
 
-        // Mode Switch: 加工计划 vs 待领取
+        // Mode Switch: 加工计划 vs 领取列表
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -257,7 +266,7 @@ internal fun ProcessingScreenV2(
                 centerLabel = true,
             )
             SegmentedButton(
-                label = "待领取任务",
+                label = "领取列表",
                 selected = mode == "pickup",
                 onClick = { mode = "pickup"; page = 1 },
                 modifier = Modifier.weight(1f),
@@ -270,16 +279,17 @@ internal fun ProcessingScreenV2(
         // In "plans" mode, show interactive stats grid
         if (mode == "plans") {
             val statItems = listOf(
-                "今日待加工" to (stat(stats, "waitingCount") to "today-all"),
+                "今日全部" to (todayAllStat(stats) to "today-all"),
+                "今日待加工" to (stat(stats, "waitingCount") to "today-waiting"),
                 "逾期未开工" to (stat(stats, "overdueCount") to "overdue"),
                 "加工中" to (stat(stats, "processingCount") to "processing"),
-                "今日完成" to (stat(stats, "todayFinished") to "today-finished"),
-                "等待顾客" to (stat(stats, "waitingNoticeCount") to "waiting-notice"),
+                "等待顾客" to (stat(stats, "waitingNoticeCount") to "notice"),
                 "明日加工" to (stat(stats, "tomorrowWaitingCount") to "tomorrow-waiting"),
+                "全部" to (stat(stats, "processingPlanTotalCount") to "all"),
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                statItems.chunked(3).forEach { row ->
+                statItems.chunked(4).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -303,7 +313,7 @@ internal fun ProcessingScreenV2(
                                     if (isSelected) Primary else CardBorderColor,
                                 ),
                                 onClick = {
-                                    activeView = if (activeView == viewKey) "all" else viewKey
+                                    activeView = viewKey
                                     page = 1
                                 },
                             ) {
@@ -333,6 +343,57 @@ internal fun ProcessingScreenV2(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+        } else {
+            val pickupStatItems = listOf(
+                "待领取" to (stat(stats, "pendingCount") to 0),
+                "已领取" to (stat(stats, "pickedCount") to 1),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pickupStatItems.forEach { (label, pair) ->
+                    val (value, status) = pair
+                    val isSelected = pickupStatus == status
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
+                        ),
+                        border = BorderStroke(
+                            if (isSelected) 1.5.dp else 1.dp,
+                            if (isSelected) Primary else CardBorderColor,
+                        ),
+                        onClick = { pickupStatus = status },
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = value,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Primary else Ink,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = label,
+                                color = if (isSelected) Primary else Muted,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
                         }
                     }
                 }
@@ -585,10 +646,10 @@ internal fun ProcessingScreenV2(
             }
         }
 
-        // Pickup Tasks List
+        // Pickup List
         if (mode == "pickup" && !loading) {
             if (pickupTasks == null || pickupTasks!!.isEmpty()) {
-                AppEmptyState("暂无待领取任务")
+                AppEmptyState(if (pickupStatus == 0) "暂无待领取记录" else "暂无已领取记录")
             } else {
                 pickupTasks!!.forEach { item ->
                     AppCard(
@@ -1418,6 +1479,87 @@ internal fun WorkflowOperationScreen(
     val exceptions = detail?.optJSONArray("workflowExceptions")?.let { arr ->
         (0 until arr.length()).map { arr.getJSONObject(it) }
     }.orEmpty()
+    val formatWorkflowTime: (String) -> String = { value ->
+        value.take(16).replace("T", " ")
+    }
+    val latestStageCompletedAt: (Int) -> String = { stage ->
+        usages
+            .filter { it.optInt("stage") == stage && it.optInt("status") == 2 }
+            .maxByOrNull { it.displayField("endedAt", "") }
+            ?.displayField("endedAt", "")
+            .orEmpty()
+            .let(formatWorkflowTime)
+    }
+    val earliestStageStartedAt: (Int) -> String = { stage ->
+        usages
+            .filter { it.optInt("stage") == stage && it.optInt("status") == 1 }
+            .minByOrNull { it.displayField("startedAt", "") }
+            ?.displayField("startedAt", "")
+            .orEmpty()
+            .let(formatWorkflowTime)
+    }
+    val latestDispensingPhotoAt = (0 until (photos?.length() ?: 0))
+        .mapNotNull { photos?.optJSONObject(it)?.displayField("createdAt", "")?.takeIf(String::isNotBlank) }
+        .maxOrNull()
+        .orEmpty()
+    val dispensingCompletedAt = detail?.displayField("dispensingCompletedAt", "")
+        .orEmpty()
+        .ifBlank { latestDispensingPhotoAt }
+        .let(formatWorkflowTime)
+    val dispensingStartedAt = (detail?.displayField("startDate", "")
+        .orEmpty()
+        .ifBlank { plan.displayField("startDate", "") })
+        .let(formatWorkflowTime)
+    val soakingCompletedAt = latestStageCompletedAt(3)
+    val decoctionCompletedAt = latestStageCompletedAt(4)
+    val packagingCompletedAt = latestStageCompletedAt(5)
+    val soakingStartedAt = earliestStageStartedAt(3)
+    val decoctionStartedAt = earliestStageStartedAt(4)
+    val packagingStartedAt = earliestStageStartedAt(5)
+    val dispensingState = when {
+        status == 2 || photoCount > 0 -> "已完成调配"
+        status == 1 -> "调配中"
+        else -> "待调配"
+    }
+    val soakingState = when {
+        status == 2 -> "浸泡已完成"
+        activeSoakings.isNotEmpty() -> "浸泡中"
+        else -> "等待浸泡"
+    }
+    val decoctionState = when {
+        status == 2 -> "煎煮已完成"
+        activeDecoctions.isNotEmpty() -> "煎煮中"
+        activeSoakings.isNotEmpty() -> "等待浸泡完成"
+        else -> "等待煎煮"
+    }
+    val packagingState = when {
+        status == 2 -> "全部分组已打包"
+        activePackagings.isNotEmpty() -> "打包中"
+        activeDecoctions.isNotEmpty() -> "等待煎煮完成"
+        else -> "等待打包"
+    }
+    val isDispensingCompleted = status == 2 || photoCount > 0
+    val isWorkflowCompleted = status == 2
+    val dispensingTimeLabel = when {
+        isDispensingCompleted && dispensingCompletedAt.isNotBlank() -> "完成时间 $dispensingCompletedAt"
+        status == 1 && dispensingStartedAt.isNotBlank() -> "开始时间 $dispensingStartedAt"
+        else -> ""
+    }
+    val soakingTimeLabel = when {
+        isWorkflowCompleted && soakingCompletedAt.isNotBlank() -> "完成时间 $soakingCompletedAt"
+        activeSoakings.isNotEmpty() && soakingStartedAt.isNotBlank() -> "开始时间 $soakingStartedAt"
+        else -> ""
+    }
+    val decoctionTimeLabel = when {
+        isWorkflowCompleted && decoctionCompletedAt.isNotBlank() -> "完成时间 $decoctionCompletedAt"
+        activeDecoctions.isNotEmpty() && decoctionStartedAt.isNotBlank() -> "开始时间 $decoctionStartedAt"
+        else -> ""
+    }
+    val packagingTimeLabel = when {
+        isWorkflowCompleted && packagingCompletedAt.isNotBlank() -> "完成时间 $packagingCompletedAt"
+        activePackagings.isNotEmpty() && packagingStartedAt.isNotBlank() -> "开始时间 $packagingStartedAt"
+        else -> ""
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         // Top Summary Card - 顶部显示加工方式、剂数、代煎显示袋数毫升数
@@ -1539,7 +1681,21 @@ internal fun WorkflowOperationScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("调配", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                 }
-                Text(if (photoCount > 0) "已完成调配" else "待调配拍照", color = if (photoCount > 0) Success else Muted, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        dispensingState,
+                        color = when {
+                            isDispensingCompleted -> Success
+                            status == 1 -> Primary
+                            else -> Muted
+                        },
+                        fontSize = 12.sp,
+                    )
+                    if (dispensingTimeLabel.isNotBlank()) {
+                        Spacer(Modifier.width(5.dp))
+                        Text(dispensingTimeLabel, color = Muted, fontSize = 10.sp)
+                    }
+                }
             }
             Spacer(Modifier.height(6.dp))
             Text("称量调配完成后拍照留存凭证", color = Muted, fontSize = 12.sp)
@@ -1632,7 +1788,21 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Text(if (status == 2) "浸泡已完成" else "可连续扫描浸泡桶或煎药锅", color = if (status == 2) Success else Muted, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            soakingState,
+                            color = when {
+                                isWorkflowCompleted -> Success
+                                activeSoakings.isNotEmpty() -> Primary
+                                else -> Muted
+                            },
+                            fontSize = 12.sp,
+                        )
+                        if (soakingTimeLabel.isNotBlank()) {
+                            Spacer(Modifier.width(5.dp))
+                            Text(soakingTimeLabel, color = Muted, fontSize = 10.sp)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1715,7 +1885,21 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Text(if (status == 2) "煎煮已完成" else "等待或进行煎煮", color = if (status == 2) Success else Muted, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            decoctionState,
+                            color = when {
+                                isWorkflowCompleted -> Success
+                                activeDecoctions.isNotEmpty() -> Primary
+                                else -> Muted
+                            },
+                            fontSize = 12.sp,
+                        )
+                        if (decoctionTimeLabel.isNotBlank()) {
+                            Spacer(Modifier.width(5.dp))
+                            Text(decoctionTimeLabel, color = Muted, fontSize = 10.sp)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1820,7 +2004,21 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Text(if (status == 2) "全部分组已打包" else "扫描包装机开始打包", color = if (status == 2) Success else Muted, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            packagingState,
+                            color = when {
+                                isWorkflowCompleted -> Success
+                                activePackagings.isNotEmpty() -> Primary
+                                else -> Muted
+                            },
+                            fontSize = 12.sp,
+                        )
+                        if (packagingTimeLabel.isNotBlank()) {
+                            Spacer(Modifier.width(5.dp))
+                            Text(packagingTimeLabel, color = Muted, fontSize = 10.sp)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1903,7 +2101,7 @@ internal fun WorkflowOperationScreen(
                     Text("设备工序记录", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     Text("共 ${allUsageRecords.size} 条记录", color = Muted, fontSize = 12.sp)
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
                 allUsageRecords.forEach { item ->
                     val stage = item.optInt("stage")
                     val stageText = when (stage) { 3 -> "浸泡"; 4 -> "煎煮"; 5 -> "打包"; else -> "工序" }
@@ -1929,9 +2127,9 @@ internal fun WorkflowOperationScreen(
                         color = if (isRunning) PrimarySoft.copy(alpha = 0.18f) else Color(0xFFF9FAFB),
                         shape = FieldShape,
                         border = BorderStroke(1.dp, if (isRunning) Primary.copy(alpha = 0.4f) else CardBorderColor),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.5.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                     ) {
-                        Column(Modifier.padding(11.dp)) {
+                        Column(Modifier.padding(9.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1953,12 +2151,23 @@ internal fun WorkflowOperationScreen(
                                 }
                                 StatusPill(statusText)
                             }
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(4.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text("时段：$startTime → $endTime", color = Muted, fontSize = 11.5.sp)
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "操作人：$operator",
+                                    color = Muted,
+                                    fontSize = 11.5.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
                                 Text(
                                     if (isRunning) "已用时 " + processingDuration(item.displayField("startedAt", ""), "")
                                     else "用时 " + processingDuration(item.displayField("startedAt", ""), item.displayField("endedAt", "")),
@@ -1967,8 +2176,6 @@ internal fun WorkflowOperationScreen(
                                     fontWeight = FontWeight.Medium,
                                 )
                             }
-                            Spacer(Modifier.height(2.dp))
-                            Text("操作人：$operator", color = Muted, fontSize = 11.5.sp)
                             if (voidReason.isNotBlank()) {
                                 Spacer(Modifier.height(2.dp))
                                 Text("作废原因：$voidReason", color = Danger, fontSize = 11.5.sp)

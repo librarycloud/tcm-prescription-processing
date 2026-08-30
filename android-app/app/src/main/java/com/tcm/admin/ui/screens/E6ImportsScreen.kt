@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -27,9 +28,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,18 +47,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.clickable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 
 private data class E6Status(val value: Int?, val label: String)
 
@@ -82,6 +92,24 @@ private fun e6Money(value: Any?): String {
     return runCatching { "%.2f".format(java.util.Locale.US, value.toString().toDouble()) }.getOrDefault("-")
 }
 private fun e6Date(value: String): String = value.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }?.take(16)?.replace("T", " ") ?: "-"
+private fun e6DateMillis(value: String): Long? = runCatching {
+    LocalDate.parse(value.take(10)).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+}.getOrNull()
+private fun e6DateFromMillis(value: Long?): String? = value?.let {
+    Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
+}
+private fun rethrowCancellation(error: Throwable) {
+    if (error is CancellationException) throw error
+}
+private fun e6DoctorName(item: JSONObject): String? {
+    val doctors = listOf(
+        item.optJSONObject("prescription")?.optJSONObject("doctor"),
+        item.optJSONObject("doctorMapping")?.optJSONObject("doctor"),
+    )
+    return doctors.asSequence()
+        .mapNotNull { doctor -> doctor?.displayField("name", "")?.trim() }
+        .firstOrNull { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+}
 private fun e6Batches(totalDose: Int, count: Int): JSONArray {
     val result = JSONArray()
     val safeCount = count.coerceIn(1, totalDose)
@@ -96,10 +124,14 @@ private fun e6Batches(totalDose: Int, count: Int): JSONArray {
     return result
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
+    val context = LocalContext.current.applicationContext
     var keyword by remember { mutableStateOf("") }
     var orderDate by remember { mutableStateOf(LocalDate.now().toString()) }
+    var datePickerOpen by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(1) }
     var items by remember { mutableStateOf<List<JSONObject>?>(null) }
     var selectedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var rejectTarget by remember { mutableStateOf<JSONObject?>(null) }
@@ -107,43 +139,97 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
     var actionLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    suspend fun refreshFromServer() {
+        if (refreshing) return
+        refreshing = true
+        error = null
+        try {
+            val data = withContext(Dispatchers.IO) { ApiClient.e6ImportsAll() }
+            val list = data.optJSONArray("list") ?: JSONArray()
+            items = (0 until list.length()).map { list.getJSONObject(it) }
+            ApiClient.saveE6ImportCache(context, data)
+            selectedIds = emptySet()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            error = failure.message ?: "加载E6导入记录失败"
+        } finally {
+            refreshing = false
+        }
+    }
+
     fun runAction(action: suspend () -> Unit, success: String) {
         if (actionLoading) return
         actionLoading = true
         error = null
         scope.launch {
-            runCatching { withContext(Dispatchers.IO) { action() } }
-                .onSuccess { notice = success; selectedIds = emptySet(); reload++ }
-                .onFailure { error = it.message ?: "操作失败" }
+            try {
+                withContext(Dispatchers.IO) { action() }
+                notice = success
+                selectedIds = emptySet()
+                ApiClient.clearResponseCache(context)
+                refreshFromServer()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                error = failure.message ?: "操作失败"
+            }
             actionLoading = false
         }
     }
 
-    LaunchedEffect(reload, keyword, orderDate) {
-        loading = true
-        error = null
-        runCatching {
-            withContext(Dispatchers.IO) {
-                ApiClient.e6Imports(keyword = keyword, orderDate = orderDate)
-            }
-        }.onSuccess { data ->
-            val list = data.optJSONArray("list") ?: JSONArray()
+    LaunchedEffect(Unit) {
+        val cached = withContext(Dispatchers.IO) { ApiClient.loadE6ImportCache(context) }
+        cached?.optJSONArray("list")?.let { list ->
             items = (0 until list.length()).map { list.getJSONObject(it) }
-            selectedIds = emptySet()
-        }.onFailure { error = it.message ?: "加载E6导入记录失败" }
-        loading = false
+        }
+        if (items == null) {
+            loading = true
+            ApiClient.clearResponseCache(context)
+            refreshFromServer()
+            loading = false
+        }
     }
 
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    LaunchedEffect(keyword, orderDate) { page = 1 }
+
+    val filteredItems = remember(items, keyword, orderDate) {
+        val needle = keyword.trim().lowercase()
+        items.orEmpty().filter { item ->
+            val matchesKeyword = needle.isBlank() || listOf(
+                item.optString("externalOrderNo"), item.optString("customerName"),
+                item.optString("phone"), item.optString("e6DoctorCode"), item.optString("cashierName"),
+            ).any { it.lowercase().contains(needle) }
+            val matchesDate = orderDate.isBlank() || item.optString("sourceCreatedAt").take(10) == orderDate
+            matchesKeyword && matchesDate
+        }.sortedByDescending { it.optString("sourceCreatedAt") }
+    }
+    val total = filteredItems.size
+    val pages = ((total + 19) / 20).coerceAtLeast(1)
+    val currentPage = page.coerceIn(1, pages)
+    val currentItems = filteredItems.drop((currentPage - 1) * 20).take(20)
+
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                ApiClient.clearResponseCache(context)
+                refreshFromServer()
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader("E6诊所处方导入", "核对E6订单，确认后生成处方与加工计划")
         Spacer(Modifier.height(12.dp))
         SearchBarField(
             value = keyword,
-            onValueChange = { keyword = it },
+            onValueChange = { page = 1; keyword = it },
             placeholder = "搜索订单号、顾客、电话或医师编码",
-            onSearch = { reload++ },
+            onSearch = {},
         )
         Spacer(Modifier.height(8.dp))
         Row(
@@ -154,23 +240,34 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
             SegmentedButton(
                 label = if (orderDate == LocalDate.now().toString()) "今日订单" else "今日",
                 selected = orderDate == LocalDate.now().toString(),
-                onClick = { orderDate = LocalDate.now().toString() },
+                onClick = { page = 1; orderDate = LocalDate.now().toString() },
             )
             SegmentedButton(
                 label = "全部日期",
                 selected = orderDate.isBlank(),
-                onClick = { orderDate = "" },
+                onClick = { page = 1; orderDate = "" },
             )
             OutlinedTextField(
                 value = orderDate,
-                onValueChange = { orderDate = it },
-                modifier = Modifier.weight(1f).height(SearchControlHeight),
+                onValueChange = {},
+                modifier = Modifier
+                    .weight(1f)
+                    .height(SearchControlHeight)
+                    .clickable { datePickerOpen = true },
                 singleLine = true,
+                readOnly = true,
                 placeholder = { Text("YYYY-MM-DD", fontSize = 12.sp) },
                 shape = FieldShape,
+                trailingIcon = { Icon(Icons.Default.CalendarMonth, contentDescription = "选择日期", tint = Primary) },
             )
             OutlinedButton(
-                onClick = { reload++ },
+                onClick = {
+                    scope.launch {
+                        ApiClient.clearResponseCache(context)
+                        refreshFromServer()
+                    }
+                },
+                enabled = !refreshing,
                 modifier = Modifier.height(SearchControlHeight),
                 shape = FieldShape,
             ) {
@@ -183,12 +280,11 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
         error?.let { Text(it, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp)) }
         Spacer(Modifier.height(12.dp))
 
-        val currentItems = items
         when {
-            loading && currentItems == null -> LoadingState("正在加载E6导入记录")
-            currentItems.isNullOrEmpty() -> EmptyState("暂无符合条件的E6处方导入记录")
+            loading && items == null -> LoadingState("正在加载E6导入记录")
+            currentItems.isEmpty() -> EmptyState("暂无符合条件的E6处方导入记录")
             else -> {
-                Text("共 ${currentItems!!.size} 条记录", color = Muted, fontSize = 12.sp)
+                Text("共 $total 条记录 · 第 $currentPage / $pages 页", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(7.dp))
                 currentItems.forEach { item ->
                     E6ImportCard(
@@ -208,7 +304,40 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
                         colors = ButtonDefaults.buttonColors(containerColor = Primary),
                     ) { Text("合并选中订单并生成处方 (${mergeItems.size})", fontWeight = FontWeight.SemiBold) }
                 }
+                if (pages > 1) {
+                    AppPagination(
+                        page = currentPage,
+                        pages = pages,
+                        onPrev = { if (currentPage > 1) page-- },
+                        onNext = { if (currentPage < pages) page++ },
+                    )
+                }
             }
+        }
+        }
+    }
+
+    if (datePickerOpen) {
+        val pickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = e6DateMillis(orderDate),
+        )
+        DatePickerDialog(
+            onDismissRequest = { datePickerOpen = false },
+            confirmButton = {
+                TextButton(
+                    enabled = pickerState.selectedDateMillis != null,
+                    onClick = {
+                        e6DateFromMillis(pickerState.selectedDateMillis)?.let {
+                            page = 1
+                            orderDate = it
+                        }
+                        datePickerOpen = false
+                    },
+                ) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { datePickerOpen = false }) { Text("取消") } },
+        ) {
+            DatePicker(state = pickerState, title = { Text("选择订单日期") })
         }
     }
 
@@ -247,28 +376,29 @@ private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolea
                         StatusPill(e6StatusLabel(item.optInt("status", -1)))
                     }
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = "$phone  ·  单号：$orderNo",
                     color = RegularText,
                     fontSize = 12.5.sp,
                 )
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${e6Date(item.optString("sourceCreatedAt"))}  ·  ${item.optInt("doseCount", 0)}剂  ·  ¥${e6Money(item.opt("totalPrice"))}",
                     color = Muted,
                     fontSize = 12.sp,
                 )
-                item.optJSONObject("doctorMapping")?.optJSONObject("doctor")?.displayField("name")?.let { mapped ->
+                e6DoctorName(item)?.let { mapped ->
                     Text("系统医生：$mapped", color = Muted, fontSize = 12.sp)
                 }
-                if (item.optString("errorMessage").isNotBlank()) {
+                val errorMessage = item.displayField("errorMessage", "")
+                if (errorMessage.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(item.optString("errorMessage"), color = Danger, fontSize = 12.sp, maxLines = 2)
+                    Text(errorMessage, color = Danger, fontSize = 12.sp, maxLines = 2)
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(5.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (e6CanReview(item)) {
                 TextButton(onClick = onRevalidate) { Icon(Icons.Default.Sync, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("重校验") }
@@ -287,7 +417,7 @@ private fun e6DraftBatches(totalDose: Int, count: Int): List<E6BatchDraft> {
     val source = e6Batches(totalDose.coerceAtLeast(1), count.coerceIn(1, totalDose.coerceAtLeast(1)))
     return (0 until source.length()).map { index ->
         val batch = source.getJSONObject(index)
-        E6BatchDraft(index, batch.optInt("totalDose").toString(), batch.optString("processDate"))
+        E6BatchDraft(index, batch.optInt("totalDose").toString(), batch.displayField("processDate", LocalDate.now().toString()))
     }
 }
 
@@ -305,7 +435,7 @@ internal fun E6ImportDetailScreen(
         loading = true
         runCatching { withContext(Dispatchers.IO) { ApiClient.e6ImportDetail(id) } }
             .onSuccess { detail = it }
-            .onFailure { error = it.message ?: "加载E6订单详情失败" }
+            .onFailure { rethrowCancellation(it); error = it.message ?: "加载E6订单详情失败" }
         loading = false
     }
 
@@ -325,12 +455,16 @@ internal fun E6ImportDetailScreen(
                     DetailLine("手机号", maskPhone(value.optString("phone")))
                     DetailLine("操作员", value.displayField("cashierName"))
                     DetailLine("医师编码", value.displayField("e6DoctorCode"))
-                    DetailLine("系统医生", value.optJSONObject("prescription")?.optJSONObject("doctor")?.displayField("name") ?: value.optJSONObject("doctorMapping")?.optJSONObject("doctor")?.displayField("name") ?: "-")
+                    DetailLine("系统医生", e6DoctorName(value) ?: "-")
                     DetailLine("剂数", "${value.optInt("doseCount", 0)}剂")
-                    DetailLine("付款", if (value.optInt("isPaid") == 1) "已付款" else "未付款")
+                    DetailLine(
+                        "付款",
+                        if (value.optInt("isPaid") == 1) "已付款" else "未付款",
+                        if (value.optInt("isPaid") == 1) Success else Brown,
+                    )
                     DetailLine("总价", "¥${e6Money(value.opt("totalPrice"))}")
                     DetailLine("备注", value.displayField("remark"))
-                    value.optString("errorMessage").takeIf { it.isNotBlank() }?.let { DetailLine("错误信息", it, Danger) }
+                    value.displayField("errorMessage", "").takeIf { it.isNotBlank() }?.let { DetailLine("错误信息", it, Danger) }
                 }
                 Spacer(Modifier.height(10.dp))
                 value.optJSONObject("prescription")?.let { prescription ->
@@ -357,9 +491,22 @@ internal fun E6ImportDetailScreen(
                     AppCard {
                         Text("E6处方明细（${items.length()}项）", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         Spacer(Modifier.height(5.dp))
+                        E6PrescriptionItemRow(
+                            name = "药材名称",
+                            doseCount = "剂数",
+                            singleQuantity = "单剂量",
+                            totalQuantity = "总量",
+                            header = true,
+                        )
                         (0 until items.length()).take(50).forEach { index ->
                             val item = items.optJSONObject(index) ?: return@forEach
-                            DetailLine("${index + 1}", "${item.displayField("name", "药材")}  ${quantityText(item.opt("quantity"))}${item.displayField("unit", "")}")
+                            val unit = item.displayField("unit", "")
+                            E6PrescriptionItemRow(
+                                name = "${index + 1}. ${item.displayField("name", "药材")}",
+                                doseCount = quantityText(item.opt("doseCount")),
+                                singleQuantity = "${quantityText(item.opt("quantity"))}$unit",
+                                totalQuantity = "${quantityText(item.opt("totalQuantity"))}$unit",
+                            )
                         }
                     }
                 }
@@ -375,15 +522,62 @@ internal fun E6ImportDetailScreen(
 }
 
 @Composable
+private fun E6PrescriptionItemRow(
+    name: String,
+    doseCount: String,
+    singleQuantity: String,
+    totalQuantity: String,
+    header: Boolean = false,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            name,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.Normal,
+            modifier = Modifier.weight(1.5f),
+        )
+        Text(
+            doseCount,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier.weight(0.55f),
+        )
+        Text(
+            singleQuantity,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier.weight(0.9f),
+        )
+        Text(
+            totalQuantity,
+            color = if (header) Muted else Ink,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier.weight(0.9f),
+        )
+    }
+}
+
+@Composable
 internal fun E6ImportConfirmScreen(
     initial: JSONObject,
     mergeIds: List<Int>,
     onDone: () -> Unit,
 ) {
+    val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val hasPrescription = !initial.isNull("prescriptionId")
-    var customer by remember(initial) { mutableStateOf(initial.optString("customerName")) }
-    var phone by remember(initial) { mutableStateOf(initial.optString("phone")) }
+    var customer by remember(initial) { mutableStateOf(initial.displayField("customerName", "")) }
+    var phone by remember(initial) { mutableStateOf(initial.displayField("phone", "")) }
     var dose by remember(initial) { mutableStateOf(initial.optInt("doseCount", 1).toString()) }
     var batchCount by remember(initial) { mutableStateOf("1") }
     var autoAllocationEnabled by remember(initial) { mutableStateOf(true) }
@@ -405,7 +599,7 @@ internal fun E6ImportConfirmScreen(
                 processTypes = (0 until typeData.length()).map { typeData.getJSONObject(it) }
                 if (processTypeId == 0) processTypeId = processTypes.firstOrNull()?.optInt("id") ?: 0
             }
-            .onFailure { error = it.message ?: "加载基础数据失败" }
+            .onFailure { rethrowCancellation(it); error = it.message ?: "加载基础数据失败" }
     }
     LaunchedEffect(dose, batchCount, autoAllocationEnabled) {
         val total = dose.toIntOrNull()
@@ -515,8 +709,12 @@ internal fun E6ImportConfirmScreen(
                                 ApiClient.confirmE6Import(initial.optInt("id"), payload)
                             }
                         }
-                    }.onSuccess { onDone() }
-                    .onFailure { error = it.message ?: "生成处方和加工计划失败" }
+                    }.onSuccess {
+                        ApiClient.clearE6ImportCache(context)
+                        ApiClient.clearResponseCache(context)
+                        onDone()
+                    }
+                    .onFailure { rethrowCancellation(it); error = it.message ?: "生成处方和加工计划失败" }
                     loading = false
                 }
             },

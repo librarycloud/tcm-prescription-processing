@@ -187,6 +187,7 @@ export async function getStats(prisma, actor, query = {}) {
   };
   const [
     pendingCount,
+    pickedCount,
     todayAdded,
     todayPicked,
     totalCount,
@@ -205,6 +206,9 @@ export async function getStats(prisma, actor, query = {}) {
   ] = await Promise.all([
     packageRepository.count(prisma, {
       where: { ...scope, status: PACKAGE_STATUS.READY_PICKUP },
+    }),
+    packageRepository.count(prisma, {
+      where: { ...scope, status: PACKAGE_STATUS.PICKED },
     }),
     packageRepository.count(prisma, {
       where: { ...scope, createdAt: { gte: start, lt: end } },
@@ -290,6 +294,7 @@ export async function getStats(prisma, actor, query = {}) {
 
   return {
     pendingCount,
+    pickedCount,
     todayAdded,
     todayPicked,
     totalCount,

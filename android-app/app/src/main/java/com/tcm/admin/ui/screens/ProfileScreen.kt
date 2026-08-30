@@ -171,7 +171,7 @@ internal fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onThemeSelected(value) }
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
@@ -231,7 +231,7 @@ internal fun ProfileDetailScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(
@@ -271,7 +271,7 @@ internal fun ProfileDetailScreen(
             border = BorderStroke(1.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                 ProfileDetailRow(
                     icon = Icons.Default.Person,
                     label = "用户名",
@@ -388,7 +388,7 @@ private fun ProfileDetailRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 14.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

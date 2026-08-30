@@ -10,6 +10,8 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionPool
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 data class AdminSession(val token: String, val user: JSONObject)
 
@@ -23,11 +25,55 @@ object ApiClient {
     private const val SESSION_PREFS = "admin_session"
     private const val TOKEN_KEY = "token"
     private const val USER_KEY = "user"
+    private const val E6_IMPORT_CACHE_PREFS = "e6_import_cache"
+    private const val E6_IMPORT_CACHE_KEY = "records"
+    private const val RESPONSE_CACHE_PREFS = "api_response_cache"
+    private const val REFERENCE_CACHE_TTL = 24 * 60 * 60 * 1000L
+    private const val E6_CACHE_TTL = 5 * 60 * 1000L
+    private const val OPERATION_CACHE_TTL = 30 * 1000L
+    private const val DETAIL_CACHE_TTL = 15 * 1000L
     private var token: String? = null
+    private var cacheContext: Context? = null
+    private val memoryCache = ConcurrentHashMap<String, String>()
+
+    // Use short TTLs for operational data and a longer TTL for stable references.
+    private fun cacheTtlMillis(path: String): Long? {
+        val route = path.substringBefore('?')
+        return when {
+            route == "/admin/e6/imports" -> E6_CACHE_TTL
+            route == "/admin/doctors" ||
+                route == "/admin/dictionaries" ||
+                route == "/stores" ||
+                route == "/admin/store-transfers/stores" ||
+                route == "/admin/herb-locations/stores" -> REFERENCE_CACHE_TTL
+            route == "/admin/stats" ||
+                route == "/admin/prescriptions" ||
+                route == "/admin/processing-plans" ||
+                route == "/admin/packages" ||
+                route == "/admin/e6-pharmacy/products" ||
+                route == "/admin/products" ||
+                route == "/admin/product-differences/stats" ||
+                route == "/admin/product-differences/logs" ||
+                route == "/admin/yd-goods-check" ||
+                route == "/admin/store-transfers" ||
+                route == "/admin/store-transfers/stats" ||
+                route == "/admin/herb-locations" -> OPERATION_CACHE_TTL
+            route.startsWith("/admin/prescriptions/") ||
+                route.startsWith("/admin/processing-plans/") ||
+                route.startsWith("/admin/packages/") ||
+                route.startsWith("/admin/yd-goods-check/") ||
+                route.startsWith("/admin/store-transfers/") ||
+                route.startsWith("/admin/herb-locations/") -> DETAIL_CACHE_TTL
+            else -> null
+        }
+    }
 
     fun setToken(value: String?) { token = value }
 
     fun saveSession(context: Context, session: AdminSession) {
+        cacheContext = context.applicationContext
+        clearE6ImportCache(context)
+        clearResponseCache(context)
         token = session.token
         context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
             .edit()
@@ -37,6 +83,7 @@ object ApiClient {
     }
 
     fun loadSession(context: Context): AdminSession? {
+        cacheContext = context.applicationContext
         val preferences = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
         val savedToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
         val savedUser = preferences.getString(USER_KEY, null) ?: return null
@@ -46,11 +93,14 @@ object ApiClient {
     }
 
     fun clearSession(context: Context) {
+        cacheContext = context.applicationContext
         token = null
         context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .apply()
+        clearE6ImportCache(context)
+        clearResponseCache(context)
     }
 
     fun login(identifier: String, password: String): AdminSession {
@@ -121,7 +171,8 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/processing-plans?$query").getJSONObject("data")
     }
-    fun pickupTasks(keyword: String = "", storeId: Int? = null): JSONArray = packages(keyword = keyword, storeId = storeId)
+    fun pickupTasks(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray =
+        packages(status = status, keyword = keyword, storeId = storeId)
     fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
     fun updatePlan(id: Int, payload: JSONObject): JSONObject = updateProcessingPlan(id, payload)
     fun cancelPlan(id: Int, reason: String = ""): JSONObject = transitionPlan(id, 5)
@@ -229,6 +280,53 @@ object ApiClient {
             if (cashierName.isNotBlank()) add("cashierName=${java.net.URLEncoder.encode(cashierName.trim(), "UTF-8")}")
         }.joinToString("&")
         return request("/admin/e6/imports?$query").getJSONObject("data")
+    }
+    fun e6ImportsAll(): JSONObject {
+        val first = e6Imports(page = 1, pageSize = 100)
+        val list = JSONArray()
+        val firstList = first.optJSONArray("list") ?: JSONArray()
+        for (index in 0 until firstList.length()) list.put(firstList.getJSONObject(index))
+        val pages = first.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+        for (page in 2..pages) {
+            val nextList = e6Imports(page = page, pageSize = 100).optJSONArray("list") ?: JSONArray()
+            for (index in 0 until nextList.length()) list.put(nextList.getJSONObject(index))
+        }
+        return JSONObject().put("list", list).put("pagination", JSONObject().put("total", list.length()).put("pages", 1).put("page", 1).put("pageSize", list.length().coerceAtLeast(1)))
+    }
+    fun saveE6ImportCache(context: Context, data: JSONObject) {
+        context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(
+                E6_IMPORT_CACHE_KEY,
+                JSONObject().put("savedAt", System.currentTimeMillis()).put("data", data).toString(),
+            )
+            .apply()
+    }
+    fun loadE6ImportCache(context: Context): JSONObject? {
+        val preferences = context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
+        val cached = preferences.getString(E6_IMPORT_CACHE_KEY, null)
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: return null
+        val savedAt = cached.optLong("savedAt", 0L)
+        val data = cached.optJSONObject("data")
+        if (data == null || savedAt <= 0L || System.currentTimeMillis() - savedAt > E6_CACHE_TTL) {
+            preferences.edit().remove(E6_IMPORT_CACHE_KEY).apply()
+            return null
+        }
+        return data
+    }
+    fun clearE6ImportCache(context: Context) {
+        context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove(E6_IMPORT_CACHE_KEY)
+            .apply()
+    }
+    fun clearResponseCache(context: Context? = cacheContext) {
+        memoryCache.clear()
+        context?.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)
+            ?.edit()
+            ?.clear()
+            ?.apply()
     }
     fun e6ImportDetail(id: Int): JSONObject = request("/admin/e6/imports/$id").getJSONObject("data")
     fun confirmE6Import(id: Int, payload: JSONObject): JSONObject = request("/admin/e6/imports/$id/confirm", "POST", payload).getJSONObject("data")
@@ -354,10 +452,16 @@ object ApiClient {
         val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
         if (response.code == 401) token = null
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "上传失败"))
+        clearResponseCache()
         return json
     }
 
     private fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
+        val normalizedMethod = method.uppercase()
+        val cacheTtl = if (normalizedMethod == "GET") cacheTtlMillis(path) else null
+        if (cacheTtl != null) {
+            cachedResponse(path, cacheTtl)?.let { return it }
+        }
         val requestBuilder = Request.Builder()
             .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
             .header("Accept", "application/json")
@@ -372,7 +476,7 @@ object ApiClient {
 
         val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
 
-        when (method.uppercase()) {
+        when (normalizedMethod) {
             "GET" -> requestBuilder.get()
             // OkHttp requires a non-null body for POST/PUT. A zero-byte body
             // without a media type preserves the endpoint's bodyless semantics.
@@ -387,8 +491,48 @@ object ApiClient {
         val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
         if (response.code == 401) token = null
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "请求失败"))
+        if (normalizedMethod != "GET") clearResponseCache()
+        else if (cacheTtl != null) cacheResponse(path, json.toString())
         return json
     }
+
+    private fun cacheResponse(path: String, value: String) {
+        val context = cacheContext ?: return
+        val key = cacheKey(path)
+        val cached = JSONObject()
+            .put("savedAt", System.currentTimeMillis())
+            .put("data", JSONObject(value))
+            .toString()
+        memoryCache[key] = cached
+        context.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(key, cached)
+            .apply()
+    }
+
+    private fun cachedResponse(path: String, ttlMillis: Long): JSONObject? {
+        val key = cacheKey(path)
+        val value = memoryCache[key]
+            ?: cacheContext?.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)?.getString(key, null)
+            ?: return null
+        val cached = runCatching { JSONObject(value) }.getOrNull() ?: return null
+        val savedAt = cached.optLong("savedAt", 0L)
+        val data = cached.optJSONObject("data")
+        if (data == null || savedAt <= 0L || System.currentTimeMillis() - savedAt > ttlMillis) {
+            memoryCache.remove(key)
+            cacheContext?.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)
+                ?.edit()
+                ?.remove(key)
+                ?.apply()
+            return null
+        }
+        return data
+    }
+
+    private fun cacheKey(path: String): String = MessageDigest
+        .getInstance("SHA-256")
+        .digest(path.toByteArray())
+        .joinToString("") { byte -> "%02x".format(byte) }
 
     private fun requestBytes(path: String): ByteArray {
         val requestBuilder = Request.Builder()

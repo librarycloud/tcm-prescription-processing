@@ -52,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.LocalDate
 
 @Composable
 internal fun InventoryScreen(
@@ -311,6 +312,7 @@ internal fun InventoryScreen(
                 val qty = item.optDouble("quantity", 0.0)
                 val prodDate = inventoryDate(item, "productionDate")
                 val expDate = inventoryDate(item, "expiryDate", "expirationDate", "expireDate")
+                val expiringSoon = inventoryExpiryWarning(expDate)
                 val inDate = inventoryDate(item, "inboundDate", "receivedAt")
 
                 AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
@@ -362,7 +364,7 @@ internal fun InventoryScreen(
                             Text("有效期", color = Muted, fontSize = 9.sp)
                             Text(
                                 expDate.ifBlank { "-" },
-                                color = if (expDate.isNotBlank()) Danger else Muted,
+                                color = if (expiringSoon) Danger else Muted,
                                 fontSize = 10.sp,
                                 maxLines = 1,
                             )
@@ -453,3 +455,7 @@ private fun inventoryDate(item: JSONObject, vararg keys: String): String {
         ?.take(10)
         .orEmpty()
 }
+
+private fun inventoryExpiryWarning(value: String): Boolean = runCatching {
+    LocalDate.parse(value.take(10)).isBefore(LocalDate.now().plusMonths(6))
+}.getOrDefault(false)
