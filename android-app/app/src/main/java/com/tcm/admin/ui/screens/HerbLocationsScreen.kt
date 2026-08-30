@@ -297,7 +297,7 @@ internal fun HerbsScreen(
                                                     (0 until herbs.length()).forEach { index ->
                                                         if (index > 0) append("、")
                                                         val name = herbs.getJSONObject(index).displayField("name")
-                                                        append(searchHighlightedText(name, keyword, PrimarySoft, PrimaryDark, matchPinyin = true))
+                                                        append(searchHighlightedText(name, keyword, Primary.copy(alpha = 0.28f), PrimaryDark, matchPinyin = true))
                                                     }
                                                 },
                                                 color = RegularText,
@@ -332,7 +332,7 @@ private fun SearchHighlightedText(
     matchPinyin: Boolean = false,
 ) {
     Text(
-        text = searchHighlightedText(text, keyword, PrimarySoft, PrimaryDark, matchPinyin),
+        text = searchHighlightedText(text, keyword, Primary.copy(alpha = 0.28f), PrimaryDark, matchPinyin),
         modifier = modifier,
         color = color,
         fontWeight = fontWeight,

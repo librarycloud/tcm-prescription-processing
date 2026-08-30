@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
@@ -45,6 +47,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -221,7 +224,7 @@ private fun TcmAdminApp() {
         appContext.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
     }
     var themeMode by remember(settingsPreferences) {
-        mutableStateOf(settingsPreferences.getString("theme_mode", "system") ?: "system")
+        mutableStateOf(settingsPreferences.getString("theme_mode", "light") ?: "light")
     }
     var hasAppUpdate by remember(updatePreferences) {
         mutableStateOf(
@@ -312,7 +315,7 @@ private fun TcmAdminApp() {
                 }
 
                 // Main Navigation Tabs
-                is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, dashboardScrollState) {
                     DashboardScreen(
                         onNavigate = ::navigateTo,
                         stats = stats,
@@ -323,10 +326,10 @@ private fun TcmAdminApp() {
                         scrollState = dashboardScrollState,
                     )
                 }
-                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, prescriptionsScrollState) {
                     PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = prescriptionsScrollState)
                 }
-                is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, e6ImportsListState.scrollState) {
                     E6ImportsScreen(
                         user = session?.user,
                         onNavigate = ::navigateTo,
@@ -350,26 +353,27 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, processingScrollState) {
                     ProcessingScreenV2(
                         user = session?.user,
                         onNavigate = ::navigateTo,
                         scrollState = processingScrollState,
                     )
                 }
-                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, packagesScrollState) {
                     PackagesScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = packagesScrollState)
                 }
-                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, herbsListState.scrollState) {
                     HerbsScreen(user = session?.user, onNavigate = ::navigateTo, listState = herbsListState)
                 }
-                is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate) {
+                is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
                     ProfileScreen(
                         user = session?.user,
                         onOpenDetails = { navigateTo(ScreenTarget.ProfileDetail) },
                         onOpenSettings = { navigateTo(ScreenTarget.Settings) },
                         onOpenAbout = { navigateTo(ScreenTarget.About) },
                         onEntered = ::checkForAppUpdateIfDue,
+                        hasAppUpdate = hasAppUpdate,
                         scrollState = profileScrollState,
                         onSessionUpdated = { updated ->
                             ApiClient.saveSession(appContext, updated)
@@ -410,7 +414,7 @@ private fun TcmAdminApp() {
                 }
 
                 // Sub-screens & Details (Page navigation instead of dialogs)
-                is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }) {
+                is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }, scrollState = inventoryScrollState) {
                     InventoryScreen(
                         user = session?.user,
                         initialQuery = currentScreen.initialQuery,
@@ -495,7 +499,7 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }) {
+                is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }, scrollState = stocktakingScrollState) {
                     StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = stocktakingScrollState)
                 }
                 is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }) {
@@ -516,13 +520,13 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }) {
+                is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
                     DifferencesScreen(scrollState = differencesScrollState)
                 }
                 is ScreenTarget.DifferenceRegister -> DetailShell("登记库存差异", onBack = { navigateBack() }) {
                     DifferencesScreen(scrollState = differencesScrollState)
                 }
-                is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }) {
+                is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, scrollState = transfersScrollState) {
                     TransfersScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = transfersScrollState)
                 }
                 is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
@@ -669,6 +673,7 @@ private fun MainShell(
     onSwitchTab: (ScreenTarget) -> Unit,
     onNavigate: (ScreenTarget) -> Unit,
     showUpdateBadge: Boolean,
+    scrollState: ScrollState? = null,
     content: @Composable () -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -725,6 +730,10 @@ private fun MainShell(
                     onSwitchTab(ScreenTarget.Prescriptions)
                     scope.launch { drawerState.close() }
                 }
+                DrawerItem("E6诊所处方导入", current is ScreenTarget.E6Imports, Icons.Default.Sync) {
+                    onSwitchTab(ScreenTarget.E6Imports)
+                    scope.launch { drawerState.close() }
+                }
                 DrawerItem("加工管理", current is ScreenTarget.Processing, Icons.Default.Sync) {
                     onSwitchTab(ScreenTarget.Processing)
                     scope.launch { drawerState.close() }
@@ -774,11 +783,25 @@ private fun MainShell(
                     onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
                 )
             },
-            bottomBar = { BottomNav(current, onSwitchTab) },
+            bottomBar = {
+                BottomNav(
+                    current = current,
+                    onSwitchTab = onSwitchTab,
+                    onReselect = {
+                        scrollState?.let { state ->
+                            scope.launch { state.animateScrollTo(0) }
+                        }
+                    },
+                )
+            },
             containerColor = PageBackground,
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 content()
+                ScrollToTopButton(
+                    scrollState = scrollState,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                )
             }
         }
     }
@@ -820,7 +843,12 @@ private fun DrawerItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailShell(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+private fun DetailShell(
+    title: String,
+    onBack: () -> Unit,
+    scrollState: ScrollState? = null,
+    content: @Composable () -> Unit,
+) {
     Scaffold(
         topBar = {
             Column {
@@ -843,6 +871,10 @@ private fun DetailShell(title: String, onBack: () -> Unit, content: @Composable 
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             content()
+            ScrollToTopButton(
+                scrollState = scrollState,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            )
         }
     }
 }
@@ -873,7 +905,11 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
 }
 
 @Composable
-private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit) {
+private fun BottomNav(
+    current: ScreenTarget,
+    onSwitchTab: (ScreenTarget) -> Unit,
+    onReselect: () -> Unit,
+) {
     val items = listOf(
         ScreenTarget.Dashboard to ("概览" to Icons.AutoMirrored.Filled.Assignment),
         ScreenTarget.Herbs to ("斗谱" to Icons.Default.Inventory),
@@ -899,7 +935,9 @@ private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit
                 }
                 NavigationBarItem(
                     selected = isSelected,
-                    onClick = { onSwitchTab(target) },
+                    onClick = {
+                        if (isSelected) onReselect() else onSwitchTab(target)
+                    },
                     icon = { Icon(pair.second, contentDescription = pair.first) },
                     label = { Text(pair.first, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -912,5 +950,30 @@ private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ScrollToTopButton(
+    scrollState: ScrollState?,
+    modifier: Modifier = Modifier,
+) {
+    if (scrollState == null) return
+    val twoScreens = scrollState.viewportSize * 2
+    if (twoScreens <= 0 || scrollState.value < twoScreens) return
+
+    val scope = rememberCoroutineScope()
+    SmallFloatingActionButton(
+        onClick = { scope.launch { scrollState.animateScrollTo(0) } },
+        modifier = modifier,
+        shape = CircleShape,
+        containerColor = Primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Icon(
+            Icons.Default.KeyboardArrowUp,
+            contentDescription = "返回顶部",
+            modifier = Modifier.size(22.dp),
+        )
     }
 }

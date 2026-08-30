@@ -69,6 +69,7 @@ internal fun ProfileScreen(
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onEntered: () -> Unit,
+    hasAppUpdate: Boolean,
     scrollState: ScrollState,
     onSessionUpdated: (AdminSession) -> Unit,
 ) {
@@ -136,6 +137,14 @@ internal fun ProfileScreen(
             Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("检查新版本（${BuildConfig.VERSION_NAME}）", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            if (hasAppUpdate) {
+                Spacer(Modifier.width(6.dp))
+                Surface(
+                    modifier = Modifier.size(7.dp),
+                    shape = CircleShape,
+                    color = Color(0xFFE5484D),
+                ) {}
+            }
         }
 
         Spacer(Modifier.height(28.dp))

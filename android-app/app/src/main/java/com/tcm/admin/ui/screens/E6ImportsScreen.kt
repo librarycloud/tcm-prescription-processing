@@ -282,27 +282,36 @@ internal fun E6ImportsScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
+            Surface(
+                onClick = { datePickerOpen = true },
                 modifier = Modifier
                     .weight(1f)
-                    .height(SearchControlHeight),
+                    .height(48.dp),
+                shape = FieldShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, CardBorderColor),
             ) {
-                OutlinedTextField(
-                    value = orderDate,
-                    onValueChange = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    readOnly = true,
-                    placeholder = { Text("选择订单日期", fontSize = 12.sp) },
-                    shape = FieldShape,
-                    trailingIcon = { Icon(Icons.Default.CalendarMonth, contentDescription = "选择日期", tint = Primary) },
-                )
-                // Keep the entire field, including its trailing icon, tappable.
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clickable { datePickerOpen = true },
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.CalendarMonth,
+                        contentDescription = "选择订单日期",
+                        tint = Primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = orderDate.takeIf { it.isNotBlank() }?.let { "订单日期：$it" } ?: "选择订单日期",
+                        modifier = Modifier.weight(1f),
+                        color = if (orderDate.isBlank()) Muted else Ink,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
             OutlinedButton(
                 onClick = {
