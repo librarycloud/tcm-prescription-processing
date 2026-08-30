@@ -194,6 +194,7 @@ namespace E6Sync.Services
                 sync[FindKey(sync, "lastPharmacyProductCursor") ?? "lastPharmacyProductCursor"] = config.Sync.LastPharmacyProductCursor ?? "";
                 sync[FindKey(sync, "lastPharmacyLocationCursor") ?? "lastPharmacyLocationCursor"] = config.Sync.LastPharmacyLocationCursor ?? "";
                 sync[FindKey(sync, "lastPharmacyInventoryCursor") ?? "lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? "";
+                sync[FindKey(sync, "lastPharmacyStockCursor") ?? "lastPharmacyStockCursor"] = config.Sync.LastPharmacyStockCursor ?? "";
                 return serializer.Serialize(root);
             }
             catch
@@ -240,7 +241,8 @@ namespace E6Sync.Services
                     ["lastPharmacyProductModifiedAt"] = config.Sync.LastPharmacyProductModifiedAt ?? "",
                     ["lastPharmacyProductCursor"] = config.Sync.LastPharmacyProductCursor ?? "",
                     ["lastPharmacyLocationCursor"] = config.Sync.LastPharmacyLocationCursor ?? "",
-                    ["lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? ""
+                    ["lastPharmacyInventoryCursor"] = config.Sync.LastPharmacyInventoryCursor ?? "",
+                    ["lastPharmacyStockCursor"] = config.Sync.LastPharmacyStockCursor ?? ""
                 }
             };
             return serializer.Serialize(root);

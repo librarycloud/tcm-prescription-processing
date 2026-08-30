@@ -191,9 +191,9 @@ namespace E6Sync.Services
                 stats.SuccessCount++;
                 productBatchCount++;
             }
-            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor), cancellationToken).ConfigureAwait(false);
-            stats.QueryCount += snapshot.Batches.Count;
-            if (!fullSync && snapshot.Batches.Count > 0)
+            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor, fullSync ? "" : config.Sync.LastPharmacyStockCursor), cancellationToken).ConfigureAwait(false);
+            stats.QueryCount += snapshot.Batches.Count + snapshot.ZeroProductCodes.Count;
+            if (!fullSync && (snapshot.Batches.Count > 0 || snapshot.ZeroProductCodes.Count > 0))
             {
                 var uploadedCodes = new HashSet<string>(products.ConvertAll(item => item.productCode ?? ""), StringComparer.OrdinalIgnoreCase);
                 var inventoryCodes = new List<string>();
@@ -201,6 +201,10 @@ namespace E6Sync.Services
                 {
                     var code = (batch.productCode ?? "").Trim();
                     if (!string.IsNullOrWhiteSpace(code) && !uploadedCodes.Contains(code)) inventoryCodes.Add(code);
+                }
+                foreach (var code in snapshot.ZeroProductCodes)
+                {
+                    if (!uploadedCodes.Contains(code)) inventoryCodes.Add(code);
                 }
                 if (inventoryCodes.Count > 0)
                 {
@@ -222,16 +226,17 @@ namespace E6Sync.Services
                 }
             }
             log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，模式 {2}", products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
-            if (fullSync && snapshot.Batches.Count == 0)
+            if (fullSync && snapshot.Batches.Count == 0 && snapshot.ZeroProductCodes.Count == 0)
                 throw new InvalidOperationException("药店货位库存查询为 0，已停止全量上传；请检查药店数据库和库存表");
             var fullSyncStartedAt = fullSync ? DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture) : null;
             var inventoryBatchCount = 0;
             var inventoryBatches = SplitBatches(snapshot.Batches, 1000);
+            if (inventoryBatches.Count == 0 && snapshot.ZeroProductCodes.Count > 0) inventoryBatches.Add(new List<E6PharmacyBatchUpload>());
             for (var index = 0; index < inventoryBatches.Count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var lastBatch = index == inventoryBatches.Count - 1;
-                var inventoryResult = await api.SendPharmacyInventoryAsync(inventoryBatches[index], fullSync, fullSync && lastBatch, fullSyncStartedAt, cancellationToken).ConfigureAwait(false);
+                var inventoryResult = await api.SendPharmacyInventoryAsync(inventoryBatches[index], fullSync, fullSync && lastBatch, fullSyncStartedAt, lastBatch ? snapshot.ZeroProductCodes : new List<string>(), cancellationToken).ConfigureAwait(false);
                 if (!inventoryResult.Success) throw new InvalidOperationException(inventoryResult.Message);
                 stats.SuccessCount++;
                 inventoryBatchCount++;
@@ -240,6 +245,7 @@ namespace E6Sync.Services
             if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor)) config.Sync.LastPharmacyProductCursor = productSnapshot.Cursor;
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
             if (!string.IsNullOrWhiteSpace(snapshot.LocationCursor)) config.Sync.LastPharmacyLocationCursor = snapshot.LocationCursor;
+            if (!string.IsNullOrWhiteSpace(snapshot.StockCursor)) config.Sync.LastPharmacyStockCursor = snapshot.StockCursor;
             SaveConfig();
             log.Info(string.Format("药店同步完成：商品 {0}（{1} 批），库存批次 {2}（{3} 批）{4}", products.Count, productBatchCount, snapshot.Batches.Count, inventoryBatchCount, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
             return stats;

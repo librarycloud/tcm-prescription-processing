@@ -221,7 +221,8 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
             var cursorClause = cursorBytes == null ? "" : " AND p.[_c_] > @cursor ";
             var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
 FROM dbo.[DC商品] p
-WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID] AND i.[数量] > 0) " + cursorClause + @"
+WHERE ISNULL(p.[停用], 0) = 0
+  AND ISNULL(p.[名称], '') <> '' " + cursorClause + @"
  ORDER BY p.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
@@ -273,7 +274,9 @@ WHERE EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] i WHERE i.[商品id] = p.[ID
                 for (var index = 0; index < count; index++) placeholders.Add("@code" + index);
                 var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
 FROM dbo.[DC商品] p
-WHERE p.[编号] IN (" + string.Join(",", placeholders) + ");";
+WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
+  AND ISNULL(p.[停用], 0) = 0
+  AND ISNULL(p.[名称], '') <> '';";
                 using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
                 using (var command = new SqlCommand(sql, connection))
                 {
@@ -308,7 +311,7 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + ");";
             });
         }
 
-        public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor, string locationCursor)
+        public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor, string locationCursor, string stockCursor)
         {
             var result = new E6PharmacyInventorySnapshot();
             var cursorBytes = DecodeCursor(cursor);
@@ -327,7 +330,9 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + ");";
 FROM dbo.[AC货位商品帐] i
 LEFT JOIN dbo.[DC商品] p ON p.[ID] = i.[商品id]
 LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id]
-WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
+WHERE i.[数量] >= 0
+  AND ISNULL(p.[停用], 0) = 0
+  AND ISNULL(p.[名称], '') <> '' " + cursorClause + "ORDER BY i.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
             {
@@ -353,7 +358,47 @@ WHERE i.[数量] > 0 " + cursorClause + "ORDER BY i.[_c_];";
                     }
                 }
             }
+            QueryZeroPharmacyProducts(result, stockCursor);
             return result;
+        }
+
+        private void QueryZeroPharmacyProducts(E6PharmacyInventorySnapshot result, string cursor)
+        {
+            var cursorBytes = DecodeCursor(cursor);
+            var where = cursorBytes == null ? "" : "WHERE a0.[_c_] > @stockCursor";
+            var sql = @"WITH ChangedRows AS (
+    SELECT a0.[商品id], a0.[_c_] AS [ts], ROW_NUMBER() OVER (PARTITION BY a0.[商品id] ORDER BY a0.[_c_] DESC) AS [rn]
+    FROM dbo.[AC商品库存帐] a0 WITH (NOLOCK)
+    " + where + @"
+), Changed AS (
+    SELECT [商品id], [ts] FROM ChangedRows WHERE [rn] = 1
+), Totals AS (
+    SELECT [商品id], SUM(ISNULL([数量], 0)) AS [total]
+    FROM dbo.[AC商品库存帐] WITH (NOLOCK)
+    GROUP BY [商品id]
+)
+SELECT p.[编号] AS [商品编号], t.[total], c.[ts]
+FROM Changed c
+INNER JOIN Totals t ON t.[商品id] = c.[商品id]
+INNER JOIN dbo.[DC商品] p WITH (NOLOCK) ON p.[ID] = c.[商品id]
+WHERE ISNULL(p.[停用], 0) = 0
+  AND ISNULL(p.[名称], '') <> ''
+ORDER BY c.[ts];";
+            using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                if (cursorBytes != null) command.Parameters.Add("@stockCursor", SqlDbType.Binary, 8).Value = cursorBytes;
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var code = ToNullableText(reader["商品编号"]);
+                        if (!reader.IsDBNull(reader.GetOrdinal("total")) && Convert.ToDecimal(reader["total"]) == 0m && !string.IsNullOrWhiteSpace(code)) result.ZeroProductCodes.Add(code);
+                        result.StockCursor = MaxCursor(result.StockCursor, reader["ts"]);
+                    }
+                }
+            }
         }
 
         private static string BuildConnectionString(E6PharmacyConfig e6)

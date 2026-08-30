@@ -122,9 +122,9 @@ namespace E6Sync.Services
             return PostPharmacyAsync("/integrations/e6/v1/pharmacy/products", new { storeCode = config.StoreCode, products = products }, cancellationToken);
         }
 
-        public Task<ApiResult> SendPharmacyInventoryAsync(System.Collections.Generic.IList<E6PharmacyBatchUpload> batches, bool fullSync, bool fullSyncComplete, string fullSyncStartedAt, CancellationToken cancellationToken)
+        public Task<ApiResult> SendPharmacyInventoryAsync(System.Collections.Generic.IList<E6PharmacyBatchUpload> batches, bool fullSync, bool fullSyncComplete, string fullSyncStartedAt, System.Collections.Generic.IList<string> clearProductCodes, CancellationToken cancellationToken)
         {
-            return PostPharmacyAsync("/integrations/e6/v1/pharmacy/inventory", new { storeCode = config.StoreCode, fullSync = fullSync, fullSyncComplete = fullSyncComplete, fullSyncStartedAt = fullSyncStartedAt, batches = batches }, cancellationToken);
+            return PostPharmacyAsync("/integrations/e6/v1/pharmacy/inventory", new { storeCode = config.StoreCode, fullSync = fullSync, fullSyncComplete = fullSyncComplete, fullSyncStartedAt = fullSyncStartedAt, batches = batches, clearProductCodes = clearProductCodes }, cancellationToken);
         }
 
         private async Task<ApiResult> PostPharmacyAsync(string path, object body, CancellationToken cancellationToken)

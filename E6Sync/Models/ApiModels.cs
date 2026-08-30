@@ -33,8 +33,10 @@ namespace E6Sync.Models
     public sealed class E6PharmacyInventorySnapshot
     {
         public List<E6PharmacyBatchUpload> Batches { get; set; } = new List<E6PharmacyBatchUpload>();
+        public List<string> ZeroProductCodes { get; set; } = new List<string>();
         public string Cursor { get; set; }
         public string LocationCursor { get; set; }
+        public string StockCursor { get; set; }
     }
 
     public sealed class E6PharmacyProductSnapshot

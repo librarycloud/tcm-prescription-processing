@@ -46,5 +46,6 @@ namespace E6Sync.Models
         public string LastPharmacyProductCursor { get; set; } = "";
         public string LastPharmacyLocationCursor { get; set; } = "";
         public string LastPharmacyInventoryCursor { get; set; } = "";
+        public string LastPharmacyStockCursor { get; set; } = "";
     }
 }

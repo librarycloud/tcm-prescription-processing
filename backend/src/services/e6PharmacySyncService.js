@@ -60,7 +60,6 @@ function normalizeProduct(item) {
 
 function normalizeBatch(item) {
   const quantity = decimal(item?.quantity, "库存数量", 3);
-  if (Number(quantity) <= 0) throw new AppError("库存数量必须大于零", 400);
   return {
     productCode: text(item?.productCode, 64, "商品编号", true),
     batchNo: text(item?.batchNo, 100, "批号") || "",
@@ -120,11 +119,12 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   const items = Array.isArray(payload?.batches) ? payload.batches : [];
   if (items.length > 10000) throw new AppError("单次库存上传不能超过10000条", 400);
   const normalized = mergeBatches(items.map(normalizeBatch));
+  const clearProductCodes = [...new Set((Array.isArray(payload?.clearProductCodes) ? payload.clearProductCodes : []).map((value) => text(value, 64, "商品编号")).filter(Boolean))];
   const fullSyncStartedAt = payload?.fullSyncStartedAt
     ? date(payload.fullSyncStartedAt, "全量同步开始时间")
     : null;
   const fullSyncComplete = payload?.fullSyncComplete === true;
-  const productCodes = [...new Set(normalized.map((item) => item.productCode))];
+  const productCodes = [...new Set([...normalized.map((item) => item.productCode), ...clearProductCodes])];
   const products = await prisma.e6PharmacyProduct.findMany({
     where: { productCode: { in: productCodes } },
     select: { id: true, productCode: true },
@@ -136,6 +136,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   const seen = new Set();
   let created = 0;
   let updated = 0;
+  let deleted = 0;
   for (const item of normalized) {
     const productId = productMap.get(item.productCode);
     const key = `${productId}\u0000${item.batchNo}\u0000${item.locationName}`;
@@ -144,6 +145,13 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
       where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
       select: { id: true },
     });
+    if (Number(item.quantity) === 0) {
+      if (existing) {
+        await prisma.e6PharmacyInventoryBatch.delete({ where: { id: existing.id } });
+        deleted++;
+      }
+      continue;
+    }
     await prisma.e6PharmacyInventoryBatch.upsert({
       where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
       create: {
@@ -161,6 +169,11 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     });
     if (existing) updated++;
     else created++;
+  }
+  for (const productCode of clearProductCodes) {
+    const productId = productMap.get(productCode);
+    const result = await prisma.e6PharmacyInventoryBatch.deleteMany({ where: { storeId: store.id, productId } });
+    deleted += result.count || 0;
   }
 
   if (payload?.fullSync === true && (fullSyncComplete || !fullSyncStartedAt)) {
@@ -186,5 +199,5 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         WHERE product_code = ${productCode}`;
     }
   }
-  return { received: normalized.length, created, updated, fullSync: payload?.fullSync === true };
+  return { received: normalized.length, created, updated, deleted, fullSync: payload?.fullSync === true };
 }

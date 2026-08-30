@@ -17,6 +17,15 @@ test("E6 pharmacy batches keep locations separate", () => {
   assert.equal(result[1].locationName, "B货位");
 });
 
+test("E6 pharmacy batches preserve a zero quantity update", () => {
+  const result = mergeBatches([
+    { productCode: "99052", batchNo: "2411061", locationName: "A货位", quantity: "0.000" },
+  ]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].quantity, "0.000");
+});
+
 test("E6 pharmacy query scopes store admins and searches product fields", async () => {
   const calls = [];
   const product = {
