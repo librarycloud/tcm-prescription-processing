@@ -1541,23 +1541,23 @@ internal fun WorkflowOperationScreen(
     val isDispensingCompleted = status == 2 || photoCount > 0
     val isWorkflowCompleted = status == 2
     val dispensingTimeLabel = when {
-        isDispensingCompleted && dispensingCompletedAt.isNotBlank() -> "完成时间 $dispensingCompletedAt"
-        status == 1 && dispensingStartedAt.isNotBlank() -> "开始时间 $dispensingStartedAt"
+        isDispensingCompleted && dispensingCompletedAt.isNotBlank() -> dispensingCompletedAt
+        status == 1 && dispensingStartedAt.isNotBlank() -> dispensingStartedAt
         else -> ""
     }
     val soakingTimeLabel = when {
-        isWorkflowCompleted && soakingCompletedAt.isNotBlank() -> "完成时间 $soakingCompletedAt"
-        activeSoakings.isNotEmpty() && soakingStartedAt.isNotBlank() -> "开始时间 $soakingStartedAt"
+        isWorkflowCompleted && soakingCompletedAt.isNotBlank() -> soakingCompletedAt
+        activeSoakings.isNotEmpty() && soakingStartedAt.isNotBlank() -> soakingStartedAt
         else -> ""
     }
     val decoctionTimeLabel = when {
-        isWorkflowCompleted && decoctionCompletedAt.isNotBlank() -> "完成时间 $decoctionCompletedAt"
-        activeDecoctions.isNotEmpty() && decoctionStartedAt.isNotBlank() -> "开始时间 $decoctionStartedAt"
+        isWorkflowCompleted && decoctionCompletedAt.isNotBlank() -> decoctionCompletedAt
+        activeDecoctions.isNotEmpty() && decoctionStartedAt.isNotBlank() -> decoctionStartedAt
         else -> ""
     }
     val packagingTimeLabel = when {
-        isWorkflowCompleted && packagingCompletedAt.isNotBlank() -> "完成时间 $packagingCompletedAt"
-        activePackagings.isNotEmpty() && packagingStartedAt.isNotBlank() -> "开始时间 $packagingStartedAt"
+        isWorkflowCompleted && packagingCompletedAt.isNotBlank() -> packagingCompletedAt
+        activePackagings.isNotEmpty() && packagingStartedAt.isNotBlank() -> packagingStartedAt
         else -> ""
     }
 
@@ -1682,6 +1682,10 @@ internal fun WorkflowOperationScreen(
                     Text("调配", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (dispensingTimeLabel.isNotBlank()) {
+                        Text(dispensingTimeLabel, color = Muted, fontSize = 10.sp)
+                        Spacer(Modifier.width(5.dp))
+                    }
                     Text(
                         dispensingState,
                         color = when {
@@ -1691,10 +1695,6 @@ internal fun WorkflowOperationScreen(
                         },
                         fontSize = 12.sp,
                     )
-                    if (dispensingTimeLabel.isNotBlank()) {
-                        Spacer(Modifier.width(5.dp))
-                        Text(dispensingTimeLabel, color = Muted, fontSize = 10.sp)
-                    }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -1789,6 +1789,10 @@ internal fun WorkflowOperationScreen(
                         Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (soakingTimeLabel.isNotBlank()) {
+                            Text(soakingTimeLabel, color = Muted, fontSize = 10.sp)
+                            Spacer(Modifier.width(5.dp))
+                        }
                         Text(
                             soakingState,
                             color = when {
@@ -1798,10 +1802,6 @@ internal fun WorkflowOperationScreen(
                             },
                             fontSize = 12.sp,
                         )
-                        if (soakingTimeLabel.isNotBlank()) {
-                            Spacer(Modifier.width(5.dp))
-                            Text(soakingTimeLabel, color = Muted, fontSize = 10.sp)
-                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1886,6 +1886,10 @@ internal fun WorkflowOperationScreen(
                         Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (decoctionTimeLabel.isNotBlank()) {
+                            Text(decoctionTimeLabel, color = Muted, fontSize = 10.sp)
+                            Spacer(Modifier.width(5.dp))
+                        }
                         Text(
                             decoctionState,
                             color = when {
@@ -1895,10 +1899,6 @@ internal fun WorkflowOperationScreen(
                             },
                             fontSize = 12.sp,
                         )
-                        if (decoctionTimeLabel.isNotBlank()) {
-                            Spacer(Modifier.width(5.dp))
-                            Text(decoctionTimeLabel, color = Muted, fontSize = 10.sp)
-                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -2005,6 +2005,10 @@ internal fun WorkflowOperationScreen(
                         Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (packagingTimeLabel.isNotBlank()) {
+                            Text(packagingTimeLabel, color = Muted, fontSize = 10.sp)
+                            Spacer(Modifier.width(5.dp))
+                        }
                         Text(
                             packagingState,
                             color = when {
@@ -2014,10 +2018,6 @@ internal fun WorkflowOperationScreen(
                             },
                             fontSize = 12.sp,
                         )
-                        if (packagingTimeLabel.isNotBlank()) {
-                            Spacer(Modifier.width(5.dp))
-                            Text(packagingTimeLabel, color = Muted, fontSize = 10.sp)
-                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

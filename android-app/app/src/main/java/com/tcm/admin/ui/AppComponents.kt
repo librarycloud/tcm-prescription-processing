@@ -354,7 +354,7 @@ internal fun SearchBarField(
         modifier = modifier
             .fillMaxWidth()
             .height(SearchControlHeight)
-            .background(MaterialTheme.colorScheme.surfaceVariant, FieldShape)
+            .background(MaterialTheme.colorScheme.surface, FieldShape)
             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), FieldShape)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
