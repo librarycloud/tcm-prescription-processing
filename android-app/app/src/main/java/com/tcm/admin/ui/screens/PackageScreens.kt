@@ -480,7 +480,10 @@ internal fun PackageDetailPage(
         Button(
             onClick = onBack,
             shape = FieldShape,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+            ),
             modifier = Modifier.fillMaxWidth().height(46.dp),
         ) {
             Text("返回包裹列表")

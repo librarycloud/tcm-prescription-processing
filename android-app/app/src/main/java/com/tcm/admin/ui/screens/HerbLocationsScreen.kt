@@ -229,7 +229,7 @@ internal fun HerbsScreen(
                                             )
                                             Spacer(Modifier.width(8.dp))
                                             Surface(
-                                                color = Color.White,
+                                                color = MaterialTheme.colorScheme.surface,
                                                 shape = RoundedCornerShape(5.dp),
                                                 border = BorderStroke(1.dp, Primary.copy(alpha = 0.35f)),
                                             ) {
@@ -500,7 +500,7 @@ internal fun HerbLocationAssignScreen(
                                     specification = herb.displayField("specification", "")
                                 },
                                 shape = FieldShape,
-                                color = if (selectedHerbId == id) PrimarySoft else Color(0xFFF9FAFB),
+                                color = if (selectedHerbId == id) PrimarySoft else MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(1.dp, if (selectedHerbId == id) Primary else CardBorderColor),
                             ) {
                                 Row(

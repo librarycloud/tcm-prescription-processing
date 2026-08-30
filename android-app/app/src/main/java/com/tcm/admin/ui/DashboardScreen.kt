@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -142,7 +143,7 @@ internal fun StatsGrid(
                             .then(cellWeight)
                             .height(68.dp)
                             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = CardShape,
                         border = BorderStroke(1.dp, CardBorderColor),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
@@ -189,7 +190,7 @@ internal fun QuickAction(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, CardBorderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {

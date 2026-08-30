@@ -296,7 +296,7 @@ internal fun ProcessingScreenV2(
                                     .height(64.dp),
                                 shape = CardShape,
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) PrimarySoft else Color.White,
+                                    containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
                                 ),
                                 border = BorderStroke(
                                     if (isSelected) 1.5.dp else 1.dp,
@@ -1926,7 +1926,7 @@ internal fun WorkflowOperationScreen(
                     val endTime = item.displayField("endedAt", "").take(16).replace("T", " ").ifBlank { if (isRunning) "进行中..." else "-" }
 
                     Surface(
-                        color = if (isRunning) PrimarySoft.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
+                        color = if (isRunning) PrimarySoft.copy(alpha = 0.18f) else Color(0xFFF9FAFB),
                         shape = FieldShape,
                         border = BorderStroke(1.dp, if (isRunning) Primary.copy(alpha = 0.4f) else CardBorderColor),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 3.5.dp),

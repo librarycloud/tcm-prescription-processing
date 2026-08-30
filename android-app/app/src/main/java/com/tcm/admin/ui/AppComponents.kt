@@ -73,18 +73,18 @@ internal val WarningSoft: Color @Composable get() = MaterialTheme.colorScheme.se
 internal val Danger: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val DangerSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
 // Method-specific accents keep logistics labels visually distinct from workflow status labels.
-internal val Info: Color = Color(0xFF0EA5E9)
-internal val InfoSoft: Color = Color(0xFFE0F2FE)
-internal val Indigo: Color = Color(0xFF6366F1)
-internal val IndigoSoft: Color = Color(0xFFEEF2FF)
-internal val Pink: Color = Color(0xFFEC4899)
-internal val PinkSoft: Color = Color(0xFFFDF2F8)
-internal val Brown: Color = Color(0xFFD97706)
-internal val BrownSoft: Color = Color(0xFFFEF3C7)
-private val RunnerColor = Color(0xFFF59E0B)
-private val RunnerSoftColor = Color(0xFFFEF3C7)
-private val CourierColor = Color(0xFF8B5CF6)
-private val CourierSoftColor = Color(0xFFF5F3FF)
+internal val Info: Color @Composable get() = MaterialTheme.colorScheme.primary
+internal val InfoSoft: Color @Composable get() = MaterialTheme.colorScheme.primaryContainer
+internal val Indigo: Color @Composable get() = MaterialTheme.colorScheme.secondary
+internal val IndigoSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
+internal val Pink: Color @Composable get() = MaterialTheme.colorScheme.error
+internal val PinkSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
+internal val Brown: Color @Composable get() = MaterialTheme.colorScheme.secondary
+internal val BrownSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
+private val RunnerColor: Color @Composable get() = MaterialTheme.colorScheme.secondary
+private val RunnerSoftColor: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
+private val CourierColor: Color @Composable get() = MaterialTheme.colorScheme.tertiary
+private val CourierSoftColor: Color @Composable get() = MaterialTheme.colorScheme.tertiaryContainer
 internal val CardBorderColor: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
 internal val CardShape = RoundedCornerShape(12.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
@@ -164,7 +164,7 @@ internal fun StatusPill(
     modifier: Modifier = Modifier,
 ) {
     val (color, bgColor) = when {
-        text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销") ->
+        text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款") ->
             Pair(Success, SuccessSoft)
         text == "自提" ->
             Pair(Primary, PrimarySoft)
@@ -178,12 +178,14 @@ internal fun StatusPill(
             Pair(Pink, PinkSoft)
         text in listOf("待出库", "借出中") ->
             Pair(Brown, BrownSoft)
+        text == "未付款" ->
+            Pair(Brown, BrownSoft)
         text == "部分归还" ->
             Pair(Info, InfoSoft)
         text in listOf("实货少", "已取消", "逾期", "已逾期", "紧急", "特急", "加急") ->
             Pair(Danger, DangerSoft)
         text in listOf("全局管理员", "门店管理员", "门店员工", "管理员") ->
-            Pair(PrimaryDark, Color(0xFFE0E7FF)) // Calmer elegant blue/indigo
+            Pair(PrimaryDark, PrimarySoft)
         text in listOf("加工中", "实货多", "进行中") ->
             Pair(Primary, PrimarySoft)
         else ->
@@ -259,7 +261,7 @@ internal fun SegmentedButton(
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(8.dp),
-            color = Color(0xFFF1F5F9),
+            color = MaterialTheme.colorScheme.surfaceVariant,
             border = BorderStroke(0.5.dp, CardBorderColor),
             modifier = modifier,
         ) {
@@ -352,8 +354,8 @@ internal fun SearchBarField(
         modifier = modifier
             .fillMaxWidth()
             .height(SearchControlHeight)
-            .background(Color(0xFFF1F5F9), FieldShape)
-            .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), FieldShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant, FieldShape)
+            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), FieldShape)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -604,7 +606,7 @@ internal fun LoadingButton(
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(16.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 strokeWidth = 2.dp,
             )
             Spacer(Modifier.width(8.dp))

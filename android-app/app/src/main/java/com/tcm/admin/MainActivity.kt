@@ -536,7 +536,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                 Icon(
                     Icons.AutoMirrored.Filled.Assignment,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(36.dp),
                 )
             }
@@ -650,7 +650,7 @@ private fun MainShell(
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.fillMaxHeight().width(drawerWidth),
-                drawerContainerColor = Color.White,
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
             ) {
                 Spacer(Modifier.height(18.dp))
                 Row(
@@ -663,7 +663,7 @@ private fun MainShell(
                         color = Primary,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
                         }
                     }
                     Spacer(Modifier.width(12.dp))

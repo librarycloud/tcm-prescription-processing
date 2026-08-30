@@ -239,7 +239,7 @@ internal fun AboutScreen(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(progressShape)
-                                .background(Color(0xFFE5E7EB)),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                         ) {
                             Box(
                                 modifier = Modifier
