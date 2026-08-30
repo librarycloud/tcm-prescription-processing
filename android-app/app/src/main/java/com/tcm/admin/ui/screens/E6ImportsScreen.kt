@@ -262,7 +262,7 @@ internal fun E6ImportsScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SegmentedButton(
-                label = if (orderDate == LocalDate.now().toString()) "今日订单" else "今日",
+                label = "今日订单",
                 selected = orderDate == LocalDate.now().toString(),
                 onClick = { page = 1; orderDate = LocalDate.now().toString() },
                 modifier = Modifier.weight(1f),
