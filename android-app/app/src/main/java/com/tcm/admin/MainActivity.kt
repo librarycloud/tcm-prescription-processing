@@ -562,7 +562,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = CardShape,
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = androidx.compose.foundation.BorderStroke(1.dp, Border),
         ) {
             Column(Modifier.padding(20.dp)) {
@@ -791,8 +791,8 @@ private fun DetailShell(title: String, onBack: () -> Unit, content: @Composable 
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.White,
-                        scrolledContainerColor = Color.White,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
                     ),
                 )
                 HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
@@ -823,8 +823,8 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.White,
-                scrolledContainerColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.surface,
+                scrolledContainerColor = MaterialTheme.colorScheme.surface,
             ),
         )
         HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
@@ -844,7 +844,7 @@ private fun BottomNav(current: ScreenTarget, onSwitchTab: (ScreenTarget) -> Unit
         HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
         NavigationBar(
             modifier = Modifier.navigationBarsPadding(),
-            containerColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp,
         ) {
             items.forEach { (target, pair) ->

@@ -111,7 +111,7 @@ function appendPrintStyles(targetDocument) {
   style.textContent = `
     ${printLabelCss}
     @page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0; }
-    html, body { margin: 0; padding: 0; background: #fff; }
+    html, body { margin: 0; padding: 0; background: var(--el-bg-color); }
     .print-area { display: block; margin: 0; padding: 0; }
     .label-copy { break-after: page; page-break-after: always; }
     .label-copy:last-child { break-after: auto; page-break-after: auto; }
@@ -176,7 +176,7 @@ async function printLabels() {
   min-height: 300px;
   padding: 28px;
   overflow: auto;
-  background: #f3f4f6;
+  background: var(--el-bg-color-page);
   border: 1px solid var(--app-border);
   border-radius: 8px;
 }

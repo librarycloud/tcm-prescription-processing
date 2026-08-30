@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -110,7 +111,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
         }.onFailure { error = it.message ?: "加载处方失败" }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
             if (!readOnly) {
@@ -254,7 +255,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
         runCatching { withContext(Dispatchers.IO) { ApiClient.prescriptionDetail(id) } }
             .onSuccess { detail = it }.onFailure { error = it.message ?: "加载处方详情失败" }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         if (detail == null && error == null) AppEmptyState("正在加载处方详情...")
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
         detail?.let { p ->
@@ -321,7 +322,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                 }
                 Spacer(Modifier.height(8.dp))
                 if (attachment != null) {
-                    Surface(color = Color(0xFFF8FAFC), shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(attachment.displayField("originalName", "处方原件"), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
@@ -366,7 +367,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
 
                     Spacer(Modifier.height(10.dp))
                     Surface(
-                        color = Color(0xFFF8FAFC),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
                         border = BorderStroke(1.dp, CardBorderColor),
                         modifier = Modifier.fillMaxWidth(),
@@ -498,7 +499,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
             }.onFailure { error = it.message ?: "加载处方基础数据失败" }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader(if (isEdit) "编辑处方" else "新建处方")
         Spacer(Modifier.height(14.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp); Spacer(Modifier.height(8.dp)) }
@@ -538,7 +539,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
                 }
             }
             Spacer(Modifier.height(14.dp))
-            Surface(color = Color(0xFFF9FAFB), shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("外方处方", color = Ink, fontWeight = FontWeight.Medium)

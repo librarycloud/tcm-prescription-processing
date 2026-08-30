@@ -277,13 +277,13 @@ internal fun ProfileDetailScreen(
                     label = "用户名",
                     value = user?.displayField("username") ?: "-",
                 )
-                HorizontalDivider(color = Color(0xFFF2F3F5))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileDetailRow(
                     icon = Icons.Default.Phone,
                     label = "手机号",
                     value = maskPhone(user?.displayField("phone", "")),
                 )
-                HorizontalDivider(color = Color(0xFFF2F3F5))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 if (isSuperAdmin) {
                     ProfileDetailRow(
                         icon = Icons.Default.Business,
@@ -291,7 +291,7 @@ internal fun ProfileDetailScreen(
                         value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
                             ?: "全部门店（全局权限）",
                     )
-                    HorizontalDivider(color = Color(0xFFF2F3F5))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
                 ProfileDetailRow(
                     icon = Icons.Default.Shield,

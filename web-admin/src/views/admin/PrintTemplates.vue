@@ -947,7 +947,7 @@ onBeforeUnmount(stopLayoutInteraction);
   justify-content: center;
   padding: 20px;
   overflow: auto;
-  background: #f3f4f6;
+  background: var(--el-bg-color-page);
   border: 1px solid var(--app-border);
   border-radius: 8px;
 }
@@ -1004,7 +1004,7 @@ onBeforeUnmount(stopLayoutInteraction);
   height: 10px;
   box-sizing: border-box;
   cursor: nwse-resize;
-  background: #fff;
+  background: var(--el-bg-color);
   border: 2px solid var(--el-color-primary);
   border-radius: 2px;
 }

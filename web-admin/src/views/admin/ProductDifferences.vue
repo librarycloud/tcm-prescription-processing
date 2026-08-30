@@ -866,7 +866,7 @@ onMounted(async () => {
 
 .summary-band {
   border: 1px solid var(--app-border);
-  background: #fff;
+  background: var(--el-bg-color);
 }
 
 .summary-band button {

@@ -631,7 +631,7 @@ onMounted(async () => {
 .notification-tabs {
   padding: 0 16px 16px;
   border: 1px solid var(--app-border);
-  background: #fff;
+  background: var(--el-bg-color);
 }
 .event-toolbar,
 .log-filters {
@@ -660,7 +660,7 @@ onMounted(async () => {
   padding: 12px;
   overflow: auto;
   border: 1px solid var(--app-border);
-  background: #f8fafc;
+  background: var(--el-fill-color-light);
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;

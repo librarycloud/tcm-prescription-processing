@@ -220,7 +220,7 @@ watch(
   width: 100%;
   padding: 12px;
   border: 1px solid var(--app-border);
-  background: #f8fafc;
+  background: var(--el-fill-color-light);
   line-height: 1.7;
 }
 

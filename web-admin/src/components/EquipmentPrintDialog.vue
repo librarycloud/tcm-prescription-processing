@@ -95,7 +95,7 @@ watch(
 function appendPrintStyles(targetDocument) {
   const template = activeTemplate.value;
   const style = targetDocument.createElement('style');
-  style.textContent = `${printLabelCss}\n@page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0; }\nhtml, body { margin: 0; padding: 0; background: #fff; }\n.label-copy { break-after: page; page-break-after: always; }\n.label-copy:last-child { break-after: auto; page-break-after: auto; }\n.print-label { border: 0 !important; }`;
+  style.textContent = `${printLabelCss}\n@page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0; }\nhtml, body { margin: 0; padding: 0; background: var(--el-bg-color); }\n.label-copy { break-after: page; page-break-after: always; }\n.label-copy:last-child { break-after: auto; page-break-after: auto; }\n.print-label { border: 0 !important; }`;
   targetDocument.head.appendChild(style);
 }
 
@@ -131,11 +131,11 @@ async function printLabels() {
   place-items: center;
   min-height: 260px;
   overflow: auto;
-  background: #f5f7fa;
+  background: var(--el-bg-color-page);
   border: 1px solid var(--app-border);
 }
 
 .label-copy {
-  background: #fff;
+  background: var(--el-bg-color);
 }
 </style>

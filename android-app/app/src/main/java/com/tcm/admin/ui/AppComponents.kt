@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -84,7 +85,7 @@ private val RunnerColor = Color(0xFFF59E0B)
 private val RunnerSoftColor = Color(0xFFFEF3C7)
 private val CourierColor = Color(0xFF8B5CF6)
 private val CourierSoftColor = Color(0xFFF5F3FF)
-internal val CardBorderColor = Color(0xFFE2E8F0)
+internal val CardBorderColor: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
 internal val CardShape = RoundedCornerShape(12.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
@@ -181,6 +182,8 @@ internal fun StatusPill(
             Pair(Info, InfoSoft)
         text in listOf("实货少", "已取消", "逾期", "已逾期", "紧急", "特急", "加急") ->
             Pair(Danger, DangerSoft)
+        text in listOf("全局管理员", "门店管理员", "门店员工", "管理员") ->
+            Pair(PrimaryDark, Color(0xFFE0E7FF)) // Calmer elegant blue/indigo
         text in listOf("加工中", "实货多", "进行中") ->
             Pair(Primary, PrimarySoft)
         else ->
@@ -285,7 +288,7 @@ internal fun AppCard(
     Card(
         modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
         shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, CardBorderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
@@ -578,5 +581,36 @@ internal fun InfoRowItem(
             fontSize = 12.5.sp,
             fontWeight = if (isBold) FontWeight.SemiBold else FontWeight.Normal,
         )
+    }
+}
+
+@Composable
+internal fun LoadingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    text: String = "确定",
+    loadingText: String = "提交中...",
+    colors: androidx.compose.material3.ButtonColors = ButtonDefaults.buttonColors(containerColor = Primary),
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled && !loading,
+        modifier = modifier,
+        shape = FieldShape,
+        colors = colors,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = Color.White,
+                strokeWidth = 2.dp,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(loadingText, fontSize = 14.sp)
+        } else {
+            Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 }

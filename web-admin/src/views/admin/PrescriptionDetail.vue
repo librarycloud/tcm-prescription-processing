@@ -1026,7 +1026,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 70vh;
   border: 0;
-  background: #fff;
+  background: var(--el-bg-color);
 }
 
 .form-grid {

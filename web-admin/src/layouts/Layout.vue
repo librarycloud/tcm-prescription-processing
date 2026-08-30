@@ -77,6 +77,7 @@
             <el-dropdown-menu>
               <el-dropdown-item disabled>{{ userStore.user?.phone || '-' }}</el-dropdown-item>
               <el-dropdown-item command="profile">个人资料</el-dropdown-item>
+              <el-dropdown-item command="toggleTheme">{{ themeStore.isDark ? "切换亮色" : "切换暗色" }}</el-dropdown-item>
               <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -124,6 +125,7 @@ import {
   UserFilled
 } from '@element-plus/icons-vue';
 import avatar from '@/assets/avatar.svg';
+import { useThemeStore } from "@/stores/theme";
 import { useUserStore } from '@/stores/user';
 import { logout as logoutApi } from '@/api/login';
 import { roleText } from '@/utils/permission';
@@ -131,6 +133,7 @@ import { roleText } from '@/utils/permission';
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+const themeStore = useThemeStore();
 const isMobile = ref(window.innerWidth <= 768);
 const collapsed = ref(window.innerWidth <= 1024 && window.innerWidth > 768);
 const mobileMenuOpen = ref(false);
@@ -253,6 +256,11 @@ function handleMenuSelect() {
 }
 
 async function handleCommand(command) {
+  if (command === 'toggleTheme') {
+    themeStore.toggleDark();
+    return;
+  }
+
   if (command === 'profile') {
     router.push(userStore.isStoreAdmin ? '/admin/profile' : '/profile');
     return;
@@ -356,7 +364,7 @@ onBeforeUnmount(() => {
   height: 64px;
   padding: 0 24px;
   border-bottom: 1px solid var(--app-border);
-  background: #ffffff;
+  background: var(--el-bg-color);
 }
 
 .header-left {

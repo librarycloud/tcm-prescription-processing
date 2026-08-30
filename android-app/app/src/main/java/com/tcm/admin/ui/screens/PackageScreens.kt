@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -283,7 +284,7 @@ internal fun PackagesScreen(
                     Spacer(Modifier.height(10.dp))
 
                     Surface(
-                        color = Color(0xFFF9FAFB),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
                         border = BorderStroke(1.dp, CardBorderColor),
                         modifier = Modifier.fillMaxWidth(),
@@ -393,7 +394,7 @@ internal fun PackageDetailPage(
 
             // QR Code Center Box
             Surface(
-                color = Color(0xFFF9FAFB),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = FieldShape,
                 border = BorderStroke(1.dp, CardBorderColor),
                 modifier = Modifier.fillMaxWidth(),
@@ -427,7 +428,7 @@ internal fun PackageDetailPage(
             if (pkg.info.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
                 Surface(
-                    color = Color(0xFFF9FAFB),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(6.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -507,6 +508,7 @@ internal fun PackageFormScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
@@ -656,6 +658,7 @@ internal fun PackageVerifyScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {

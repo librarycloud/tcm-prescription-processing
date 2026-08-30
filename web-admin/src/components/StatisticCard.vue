@@ -97,27 +97,27 @@ const iconComponent = computed(() => iconComponents[props.icon] || DataLine);
 
 .stat-primary {
   color: #2563eb;
-  background: #eff6ff;
+  background: var(--el-color-primary-light-9);
 }
 
 .stat-success {
   color: #16a34a;
-  background: #f0fdf4;
+  background: var(--el-color-success-light-9);
 }
 
 .stat-warning {
   color: #d97706;
-  background: #fffbeb;
+  background: var(--el-color-warning-light-9);
 }
 
 .stat-danger {
   color: #dc2626;
-  background: #fef2f2;
+  background: var(--el-color-danger-light-9);
 }
 
 .stat-info {
   color: #475569;
-  background: #f8fafc;
+  background: var(--el-fill-color-light);
 }
 
 .stat-label {

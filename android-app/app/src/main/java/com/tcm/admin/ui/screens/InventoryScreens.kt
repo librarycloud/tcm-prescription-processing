@@ -252,7 +252,7 @@ internal fun InventoryScreen(
                 }
 
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = Color(0xFFF2F3F5))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(Modifier.height(8.dp))
 
                 InfoRowItem("条形码", product.displayField("barcode"))
@@ -346,7 +346,7 @@ internal fun InventoryScreen(
                     }
 
                     Spacer(Modifier.height(8.dp))
-                    HorizontalDivider(color = Color(0xFFF2F3F5))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(Modifier.height(6.dp))
 
                     Row(

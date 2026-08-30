@@ -99,7 +99,7 @@ async function handleLogin() {
   padding: 34px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--el-bg-color);
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
 }
 

@@ -5,5 +5,12 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
+import { useThemeStore } from '@/stores/theme';
+
+const themeStore = useThemeStore();
+onMounted(() => {
+  themeStore.initTheme();
+});
 </script>

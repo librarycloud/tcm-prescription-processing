@@ -208,7 +208,7 @@ internal fun HerbsScreen(
                                         onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
                                     },
                                 shape = FieldShape,
-                                color = Color(0xFFF9FAFB),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 border = BorderStroke(1.dp, CardBorderColor),
                             ) {
                                 Row(
@@ -358,7 +358,7 @@ internal fun HerbLocationAssignScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         currentHerbs.forEach { herb ->
                             Surface(
-                                color = Color(0xFFF9FAFB),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = FieldShape,
                                 border = BorderStroke(1.dp, CardBorderColor),
                             ) {

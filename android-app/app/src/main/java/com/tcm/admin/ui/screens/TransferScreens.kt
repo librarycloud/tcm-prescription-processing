@@ -215,7 +215,7 @@ internal fun TransfersScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Surface(
-                    color = Color(0xFFF9FAFB),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = FieldShape,
                     border = BorderStroke(1.dp, CardBorderColor),
                     modifier = Modifier.fillMaxWidth(),

@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -133,27 +135,47 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
         loading = false
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader("E6诊所处方导入", "核对E6订单，确认后生成处方与加工计划")
         Spacer(Modifier.height(12.dp))
-        Surface(
-            color = Color(0xFFEFF6FF), shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(1.dp, Color(0xFFBFDBFE)), modifier = Modifier.fillMaxWidth(),
+        SearchBarField(
+            value = keyword,
+            onValueChange = { keyword = it },
+            placeholder = "搜索订单号、顾客、电话或医师编码",
+            onSearch = { reload++ },
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.padding(12.dp)) {
-                OutlinedTextField(
-                    value = keyword, onValueChange = { keyword = it }, modifier = Modifier.fillMaxWidth(),
-                    singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) },
-                    placeholder = { Text("订单号、顾客、电话或医师编码") }, shape = FieldShape,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(orderDate, { orderDate = it }, Modifier.weight(1f), singleLine = true, label = { Text("订单日期") }, shape = FieldShape)
-                    TextButton(onClick = { orderDate = "" }) { Text("全部日期") }
-                    OutlinedButton(onClick = { reload++ }, modifier = Modifier.height(SearchControlHeight), shape = FieldShape) {
-                        Icon(Icons.Default.Refresh, null, Modifier.width(17.dp)); Spacer(Modifier.width(4.dp)); Text("刷新")
-                    }
-                }
+            SegmentedButton(
+                label = if (orderDate == LocalDate.now().toString()) "今日订单" else "今日",
+                selected = orderDate == LocalDate.now().toString(),
+                onClick = { orderDate = LocalDate.now().toString() },
+            )
+            SegmentedButton(
+                label = "全部日期",
+                selected = orderDate.isBlank(),
+                onClick = { orderDate = "" },
+            )
+            OutlinedTextField(
+                value = orderDate,
+                onValueChange = { orderDate = it },
+                modifier = Modifier.weight(1f).height(SearchControlHeight),
+                singleLine = true,
+                placeholder = { Text("YYYY-MM-DD", fontSize = 12.sp) },
+                shape = FieldShape,
+            )
+            OutlinedButton(
+                onClick = { reload++ },
+                modifier = Modifier.height(SearchControlHeight),
+                shape = FieldShape,
+            ) {
+                Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("刷新", fontSize = 12.sp)
             }
         }
         notice?.let { Text(it, color = Success, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp)) }
@@ -199,20 +221,50 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
 
 @Composable
 private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolean, onSelect: (Boolean) -> Unit, onDetail: () -> Unit, onConfirm: () -> Unit, onRevalidate: () -> Unit, onReject: () -> Unit) {
+    val isPaid = item.optInt("isPaid", 0) == 1
+    val paidText = if (isPaid) "已付款" else "未付款"
+    val orderNo = item.displayField("externalOrderNo", "-")
+    val phone = maskPhone(item.optString("phone"))
+
     AppCard(onClick = onDetail) {
         Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
             androidx.compose.material3.Checkbox(checked = selected, enabled = selectable, onCheckedChange = onSelect)
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.displayField("externalOrderNo", "E6订单"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                    Spacer(Modifier.width(8.dp)); StatusPill(e6StatusLabel(item.optInt("status", -1)))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = item.displayField("customerName", "未填写顾客"),
+                        color = Ink,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        StatusPill(paidText)
+                        StatusPill(e6StatusLabel(item.optInt("status", -1)))
+                    }
                 }
-                Spacer(Modifier.height(5.dp))
-                Text("${item.displayField("customerName", "未填写顾客")} · ${maskPhone(item.optString("phone"))}", color = RegularText, fontSize = 13.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "$phone  ·  单号：$orderNo",
+                    color = RegularText,
+                    fontSize = 12.5.sp,
+                )
                 Spacer(Modifier.height(3.dp))
-                Text("${e6Date(item.optString("sourceCreatedAt"))}  ·  ${item.optInt("doseCount", 0)}剂  ·  ¥${e6Money(item.opt("totalPrice"))}", color = Muted, fontSize = 12.sp)
-                item.optJSONObject("doctorMapping")?.optJSONObject("doctor")?.displayField("name")?.let { mapped -> Text("系统医生：$mapped", color = Muted, fontSize = 12.sp) }
-                if (item.optString("errorMessage").isNotBlank()) Text(item.optString("errorMessage"), color = Danger, fontSize = 12.sp, maxLines = 2)
+                Text(
+                    text = "${e6Date(item.optString("sourceCreatedAt"))}  ·  ${item.optInt("doseCount", 0)}剂  ·  ¥${e6Money(item.opt("totalPrice"))}",
+                    color = Muted,
+                    fontSize = 12.sp,
+                )
+                item.optJSONObject("doctorMapping")?.optJSONObject("doctor")?.displayField("name")?.let { mapped ->
+                    Text("系统医生：$mapped", color = Muted, fontSize = 12.sp)
+                }
+                if (item.optString("errorMessage").isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(item.optString("errorMessage"), color = Danger, fontSize = 12.sp, maxLines = 2)
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -256,7 +308,7 @@ internal fun E6ImportDetailScreen(
         loading = false
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader("订单详情", "核对原始订单、处方和加工计划")
         Spacer(Modifier.height(12.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
@@ -370,7 +422,7 @@ internal fun E6ImportConfirmScreen(
     val validBatches = totalDose > 0 && allocatedDose == totalDose && batches.isNotEmpty() && batches.all { it.dose.toIntOrNull()?.let { value -> value > 0 } == true && it.date.isNotBlank() }
     val canSubmit = !loading && (hasPrescription || doctorId > 0) && processTypeId > 0 && validBatches && (!isDecoction || (bagsPerDose.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true))
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader(if (mergeIds.size > 1) "合并订单并生成处方" else "确认导入并生成加工计划", if (mergeIds.size > 1) "已选择 ${mergeIds.size} 个E6订单" else "核对信息后提交，生成处方和加工计划")
         Spacer(Modifier.height(12.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
@@ -417,42 +469,58 @@ internal fun E6ImportConfirmScreen(
         Spacer(Modifier.height(12.dp)); AppCard {
             Text("取货方式 *", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp); Spacer(Modifier.height(7.dp)); Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) { listOf("自提", "跑腿", "快递").forEachIndexed { index, label -> SegmentedButton(label, pickupMethod == index, { pickupMethod = index }) } }
         }
-        Spacer(Modifier.height(16.dp)); Button(enabled = canSubmit, onClick = {
-            loading = true; error = null
-            val batchPayloads = JSONArray()
-            batches.forEach { batch ->
-                val batchDose = batch.dose.toIntOrNull() ?: 0
-                val batchPayload = JSONObject()
-                    .put("totalDose", batchDose)
-                    .put("scheduleType", 1)
-                    .put("processDate", batch.date.trim())
-                if (isDecoction) {
-                    batchPayload
-                        .put("bagCount", batchDose * (bagsPerDose.toIntOrNull() ?: 2))
-                        .put("volumeMl", volumeMl.toIntOrNull() ?: 200)
+        Spacer(Modifier.height(16.dp))
+        LoadingButton(
+            enabled = canSubmit,
+            loading = loading,
+            text = if (mergeIds.size > 1) "确认合并并生成" else "确认导入并生成加工计划",
+            loadingText = "正在生成...",
+            onClick = {
+                loading = true
+                error = null
+                val batchPayloads = JSONArray()
+                batches.forEach { batch ->
+                    val batchDose = batch.dose.toIntOrNull() ?: 0
+                    val batchPayload = JSONObject()
+                        .put("totalDose", batchDose)
+                        .put("scheduleType", 1)
+                        .put("processDate", batch.date.trim())
+                    if (isDecoction) {
+                        batchPayload
+                            .put("bagCount", batchDose * (bagsPerDose.toIntOrNull() ?: 2))
+                            .put("volumeMl", volumeMl.toIntOrNull() ?: 200)
+                    }
+                    batchPayloads.put(batchPayload)
                 }
-                batchPayloads.put(batchPayload)
-            }
-            val payload = JSONObject()
-                .put("customerName", customer.trim())
-                .put("phone", phone.trim())
-                .put("doseCount", totalDose)
-                .put("processTypeId", processTypeId)
-                .put("pickupMethod", pickupMethod)
-                .put("batches", batchPayloads)
-            if (isDecoction) {
-                payload
-                    .put("bagsPerDose", bagsPerDose.toIntOrNull() ?: 0)
-                    .put("volumeMl", volumeMl.toIntOrNull() ?: 0)
-            }
-            if (doctorId > 0) payload.put("doctorId", doctorId)
-            scope.launch {
-                runCatching { withContext(Dispatchers.IO) { if (mergeIds.size > 1) ApiClient.mergeE6Imports(payload.put("ids", JSONArray().also { ids -> mergeIds.forEach { ids.put(it) } })) else ApiClient.confirmE6Import(initial.optInt("id"), payload) } }
-                    .onSuccess { onDone() }
+                val payload = JSONObject()
+                    .put("customerName", customer.trim())
+                    .put("phone", phone.trim())
+                    .put("doseCount", totalDose)
+                    .put("processTypeId", processTypeId)
+                    .put("pickupMethod", pickupMethod)
+                    .put("batches", batchPayloads)
+                if (isDecoction) {
+                    payload
+                        .put("bagsPerDose", bagsPerDose.toIntOrNull() ?: 0)
+                        .put("volumeMl", volumeMl.toIntOrNull() ?: 0)
+                }
+                if (doctorId > 0) payload.put("doctorId", doctorId)
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            if (mergeIds.size > 1) {
+                                ApiClient.mergeE6Imports(payload.put("ids", JSONArray().also { ids -> mergeIds.forEach { ids.put(it) } }))
+                            } else {
+                                ApiClient.confirmE6Import(initial.optInt("id"), payload)
+                            }
+                        }
+                    }.onSuccess { onDone() }
                     .onFailure { error = it.message ?: "生成处方和加工计划失败" }
-                loading = false
-            }
-        }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = FieldShape, colors = ButtonDefaults.buttonColors(containerColor = Primary)) { if (loading) CircularProgressIndicator(Modifier.width(18.dp), strokeWidth = 2.dp, color = Color.White) else Text(if (mergeIds.size > 1) "确认合并并生成" else "确认导入并生成加工计划", fontWeight = FontWeight.SemiBold) }
+                    loading = false
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp)
+        )
         Spacer(Modifier.height(20.dp))
     }
 }

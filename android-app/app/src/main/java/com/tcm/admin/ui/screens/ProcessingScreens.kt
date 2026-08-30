@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -440,7 +441,7 @@ internal fun ProcessingScreenV2(
                         }
 
                         Spacer(Modifier.height(6.dp))
-                        HorizontalDivider(color = Color(0xFFF2F3F5))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(Modifier.height(5.dp))
 
                         // Detail Rows
@@ -618,7 +619,7 @@ internal fun ProcessingScreenV2(
                         }
 
                         Spacer(Modifier.height(10.dp))
-                        HorizontalDivider(color = Color(0xFFF2F3F5))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(Modifier.height(8.dp))
 
                         // Large Pickup Code Highlight
@@ -1405,7 +1406,7 @@ internal fun WorkflowOperationScreen(
     val activeSoakings = usages.filter { it.optInt("stage") == 3 && it.optInt("status") == 1 }
     val activeDecoctions = usages.filter { it.optInt("stage") == 4 && it.optInt("status") == 1 }
     val activePackagings = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
-    val usageHistory = usages.filter { it.optInt("status") != 1 }
+    val allUsageRecords = usages.sortedByDescending { it.displayField("startedAt", "") }
 
     val photos = detail?.optJSONArray("photos")
     val photoCount = photos?.length() ?: 0
@@ -1440,7 +1441,7 @@ internal fun WorkflowOperationScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFF1F5F9),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.weight(1f),
                 ) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1450,7 +1451,7 @@ internal fun WorkflowOperationScreen(
                 }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFF1F5F9),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.weight(1f),
                 ) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1461,7 +1462,7 @@ internal fun WorkflowOperationScreen(
                 if (isDecoction) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFFF1F5F9),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.weight(1.2f),
                     ) {
                         Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1641,7 +1642,7 @@ internal fun WorkflowOperationScreen(
                             op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
                         } ?: "-"
                         Surface(
-                            color = Color(0xFFF8FAFC),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
                             border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1723,7 +1724,7 @@ internal fun WorkflowOperationScreen(
                         val equipment = item.optJSONObject("equipment")?.displayField("name", "浸泡桶") ?: "浸泡桶"
                         val portion = item.optInt("portionNo", 1)
                         Surface(
-                            color = Color(0xFFF8FAFC),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
                             border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1760,7 +1761,7 @@ internal fun WorkflowOperationScreen(
                             op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
                         } ?: "-"
                         Surface(
-                            color = Color(0xFFF8FAFC),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
                             border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1828,7 +1829,7 @@ internal fun WorkflowOperationScreen(
                         val equipment = item.optJSONObject("equipment")?.displayField("name", "煎药机") ?: "煎药机"
                         val usageId = item.optInt("id")
                         Surface(
-                            color = Color(0xFFF8FAFC),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
                             border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1865,7 +1866,7 @@ internal fun WorkflowOperationScreen(
                             op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
                         } ?: "-"
                         Surface(
-                            color = Color(0xFFF8FAFC),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
                             border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1889,48 +1890,87 @@ internal fun WorkflowOperationScreen(
             }
         }
 
-        // 设备工序记录（底部工序历史）
-        if (usageHistory.isNotEmpty()) {
+        // 设备工序记录（展示进行中与历史记录）
+        if (allUsageRecords.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Text("设备工序记录", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
-                Spacer(Modifier.height(8.dp))
-                usageHistory.forEach { item ->
-                    val stageText = when (item.optInt("stage")) { 3 -> "浸泡"; 4 -> "煎煮"; 5 -> "打包"; else -> "设备" }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("设备工序记录", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                    Text("共 ${allUsageRecords.size} 条记录", color = Muted, fontSize = 12.sp)
+                }
+                Spacer(Modifier.height(10.dp))
+                allUsageRecords.forEach { item ->
+                    val stage = item.optInt("stage")
+                    val stageText = when (stage) { 3 -> "浸泡"; 4 -> "煎煮"; 5 -> "打包"; else -> "工序" }
                     val equipment = item.optJSONObject("equipment")?.displayField("name", "设备") ?: "设备"
-                    val statusText = when (item.optInt("status")) { 2 -> "已完成"; 3 -> "已作废"; else -> "进行中" }
+                    val statusCode = item.optInt("status")
+                    val isRunning = statusCode == 1
+                    val isSuccess = statusCode == 2
+                    val isVoid = statusCode == 3
+                    val statusText = when {
+                        isRunning -> "进行中"
+                        isSuccess -> "已完成"
+                        isVoid -> "已作废"
+                        else -> "未知"
+                    }
                     val operator = item.optJSONObject("operator")?.let { op ->
                         op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
                     } ?: "-"
                     val voidReason = item.displayField("voidReason", "")
+                    val startTime = item.displayField("startedAt", "").take(16).replace("T", " ")
+                    val endTime = item.displayField("endedAt", "").take(16).replace("T", " ").ifBlank { if (isRunning) "进行中..." else "-" }
 
                     Surface(
-                        color = Color(0xFFF8FAFC),
+                        color = if (isRunning) PrimarySoft.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
-                        border = BorderStroke(1.dp, CardBorderColor),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        border = BorderStroke(1.dp, if (isRunning) Primary.copy(alpha = 0.4f) else CardBorderColor),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.5.dp),
                     ) {
-                        Column(Modifier.padding(10.dp)) {
+                        Column(Modifier.padding(11.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("$stageText · 第 ${item.optInt("portionNo", 1)} 组 · $equipment", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(statusText, color = if (item.optInt("status") == 2) Success else Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                    Text("用时 " + processingDuration(item.displayField("startedAt", ""), item.displayField("endedAt", "")), color = PrimaryDark, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        color = if (isRunning) Primary else if (isSuccess) Success else Danger,
+                                        shape = RoundedCornerShape(3.dp),
+                                        modifier = Modifier.size(width = 3.5.dp, height = 14.dp),
+                                    ) {}
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "$stageText · 第 ${item.optInt("portionNo", 1)} 组 · $equipment",
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Ink,
+                                        fontSize = 13.5.sp,
+                                    )
                                 }
+                                StatusPill(statusText)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("时段：$startTime → $endTime", color = Muted, fontSize = 11.5.sp)
+                                Text(
+                                    if (isRunning) "已用时 " + processingDuration(item.displayField("startedAt", ""), "")
+                                    else "用时 " + processingDuration(item.displayField("startedAt", ""), item.displayField("endedAt", "")),
+                                    color = if (isRunning) PrimaryDark else Ink,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
                             }
                             Spacer(Modifier.height(2.dp))
-                            Text(
-                                "时间：${item.displayField("startedAt", "").take(16).replace("T", " ")} → ${item.displayField("endedAt", "").take(16).replace("T", " ").ifBlank { "完成" }}",
-                                color = Muted,
-                                fontSize = 11.sp,
-                            )
-                            Text("操作人：$operator", color = Muted, fontSize = 11.sp)
+                            Text("操作人：$operator", color = Muted, fontSize = 11.5.sp)
                             if (voidReason.isNotBlank()) {
-                                Text("作废原因：$voidReason", color = Danger, fontSize = 11.sp)
+                                Spacer(Modifier.height(2.dp))
+                                Text("作废原因：$voidReason", color = Danger, fontSize = 11.5.sp)
                             }
                         }
                     }

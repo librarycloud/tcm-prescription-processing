@@ -194,7 +194,7 @@ async function saveUsageMethod() {
 function appendPrintStyles(targetDocument) {
   const template = activeTemplate.value;
   const style = targetDocument.createElement('style');
-  style.textContent = `${printLabelCss}\n@page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0 !important; }\nhtml, body { width: ${template.widthMm}mm; margin: 0 !important; padding: 0 !important; background: #fff; }\n.print-area { display: block; width: ${template.widthMm}mm; margin: 0 !important; padding: 0 !important; }\n.label-copy { width: ${template.widthMm}mm; height: ${template.heightMm}mm; margin: 0 !important; padding: 0 !important; overflow: hidden; break-after: page; page-break-after: always; }\n.label-copy:last-child { break-after: auto; page-break-after: auto; }\n.print-label { margin: 0 !important; border: 0 !important; }`;
+  style.textContent = `${printLabelCss}\n@page { size: ${template.widthMm}mm ${template.heightMm}mm; margin: 0 !important; }\nhtml, body { width: ${template.widthMm}mm; margin: 0 !important; padding: 0 !important; background: var(--el-bg-color); }\n.print-area { display: block; width: ${template.widthMm}mm; margin: 0 !important; padding: 0 !important; }\n.label-copy { width: ${template.widthMm}mm; height: ${template.heightMm}mm; margin: 0 !important; padding: 0 !important; overflow: hidden; break-after: page; page-break-after: always; }\n.label-copy:last-child { break-after: auto; page-break-after: auto; }\n.print-label { margin: 0 !important; border: 0 !important; }`;
   targetDocument.head.appendChild(style);
 }
 
@@ -268,7 +268,7 @@ async function printLabels() {
   min-height: 300px;
   padding: 28px;
   overflow: auto;
-  background: #f3f4f6;
+  background: var(--el-bg-color-page);
   border: 1px solid var(--app-border);
   border-radius: 8px;
 }
