@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +69,7 @@ internal fun ProfileScreen(
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onEntered: () -> Unit,
+    scrollState: ScrollState,
     onSessionUpdated: (AdminSession) -> Unit,
 ) {
     val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
@@ -85,7 +87,7 @@ internal fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         Card(

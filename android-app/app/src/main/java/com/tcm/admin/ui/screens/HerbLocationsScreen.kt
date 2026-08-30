@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,43 +56,75 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+@Stable
+internal class HerbsListState(val scrollState: ScrollState) {
+    var stores by mutableStateOf<List<JSONObject>>(emptyList())
+    var selectedStoreId by mutableStateOf<String?>(null)
+    var data by mutableStateOf<JSONObject?>(null)
+    var keyword by mutableStateOf("")
+    var type by mutableStateOf("")
+    var error by mutableStateOf<String?>(null)
+    var reload by mutableStateOf(0)
+    var storesLoaded by mutableStateOf(false)
+    var loadedQueryKey by mutableStateOf<String?>(null)
+
+    fun invalidate() {
+        loadedQueryKey = null
+        reload++
+    }
+}
+
+@Composable
+internal fun rememberHerbsListState(): HerbsListState {
+    val scrollState = rememberScrollState()
+    return remember { HerbsListState(scrollState) }
+}
+
 @Composable
 internal fun HerbsScreen(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit,
+    listState: HerbsListState,
 ) {
     val showStore = user?.optInt("role", -1) == 0
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var selectedStoreId by remember { mutableStateOf<String?>(null) }
-    var data by remember { mutableStateOf<JSONObject?>(null) }
-    var keyword by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    var stores by listState::stores
+    var selectedStoreId by listState::selectedStoreId
+    var data by listState::data
+    var keyword by listState::keyword
+    var type by listState::type
+    var error by listState::error
+    var reload by listState::reload
 
     LaunchedEffect(showStore) {
+        if (listState.storesLoaded) return@LaunchedEffect
         if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
+                listState.storesLoaded = true
                 if (stores.size == 1) selectedStoreId = stores.first().displayField("id", "")
             }
     }
 
     LaunchedEffect(selectedStoreId, keyword, type, reload) {
+        val queryKey = listOf(selectedStoreId.orEmpty(), keyword, type).joinToString("|")
+        if (listState.loadedQueryKey == queryKey && data != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
                 ApiClient.herbLocationMatrix(selectedStoreId?.toIntOrNull(), keyword, type)
             }
-        }.onSuccess { data = it }
+        }.onSuccess {
+            data = it
+            listState.loadedQueryKey = queryKey
+        }
             .onFailure { error = it.message ?: "加载斗谱失败" }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(listState.scrollState)
             .padding(16.dp),
     ) {
         Row(
@@ -218,8 +255,9 @@ internal fun HerbsScreen(
                                 ) {
                                     Column(Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
+                                            SearchHighlightedText(
                                                 text = code,
+                                                keyword = keyword,
                                                 modifier = Modifier.weight(1f),
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontSize = 13.sp,
@@ -233,8 +271,9 @@ internal fun HerbsScreen(
                                                 shape = RoundedCornerShape(5.dp),
                                                 border = BorderStroke(1.dp, Primary.copy(alpha = 0.35f)),
                                             ) {
-                                                Text(
+                                                SearchHighlightedText(
                                                     text = positionLabel(loc),
+                                                    keyword = keyword,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                                     color = PrimaryDark,
                                                     fontSize = 10.sp,
@@ -253,11 +292,14 @@ internal fun HerbsScreen(
                                         if (herbs.length() == 0) {
                                             Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
                                         } else {
-                                            val herbNames = (0 until herbs.length())
-                                                .map { herbs.getJSONObject(it).displayField("name") }
-                                                .joinToString("、")
                                             Text(
-                                                text = herbNames,
+                                                text = buildAnnotatedString {
+                                                    (0 until herbs.length()).forEach { index ->
+                                                        if (index > 0) append("、")
+                                                        val name = herbs.getJSONObject(index).displayField("name")
+                                                        append(searchHighlightedText(name, keyword, PrimarySoft, PrimaryDark, matchPinyin = true))
+                                                    }
+                                                },
                                                 color = RegularText,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Medium,
@@ -275,6 +317,72 @@ internal fun HerbsScreen(
 
         Spacer(Modifier.height(16.dp))
     }
+}
+
+@Composable
+private fun SearchHighlightedText(
+    text: String,
+    keyword: String,
+    modifier: Modifier = Modifier,
+    color: Color,
+    fontWeight: FontWeight? = null,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    matchPinyin: Boolean = false,
+) {
+    Text(
+        text = searchHighlightedText(text, keyword, PrimarySoft, PrimaryDark, matchPinyin),
+        modifier = modifier,
+        color = color,
+        fontWeight = fontWeight,
+        fontSize = fontSize,
+        maxLines = maxLines,
+        overflow = overflow,
+    )
+}
+
+private fun searchHighlightedText(
+    value: String,
+    keyword: String,
+    highlightBackground: Color,
+    highlightColor: Color,
+    matchPinyin: Boolean = false,
+): AnnotatedString = buildAnnotatedString {
+    val text = value
+    val query = keyword.trim()
+    if (query.isBlank()) {
+        append(text)
+        return@buildAnnotatedString
+    }
+
+    val normalizedText = text.lowercase()
+    val normalizedQuery = query.lowercase()
+    var matchStart = normalizedText.indexOf(normalizedQuery)
+    if (matchStart >= 0) {
+        var cursor = 0
+        while (matchStart >= 0) {
+            append(text.substring(cursor, matchStart))
+            pushStyle(SpanStyle(color = highlightColor, background = highlightBackground, fontWeight = FontWeight.SemiBold))
+            append(text.substring(matchStart, matchStart + query.length))
+            pop()
+            cursor = matchStart + query.length
+            matchStart = normalizedText.indexOf(normalizedQuery, cursor)
+        }
+        append(text.substring(cursor))
+        return@buildAnnotatedString
+    }
+
+    val range = if (matchPinyin) pinyinInitialMatchRange(text, query) else null
+    if (range == null) {
+        append(text)
+        return@buildAnnotatedString
+    }
+    append(text.substring(0, range.first))
+    pushStyle(SpanStyle(color = highlightColor, background = highlightBackground, fontWeight = FontWeight.SemiBold))
+    append(text.substring(range))
+    pop()
+    append(text.substring(range.last + 1))
 }
 
 @Composable
@@ -481,6 +589,7 @@ internal fun HerbLocationAssignScreen(
                 val filteredHerbs = herbs.filter { herb ->
                     needle.isNotBlank() && listOf(
                         herb.displayField("name", ""),
+                        pinyinInitials(herb.displayField("name", "")),
                         herb.displayField("code", ""),
                         herb.displayField("specification", ""),
                     )
@@ -508,7 +617,14 @@ internal fun HerbLocationAssignScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                    Text(herb.displayField("name"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        SearchHighlightedText(
+                                            text = herb.displayField("name"),
+                                            keyword = herbKeyword,
+                                            color = Ink,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp,
+                                            matchPinyin = true,
+                                        )
                                         Text(
                                             listOf(
                                                 herb.displayField("code", ""),

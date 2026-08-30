@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -43,6 +44,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,23 +91,29 @@ private fun FakeQr(value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PackagesScreen(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit,
+    scrollState: ScrollState,
 ) {
+    val listOwner = "packages"
     val showStore = user?.optInt("role", -1) == 0
-    var status by remember { mutableStateOf<Int?>(null) } // null=全部, 0=待取, 1=已取
-    var sortBy by remember { mutableStateOf("createdAt") } // "createdAt" | "pickedAt"
-    var keyword by remember { mutableStateOf("") }
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var selectedStoreId by remember { mutableStateOf("") }
-    var items by remember { mutableStateOf<List<PackageItem>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var status by rememberRetainedListValue(listOwner, "status") { null as Int? } // null=全部, 0=待取, 1=已取
+    var sortBy by rememberRetainedListValue(listOwner, "sortBy") { "createdAt" } // "createdAt" | "pickedAt"
+    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var items by rememberRetainedListValue(listOwner, "items") { null as List<PackageItem>? }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
     var loading by remember { mutableStateOf(false) }
-    var reload by remember { mutableStateOf(0) }
-    var page by remember { mutableStateOf(1) }
-    var pages by remember { mutableStateOf(1) }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
+    var refreshing by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -117,15 +126,19 @@ internal fun PackagesScreen(
     }
 
     LaunchedEffect(showStore) {
+        if (storesLoaded) return@LaunchedEffect
         if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
+                storesLoaded = true
                 if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
             }
     }
 
     LaunchedEffect(status, sortBy, keyword, selectedStoreId, reload, page) {
+        val queryKey = listOf(status, sortBy, keyword, selectedStoreId, reload, page).joinToString("|")
+        if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
         error = null
         loading = true
         runCatching {
@@ -148,16 +161,30 @@ internal fun PackagesScreen(
                 items = emptyList()
             }
             loading = false
+            refreshing = false
+            loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载包裹列表失败"
             loading = false
+            refreshing = false
         }
     }
 
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            if (!refreshing) {
+                refreshing = true
+                ApiClient.clearResponseCache(context)
+                reload++
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         // Top action bar
@@ -261,89 +288,13 @@ internal fun PackagesScreen(
             AppEmptyState("暂无匹配包裹")
         } else {
             items.orEmpty().forEach { item ->
-                AppCard(
+                PackageSummaryCard(
+                    item = item,
+                    showStore = showStore,
                     modifier = Modifier.padding(bottom = 12.dp),
                     onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = item.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = Ink,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            StatusPill(text = item.method)
-                            StatusPill(text = item.status)
-                        }
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = FieldShape,
-                        border = BorderStroke(1.dp, CardBorderColor),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column {
-                                Text("取货码", color = Muted, fontSize = 11.sp)
-                                Text(
-                                    text = formatPickupCode(item.code),
-                                    color = PrimaryDark,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("收件人", color = Muted, fontSize = 11.sp)
-                                Text(
-                                    text = "${item.customer} · ${maskPhone(item.phone)}",
-                                    color = Ink,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    if (showStore && item.store.isNotBlank()) {
-                        InfoRowItem(label = "所属门店", value = item.store)
-                    }
-                    InfoRowItem(label = "记录时间", value = item.time)
-                    item.info.takeIf { it.isNotBlank() }?.let {
-                        InfoRowItem(label = "备注", value = it)
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        if (item.statusCode == 0) {
-                            Button(
-                                onClick = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
-                                shape = FieldShape,
-                                colors = ButtonDefaults.buttonColors(containerColor = Success),
-                            ) {
-                                Text("快速核销")
-                            }
-                            Spacer(Modifier.width(8.dp))
-                        }
-                    }
-                }
+                    onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
+                )
             }
 
             if (pages > 1) {
@@ -357,6 +308,100 @@ internal fun PackagesScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+    }
+    }
+}
+
+@Composable
+internal fun PackageSummaryCard(
+    item: PackageItem,
+    showStore: Boolean,
+    onClick: () -> Unit,
+    onVerify: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AppCard(
+        modifier = modifier,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = item.name,
+                modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = Ink,
+            )
+            Spacer(Modifier.width(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                StatusPill(text = item.method)
+                StatusPill(text = item.status)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = FieldShape,
+            border = BorderStroke(1.dp, CardBorderColor),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("取货码", color = Muted, fontSize = 11.sp)
+                    Text(
+                        text = formatPickupCode(item.code),
+                        color = PrimaryDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("收件人", color = Muted, fontSize = 11.sp)
+                    Text(
+                        text = "${item.customer} · ${maskPhone(item.phone)}",
+                        color = Ink,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        if (showStore && item.store.isNotBlank()) {
+            InfoRowItem(label = "所属门店", value = item.store)
+        }
+        InfoRowItem(label = "记录时间", value = item.time)
+        item.info.takeIf { it.isNotBlank() }?.let {
+            InfoRowItem(label = "备注", value = it)
+        }
+
+        if (item.statusCode == 0) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Button(
+                    onClick = onVerify,
+                    shape = FieldShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 5.dp),
+                ) {
+                    Text("快速核销", fontSize = 12.sp)
+                }
+            }
+        }
     }
 }
 
@@ -391,7 +436,7 @@ internal fun PackageDetailPage(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
             // QR Code Center Box
             Surface(
@@ -401,7 +446,7 @@ internal fun PackageDetailPage(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     FakeQr(pkg.pickupQrContent.ifBlank { pkg.code })
@@ -416,7 +461,7 @@ internal fun PackageDetailPage(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
             InfoRowItem(label = "收件客户", value = pkg.customer)
             InfoRowItem(label = "联系电话", value = maskPhone(pkg.phone))
@@ -437,7 +482,7 @@ internal fun PackageDetailPage(
                         text = "备注：${pkg.info}",
                         color = RegularText,
                         fontSize = 12.sp,
-                        modifier = Modifier.padding(10.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                     )
                 }
             }

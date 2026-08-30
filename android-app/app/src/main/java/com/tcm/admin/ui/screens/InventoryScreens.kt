@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,20 +57,26 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InventoryScreen(
     user: JSONObject?,
     initialQuery: String = "",
+    scrollState: ScrollState,
 ) {
+    val listOwner = "inventory:$initialQuery"
     val showStore = user?.optInt("role", -1) == 0
-    var query by remember(initialQuery) { mutableStateOf(initialQuery) }
-    var products by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var selectedStoreId by remember { mutableStateOf("") }
+    var query by rememberRetainedListValue(listOwner, "query") { initialQuery }
+    var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
     var selectedProduct by remember { mutableStateOf<JSONObject?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
     var loading by remember { mutableStateOf(false) }
-    var searchRequest by remember(initialQuery) { mutableStateOf(if (initialQuery.isBlank()) 0 else 1) }
+    var refreshing by remember { mutableStateOf(false) }
+    var searchRequest by rememberRetainedListValue(listOwner, "searchRequest") { if (initialQuery.isBlank()) 0 else 1 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
     val context = LocalContext.current
 
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -79,16 +88,20 @@ internal fun InventoryScreen(
     }
 
     LaunchedEffect(showStore) {
+        if (storesLoaded) return@LaunchedEffect
         if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
+                storesLoaded = true
                 if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
             }
     }
 
     LaunchedEffect(searchRequest, selectedStoreId) {
         if (searchRequest == 0) return@LaunchedEffect
+        val queryKey = listOf(searchRequest, query, selectedStoreId).joinToString("|")
+        if (loadedQueryKey == queryKey && products != null) return@LaunchedEffect
         error = null
         selectedProduct = null
         loading = true
@@ -103,9 +116,12 @@ internal fun InventoryScreen(
                 selectedProduct = list.first()
             }
             loading = false
+            refreshing = false
+            loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载库存失败"
             loading = false
+            refreshing = false
         }
     }
 
@@ -113,10 +129,21 @@ internal fun InventoryScreen(
         selectedProduct = null
     }
 
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            if (!refreshing) {
+                refreshing = true
+                ApiClient.clearResponseCache(context)
+                searchRequest++
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         // Heading
@@ -445,6 +472,7 @@ internal fun InventoryScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+    }
     }
 }
 

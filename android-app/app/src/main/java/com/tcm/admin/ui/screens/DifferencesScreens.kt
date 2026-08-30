@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,14 +44,17 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 @Composable
-internal fun DifferencesScreen() {
-    var tab by remember { mutableStateOf("current") }
-    var stats by remember { mutableStateOf<JSONObject?>(null) }
-    var products by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var registerProducts by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var logs by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
+internal fun DifferencesScreen(scrollState: ScrollState) {
+    val listOwner = "differences"
+    var tab by rememberRetainedListValue(listOwner, "tab") { "current" }
+    var differenceFilter by rememberRetainedListValue(listOwner, "differenceFilter") { null as String? } // null=全部, receipt=先到货, shipment=先出货
+    var stats by rememberRetainedListValue(listOwner, "stats") { null as JSONObject? }
+    var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
+    var registerProducts by rememberRetainedListValue(listOwner, "registerProducts") { emptyList<JSONObject>() }
+    var logs by rememberRetainedListValue(listOwner, "logs") { null as List<JSONObject>? }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var writeOff by remember { mutableStateOf<Pair<JSONObject, String>?>(null) }
     var writeOffQuantity by remember { mutableStateOf("") }
     var registerVisible by remember { mutableStateOf(false) }
@@ -61,6 +65,8 @@ internal fun DifferencesScreen() {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(reload, tab) {
+        val queryKey = listOf(reload, tab).joinToString("|")
+        if (loadedQueryKey == queryKey && products != null && logs != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
@@ -70,6 +76,7 @@ internal fun DifferencesScreen() {
             stats = summary
             products = (0 until list.length()).map { list.getJSONObject(it) }
             logs = (0 until logList.length()).map { logList.getJSONObject(it) }
+            loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载库存差异失败"
         }
@@ -90,7 +97,7 @@ internal fun DifferencesScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         Row(
@@ -118,6 +125,19 @@ internal fun DifferencesScreen() {
                     "先出货未销库" to quantityText(s.optDouble("preShipmentQuantity", 0.0)),
                     "差异商品数" to s.optInt("affectedProducts", 0).toString(),
                 ),
+                selectedIndex = when (differenceFilter) {
+                    "receipt" -> 0
+                    "shipment" -> 1
+                    else -> if (tab == "current") 2 else null
+                },
+                onItemClick = { index ->
+                    tab = "current"
+                    differenceFilter = when (index) {
+                        0 -> "receipt"
+                        1 -> "shipment"
+                        else -> null
+                    }
+                },
             )
         }
 
@@ -135,7 +155,17 @@ internal fun DifferencesScreen() {
         if (tab == "current") {
             if (products == null && error == null) AppEmptyState("加载中...")
             if (products != null && products!!.isEmpty()) AppEmptyState("暂无未销账差异")
-            products.orEmpty().forEach { product ->
+            val filteredProducts = products.orEmpty().filter { product ->
+                when (differenceFilter) {
+                    "receipt" -> product.optDouble("preReceiptQuantity", 0.0) > 0
+                    "shipment" -> product.optDouble("preShipmentQuantity", 0.0) > 0
+                    else -> true
+                }
+            }
+            if (products?.isNotEmpty() == true && filteredProducts.isEmpty()) {
+                AppEmptyState("暂无符合当前筛选的差异商品")
+            }
+            filteredProducts.forEach { product ->
                 val preReceipt = product.optDouble("preReceiptQuantity", 0.0)
                 val preShipment = product.optDouble("preShipmentQuantity", 0.0)
                 val unit = product.displayField("unit")
@@ -182,23 +212,17 @@ internal fun DifferencesScreen() {
                             }
                         }
                         if (preShipment > 0) {
-                            Surface(
-                                color = DangerSoft,
-                                shape = RoundedCornerShape(6.dp),
+                            Row(
                                 modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                TextButton(
+                                    onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                 ) {
-                                    Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                    TextButton(
-                                        onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
-                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                    ) {
-                                        Text("销库销账", fontSize = 11.sp)
-                                    }
+                                    Text("销库销账", fontSize = 11.sp)
                                 }
                             }
                         }

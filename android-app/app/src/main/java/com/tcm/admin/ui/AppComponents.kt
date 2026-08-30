@@ -41,6 +41,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +59,32 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
+
+private val retainedListValues = mutableMapOf<String, MutableState<Any?>>()
+
+@Composable
+internal fun <T> rememberRetainedListValue(
+    owner: String,
+    name: String,
+    initialValue: () -> T,
+): MutableState<T> {
+    @Suppress("UNCHECKED_CAST")
+    return remember(owner, name) {
+        synchronized(retainedListValues) {
+            retainedListValues.getOrPut("$owner:$name") { mutableStateOf<Any?>(initialValue()) }
+        } as MutableState<T>
+    }
+}
+
+internal fun invalidateRetainedList(owner: String) {
+    synchronized(retainedListValues) {
+        retainedListValues["$owner:loadedQueryKey"]?.value = null
+    }
+}
+
+internal fun clearRetainedListValues() {
+    synchronized(retainedListValues) { retainedListValues.clear() }
+}
 
 // ==================== Color Palette ====================
 internal val PageBackground: Color @Composable get() = MaterialTheme.colorScheme.background

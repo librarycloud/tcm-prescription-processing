@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,11 +49,12 @@ internal fun DashboardScreen(
     stores: List<JSONObject> = emptyList(),
     selectedStoreId: String = "",
     onSelectStore: (String) -> Unit = {},
+    scrollState: ScrollState,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 18.dp),
     ) {
         // Quick Actions - 单列长条卡片
@@ -118,17 +120,21 @@ internal fun SectionTitle(text: String) {
 internal fun StatsGrid(
     items: List<Pair<String, String>>,
     onClick: (() -> Unit)? = null,
+    onItemClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null,
     columns: Int? = null,
 ) {
     val gridColumns = columns ?: if (items.size % 2 == 0 && items.size <= 4) 2 else 3
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.chunked(gridColumns).forEach { row ->
+        items.chunked(gridColumns).forEachIndexed { rowIndex, row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 val cellWeight = Modifier.weight(1f)
-                row.forEach { (label, value) ->
+                row.forEachIndexed { columnIndex, (label, value) ->
+                    val itemIndex = rowIndex * gridColumns + columnIndex
+                    val isSelected = selectedIndex == itemIndex
                     val isPositive = value != "0" && value != "-"
                     val isAlert = label.contains("逾期") || label.contains("等待") || label.contains("超时")
                     val valueColor = when {
@@ -142,10 +148,18 @@ internal fun StatsGrid(
                         modifier = Modifier
                             .then(cellWeight)
                             .height(68.dp)
-                            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            .then(
+                                when {
+                                    onItemClick != null -> Modifier.clickable { onItemClick(itemIndex) }
+                                    onClick != null -> Modifier.clickable(onClick = onClick)
+                                    else -> Modifier
+                                },
+                            ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        ),
                         shape = CardShape,
-                        border = BorderStroke(1.dp, CardBorderColor),
+                        border = BorderStroke(1.dp, if (isSelected) Primary else CardBorderColor),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
                     ) {
                         Column(

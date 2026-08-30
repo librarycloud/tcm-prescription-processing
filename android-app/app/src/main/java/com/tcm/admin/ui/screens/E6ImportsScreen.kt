@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,6 +68,22 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 private data class E6Status(val value: Int?, val label: String)
+
+internal class E6ImportsListState internal constructor(
+    val scrollState: ScrollState,
+) {
+    val keyword = mutableStateOf("")
+    val orderDate = mutableStateOf(LocalDate.now().toString())
+    val page = mutableStateOf(1)
+    var items by mutableStateOf<List<JSONObject>?>(null)
+    var loaded by mutableStateOf(false)
+}
+
+@Composable
+internal fun rememberE6ImportsListState(): E6ImportsListState {
+    val scrollState = rememberScrollState()
+    return remember(scrollState) { E6ImportsListState(scrollState) }
+}
 
 private val e6Statuses = listOf(
     E6Status(null, "全部"), E6Status(0, "待确认"), E6Status(1, "待映射"),
@@ -126,13 +144,17 @@ private fun e6Batches(totalDose: Int, count: Int): JSONArray {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
+internal fun E6ImportsScreen(
+    user: JSONObject?,
+    onNavigate: (ScreenTarget) -> Unit,
+    listState: E6ImportsListState,
+) {
     val context = LocalContext.current.applicationContext
-    var keyword by remember { mutableStateOf("") }
-    var orderDate by remember { mutableStateOf(LocalDate.now().toString()) }
+    var keyword by listState.keyword
+    var orderDate by listState.orderDate
     var datePickerOpen by remember { mutableStateOf(false) }
-    var page by remember { mutableStateOf(1) }
-    var items by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var page by listState.page
+    var items by listState::items
     var selectedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var rejectTarget by remember { mutableStateOf<JSONObject?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -151,6 +173,7 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
             val list = data.optJSONArray("list") ?: JSONArray()
             items = (0 until list.length()).map { list.getJSONObject(it) }
             ApiClient.saveE6ImportCache(context, data)
+            listState.loaded = true
             selectedIds = emptySet()
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -182,9 +205,11 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
     }
 
     LaunchedEffect(Unit) {
+        if (listState.loaded) return@LaunchedEffect
         val cached = withContext(Dispatchers.IO) { ApiClient.loadE6ImportCache(context) }
         cached?.optJSONArray("list")?.let { list ->
             items = (0 until list.length()).map { list.getJSONObject(it) }
+            listState.loaded = true
         }
         if (items == null) {
             loading = true
@@ -222,7 +247,7 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-        Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().imePadding().verticalScroll(listState.scrollState).padding(16.dp)) {
         SectionHeader("E6诊所处方导入", "核对E6订单，确认后生成处方与加工计划")
         Spacer(Modifier.height(12.dp))
         SearchBarField(
@@ -235,31 +260,50 @@ internal fun E6ImportsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Un
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
             SegmentedButton(
                 label = if (orderDate == LocalDate.now().toString()) "今日订单" else "今日",
                 selected = orderDate == LocalDate.now().toString(),
                 onClick = { page = 1; orderDate = LocalDate.now().toString() },
+                modifier = Modifier.weight(1f),
+                centerLabel = true,
             )
             SegmentedButton(
                 label = "全部日期",
                 selected = orderDate.isBlank(),
                 onClick = { page = 1; orderDate = "" },
+                modifier = Modifier.weight(1f),
+                centerLabel = true,
             )
-            OutlinedTextField(
-                value = orderDate,
-                onValueChange = {},
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(SearchControlHeight)
-                    .clickable { datePickerOpen = true },
-                singleLine = true,
-                readOnly = true,
-                placeholder = { Text("YYYY-MM-DD", fontSize = 12.sp) },
-                shape = FieldShape,
-                trailingIcon = { Icon(Icons.Default.CalendarMonth, contentDescription = "选择日期", tint = Primary) },
-            )
+                    .height(SearchControlHeight),
+            ) {
+                OutlinedTextField(
+                    value = orderDate,
+                    onValueChange = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    readOnly = true,
+                    placeholder = { Text("选择订单日期", fontSize = 12.sp) },
+                    shape = FieldShape,
+                    trailingIcon = { Icon(Icons.Default.CalendarMonth, contentDescription = "选择日期", tint = Primary) },
+                )
+                // Keep the entire field, including its trailing icon, tappable.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { datePickerOpen = true },
+                )
+            }
             OutlinedButton(
                 onClick = {
                     scope.launch {

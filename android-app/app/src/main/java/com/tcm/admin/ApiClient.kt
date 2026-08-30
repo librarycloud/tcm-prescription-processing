@@ -11,6 +11,7 @@ import okhttp3.MultipartBody
 import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionPool
 import java.security.MessageDigest
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 data class AdminSession(val token: String, val user: JSONObject)
@@ -29,9 +30,14 @@ object ApiClient {
     private const val E6_IMPORT_CACHE_KEY = "records"
     private const val RESPONSE_CACHE_PREFS = "api_response_cache"
     private const val REFERENCE_CACHE_TTL = 24 * 60 * 60 * 1000L
+    // The herb-location matrix changes only through explicit management actions.
+    // Those write requests clear the response cache, so reuse it between visits.
+    private const val HERB_LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000L
     private const val E6_CACHE_TTL = 5 * 60 * 1000L
+    private const val BUSINESS_LIST_CACHE_TTL = 10 * 60 * 1000L
+    private const val INVENTORY_CACHE_TTL = 5 * 60 * 1000L
     private const val OPERATION_CACHE_TTL = 30 * 1000L
-    private const val DETAIL_CACHE_TTL = 15 * 1000L
+    private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
     private var token: String? = null
     private var cacheContext: Context? = null
     private val memoryCache = ConcurrentHashMap<String, String>()
@@ -46,24 +52,25 @@ object ApiClient {
                 route == "/stores" ||
                 route == "/admin/store-transfers/stores" ||
                 route == "/admin/herb-locations/stores" -> REFERENCE_CACHE_TTL
-            route == "/admin/stats" ||
-                route == "/admin/prescriptions" ||
+            route == "/admin/herb-locations" -> HERB_LOCATION_CACHE_TTL
+            route == "/admin/prescriptions" ||
                 route == "/admin/processing-plans" ||
                 route == "/admin/packages" ||
-                route == "/admin/e6-pharmacy/products" ||
+                route == "/admin/store-transfers" ||
+                route == "/admin/store-transfers/stats" -> BUSINESS_LIST_CACHE_TTL
+            route == "/admin/e6-pharmacy/products" -> INVENTORY_CACHE_TTL
+            route == "/admin/stats" ||
                 route == "/admin/products" ||
                 route == "/admin/product-differences/stats" ||
                 route == "/admin/product-differences/logs" ||
-                route == "/admin/yd-goods-check" ||
-                route == "/admin/store-transfers" ||
-                route == "/admin/store-transfers/stats" ||
-                route == "/admin/herb-locations" -> OPERATION_CACHE_TTL
+                route == "/admin/yd-goods-check" -> OPERATION_CACHE_TTL
             route.startsWith("/admin/prescriptions/") ||
                 route.startsWith("/admin/processing-plans/") ||
                 route.startsWith("/admin/packages/") ||
                 route.startsWith("/admin/yd-goods-check/") ||
                 route.startsWith("/admin/store-transfers/") ||
-                route.startsWith("/admin/herb-locations/") -> DETAIL_CACHE_TTL
+                route.startsWith("/admin/herb-locations/") ||
+                route.startsWith("/admin/e6/imports/") -> DETAIL_CACHE_TTL
             else -> null
         }
     }
@@ -74,6 +81,7 @@ object ApiClient {
         cacheContext = context.applicationContext
         clearE6ImportCache(context)
         clearResponseCache(context)
+        clearProcessingPhotoCache(context)
         token = session.token
         context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
             .edit()
@@ -101,6 +109,7 @@ object ApiClient {
             .apply()
         clearE6ImportCache(context)
         clearResponseCache(context)
+        clearProcessingPhotoCache(context)
     }
 
     fun login(identifier: String, password: String): AdminSession {
@@ -184,6 +193,15 @@ object ApiClient {
     fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
     fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
     fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
+    fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
+        val directory = File(context.applicationContext.filesDir, "processing-photos")
+        if (planId != null && photoId != null) {
+            File(directory, "$planId-$photoId").delete()
+        } else {
+            directory.listFiles()?.forEach { it.delete() }
+            directory.delete()
+        }
+    }
     fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {
         val query = buildList {
             add("page=1")
@@ -345,8 +363,11 @@ object ApiClient {
             val herbs = location.optJSONArray("herbs") ?: JSONArray()
             val matchesKeyword = needle.isBlank() || location.optString("code").lowercase().contains(needle) ||
                 (0 until herbs.length()).any { herbIndex ->
-                    herbs.getJSONObject(herbIndex).optString("name").lowercase().contains(needle) ||
-                        herbs.getJSONObject(herbIndex).optString("code").lowercase().contains(needle)
+                    val herb = herbs.getJSONObject(herbIndex)
+                    val name = herb.optString("name")
+                    name.lowercase().contains(needle) ||
+                        pinyinInitials(name).contains(needle) ||
+                        herb.optString("code").lowercase().contains(needle)
                 }
             if ((type.isNotBlank() && locationType != type) || !matchesKeyword) continue
             if (herbs.length() > 0) assigned++

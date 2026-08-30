@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -56,21 +60,25 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TransfersScreen(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit,
+    scrollState: ScrollState,
 ) {
+    val listOwner = "transfers"
     val showStore = user?.optInt("role", -1) == 0
-    var transfers by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var stats by remember { mutableStateOf<JSONObject?>(null) }
-    var keyword by remember { mutableStateOf("") }
-    var statusFilter by remember { mutableStateOf<Int?>(null) }
-    var overdueOnly by remember { mutableStateOf(false) }
-    var selectedStoreId by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    var transfers by rememberRetainedListValue(listOwner, "transfers") { null as List<JSONObject>? }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var stats by rememberRetainedListValue(listOwner, "stats") { null as JSONObject? }
+    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
+    var statusFilter by rememberRetainedListValue(listOwner, "statusFilter") { null as Int? }
+    var overdueOnly by rememberRetainedListValue(listOwner, "overdueOnly") { false }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var createVisible by remember { mutableStateOf(false) }
     var fromStoreId by remember { mutableStateOf("") }
     var toStoreId by remember { mutableStateOf("") }
@@ -79,9 +87,13 @@ internal fun TransfersScreen(
     var itemSpecification by remember { mutableStateOf("") }
     var itemQuantity by remember { mutableStateOf("1") }
     var itemUnit by remember { mutableStateOf("") }
+    var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(reload, keyword, statusFilter, overdueOnly, selectedStoreId) {
+        val queryKey = listOf(reload, keyword, statusFilter, overdueOnly, selectedStoreId).joinToString("|")
+        if (loadedQueryKey == queryKey && transfers != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
@@ -95,15 +107,29 @@ internal fun TransfersScreen(
             transfers = (0 until transferValues.length()).map { transferValues.getJSONObject(it) }
             stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
             stats = summary
+            loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载门店调拨失败"
+            refreshing = false
         }
+        refreshing = false
     }
 
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            if (!refreshing) {
+                refreshing = true
+                ApiClient.clearResponseCache(context)
+                reload++
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         Row(
@@ -134,6 +160,19 @@ internal fun TransfersScreen(
                     "部分归还" to it.optInt("partReturned").toString(),
                     "已逾期" to it.optInt("overdue").toString(),
                 ),
+                selectedIndex = when {
+                    overdueOnly -> 2
+                    statusFilter == 0 -> 0
+                    statusFilter == 1 -> 1
+                    else -> null
+                },
+                onItemClick = { index ->
+                    when (index) {
+                        0 -> { statusFilter = 0; overdueOnly = false }
+                        1 -> { statusFilter = 1; overdueOnly = false }
+                        2 -> { statusFilter = null; overdueOnly = true }
+                    }
+                },
             )
         }
 
@@ -275,6 +314,7 @@ internal fun TransfersScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+    }
     }
 
     // Create Transfer Dialog

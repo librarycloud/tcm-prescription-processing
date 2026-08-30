@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,33 +76,43 @@ private fun prescriptionStatusLabel(value: Int): String = when (value) {
 private fun isStoreStaff(user: JSONObject?): Boolean = user?.optInt("role", -1) == 3
 private fun isSuperAdmin(user: JSONObject?): Boolean = user?.optInt("role", -1) == 0
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
+internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -> Unit, scrollState: ScrollState) {
+    val listOwner = "prescriptions"
     val readOnly = isStoreStaff(user)
-    var keyword by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf<Int?>(null) }
-    var doctorId by remember { mutableStateOf<Int?>(null) }
-    var doctors by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var selectedStoreId by remember { mutableStateOf("") }
-    var items by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
-    var page by remember { mutableStateOf(1) }
-    var pages by remember { mutableStateOf(1) }
+    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
+    var status by rememberRetainedListValue(listOwner, "status") { null as Int? }
+    var doctorId by rememberRetainedListValue(listOwner, "doctorId") { null as Int? }
+    var doctors by rememberRetainedListValue(listOwner, "doctors") { emptyList<JSONObject>() }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var items by rememberRetainedListValue(listOwner, "items") { null as List<JSONObject>? }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    var filtersLoaded by rememberRetainedListValue(listOwner, "filtersLoaded") { false }
     var deleteTarget by remember { mutableStateOf<JSONObject?>(null) }
     var deleting by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        if (filtersLoaded) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { Pair(ApiClient.doctors(), ApiClient.availableStores()) } }
             .onSuccess { (doctorValues, storeValues) ->
                 doctors = (0 until doctorValues.length()).map { doctorValues.getJSONObject(it) }
                 stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
+                filtersLoaded = true
                 if (!isSuperAdmin(user) && stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
             }
     }
     LaunchedEffect(reload, keyword, status, doctorId, selectedStoreId, page) {
+        val queryKey = listOf(reload, keyword, status, doctorId, selectedStoreId, page).joinToString("|")
+        if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
@@ -109,10 +122,26 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
             val list = data.optJSONArray("list") ?: JSONArray()
             items = (0 until list.length()).map { list.getJSONObject(it) }
             pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-        }.onFailure { error = it.message ?: "加载处方失败" }
+            refreshing = false
+            loadedQueryKey = queryKey
+        }.onFailure {
+            error = it.message ?: "加载处方失败"
+            refreshing = false
+        }
     }
 
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            if (!refreshing) {
+                refreshing = true
+                ApiClient.clearResponseCache(context)
+                reload++
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(scrollState).padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
             if (!readOnly) {
@@ -230,6 +259,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
         } }) { Text(if (deleting) "删除中..." else "确认删除") } },
         dismissButton = { TextButton(enabled = !deleting, onClick = { deleteTarget = null }) { Text("取消") } },
     ) }
+    }
 }
 
 @Composable

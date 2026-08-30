@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,12 +64,15 @@ import org.json.JSONObject
 internal fun StocktakingScreen(
     user: JSONObject? = null,
     onNavigate: (ScreenTarget) -> Unit,
+    scrollState: ScrollState,
 ) {
-    var checks by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var selectedStoreId by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    val listOwner = "stocktaking"
+    var checks by rememberRetainedListValue(listOwner, "checks") { null as List<JSONObject>? }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var createVisible by remember { mutableStateOf(false) }
     var checkName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -77,6 +81,8 @@ internal fun StocktakingScreen(
     val isStoreStaff = user?.optInt("role", -1) == 3
 
     LaunchedEffect(reload, selectedStoreId) {
+        val queryKey = listOf(reload, selectedStoreId).joinToString("|")
+        if (loadedQueryKey == queryKey && checks != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
@@ -90,6 +96,7 @@ internal fun StocktakingScreen(
             if (isSuperAdmin && selectedStoreId.isBlank() && stores.size == 1) {
                 selectedStoreId = stores.first().optInt("id").toString()
             }
+            loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载盘点单失败"
         }
@@ -98,7 +105,7 @@ internal fun StocktakingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         Row(

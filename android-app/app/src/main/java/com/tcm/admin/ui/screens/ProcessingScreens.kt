@@ -13,6 +13,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +54,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,13 +65,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -79,6 +89,25 @@ import java.time.OffsetDateTime
 import java.time.LocalDate
 
 private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
+private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
+
+private fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap {
+    val cacheFile = java.io.File(context.filesDir, "processing-photos/$planId-$photoId")
+    val cacheAge = System.currentTimeMillis() - cacheFile.lastModified()
+    if (cacheFile.isFile && cacheAge in 0..PROCESSING_PHOTO_CACHE_TTL_MILLIS) {
+        BitmapFactory.decodeFile(cacheFile.absolutePath)?.let { return it }
+    }
+    cacheFile.delete()
+
+    val bytes = ApiClient.processingPhoto(planId, photoId)
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        ?: throw IllegalStateException("无法读取照片")
+    runCatching {
+        cacheFile.parentFile?.mkdirs()
+        cacheFile.writeBytes(bytes)
+    }
+    return bitmap
+}
 
 private fun todayAllStat(stats: JSONObject?): String {
     if (stats == null) return "-"
@@ -108,27 +137,32 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
     throw IllegalStateException("照片压缩后仍超过 5MB，请选择较小的照片")
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProcessingScreenV2(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit = {},
+    scrollState: ScrollState,
 ) {
+    val listOwner = "processing"
     val showStore = user?.optInt("role", -1) == 0
-    var mode by remember { mutableStateOf("plans") } // "plans" | "pickup"
-    var activeView by remember { mutableStateOf("today-all") }
-    var pickupStatus by remember { mutableStateOf(0) } // 0=待领取, 1=已领取
-    var keyword by remember { mutableStateOf("") }
-    var plans by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var pickupTasks by remember { mutableStateOf<List<PackageItem>?>(null) }
-    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var selectedStoreId by remember { mutableStateOf("") }
-    var stats by remember { mutableStateOf<JSONObject?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var mode by rememberRetainedListValue(listOwner, "mode") { "plans" } // "plans" | "pickup"
+    var activeView by rememberRetainedListValue(listOwner, "activeView") { "today-all" }
+    var pickupStatus by rememberRetainedListValue(listOwner, "pickupStatus") { 0 } // 0=待领取, 1=已领取
+    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
+    var plans by rememberRetainedListValue(listOwner, "plans") { null as List<JSONObject>? }
+    var pickupTasks by rememberRetainedListValue(listOwner, "pickupTasks") { null as List<PackageItem>? }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var stats by rememberRetainedListValue(listOwner, "stats") { null as JSONObject? }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
     var loading by remember { mutableStateOf(false) }
-    var reload by remember { mutableStateOf(0) }
-    var page by remember { mutableStateOf(1) }
-    var pages by remember { mutableStateOf(1) }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
+    var refreshing by remember { mutableStateOf(false) }
 
     // Dialog states
     var selectedPlan by remember { mutableStateOf<JSONObject?>(null) }
@@ -146,15 +180,20 @@ internal fun ProcessingScreenV2(
     }
 
     LaunchedEffect(showStore) {
+        if (storesLoaded) return@LaunchedEffect
         if (!showStore) return@LaunchedEffect
         runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
             .onSuccess { values ->
                 stores = (0 until values.length()).map { values.getJSONObject(it) }
+                storesLoaded = true
                 if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
             }
     }
 
     LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page) {
+        val queryKey = listOf(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page).joinToString("|")
+        val existingItems = if (mode == "plans") plans else pickupTasks
+        if (loadedQueryKey == queryKey && existingItems != null) return@LaunchedEffect
         error = null
         loading = true
         runCatching {
@@ -205,21 +244,36 @@ internal fun ProcessingScreenV2(
                         store = store?.displayField("name", "") ?: "",
                         expressTrackingNo = obj.displayField("expressTrackingNo", ""),
                         pickupQrContent = obj.displayField("pickupQrContent", ""),
+                        info = obj.displayField("itemInfo", ""),
                     )
                 }
             }
             loading = false
+            refreshing = false
+            loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载加工数据失败"
             loading = false
+            refreshing = false
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                if (!refreshing) {
+                    refreshing = true
+                    ApiClient.clearResponseCache(context)
+                    reload++
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         // Top Action Bar
@@ -652,88 +706,25 @@ internal fun ProcessingScreenV2(
                 AppEmptyState(if (pickupStatus == 0) "暂无待领取记录" else "暂无已领取记录")
             } else {
                 pickupTasks!!.forEach { item ->
-                    AppCard(
+                    PackageSummaryCard(
+                        item = item,
+                        showStore = showStore,
                         modifier = Modifier.padding(bottom = 12.dp),
                         onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = item.name,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = Ink,
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = "${item.customer} · ${maskPhone(item.phone)}",
-                                    color = Muted,
-                                    fontSize = 12.sp,
-                                )
+                        onVerify = {
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
+                                    .onSuccess { reload++ }
+                                    .onFailure { error = it.message ?: "核销失败" }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                StatusPill(item.method)
-                                StatusPill(item.status)
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Spacer(Modifier.height(8.dp))
-
-                        // Large Pickup Code Highlight
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("取货码：", color = RegularText, fontSize = 13.sp)
-                            Text(
-                                text = formatPickupCode(item.code),
-                                color = Primary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-
-                        InfoRowItem("完成时间", item.time)
-                        if (showStore && item.store.isNotBlank()) {
-                            InfoRowItem("门店", item.store)
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (item.statusCode == 0) {
-                                Spacer(Modifier.width(8.dp))
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
-                                                .onSuccess { reload++ }
-                                                .onFailure { error = it.message ?: "核销失败" }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(6.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                ) {
-                                    Text("核销领取", fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
+                        },
+                    )
                 }
             }
         }
 
-            Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
+        }
         }
 
     // Dialogs
@@ -1717,8 +1708,7 @@ internal fun WorkflowOperationScreen(
                                     scope.launch {
                                         runCatching {
                                             withContext(Dispatchers.IO) {
-                                                val bytes = ApiClient.processingPhoto(plan.optInt("id"), photoId)
-                                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                                loadProcessingPhoto(context, plan.optInt("id"), photoId)
                                             }
                                         }.onSuccess {
                                             previewBitmap = it
@@ -1738,7 +1728,12 @@ internal fun WorkflowOperationScreen(
                                     onClick = {
                                         photoDeleting = true
                                         scope.launch {
-                                            runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPhoto(plan.optInt("id"), photoId) } }
+                                            runCatching {
+                                                withContext(Dispatchers.IO) {
+                                                    ApiClient.deleteProcessingPhoto(plan.optInt("id"), photoId)
+                                                    ApiClient.clearProcessingPhotoCache(context, plan.optInt("id"), photoId)
+                                                }
+                                            }
                                                 .onSuccess { reload() }
                                                 .onFailure { error = it.message ?: "照片删除失败" }
                                             photoDeleting = false
@@ -2124,9 +2119,9 @@ internal fun WorkflowOperationScreen(
                     val endTime = item.displayField("endedAt", "").take(16).replace("T", " ").ifBlank { if (isRunning) "进行中..." else "-" }
 
                     Surface(
-                        color = if (isRunning) PrimarySoft.copy(alpha = 0.18f) else Color(0xFFF9FAFB),
+                        color = if (isRunning) PrimarySoft else MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
-                        border = BorderStroke(1.dp, if (isRunning) Primary.copy(alpha = 0.4f) else CardBorderColor),
+                        border = BorderStroke(1.dp, if (isRunning) Primary else CardBorderColor),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                     ) {
                         Column(Modifier.padding(9.dp)) {
@@ -2245,24 +2240,62 @@ internal fun WorkflowOperationScreen(
         Spacer(Modifier.height(20.dp))
     }
 
-    // Photo Preview Dialog
+    // Full-screen photo preview with pinch-to-zoom.
     previewBitmap?.let { bitmap ->
-        AlertDialog(
+        var previewScale by remember(previewPhotoId) { mutableStateOf(1f) }
+        var previewOffsetX by remember(previewPhotoId) { mutableStateOf(0f) }
+        var previewOffsetY by remember(previewPhotoId) { mutableStateOf(0f) }
+        Dialog(
             onDismissRequest = { previewBitmap = null },
-            title = { Text("调配照片") },
-            text = {
-                Column {
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            Surface(
+                color = Color.Black,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(Modifier.fillMaxSize()) {
                     androidx.compose.foundation.Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "调配照片 $previewPhotoId",
-                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clipToBounds()
+                            .graphicsLayer {
+                                scaleX = previewScale
+                                scaleY = previewScale
+                                translationX = previewOffsetX
+                                translationY = previewOffsetY
+                            }
+                            .pointerInput(previewPhotoId) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    previewScale = (previewScale * zoom).coerceIn(1f, 5f)
+                                    previewOffsetX += pan.x
+                                    previewOffsetY += pan.y
+                                }
+                            },
                     )
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 32.dp, end = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        TextButton(
+                            onClick = {
+                                previewScale = 1f
+                                previewOffsetX = 0f
+                                previewOffsetY = 0f
+                            },
+                        ) { Text("复位", color = Color.White) }
+                        TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { previewBitmap = null }) { Text("关闭") }
-            },
-        )
+            }
+        }
     }
 
     // Exception handling selection & dialogs
