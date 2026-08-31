@@ -465,13 +465,23 @@ private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolea
     }
 }
 
-private data class E6BatchDraft(val key: Int, val dose: String, val date: String)
+private data class E6BatchDraft(
+    val key: Int,
+    val dose: String,
+    val date: String,
+    val scheduleType: Int = 1,
+)
 
 private fun e6DraftBatches(totalDose: Int, count: Int): List<E6BatchDraft> {
     val source = e6Batches(totalDose.coerceAtLeast(1), count.coerceIn(1, totalDose.coerceAtLeast(1)))
     return (0 until source.length()).map { index ->
         val batch = source.getJSONObject(index)
-        E6BatchDraft(index, batch.optInt("totalDose").toString(), batch.displayField("processDate", LocalDate.now().toString()))
+        E6BatchDraft(
+            key = index,
+            dose = batch.optInt("totalDose").toString(),
+            date = batch.displayField("processDate", LocalDate.now().toString()),
+            scheduleType = batch.optInt("scheduleType", 1),
+        )
     }
 }
 
@@ -668,7 +678,10 @@ internal fun E6ImportConfirmScreen(
     val isDecoction = selectedType?.optString("code") == "DECOCTION" || selectedType?.optString("name") == "代煎"
     val totalDose = dose.toIntOrNull() ?: 0
     val allocatedDose = batches.sumOf { it.dose.toIntOrNull() ?: 0 }
-    val validBatches = totalDose > 0 && allocatedDose == totalDose && batches.isNotEmpty() && batches.all { it.dose.toIntOrNull()?.let { value -> value > 0 } == true && it.date.isNotBlank() }
+    val validBatches = totalDose > 0 && allocatedDose == totalDose && batches.isNotEmpty() && batches.all {
+        it.dose.toIntOrNull()?.let { value -> value > 0 } == true &&
+            (it.scheduleType == 2 || it.date.isNotBlank())
+    }
     val canSubmit = !loading && (hasPrescription || doctorId > 0) && processTypeId > 0 && validBatches && (!isDecoction || (bagsPerDose.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true))
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -690,16 +703,55 @@ internal fun E6ImportConfirmScreen(
         Spacer(Modifier.height(12.dp))
         AppCard {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text("加工批次", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp); Text("系统已自动分配，可逐批修改剂数和日期", color = Muted, fontSize = 12.sp) }
+                Column(Modifier.weight(1f)) { Text("加工批次", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp); Text("系统已自动分配，可逐批设置剂数、日期或等待通知", color = Muted, fontSize = 12.sp) }
                 TextButton(onClick = { if (totalDose > 0) { batchCount = batches.size.toString(); autoAllocationEnabled = true } }) { Text("重新自动分配") }
             }
             Spacer(Modifier.height(8.dp))
             batches.forEachIndexed { index, batch ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("第${index + 1}批", color = Ink, fontSize = 12.sp, modifier = Modifier.width(42.dp))
-                    OutlinedTextField(batch.dose, { value -> batches = batches.toMutableList().also { it[index] = batch.copy(dose = value.filter(Char::isDigit)) } }, Modifier.weight(0.8f), label = { Text("剂数") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = FieldShape)
-                    OutlinedTextField(batch.date, { value -> batches = batches.toMutableList().also { it[index] = batch.copy(date = value) } }, Modifier.weight(1.2f), label = { Text("加工日期") }, singleLine = true, shape = FieldShape)
+                    OutlinedTextField(
+                        batch.dose,
+                        { value -> batches = batches.toMutableList().also { it[index] = batch.copy(dose = value.filter(Char::isDigit)) } },
+                        Modifier.weight(1f),
+                        label = { Text("剂数") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = FieldShape,
+                    )
                     if (batches.size > 1) TextButton(onClick = { batches = batches.toMutableList().also { it.removeAt(index) }; batchCount = batches.size.toString() }) { Text("删", color = Danger) }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SegmentedButton(
+                        label = "指定日期",
+                        selected = batch.scheduleType == 1,
+                        onClick = {
+                            batches = batches.toMutableList().also { it[index] = batch.copy(scheduleType = 1, date = batch.date.ifBlank { LocalDate.now().toString() }) }
+                        },
+                        modifier = Modifier.weight(1f),
+                        centerLabel = true,
+                    )
+                    SegmentedButton(
+                        label = "等待通知",
+                        selected = batch.scheduleType == 2,
+                        onClick = {
+                            batches = batches.toMutableList().also { it[index] = batch.copy(scheduleType = 2, date = "") }
+                        },
+                        modifier = Modifier.weight(1f),
+                        centerLabel = true,
+                    )
+                }
+                if (batch.scheduleType == 1) {
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        batch.date,
+                        { value -> batches = batches.toMutableList().also { it[index] = batch.copy(date = value) } },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("加工日期") },
+                        singleLine = true,
+                        shape = FieldShape,
+                    )
                 }
                 if (index < batches.lastIndex) Spacer(Modifier.height(7.dp))
             }
@@ -732,8 +784,8 @@ internal fun E6ImportConfirmScreen(
                     val batchDose = batch.dose.toIntOrNull() ?: 0
                     val batchPayload = JSONObject()
                         .put("totalDose", batchDose)
-                        .put("scheduleType", 1)
-                        .put("processDate", batch.date.trim())
+                        .put("scheduleType", batch.scheduleType)
+                        .put("processDate", if (batch.scheduleType == 1) batch.date.trim() else JSONObject.NULL)
                     if (isDecoction) {
                         batchPayload
                             .put("bagCount", batchDose * (bagsPerDose.toIntOrNull() ?: 2))
@@ -748,6 +800,8 @@ internal fun E6ImportConfirmScreen(
                     .put("processTypeId", processTypeId)
                     .put("pickupMethod", pickupMethod)
                     .put("batches", batchPayloads)
+                    .put("scheduleType", batches.firstOrNull()?.scheduleType ?: 1)
+                    .put("processDate", batches.firstOrNull()?.takeIf { it.scheduleType == 1 }?.date?.trim() ?: JSONObject.NULL)
                 if (isDecoction) {
                     payload
                         .put("bagsPerDose", bagsPerDose.toIntOrNull() ?: 0)
