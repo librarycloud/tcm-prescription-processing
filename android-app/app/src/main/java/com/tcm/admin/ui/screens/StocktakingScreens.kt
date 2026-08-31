@@ -588,8 +588,7 @@ internal fun StocktakingEntryScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fillMaxWidth()
             .imePadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
