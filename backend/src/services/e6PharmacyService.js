@@ -181,8 +181,12 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const expiryBefore = expiryWithinMonths
     ? (() => {
       const date = new Date();
+      const day = date.getDate();
       date.setHours(0, 0, 0, 0);
+      // Avoid Aug 31 + 3 months overflowing into December; clamp to the target month's last day.
+      date.setDate(1);
       date.setMonth(date.getMonth() + expiryWithinMonths);
+      date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
       return date;
     })()
     : null;
