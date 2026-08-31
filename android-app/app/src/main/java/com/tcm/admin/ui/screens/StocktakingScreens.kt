@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -368,31 +369,23 @@ internal fun StocktakingDetailScreen(
             }
 
             Spacer(Modifier.height(14.dp))
-            if (entryMode) {
-                StocktakingEntryScreen(
-                    checkId = checkId,
-                    user = user,
-                    initialItem = entryItem,
-                    onDismiss = {
-                        entryItem = null
-                        entryMode = false
-                    },
-                    onSaved = {
-                        entryItem = null
-                        entryMode = false
-                        reload++
-                    },
-                )
-            } else {
-                Button(
-                    onClick = { entryMode = true },
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                    shape = FieldShape,
-                ) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("搜索或扫码盘点")
-                }
+            StocktakingEntryScreen(
+                checkId = checkId,
+                user = user,
+                initialItem = entryItem,
+                onModeChanged = { active -> entryMode = active || entryItem != null },
+                onDismiss = {
+                    entryItem = null
+                    entryMode = false
+                },
+                onSaved = {
+                    entryItem = null
+                    entryMode = false
+                    reload++
+                },
+            )
+
+            if (!entryMode) {
                 Spacer(Modifier.height(16.dp))
 
                 SectionHeader(
@@ -439,6 +432,16 @@ internal fun StocktakingDetailScreen(
                                     fontSize = 14.sp,
                                 )
                                 Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "编码：${product.displayField("productCode", "-")}　条码：${product.displayField("barcode", "-")}",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                )
+                                Text(
+                                    text = "规格：${product.displayField("specification", "-")}　单位：${product.displayField("unit", "-")}　生产厂商：${product.displayField("manufacturer", "-")}",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                )
                                 Text(
                                     text = "批号：${item.displayField("batchNo")} · 系统货位：${systemLocation.ifBlank { "未设置" }}" +
                                         (countLocation.takeIf { it.isNotBlank() }?.let { " · 盘点货位：$it" } ?: ""),
@@ -527,6 +530,7 @@ internal fun StocktakingEntryScreen(
     checkId: Int,
     user: JSONObject? = null,
     initialItem: JSONObject? = null,
+    onModeChanged: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -534,6 +538,7 @@ internal fun StocktakingEntryScreen(
     var selectedItem by remember(initialItem) { mutableStateOf(initialItem) }
     var keyword by remember(initialItem) { mutableStateOf("") }
     var candidates by remember(initialItem) { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var addingBatch by remember(initialItem) { mutableStateOf(false) }
     var batchNo by remember(initialItem) { mutableStateOf(initialItem?.displayField("batchNo", "").orEmpty()) }
     var countLocation by remember(initialItem) {
         mutableStateOf(
@@ -558,30 +563,65 @@ internal fun StocktakingEntryScreen(
     var loading by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var lastSearchedTerm by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    fun search() {
+    suspend fun search(term: String = keyword.trim(), force: Boolean = false) {
+        if (term.length < 2) return
+        if (!force && term == lastSearchedTerm && !loading) return
+        lastSearchedTerm = term
         loading = true
         error = null
-        scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { ApiClient.searchGoodsCheckCandidates(checkId, keyword.trim()) }
-            }.onSuccess { values ->
-                candidates = (0 until values.length()).map { values.getJSONObject(it) }
-            }.onFailure { error = it.message ?: "搜索商品失败" }
-            loading = false
-        }
+        runCatching {
+            withContext(Dispatchers.IO) { ApiClient.searchGoodsCheckCandidates(checkId, term) }
+        }.onSuccess { values ->
+            val result = (0 until values.length()).map { values.getJSONObject(it) }
+            candidates = result
+            if (result.size == 1) {
+                val candidate = result.first()
+                selectedItem = candidate
+                addingBatch = false
+                batchNo = candidate.displayField("batchNo", "")
+                countLocation = candidate.displayField(
+                    "countLocationName",
+                    candidate.displayField("systemLocationName", candidate.displayField("locationName", "")),
+                )
+                editingLocation = false
+                val recount = nullableDouble(candidate, "recountQty")
+                val first = nullableDouble(candidate, "firstCountQty")
+                value = quantityText(
+                    if (candidate.optBoolean("canEditRecount", false) || candidate.optBoolean("needsRecount", false)) recount ?: first else first,
+                    "",
+                )
+            }
+        }.onFailure { error = it.message ?: "搜索商品失败" }
+        loading = false
     }
 
+    LaunchedEffect(keyword, selectedItem) {
+        if (selectedItem != null || keyword.trim().length < 2 || keyword.trim() == lastSearchedTerm) return@LaunchedEffect
+        delay(350)
+        search(keyword.trim())
+    }
+
+    LaunchedEffect(selectedItem, keyword, candidates, loading) {
+        onModeChanged(selectedItem != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading)
+    }
+
+    fun manualSearch() {
+        scope.launch { search(force = true) }
+    }
+
+    /* Keep scanner searches immediate, while typed searches use the debounce above. */
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
             keyword = scanned
-            search()
+            scope.launch { search(scanned, force = true) }
         }
     }
-    val isRecount = selectedItem?.let {
+    val isRecount = !addingBatch && selectedItem?.let {
         it.optBoolean("canEditRecount", false) ||
             (it.optBoolean("needsRecount", false) && it.optInt("id", it.optInt("checkItemId", 0)) > 0)
     } == true
@@ -620,25 +660,21 @@ internal fun StocktakingEntryScreen(
                 value = keyword,
                 onValueChange = {
                     keyword = it
+                    lastSearchedTerm = ""
+                    error = null
                     if (selectedItem != null) {
                         selectedItem = null
+                        addingBatch = false
                         batchNo = ""
                         value = ""
                     }
-                    if (it.isBlank()) candidates = emptyList()
+                    candidates = emptyList()
                 },
                 placeholder = "搜索商品名称、编码或条码",
-                onSearch = ::search,
+                onSearch = ::manualSearch,
+                onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
                 modifier = Modifier.weight(1f),
             )
-            OutlinedButton(
-                onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                shape = FieldShape,
-                modifier = Modifier.size(48.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-            ) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码搜索", modifier = Modifier.size(20.dp))
-            }
         }
         if (selectedItem == null) {
             if (loading) {
@@ -662,6 +698,7 @@ internal fun StocktakingEntryScreen(
                     OutlinedButton(
                         onClick = {
                             selectedItem = candidate
+                            addingBatch = false
                             batchNo = candidate.displayField("batchNo", "")
                             countLocation = candidate.displayField(
                                 "countLocationName",
@@ -681,7 +718,9 @@ internal fun StocktakingEntryScreen(
                     ) {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
                             Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink)
-                            Text("批号：${candidate.displayField("batchNo")} · 货位：${candidate.displayField("locationName")}", color = Muted, fontSize = 12.sp)
+                            Text("编码：${candidateProduct.displayField("productCode", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
+                            Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
+                            Text("生产厂商：${candidateProduct.displayField("manufacturer", "-")}　批号：${candidate.displayField("batchNo", "-")}", color = Muted, fontSize = 12.sp)
                         }
                     }
                 }
@@ -690,16 +729,21 @@ internal fun StocktakingEntryScreen(
             Spacer(Modifier.height(12.dp))
             Surface(color = PrimarySoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("${product.displayField("productCode")} · ${product.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
+                    Text(product.displayField("name", "商品"), fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
                     Spacer(Modifier.height(4.dp))
+                    Text("编码：${product.displayField("productCode", "-")}　条码：${product.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
+                    Text("规格：${product.displayField("specification", "-")}　单位：${product.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
+                    Text("生产厂商：${product.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp)
+                    Text("零售价：${product.displayField("retailPrice", "-")}　单位：${product.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
                     Text("系统货位：${selectedItem!!.displayField("systemLocationName", selectedItem!!.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
+                    Text("生产日期：${selectedItem!!.displayField("productionDate", "-")}　有效期：${selectedItem!!.displayField("expiryDate", "-")}", color = Muted, fontSize = 12.sp)
                     if (!isStoreStaff) {
                         Text("系统库存：${quantityText(selectedItem!!.optDouble("systemQty", 0.0), "0")} ${product.displayField("unit")}", color = Muted, fontSize = 12.sp)
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            if (!locationOnly) {
+            if (addingBatch) {
                 OutlinedTextField(
                     value = batchNo,
                     onValueChange = { batchNo = it },
@@ -709,6 +753,20 @@ internal fun StocktakingEntryScreen(
                     shape = FieldShape,
                 )
                 Spacer(Modifier.height(10.dp))
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("批号：${batchNo.ifBlank { "-" }}", color = RegularText, fontSize = 13.sp)
+                    if (!locationOnly) {
+                        TextButton(onClick = { addingBatch = true; batchNo = ""; countLocation = ""; value = "" }) {
+                            Text("新增批号")
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -756,7 +814,7 @@ internal fun StocktakingEntryScreen(
                         runCatching {
                             withContext(Dispatchers.IO) {
                                 val checkItemId = item.optInt("checkItemId", item.optInt("id", 0))
-                                val systemLocation = item.displayField("systemLocationName", item.displayField("locationName", ""))
+                                val systemLocation = if (addingBatch) "" else item.displayField("systemLocationName", item.displayField("locationName", ""))
                                 if (locationOnly) {
                                     ApiClient.updateCheckItemLocation(
                                         checkId,
@@ -774,7 +832,7 @@ internal fun StocktakingEntryScreen(
                                     ApiClient.addGoodsCheckItem(
                                         checkId,
                                         JSONObject()
-                                            .also { payload -> if (isEditingInitial) payload.put("itemId", checkItemId) }
+                                            .also { payload -> if (isEditingInitial && !addingBatch) payload.put("itemId", checkItemId) }
                                             .put("productId", item.optInt("productId"))
                                             .put("batchNo", batchNo.trim())
                                             .put("locationName", systemLocation)
@@ -785,6 +843,7 @@ internal fun StocktakingEntryScreen(
                             }
                         }.onSuccess {
                             selectedItem = null
+                            addingBatch = false
                             keyword = ""
                             candidates = emptyList()
                             onSaved()
