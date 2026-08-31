@@ -155,7 +155,7 @@ export async function listGoodsChecks(prisma, actor, query = {}) {
         prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
         prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
         prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, reviewStatus: 1 } }),
-        countAdjustmentItems(prisma, check.id),
+        countAdjustmentItems(prisma, check.id, check.storeId),
       ]);
       return { ...check, summary: { total: itemTotal, counted, pendingRecount, adjustment, confirmed } };
     })),
@@ -215,20 +215,27 @@ export async function getGoodsCheck(prisma, actor, id, query = {}) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 10), 100);
   const offset = (page - 1) * pageSize;
-  const itemBaseWhere = { checkId: check.id };
+  const includeSummary = text(query.summary) !== "0";
+  const itemBaseWhere = { checkId: check.id, storeId: check.storeId };
   if (status === "counted") itemBaseWhere.firstCountQty = { not: null };
   if (status === "mine") itemBaseWhere.OR = [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }];
   if (status === "recount") itemBaseWhere.checkStatus = CHECK_STATUS.PENDING_RECOUNT;
 
-  const [allItemCount, itemCount, missingCount, counted, pendingRecount, mine, adjustment] = await Promise.all([
-    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id } }),
-    prisma.ydGoodsCheckItem.count({ where: itemBaseWhere }),
-    countMissingCandidates(prisma, check),
-    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
-    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
-    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, OR: [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }] } }),
-    countAdjustmentItems(prisma, check.id),
-  ]);
+  const [allItemCount, itemCount] = includeSummary
+    ? await Promise.all([
+      prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, storeId: check.storeId } }),
+      prisma.ydGoodsCheckItem.count({ where: itemBaseWhere }),
+    ])
+    : [0, 0];
+  const [missingCount, counted, pendingRecount, mine, adjustment] = includeSummary
+    ? await Promise.all([
+      countMissingCandidates(prisma, check),
+      prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
+      prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
+      prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, OR: [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }] } }),
+      countAdjustmentItems(prisma, check.id, check.storeId),
+    ])
+    : [0, 0, 0, 0, 0];
   const total = allItemCount + missingCount;
   const summary = { total, counted, missing: missingCount, pendingRecount, adjustment, mine };
   let filteredTotal = itemCount;
@@ -238,12 +245,20 @@ export async function getGoodsCheck(prisma, actor, id, query = {}) {
     rows = await missingCandidatePage(prisma, check, page, pageSize, text(query.keyword));
   } else if (status === "adjustment") {
     filteredTotal = adjustment;
-    const ids = await adjustmentItemIds(prisma, check.id, offset, pageSize);
+    const ids = await adjustmentItemIds(prisma, check.id, check.storeId, offset, pageSize);
     if (ids.length) {
       const found = await prisma.ydGoodsCheckItem.findMany({ where: { id: { in: ids } }, include: { product: productInclude } });
       const byId = new Map(found.map((row) => [row.id, row]));
       rows = ids.map((itemId) => byId.get(itemId)).filter(Boolean);
     }
+  } else if (status === "" && !includeSummary) {
+    rows = await prisma.ydGoodsCheckItem.findMany({
+      where: itemBaseWhere,
+      include: { product: productInclude },
+      orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }],
+      skip: offset,
+      take: pageSize,
+    });
   } else if (status === "") {
     filteredTotal = total;
     const existingTake = offset < itemCount ? Math.min(pageSize, itemCount - offset) : 0;
@@ -295,6 +310,7 @@ function missingSqlWhere(check, keyword = "") {
   filters.push(Prisma.sql`NOT EXISTS (
     SELECT 1 FROM yd_goods_check_item c
     WHERE c.check_id = ${check.id}
+      AND c.store_id = ${check.storeId}
       AND c.product_id = i.product_id
       AND c.batch_no = i.batch_no
       AND c.system_location_name = i.location_name
@@ -353,15 +369,15 @@ const adjustmentPredicate = Prisma.sql`(
   OR (recount_qty IS NULL AND first_count_qty IS NOT NULL AND first_count_qty <> system_qty)
 )`;
 
-async function countAdjustmentItems(prisma, checkId) {
-  const [row] = await prisma.$queryRaw(Prisma.sql`SELECT COUNT(*) AS total FROM yd_goods_check_item WHERE check_id = ${checkId} AND ${adjustmentPredicate}`);
+async function countAdjustmentItems(prisma, checkId, storeId) {
+  const [row] = await prisma.$queryRaw(Prisma.sql`SELECT COUNT(*) AS total FROM yd_goods_check_item WHERE store_id = ${storeId} AND check_id = ${checkId} AND ${adjustmentPredicate}`);
   return Number(row?.total || 0);
 }
 
-async function adjustmentItemIds(prisma, checkId, offset, pageSize) {
+async function adjustmentItemIds(prisma, checkId, storeId, offset, pageSize) {
   const rows = await prisma.$queryRaw(Prisma.sql`
     SELECT id FROM yd_goods_check_item
-    WHERE check_id = ${checkId} AND ${adjustmentPredicate}
+    WHERE store_id = ${storeId} AND check_id = ${checkId} AND ${adjustmentPredicate}
     ORDER BY product_id ASC, batch_no ASC, system_location_name ASC
     LIMIT ${pageSize} OFFSET ${offset}
   `);

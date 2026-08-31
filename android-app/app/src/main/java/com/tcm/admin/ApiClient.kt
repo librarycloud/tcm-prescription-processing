@@ -414,10 +414,11 @@ object ApiClient {
     fun generatePackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST", payload).getJSONObject("data")
     fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
     fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
-    fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = ""): JSONObject {
+    fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = "", includeSummary: Boolean = true): JSONObject {
         val query = buildList {
             add("page=$page")
             add("pageSize=$pageSize")
+            if (!includeSummary) add("summary=0")
             status.takeIf { it.isNotBlank() }?.let { add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
         }.joinToString("&")
         return request("/admin/yd-goods-check/$id?$query").getJSONObject("data")

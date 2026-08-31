@@ -278,25 +278,48 @@ internal fun StocktakingDetailScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(checkId, reload, itemPage, itemFilter) {
+        val requestedPage = itemPage
+        val requestedFilter = itemFilter
+        fun requestStatus() = when (requestedFilter) {
+            "missing" -> "missing"
+            "recount" -> "recount"
+            "mine" -> "mine"
+            "counted" -> "counted"
+            "diff" -> "adjustment"
+            else -> ""
+        }
         runCatching {
             withContext(Dispatchers.IO) {
                 ApiClient.goodsCheck(
                     checkId,
-                    page = itemPage,
+                    page = requestedPage,
                     pageSize = 10,
-                    status = when (itemFilter) {
-                        "missing" -> "missing"
-                        "recount" -> "recount"
-                        "mine" -> "mine"
-                        "counted" -> "counted"
-                        "diff" -> "adjustment"
-                        else -> ""
-                    },
+                    status = requestStatus(),
+                    includeSummary = false,
                 )
             }
         }.onSuccess {
             check = it
             itemPages = it.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        ApiClient.goodsCheck(
+                            checkId,
+                            page = requestedPage,
+                            pageSize = 10,
+                            status = requestStatus(),
+                            includeSummary = true,
+                        )
+                    }
+                }.onSuccess { summaryData ->
+                    if (itemPage != requestedPage || itemFilter != requestedFilter) return@onSuccess
+                    itemPages = summaryData.optJSONObject("pagination")?.optInt("pages", itemPages)?.coerceAtLeast(1) ?: itemPages
+                    check = check?.let { current ->
+                        JSONObject(current.toString()).put("summary", summaryData.optJSONObject("summary") ?: JSONObject())
+                    }
+                }
+            }
         }
             .onFailure { error = it.message ?: "加载盘点详情失败" }
     }
