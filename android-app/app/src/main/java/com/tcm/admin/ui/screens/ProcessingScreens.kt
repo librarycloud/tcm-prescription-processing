@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -572,31 +573,33 @@ internal fun ProcessingScreenV2(
 
                         Spacer(Modifier.height(8.dp))
 
-                        // Actions wrap into one or two rows instead of requiring horizontal scrolling.
-                        FlowRow(
+                        // Keep plan actions on one compact row without horizontal scrolling.
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // 关联处方查看
                             val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
                             if (prescriptionId > 0) {
                                 OutlinedButton(
                                     onClick = { onNavigate(ScreenTarget.PrescriptionDetail(prescriptionId)) },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                     shape = RoundedCornerShape(6.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text("处方", fontSize = 12.sp)
+                                    Text("处方", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                             }
 
                             // 无论进行中还是已完成，均可查看/操作工序详情
                             OutlinedButton(
                                 onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 shape = RoundedCornerShape(6.dp),
                             ) {
-                                Text(if (status == 1) "流程操作" else "工序详情", fontSize = 12.sp)
+                                Text(if (status == 1) "流程操作" else "工序详情", fontSize = 11.sp, maxLines = 1, softWrap = false)
                             }
 
                             if (status == 0) { // 待加工
@@ -608,11 +611,12 @@ internal fun ProcessingScreenV2(
                                                 .onFailure { error = it.message ?: "开始加工失败" }
                                         }
                                     },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                     shape = RoundedCornerShape(6.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text("开始加工", fontSize = 12.sp)
+                                    Text("开始加工", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                                 OutlinedButton(
                                     onClick = {
@@ -622,10 +626,11 @@ internal fun ProcessingScreenV2(
                                                 .onFailure { error = it.message ?: "延期失败" }
                                         }
                                     },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                     shape = RoundedCornerShape(6.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text("延期明天", fontSize = 12.sp)
+                                    Text("延期明天", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                             }
 
@@ -634,11 +639,12 @@ internal fun ProcessingScreenV2(
                             if (status == 2 && !packageCreated) { // 完成但未生成包裹
                                 Button(
                                     onClick = { generatePackagePlan = plan },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                     shape = RoundedCornerShape(6.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Success),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text("生成包裹", fontSize = 12.sp)
+                                    Text("生成包裹", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                             }
 
@@ -646,10 +652,11 @@ internal fun ProcessingScreenV2(
                             if (status in 0..1) {
                                 OutlinedButton(
                                     onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(plan)) },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                     shape = RoundedCornerShape(6.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text("编辑", fontSize = 12.sp)
+                                    Text("编辑", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                             }
 
@@ -662,11 +669,12 @@ internal fun ProcessingScreenV2(
                                                 .onFailure { error = it.message ?: "取消失败" }
                                         }
                                     },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                     shape = RoundedCornerShape(6.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text("取消", fontSize = 12.sp)
+                                    Text("取消", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                             }
                         }
