@@ -9,6 +9,7 @@ import {
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 const REGISTER_TYPES = [
   { value: 'PRE_RECEIPT', label: '先到货未入库' },
@@ -121,6 +122,16 @@ Page({
   },
 
   onTabChange: onAdminTabChange,
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      if (this.data.activeTab === 'logs') await this.loadLogs();
+      else await this.loadCurrent();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
 
   onShow() {
     this.loadBase();

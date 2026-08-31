@@ -14,6 +14,7 @@ import {
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 const TRANSFER_STATUS = Object.freeze({
   BORROWING: 0,
@@ -128,6 +129,16 @@ Page({
   },
 
   onTabChange: onAdminTabChange,
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      await this.reload();
+      if (this.data.detail?.id) await this.loadTransferDetail(this.data.detail.id);
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
 
   onLoad(options = {}) {
     const transferId = Number(options.transferId);

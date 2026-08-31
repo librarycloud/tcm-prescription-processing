@@ -5,6 +5,8 @@ import { onUserTabChange } from '../../../utils/user-tabbar';
 import { getAppInfo } from '../../../utils/app-info';
 import { getWechatLoginCode } from '../../../utils/wechat';
 
+let emailCountdownTimer;
+
 Page({
   data: {
     activeTab: 'profile',
@@ -33,6 +35,11 @@ Page({
   },
 
   onTabChange: onUserTabChange,
+
+  onUnload() {
+    clearInterval(emailCountdownTimer);
+    emailCountdownTimer = null;
+  },
 
   onShow() {
     const user = getUser() || {};
@@ -177,10 +184,14 @@ Page({
       await sendEmailCode(email);
       wx.showToast({ title: '验证码已发送', icon: 'success' });
       this.setData({ emailCountdown: 60 });
-      const timer = setInterval(() => {
+      clearInterval(emailCountdownTimer);
+      emailCountdownTimer = setInterval(() => {
         const next = this.data.emailCountdown - 1;
         this.setData({ emailCountdown: next });
-        if (next <= 0) clearInterval(timer);
+        if (next <= 0) {
+          clearInterval(emailCountdownTimer);
+          emailCountdownTimer = null;
+        }
       }, 1000);
     } finally {
       this.setData({ emailSending: false });

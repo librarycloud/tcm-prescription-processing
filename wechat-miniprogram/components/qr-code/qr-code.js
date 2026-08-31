@@ -2,6 +2,7 @@ import drawQrcode from 'weapp-qrcode';
 import { normalizePickupCode } from '../../utils/format';
 
 let previousBrightness = -1;
+const DEFAULT_CORRECT_LEVEL = 0; // QR M level: balanced density and error correction.
 
 Component({
   properties: {
@@ -46,6 +47,13 @@ Component({
     }
   },
 
+  pageLifetimes: {
+    hide() {
+      if (this.data.previewing) this.setData({ previewing: false });
+      this.restoreBrightness();
+    }
+  },
+
   methods: {
     draw() {
       if (!this.data.ready || !this.data.text) return;
@@ -55,6 +63,7 @@ Component({
             width: this.data.size,
             height: this.data.size,
             canvasId: this.data.canvasId,
+            correctLevel: DEFAULT_CORRECT_LEVEL,
             text: this.data.text.startsWith('TCM:PICKUP:1:')
               ? this.data.text
               : (normalizePickupCode(this.data.text) || this.data.text),
@@ -73,6 +82,7 @@ Component({
             width: this.data.bigSize,
             height: this.data.bigSize,
             canvasId: this.data.previewCanvasId,
+            correctLevel: DEFAULT_CORRECT_LEVEL,
             text: this.data.text.startsWith('TCM:PICKUP:1:')
               ? this.data.text
               : (normalizePickupCode(this.data.text) || this.data.text),

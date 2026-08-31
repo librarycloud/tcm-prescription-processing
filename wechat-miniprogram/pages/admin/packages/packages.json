@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "包裹列表",
+  "enablePullDownRefresh": true,
   "usingComponents": {
     "t-button": "tdesign-miniprogram/button/button",    "t-cell": "tdesign-miniprogram/cell/cell",
     "t-input": "tdesign-miniprogram/input/input",

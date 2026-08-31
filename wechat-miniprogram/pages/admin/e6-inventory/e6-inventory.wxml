@@ -13,7 +13,7 @@
 
   <t-empty wx:if="{{searched && !searchLoading && !products.length}}" description="暂无匹配商品" />
 
-  <t-loading wx:if="{{detailLoading}}" text="正在加载库存" />
+  <t-loading wx:if="{{searchLoading}}" text="正在加载库存" />
   <view wx:if="{{selectedProduct}}" class="product-detail">
     <view class="section-title">商品信息</view>
     <view class="app-card">

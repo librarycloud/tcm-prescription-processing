@@ -1,1 +1,4 @@
-{}
+{
+  "navigationBarTitleText": "商品差异",
+  "enablePullDownRefresh": true
+}

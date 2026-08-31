@@ -2,6 +2,7 @@ import { safeScanCode } from '../../../utils/scanner';
 import { getE6PharmacyProducts, getStores } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 let searchTimer;
 let searchRequestId = 0;
@@ -9,6 +10,20 @@ let searchRequestId = 0;
 function canSearchKeyword(value) {
   const keyword = String(value || '').trim();
   return (keyword.match(/[\u4e00-\u9fff]/g) || []).length >= 2 || /\d{4}/.test(keyword);
+}
+
+function decodePageParam(value) {
+  let text = String(value || '');
+  for (let index = 0; index < 2 && /%[0-9a-f]{2}/i.test(text); index += 1) {
+    try {
+      const decoded = decodeURIComponent(text);
+      if (decoded === text) break;
+      text = decoded;
+    } catch (error) {
+      break;
+    }
+  }
+  return text;
 }
 
 function numberText(value) {
@@ -48,17 +63,30 @@ Page({
     storeName: '全部门店',
     keyword: '',
     searchLoading: false,
-    detailLoading: false,
     searched: false,
     products: [],
     selectedProduct: null
+  },
+
+  onUnload() {
+    clearTimeout(searchTimer);
+    searchRequestId += 1;
+  },
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      if (this.data.keyword.trim()) await this.search(true, true);
+    } finally {
+      wx.stopPullDownRefresh();
+    }
   },
 
   onTabChange: onAdminTabChange,
 
   onLoad(options = {}) {
     if (options.productCode) {
-      const productCode = String(options.productCode);
+      const productCode = decodePageParam(options.productCode);
       this.setData({
         initialProductCode: productCode,
         initialProductId: Number(options.productId) || null,

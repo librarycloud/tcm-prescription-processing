@@ -1,6 +1,7 @@
 import { getStats } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 Page({
   data: {
@@ -15,6 +16,15 @@ Page({
 
   onShow() {
     this.load();
+  },
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      await this.load();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
   },
 
   async load() {

@@ -8,6 +8,7 @@ import {
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 let pinyinConverter = null;
 try {
@@ -176,6 +177,15 @@ Page({
   },
 
   onTabChange: onAdminTabChange,
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      await this.load();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
 
   onLoad(options = {}) {
     const locationId = Number(options.locationId);

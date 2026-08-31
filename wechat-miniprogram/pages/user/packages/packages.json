@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "我的包裹",
+  "enablePullDownRefresh": true,
   "usingComponents": {
     "t-cell": "tdesign-miniprogram/cell/cell",
     "t-tag": "tdesign-miniprogram/tag/tag",

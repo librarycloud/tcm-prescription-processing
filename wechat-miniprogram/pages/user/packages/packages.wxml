@@ -13,7 +13,8 @@
     </view>
   </view>
 
-  <t-empty wx:if="{{!list.length}}" description="暂无包裹" />
+  <t-loading wx:if="{{loading}}" text="加载中" />
+  <t-empty wx:elif="{{!list.length}}" description="暂无包裹" />
   <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
     <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
     <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>

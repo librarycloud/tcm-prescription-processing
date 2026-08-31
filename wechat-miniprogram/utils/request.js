@@ -8,7 +8,9 @@ const DETAIL_CACHE_TTL = 5 * 60 * 1000;
 const OPERATION_CACHE_TTL = 30 * 1000;
 const USER_PACKAGE_CACHE_TTL = 30 * 1000;
 const memoryCache = {};
+const inflightRequests = {};
 let cacheToken = null;
+let responseCacheVersion = 0;
 
 function routeOf(url) {
   return String(url || '').split('?')[0];
@@ -66,11 +68,13 @@ function hash(value) {
   return (result >>> 0).toString(36);
 }
 
-function cacheKey(options, token) {
-  const forceRefresh = options.forceRefresh || options.bypassCache;
-  if (forceRefresh) return '';
+function responseKey(options, token) {
   const source = `${options.method || 'GET'}|${options.url}|${stableSerialize(options.data || {})}|${token || ''}`;
   return `${CACHE_PREFIX}${hash(source)}`;
+}
+
+function cacheKey(options, token) {
+  return options.forceRefresh || options.bypassCache ? '' : responseKey(options, token);
 }
 
 function readCached(key, ttl) {
@@ -83,7 +87,8 @@ function readCached(key, ttl) {
       cached = null;
     }
   }
-  if (!cached || !cached.savedAt || Date.now() - cached.savedAt > ttl) {
+  const expiresAt = Number(cached?.expiresAt) || (Number(cached?.savedAt) + ttl);
+  if (!cached || !cached.savedAt || expiresAt <= Date.now()) {
     delete memoryCache[key];
     try { wx.removeStorageSync(key); } catch (error) { /* storage may be unavailable */ }
     return null;
@@ -92,18 +97,39 @@ function readCached(key, ttl) {
   return cached.data;
 }
 
-function writeCached(key, data) {
-  const cached = { savedAt: Date.now(), data };
+function pruneExpiredCache() {
+  try {
+    const now = Date.now();
+    (wx.getStorageInfoSync().keys || [])
+      .filter((key) => key.startsWith(CACHE_PREFIX))
+      .forEach((key) => {
+        const cached = wx.getStorageSync(key);
+        if (!cached || !cached.savedAt || !cached.expiresAt || cached.expiresAt <= now) {
+          delete memoryCache[key];
+          wx.removeStorageSync(key);
+        }
+      });
+  } catch (error) {
+    // Cache pruning is best effort.
+  }
+}
+
+function writeCached(key, data, ttl) {
+  const savedAt = Date.now();
+  const cached = { savedAt, expiresAt: savedAt + ttl, data };
   memoryCache[key] = cached;
   try {
     wx.setStorageSync(key, cached);
+    pruneExpiredCache();
   } catch (error) {
     delete memoryCache[key];
   }
 }
 
 export function clearResponseCache() {
+  responseCacheVersion += 1;
   Object.keys(memoryCache).forEach((key) => delete memoryCache[key]);
+  Object.keys(inflightRequests).forEach((key) => delete inflightRequests[key]);
   try {
     const keys = wx.getStorageInfoSync().keys || [];
     keys.filter((key) => key.startsWith(CACHE_PREFIX)).forEach((key) => wx.removeStorageSync(key));
@@ -126,8 +152,11 @@ export function request(options) {
     const cached = readCached(key, ttl);
     if (cached !== null && cached !== undefined) return Promise.resolve(cached);
   }
+  const inflightKey = method === 'GET' ? responseKey({ ...options, method }, token) : '';
+  if (inflightKey && inflightRequests[inflightKey]) return inflightRequests[inflightKey];
+  const requestCacheVersion = responseCacheVersion;
 
-  return new Promise((resolve, reject) => {
+  const pending = new Promise((resolve, reject) => {
     wx.request({
       url: `${getBaseUrl()}${options.url}`,
       method,
@@ -139,7 +168,9 @@ export function request(options) {
       success(res) {
         const body = res.data || {};
         if (body.code === 0) {
-          if (method === 'GET' && ttl) writeCached(key, body.data);
+          if (method === 'GET' && ttl && requestCacheVersion === responseCacheVersion) {
+            writeCached(key, body.data, ttl);
+          }
           if (method !== 'GET') clearResponseCache();
           resolve(body.data);
           return;
@@ -149,6 +180,8 @@ export function request(options) {
           clearSession();
           clearResponseCache();
           wx.reLaunch({ url: '/pages/login/login' });
+          reject(new Error(body.message || '登录已过期'));
+          return;
         }
 
         wx.showToast({ title: body.message || '请求失败', icon: 'none' });
@@ -160,6 +193,11 @@ export function request(options) {
       }
     });
   });
+  if (!inflightKey) return pending;
+  inflightRequests[inflightKey] = pending;
+  return pending.finally(() => {
+    if (inflightRequests[inflightKey] === pending) delete inflightRequests[inflightKey];
+  });
 }
 
 export function uploadFile(options) {
@@ -170,12 +208,20 @@ export function uploadFile(options) {
       filePath: options.filePath,
       name: options.name || 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
+      formData: options.formData || {},
       success(res) {
         try {
           const body = JSON.parse(res.data || '{}');
           if (body.code === 0) {
             clearResponseCache();
             resolve(body.data);
+            return;
+          }
+          if (res.statusCode === 401) {
+            clearSession();
+            clearResponseCache();
+            wx.reLaunch({ url: '/pages/login/login' });
+            reject(new Error(body.message || '登录已过期'));
             return;
           }
           wx.showToast({ title: body.message || '上传失败', icon: 'none' });

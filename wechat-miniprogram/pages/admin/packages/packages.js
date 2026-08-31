@@ -2,6 +2,7 @@ import { getPackages, getStores } from '../../../api/admin';
 import { formatDate, formatPickupCode, maskPhone, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 function isPendingStatus(status) {
   return Number(status) === 0;
@@ -23,6 +24,7 @@ Page({
     page: 1,
     pageSize: 10,
     pages: 1,
+    loading: false,
     list: []
   },
 
@@ -53,33 +55,47 @@ Page({
     await this.load();
   },
 
-  async load() {
-    const data = await getPackages({
-      keyword: this.data.keyword,
-      status: this.data.status,
-      dateScope: this.data.dateScope,
-      sortBy: this.data.sortBy,
-      sortOrder: 'desc',
-      storeId: this.data.storeId,
-      page: this.data.page,
-      pageSize: this.data.pageSize
-    });
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      await this.load();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
 
-    this.setData({
-      list: data.list.map((item) => ({
-        ...item,
-        pickupCode: formatPickupCode(item.pickupCode),
-        storeName: item.store ? item.store.name : '',
-        receiverPhoneMasked: maskPhone(item.receiverPhone),
-        createdAtText: formatDate(item.createdAt),
-        pickedAtText: formatDate(item.pickedAt),
-        pickupMethodText: pickupMethodText(item.pickupMethod),
-        statusText: statusText(item.status),
-        statusTheme: statusTheme(item.status),
-        isPending: isPendingStatus(item.status)
-      })),
-      pages: data.pagination.pages || 1
-    });
+  async load() {
+    this.setData({ loading: true });
+    try {
+      const data = await getPackages({
+        keyword: this.data.keyword,
+        status: this.data.status,
+        dateScope: this.data.dateScope,
+        sortBy: this.data.sortBy,
+        sortOrder: 'desc',
+        storeId: this.data.storeId,
+        page: this.data.page,
+        pageSize: this.data.pageSize
+      });
+
+      this.setData({
+        list: (data.list || []).map((item) => ({
+          ...item,
+          pickupCode: formatPickupCode(item.pickupCode),
+          storeName: item.store ? item.store.name : '',
+          receiverPhoneMasked: maskPhone(item.receiverPhone),
+          createdAtText: formatDate(item.createdAt),
+          pickedAtText: formatDate(item.pickedAt),
+          pickupMethodText: pickupMethodText(item.pickupMethod),
+          statusText: statusText(item.status),
+          statusTheme: statusTheme(item.status),
+          isPending: isPendingStatus(item.status)
+        })),
+        pages: data.pagination?.pages || 1
+      });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   onKeywordChange(e) {

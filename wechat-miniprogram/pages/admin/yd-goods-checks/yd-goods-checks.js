@@ -9,6 +9,7 @@ import {
 } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 let candidateSearchTimer;
 let candidateRequestId = 0;
@@ -125,6 +126,27 @@ Page({
   },
 
   onTabChange: onAdminTabChange,
+
+  onUnload() {
+    clearTimeout(candidateSearchTimer);
+    candidateRequestId += 1;
+  },
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      await this.loadChecks();
+      if (this.data.selectedCheck) {
+        const refreshedCheck = this.data.checks.find(
+          (item) => Number(item.id) === Number(this.data.selectedCheck.id)
+        );
+        if (refreshedCheck) this.setData({ selectedCheck: refreshedCheck });
+        await this.searchCandidates(true, true);
+      }
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
 
   onLoad(options = {}) {
     const checkId = Number(options.checkId);

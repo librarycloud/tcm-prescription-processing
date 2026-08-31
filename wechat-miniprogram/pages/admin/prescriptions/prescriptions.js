@@ -6,6 +6,7 @@ import {
 import { formatDate, maskPhone } from '../../../utils/format';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 const STATUS_META = {
   0: { text: '进行中', theme: 'primary' },
@@ -45,6 +46,15 @@ Page({
       });
     }
     await this.load();
+  },
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    try {
+      await this.load();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
   },
 
   async load() {
