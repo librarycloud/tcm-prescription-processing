@@ -36,6 +36,9 @@ function decorateProduct(product) {
 
 Page({
   data: {
+    initialProductCode: '',
+    initialProductId: null,
+    initialStoreId: '',
     activeTab: 'overview',
     isSuperAdmin: false,
     stores: [],
@@ -51,6 +54,19 @@ Page({
   },
 
   onTabChange: onAdminTabChange,
+
+  onLoad(options = {}) {
+    if (options.productCode) {
+      const productCode = String(options.productCode);
+      this.setData({
+        initialProductCode: productCode,
+        initialProductId: Number(options.productId) || null,
+        initialStoreId: String(options.storeId || ''),
+        storeId: String(options.storeId || ''),
+        keyword: productCode
+      });
+    }
+  },
 
   onKeywordChange(e) {
     const keyword = e.detail.value || '';
@@ -85,7 +101,9 @@ Page({
       const exactMatches = products.filter((item) =>
         String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
       );
-      const selectedProduct = exactMatches.length === 1 ? exactMatches[0] : null;
+      const selectedProduct = this.data.initialProductId
+        ? products.find((item) => Number(item.id) === this.data.initialProductId) || null
+        : exactMatches.length === 1 ? exactMatches[0] : null;
       this.setData({
         products: selectedProduct ? [] : products,
         searched: selectedProduct ? false : true,
@@ -102,8 +120,11 @@ Page({
     this.setData({ isSuperAdmin });
     if (isSuperAdmin && !this.data.stores.length) {
       const data = await getStores({ page: 1, pageSize: 100 });
-      this.setData({ stores: [{ id: '', name: '全部门店' }, ...(data.list || [])], storeName: '全部门店' });
+      const stores = [{ id: '', name: '全部门店' }, ...(data.list || [])];
+      const storeIndex = Math.max(0, stores.findIndex((item) => String(item.id || '') === this.data.initialStoreId));
+      this.setData({ stores, storeIndex, storeName: stores[storeIndex]?.name || '全部门店' });
     }
+    if (this.data.initialProductCode && !this.data.selectedProduct) await this.search(true);
   },
 
   onStoreChange(e) {
@@ -125,16 +146,8 @@ Page({
   async selectProduct(e) {
     const product = this.data.products[Number(e.currentTarget.dataset.index)];
     if (!product) return;
-    clearTimeout(searchTimer);
-    searchRequestId += 1;
-    this.setData({ detailLoading: true, searched: false, products: [], selectedProduct: null });
-    try {
-      const data = await getE6PharmacyProducts({ keyword: product.productCode, storeId: this.data.storeId || undefined, page: 1, pageSize: 50 });
-      const detail = (data?.list || []).find((item) => item.id === product.id);
-      if (!detail) return wx.showToast({ title: '商品库存已更新，请重新查询', icon: 'none' });
-      this.setData({ products: [], searched: false, selectedProduct: decorateProduct(detail) });
-    } finally {
-      this.setData({ detailLoading: false });
-    }
+    wx.navigateTo({
+      url: `/pages/admin/e6-inventory/e6-inventory?productCode=${encodeURIComponent(product.productCode)}&productId=${product.id}&storeId=${encodeURIComponent(this.data.storeId || '')}`
+    });
   }
 });

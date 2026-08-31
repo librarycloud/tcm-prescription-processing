@@ -33,7 +33,7 @@ export async function deleteGoodsCheckController(request, reply) {
 }
 
 export async function goodsCheckDetailController(request, reply) {
-  return ok(reply, await getGoodsCheck(request.server.prisma, request.user, request.params.id));
+  return ok(reply, await getGoodsCheck(request.server.prisma, request.user, request.params.id, request.query || {}));
 }
 
 export async function goodsCheckItemsController(request, reply) {

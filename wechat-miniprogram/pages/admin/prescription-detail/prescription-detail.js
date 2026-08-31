@@ -102,7 +102,7 @@ Page({
   },
 
   goProcessing() {
-    wx.redirectTo({
+    wx.navigateTo({
       url: '/pages/admin/processing-workbench/processing-workbench'
     });
   },

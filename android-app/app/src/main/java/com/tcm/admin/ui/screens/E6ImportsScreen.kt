@@ -234,9 +234,9 @@ internal fun E6ImportsScreen(
         }.sortedByDescending { it.optString("sourceCreatedAt") }
     }
     val total = filteredItems.size
-    val pages = ((total + 19) / 20).coerceAtLeast(1)
+    val pages = ((total + 9) / 10).coerceAtLeast(1)
     val currentPage = page.coerceIn(1, pages)
-    val currentItems = filteredItems.drop((currentPage - 1) * 20).take(20)
+    val currentItems = filteredItems.drop((currentPage - 1) * 10).take(10)
 
     PullToRefreshBox(
         isRefreshing = refreshing,

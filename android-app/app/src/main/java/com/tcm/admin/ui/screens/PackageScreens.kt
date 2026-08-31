@@ -149,7 +149,7 @@ internal fun PackagesScreen(
                     storeId = selectedStoreId.toIntOrNull(),
                     sortBy = sortBy,
                     page = page,
-                    pageSize = 15,
+                    pageSize = 10,
                 )
             }
         }.onSuccess { root ->

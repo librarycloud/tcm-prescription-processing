@@ -139,7 +139,7 @@ object ApiClient {
         storeId: Int? = null,
         doctorId: Int? = null,
         page: Int = 1,
-        pageSize: Int = 15,
+        pageSize: Int = 10,
         createdDate: String? = null,
     ): JSONObject {
         val query = buildList {
@@ -173,7 +173,7 @@ object ApiClient {
     fun processingWorkflow(id: Int): JSONObject = request("/admin/processing-plans/$id/workflow").getJSONObject("data")
     // Compatibility helpers for screen modules that use descriptive API names.
     fun processingStats(storeId: Int? = null): JSONObject = stats(storeId)
-    fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 20): JSONObject {
+    fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList {
             add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
             add("page=$page"); add("pageSize=$pageSize")
@@ -218,7 +218,7 @@ object ApiClient {
         }.joinToString("&")
         return list(request("/admin/packages?$query").getJSONObject("data"))
     }
-    fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 15): JSONObject {
+    fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList {
             add("page=$page"); add("pageSize=$pageSize")
             add("sortBy=${java.net.URLEncoder.encode(sortBy, "UTF-8")}"); add("sortOrder=desc")
@@ -275,7 +275,7 @@ object ApiClient {
             }
         }
     }
-    fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 30): JSONObject {
+    fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList { add("page=$page"); add("pageSize=$pageSize"); storeId?.let { add("storeId=$it") } }.joinToString("&")
         return request("/admin/yd-goods-check?$query").getJSONObject("data")
     }
@@ -414,7 +414,14 @@ object ApiClient {
     fun generatePackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST", payload).getJSONObject("data")
     fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
     fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
-    fun goodsCheck(id: Int): JSONObject = request("/admin/yd-goods-check/$id").getJSONObject("data")
+    fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = ""): JSONObject {
+        val query = buildList {
+            add("page=$page")
+            add("pageSize=$pageSize")
+            status.takeIf { it.isNotBlank() }?.let { add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+        }.joinToString("&")
+        return request("/admin/yd-goods-check/$id?$query").getJSONObject("data")
+    }
     fun goodsCheckCandidates(id: Int, keyword: String = ""): JSONArray = arrayData(request("/admin/yd-goods-check/$id/candidates?page=1&pageSize=100${keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: ""}").opt("data"))
     fun addGoodsCheckItem(checkId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/$checkId/items", "POST", payload).getJSONObject("data")
     fun recountGoodsCheckItem(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/recount", "PUT", payload).getJSONObject("data")

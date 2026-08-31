@@ -42,12 +42,12 @@ Page({
   },
 
   goPrescriptions() {
-    wx.redirectTo({ url: '/pages/admin/prescriptions/prescriptions' });
+    wx.navigateTo({ url: '/pages/admin/prescriptions/prescriptions' });
   },
 
   goProcessingView(e) {
     const view = e.currentTarget.dataset.view;
-    wx.redirectTo({
+    wx.navigateTo({
       url: `/pages/admin/processing-workbench/processing-workbench?view=${encodeURIComponent(view)}`
     });
   },
@@ -80,6 +80,6 @@ Page({
     if (dateScope) params.push(`dateScope=${dateScope}`);
     if (sortBy) params.push(`sortBy=${sortBy}`);
     const query = params.length ? `?${params.join('&')}` : '';
-    wx.redirectTo({ url: `/pages/admin/packages/packages${query}` });
+    wx.navigateTo({ url: `/pages/admin/packages/packages${query}` });
   }
 });

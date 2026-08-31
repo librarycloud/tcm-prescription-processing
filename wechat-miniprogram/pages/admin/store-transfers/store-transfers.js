@@ -92,6 +92,7 @@ function decorateDetail(detail) {
 
 Page({
   data: {
+    initialTransferId: null,
     activeTab: 'overview',
     user: {},
     isSuperAdmin: false,
@@ -128,6 +129,11 @@ Page({
 
   onTabChange: onAdminTabChange,
 
+  onLoad(options = {}) {
+    const transferId = Number(options.transferId);
+    if (transferId) this.setData({ initialTransferId: transferId });
+  },
+
   async onShow() {
     const user = getUser();
     const isSuperAdmin = Number(user.role) === 0;
@@ -138,6 +144,9 @@ Page({
         this.setData({ stores: stores || [] });
       }
       await this.reload();
+      if (this.data.initialTransferId && !this.data.detail) {
+        await this.loadTransferDetail(this.data.initialTransferId);
+      }
     } catch (error) {
       console.error('load store transfers failed', error);
     }
@@ -328,12 +337,24 @@ Page({
   },
 
   async openDetail(e) {
+    wx.navigateTo({
+      url: `/pages/admin/store-transfers/store-transfers?transferId=${e.currentTarget.dataset.id}`
+    });
+  },
+
+  async loadTransferDetail(id) {
     this.setData({ detailVisible: true, detail: null, loading: true });
-    try { this.setData({ detail: decorateDetail(await getStoreTransfer(e.currentTarget.dataset.id)) }); }
+    try { this.setData({ detail: decorateDetail(await getStoreTransfer(id)) }); }
     finally { this.setData({ loading: false }); }
   },
 
-  closeDetail() { this.setData({ detailVisible: false, detail: null }); },
+  closeDetail() {
+    if (this.data.initialTransferId) {
+      wx.navigateBack();
+      return;
+    }
+    this.setData({ detailVisible: false, detail: null });
+  },
 
   async confirmOutbound() {
     const detail = this.data.detail;

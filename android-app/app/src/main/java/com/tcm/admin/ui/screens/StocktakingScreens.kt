@@ -269,16 +269,35 @@ internal fun StocktakingDetailScreen(
     var locationValue by remember { mutableStateOf("") }
     var entryItem by remember { mutableStateOf<JSONObject?>(null) }
     var entryKeyword by remember { mutableStateOf("") }
-    var itemFilter by remember { mutableStateOf("all") }
+    var itemFilter by remember { mutableStateOf("mine") }
+    var itemPage by remember { mutableStateOf(1) }
+    var itemPages by remember { mutableStateOf(1) }
     val isStoreStaff = user?.optInt("role", -1) == 3
     val currentUserId = user?.optInt("id", -1) ?: -1
     var entryActive by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(checkId, reload) {
+    LaunchedEffect(checkId, reload, itemPage, itemFilter) {
         runCatching {
-            withContext(Dispatchers.IO) { ApiClient.goodsCheck(checkId) }
-        }.onSuccess { check = it }
+            withContext(Dispatchers.IO) {
+                ApiClient.goodsCheck(
+                    checkId,
+                    page = itemPage,
+                    pageSize = 10,
+                    status = when (itemFilter) {
+                        "missing" -> "missing"
+                        "recount" -> "recount"
+                        "mine" -> "mine"
+                        "counted" -> "counted"
+                        "diff" -> "adjustment"
+                        else -> ""
+                    },
+                )
+            }
+        }.onSuccess {
+            check = it
+            itemPages = it.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+        }
             .onFailure { error = it.message ?: "加载盘点详情失败" }
     }
 
@@ -294,26 +313,21 @@ internal fun StocktakingDetailScreen(
         check?.let { selected ->
             val items = selected.optJSONArray("items") ?: JSONArray()
             val itemList = (0 until items.length()).map { items.getJSONObject(it) }
-            val total = itemList.size
-            val counted = itemList.count { nullableDouble(it, "firstCountQty") != null }
-            val missing = itemList.count { nullableDouble(it, "firstCountQty") == null }
-            val pendingRecount = itemList.count { it.optInt("checkStatus", 0) == 2 }
-            val diff = itemList.count { it.optBoolean("needsAdjustment", false) }
-            val myRecords = itemList.count {
+            val summary = selected.optJSONObject("summary")
+            val total = summary?.optInt("total", itemList.size) ?: itemList.size
+            val counted = summary?.optInt("counted", itemList.count { nullableDouble(it, "firstCountQty") != null })
+                ?: itemList.count { nullableDouble(it, "firstCountQty") != null }
+            val missing = summary?.optInt("missing", 0) ?: 0
+            val pendingRecount = summary?.optInt("pendingRecount", 0) ?: 0
+            val diff = summary?.optInt("adjustment", itemList.count { it.optBoolean("needsAdjustment", false) })
+                ?: itemList.count { it.optBoolean("needsAdjustment", false) }
+            val myRecords = summary?.optInt("mine", 0) ?: itemList.count {
                 it.optInt("firstCountedBy", -1) == currentUserId || it.optInt("recountedBy", -1) == currentUserId
             }
-            val filteredItems = when (itemFilter) {
-                "counted" -> itemList.filter { nullableDouble(it, "firstCountQty") != null }
-                "mine" -> itemList.filter {
-                    it.optInt("firstCountedBy", -1) == currentUserId || it.optInt("recountedBy", -1) == currentUserId
-                }
-                "missing" -> itemList.filter { nullableDouble(it, "firstCountQty") == null }
-                "recount" -> itemList.filter { it.optInt("checkStatus", 0) == 2 }
-                "diff" -> itemList.filter { it.optBoolean("needsAdjustment", false) }
-                else -> itemList
-            }
+            val paginationTotal = selected.optJSONObject("pagination")?.optInt("total", itemList.size) ?: itemList.size
             fun selectFilter(filter: String) {
                 itemFilter = if (itemFilter == filter && filter != "all") "all" else filter
+                itemPage = 1
             }
 
             AppCard {
@@ -375,11 +389,11 @@ internal fun StocktakingDetailScreen(
 
                 SectionHeader(
                     "盘点条目明细",
-                    if (itemFilter == "all") "共 ${filteredItems.size} 个商品条目" else "当前筛选 ${filteredItems.size} 个商品条目",
+                    if (itemFilter == "all") "共 $paginationTotal 个商品条目" else "当前筛选 $paginationTotal 个商品条目",
                 )
                 Spacer(Modifier.height(10.dp))
 
-                filteredItems.forEach { item ->
+                itemList.forEach { item ->
                     val product = item.optJSONObject("product") ?: JSONObject()
                     val firstQty = nullableDouble(item, "firstCountQty")
                     val recountQty = nullableDouble(item, "recountQty")
@@ -478,6 +492,12 @@ internal fun StocktakingDetailScreen(
                         }
                     }
                 }
+                AppPagination(
+                    page = itemPage,
+                    pages = itemPages,
+                    onPrev = { if (itemPage > 1) itemPage-- },
+                    onNext = { if (itemPage < itemPages) itemPage++ },
+                )
             }
         }
 

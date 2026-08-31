@@ -144,6 +144,8 @@ function decorateLocation(location, keyword) {
 
 Page({
   data: {
+    initialLocationId: null,
+    initialStoreId: '',
     activeTab: 'herbs',
     user: {},
     isSuperAdmin: false,
@@ -175,16 +177,24 @@ Page({
 
   onTabChange: onAdminTabChange,
 
+  onLoad(options = {}) {
+    const locationId = Number(options.locationId);
+    if (locationId) this.setData({ initialLocationId: locationId, initialStoreId: String(options.storeId || '') });
+  },
+
   async onShow() {
     const user = getUser();
     const isSuperAdmin = Number(user.role) === 0;
     this.setData({ user, isSuperAdmin });
     try {
       const stores = await getHerbLocationStores();
-      const selectedStoreId = isSuperAdmin ? stores?.[0]?.id : user.storeId;
+      const selectedStoreId = isSuperAdmin
+        ? (this.data.initialStoreId || stores?.[0]?.id)
+        : user.storeId;
       const storeIndex = Math.max(0, (stores || []).findIndex((item) => Number(item.id) === Number(selectedStoreId)));
       this.setData({ stores: stores || [], storeIndex, storeId: selectedStoreId || '', storeName: stores?.[storeIndex]?.name || '' });
       await this.load();
+      if (this.data.initialLocationId) this.openLocationById(this.data.initialLocationId);
     } catch (error) { console.error('load herb locations failed', error); }
   },
 
@@ -250,9 +260,22 @@ Page({
 
   selectLocation(e) {
     const location = this.data.locations.find((item) => Number(item.id) === Number(e.currentTarget.dataset.id));
+    if (!location) return;
+    wx.navigateTo({
+      url: `/pages/admin/herb-locations/herb-locations?locationId=${location.id}&storeId=${encodeURIComponent(this.data.storeId || '')}`
+    });
+  },
+  openLocationById(locationId) {
+    const location = this.data.locations.find((item) => Number(item.id) === Number(locationId));
     if (location) this.setData({ selectedLocation: decorateLocation(location, this.data.keyword), detailVisible: true });
   },
-  closeDetail() { this.setData({ detailVisible: false, selectedLocation: null }); },
+  closeDetail() {
+    if (this.data.initialLocationId) {
+      wx.navigateBack();
+      return;
+    }
+    this.setData({ detailVisible: false, selectedLocation: null });
+  },
 
   openAssignment() {
     const location = this.data.selectedLocation;

@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { Prisma } from "@prisma/client";
 import { AppError } from "../utils/appError.js";
 import { isStoreStaff } from "../constants/roles.js";
 import { assertManager, businessScope, resolveBusinessStoreId } from "./permissionService.js";
@@ -142,24 +143,22 @@ export async function listGoodsChecks(prisma, actor, query = {}) {
   if (query.status !== undefined && query.status !== "") where.status = Number(query.status);
   const [checks, total] = await Promise.all([
     prisma.ydGoodsCheck.findMany({
-      where, include: { store: { select: { id: true, name: true, code: true } }, items: true },
+      where, include: { store: { select: { id: true, name: true, code: true } } },
       orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
     }),
     prisma.ydGoodsCheck.count({ where }),
   ]);
   return {
-    list: checks.map((check) => {
-      const items = check.items || [];
-      const summary = { total: items.length, counted: 0, pendingRecount: 0, adjustment: 0, confirmed: 0 };
-      items.forEach((item) => {
-        if (item.firstCountQty !== null) summary.counted += 1;
-        if (Number(item.checkStatus) === CHECK_STATUS.PENDING_RECOUNT) summary.pendingRecount += 1;
-        if (normalizeItem(item).needsAdjustment) summary.adjustment += 1;
-        if (Number(item.reviewStatus) === 1) summary.confirmed += 1;
-      });
-      const { items: _items, ...rest } = check;
-      return { ...rest, summary };
-    }),
+    list: await Promise.all(checks.map(async (check) => {
+      const [itemTotal, counted, pendingRecount, confirmed, adjustment] = await Promise.all([
+        prisma.ydGoodsCheckItem.count({ where: { checkId: check.id } }),
+        prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
+        prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
+        prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, reviewStatus: 1 } }),
+        countAdjustmentItems(prisma, check.id),
+      ]);
+      return { ...check, summary: { total: itemTotal, counted, pendingRecount, adjustment, confirmed } };
+    })),
     pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
   };
 }
@@ -210,17 +209,163 @@ export async function deleteGoodsCheck(prisma, actor, id) {
   return { id: check.id };
 }
 
-export async function getGoodsCheck(prisma, actor, id) {
+export async function getGoodsCheck(prisma, actor, id, query = {}) {
   const check = await getCheck(prisma, actor, id);
-  const items = await prisma.ydGoodsCheckItem.findMany({
-    where: { checkId: check.id }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }],
-  });
-  const pricedItems = addInventoryPrices(items);
-  const missing = await missingCandidates(prisma, check, items, "");
+  const status = text(query.status);
+  const page = toPositiveInt(query.page, 1);
+  const pageSize = Math.min(toPositiveInt(query.pageSize, 10), 100);
+  const offset = (page - 1) * pageSize;
+  const itemBaseWhere = { checkId: check.id };
+  if (status === "counted") itemBaseWhere.firstCountQty = { not: null };
+  if (status === "mine") itemBaseWhere.OR = [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }];
+  if (status === "recount") itemBaseWhere.checkStatus = CHECK_STATUS.PENDING_RECOUNT;
+
+  const [allItemCount, itemCount, missingCount, counted, pendingRecount, mine, adjustment] = await Promise.all([
+    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id } }),
+    prisma.ydGoodsCheckItem.count({ where: itemBaseWhere }),
+    countMissingCandidates(prisma, check),
+    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
+    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
+    prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, OR: [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }] } }),
+    countAdjustmentItems(prisma, check.id),
+  ]);
+  const total = allItemCount + missingCount;
+  const summary = { total, counted, missing: missingCount, pendingRecount, adjustment, mine };
+  let filteredTotal = itemCount;
+  let rows = [];
+  if (status === "missing") {
+    filteredTotal = missingCount;
+    rows = await missingCandidatePage(prisma, check, page, pageSize, text(query.keyword));
+  } else if (status === "adjustment") {
+    filteredTotal = adjustment;
+    const ids = await adjustmentItemIds(prisma, check.id, offset, pageSize);
+    if (ids.length) {
+      const found = await prisma.ydGoodsCheckItem.findMany({ where: { id: { in: ids } }, include: { product: productInclude } });
+      const byId = new Map(found.map((row) => [row.id, row]));
+      rows = ids.map((itemId) => byId.get(itemId)).filter(Boolean);
+    }
+  } else if (status === "") {
+    filteredTotal = total;
+    const existingTake = offset < itemCount ? Math.min(pageSize, itemCount - offset) : 0;
+    const existingRows = existingTake
+      ? await prisma.ydGoodsCheckItem.findMany({
+        where: itemBaseWhere,
+        include: { product: productInclude },
+        orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }],
+        skip: offset,
+        take: existingTake,
+      })
+      : [];
+    const missingTake = pageSize - existingRows.length;
+    const missingOffset = Math.max(0, offset - itemCount);
+    const missingRows = missingTake && missingOffset < missingCount
+      ? await missingCandidateSlice(prisma, check, missingOffset, missingTake)
+      : [];
+    rows = existingRows.concat(missingRows);
+  } else {
+    rows = await prisma.ydGoodsCheckItem.findMany({
+      where: itemBaseWhere,
+      include: { product: productInclude },
+      orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }],
+      skip: offset,
+      take: pageSize,
+    });
+  }
+  const items = status === "missing"
+    ? rows
+    : status === ""
+      ? rows.map((item) => item.id === null ? normalizeItem(item, false, actor) : normalizeItem(item, true, actor))
+      : addInventoryPrices(rows).map((item) => normalizeItem(item, true, actor));
   return {
     ...check,
-    items: pricedItems.map((item) => normalizeItem(item, true, actor)).concat(missing),
+    items,
+    summary,
+    pagination: { page, pageSize, total: filteredTotal, pages: Math.ceil(filteredTotal / pageSize) },
   };
+}
+
+function missingSqlWhere(check, keyword = "") {
+  const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
+  const filters = [Prisma.sql`i.store_id = ${check.storeId}`, Prisma.sql`i.quantity > 0`];
+  if (categoryCodes.length) filters.push(Prisma.sql`p.category_code IN (${Prisma.join(categoryCodes)})`);
+  if (keyword) {
+    const value = `%${keyword}%`;
+    filters.push(Prisma.sql`(p.product_code LIKE ${value} OR p.name LIKE ${value} OR p.barcode LIKE ${value})`);
+  }
+  filters.push(Prisma.sql`NOT EXISTS (
+    SELECT 1 FROM yd_goods_check_item c
+    WHERE c.check_id = ${check.id}
+      AND c.product_id = i.product_id
+      AND c.batch_no = i.batch_no
+      AND c.system_location_name = i.location_name
+  )`);
+  return Prisma.join(filters, " AND ");
+}
+
+async function countMissingCandidates(prisma, check, keyword = "") {
+  const [row] = await prisma.$queryRaw(Prisma.sql`
+    SELECT COUNT(*) AS total
+    FROM e6_pharmacy_inventory_batches i
+    INNER JOIN e6_pharmacy_products p ON p.id = i.product_id
+    WHERE ${missingSqlWhere(check, keyword)}
+  `);
+  return Number(row?.total || 0);
+}
+
+async function missingCandidatePage(prisma, check, page, pageSize, keyword = "") {
+  const offset = (page - 1) * pageSize;
+  return missingCandidateSlice(prisma, check, offset, pageSize, keyword);
+}
+
+async function missingCandidateSlice(prisma, check, offset, pageSize, keyword = "") {
+  const rows = await prisma.$queryRaw(Prisma.sql`
+    SELECT i.product_id AS productId, i.batch_no AS batchNo, i.location_name AS systemLocationName,
+      i.quantity AS systemQty, p.id AS product_id, p.product_code AS productCode, p.name,
+      p.barcode, p.specification, p.dosage_form AS dosageForm, p.manufacturer,
+      p.category_attribute AS categoryAttribute, p.unit, p.retail_price AS retailPrice
+    FROM e6_pharmacy_inventory_batches i
+    INNER JOIN e6_pharmacy_products p ON p.id = i.product_id
+    WHERE ${missingSqlWhere(check, keyword)}
+    ORDER BY i.product_id ASC, i.batch_no ASC, i.location_name ASC
+    LIMIT ${pageSize} OFFSET ${offset}
+  `);
+  return rows.map((row) => normalizeItem({
+    checkId: check.id,
+    storeId: check.storeId,
+    productId: Number(row.productId),
+    product: {
+      id: Number(row.product_id), productCode: row.productCode, name: row.name, barcode: row.barcode,
+      specification: row.specification, dosageForm: row.dosageForm, manufacturer: row.manufacturer,
+      categoryAttribute: row.categoryAttribute, unit: row.unit, retailPrice: row.retailPrice,
+    },
+    batchNo: row.batchNo,
+    systemLocationName: row.systemLocationName,
+    systemQty: row.systemQty,
+    firstCountQty: null,
+    checkStatus: CHECK_STATUS.UNCOUNTED,
+  }, false));
+}
+
+const adjustmentPredicate = Prisma.sql`(
+  location_status = 1
+  OR (system_qty = 0 AND first_count_qty > 0)
+  OR (recount_qty IS NOT NULL AND recount_qty <> COALESCE(recount_system_qty, 0))
+  OR (recount_qty IS NULL AND first_count_qty IS NOT NULL AND first_count_qty <> system_qty)
+)`;
+
+async function countAdjustmentItems(prisma, checkId) {
+  const [row] = await prisma.$queryRaw(Prisma.sql`SELECT COUNT(*) AS total FROM yd_goods_check_item WHERE check_id = ${checkId} AND ${adjustmentPredicate}`);
+  return Number(row?.total || 0);
+}
+
+async function adjustmentItemIds(prisma, checkId, offset, pageSize) {
+  const rows = await prisma.$queryRaw(Prisma.sql`
+    SELECT id FROM yd_goods_check_item
+    WHERE check_id = ${checkId} AND ${adjustmentPredicate}
+    ORDER BY product_id ASC, batch_no ASC, system_location_name ASC
+    LIMIT ${pageSize} OFFSET ${offset}
+  `);
+  return rows.map((row) => Number(row.id));
 }
 
 async function inventorySnapshot(prisma, check, productId, batchNo, locationName) {

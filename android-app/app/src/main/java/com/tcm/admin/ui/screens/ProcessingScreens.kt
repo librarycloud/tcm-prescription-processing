@@ -210,7 +210,7 @@ internal fun ProcessingScreenV2(
                         keyword = keyword.trim(),
                         storeId = storeIdInt,
                         page = page,
-                        pageSize = 20,
+                        pageSize = 10,
                     )
                     Triple<JSONObject, JSONObject?, JSONArray?>(summary, paged, null)
                 } else {

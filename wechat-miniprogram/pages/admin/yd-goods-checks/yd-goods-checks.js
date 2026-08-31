@@ -72,6 +72,7 @@ function filterCandidateRows(rows, filter) {
 
 Page({
   data: {
+    initialCheckId: null,
     activeTab: 'overview',
     checksLoading: false,
     checks: [],
@@ -107,6 +108,11 @@ Page({
 
   onTabChange: onAdminTabChange,
 
+  onLoad(options = {}) {
+    const checkId = Number(options.checkId);
+    if (checkId) this.setData({ initialCheckId: checkId });
+  },
+
   async onShow() {
     const user = getUser() || {};
     const isSuperAdmin = Number(user.role) === 0;
@@ -117,6 +123,9 @@ Page({
       this.setData({ stores: data?.list || [] });
     }
     await this.loadChecks();
+    if (this.data.initialCheckId && !this.data.selectedCheck) {
+      this.openCheckById(this.data.initialCheckId);
+    }
   },
 
   async loadChecks() {
@@ -133,6 +142,14 @@ Page({
   selectCheck(e) {
     const selectedCheck = this.data.checks[Number(e.currentTarget.dataset.index)];
     if (!selectedCheck) return;
+    wx.navigateTo({
+      url: `/pages/admin/yd-goods-checks/yd-goods-checks?checkId=${selectedCheck.id}`
+    });
+  },
+
+  openCheckById(checkId) {
+    const selectedCheck = this.data.checks.find((item) => Number(item.id) === Number(checkId));
+    if (!selectedCheck) return;
     this.setData({
       selectedCheck,
       keyword: '',
@@ -147,6 +164,10 @@ Page({
   },
 
   backToChecks() {
+    if (this.data.initialCheckId) {
+      wx.navigateBack();
+      return;
+    }
     this.setData({ selectedCheck: null, candidateFilterIndex: 0, candidateFilter: '', candidateSearched: false, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
   },
 
@@ -178,8 +199,10 @@ Page({
     try {
       const selectedCheck = await createGoodsCheck({ checkName, checkType: 1, ...(storeId ? { storeId } : {}) });
       this.closeCreate();
-      this.setData({ selectedCheck });
       await this.loadChecks();
+      wx.navigateTo({
+        url: `/pages/admin/yd-goods-checks/yd-goods-checks?checkId=${selectedCheck.id}`
+      });
       wx.showToast({ title: '盘点单已创建', icon: 'success' });
     } finally {
       this.setData({ creating: false });
@@ -308,8 +331,10 @@ Page({
     const row = this.data.selectedInventories[Number(e.currentTarget.dataset.index)];
     if (!row) return;
     const status = Number(row.checkStatus || 0);
-    const isRecount = status === 2 && row.checkItemId;
-    if (row.counted && !isRecount) return;
+    const isEditingRecount = Boolean(row.canEditRecount);
+    const isRecount = isEditingRecount || (status === 2 && Number(row.reviewStatus || 0) === 1 && row.checkItemId);
+    const isEditingInitial = Boolean(row.canEditInitial) && !isEditingRecount;
+    if (row.counted && !isRecount && !isEditingInitial) return;
     const systemQty = isRecount && row.recountSystemQty !== null && row.recountSystemQty !== undefined
       ? row.recountSystemQty
       : row.quantity;
@@ -320,13 +345,14 @@ Page({
       countVisible: true,
       countForm: {
         mode: isRecount ? 'recount' : 'initial',
-        itemId: isRecount ? row.checkItemId : null,
+        itemId: row.checkItemId || null,
         product: row.product,
         batchNo: row.batchNo || '',
         locationName: row.countLocationName || row.locationName || '',
         locationEditing: false,
         systemQty: numberText(systemQty),
-        countQty,
+        countQty: isEditingInitial || isEditingRecount ? numberText(isRecount ? row.recountQty : row.firstCountQty) : countQty,
+        editing: isEditingInitial || isEditingRecount,
         manualBatch: false
       }
     });
@@ -335,7 +361,7 @@ Page({
   openManualCount() {
     const product = this.data.selectedProduct;
     if (!product) return;
-    this.setData({ countVisible: true, countForm: { mode: 'initial', itemId: null, product, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: true } });
+    this.setData({ countVisible: true, countForm: { mode: 'initial', itemId: null, product, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', editing: false, manualBatch: true } });
   },
 
   closeCount() {
@@ -362,6 +388,7 @@ Page({
         await recountGoodsCheckItem(form.itemId, { recountQty: Number(form.countQty) });
       } else {
         await addInitialGoodsCheckCount(this.data.selectedCheck.id, {
+          ...(form.editing ? { itemId: form.itemId } : {}),
           productId: form.product.id,
           batchNo: form.batchNo,
           locationName: form.locationName || undefined,
@@ -371,7 +398,7 @@ Page({
       this.closeCount();
       await this.searchCandidates(true);
       await this.loadChecks();
-      wx.showToast({ title: form.mode === 'recount' ? '复盘已保存' : '盘点已保存', icon: 'success' });
+      wx.showToast({ title: form.editing ? '盘点记录已修改' : (form.mode === 'recount' ? '复盘已保存' : '盘点已保存'), icon: 'success' });
     } finally {
       this.setData({ saving: false });
     }
