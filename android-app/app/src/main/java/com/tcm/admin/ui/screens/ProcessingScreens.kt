@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -227,25 +228,7 @@ internal fun ProcessingScreenV2(
             }
             if (pickupData != null) {
                 pickupTasks = (0 until pickupData.length()).map {
-                    val obj = pickupData.getJSONObject(it)
-                    val prescription = obj.optJSONObject("prescription")
-                    val processType = obj.optJSONObject("processType")
-                    val store = obj.optJSONObject("store")
-                    PackageItem(
-                        id = obj.optInt("id"),
-                        name = "${obj.displayField("receiverName", "顾客")} · ${processType?.displayField("name", "代煎") ?: "加工"}",
-                        customer = obj.displayField("receiverName"),
-                        phone = obj.displayField("receiverPhone"),
-                        code = obj.displayField("pickupCode"),
-                        method = pickupMethodLabel(obj.optInt("pickupMethod", 0)),
-                        status = if (obj.optInt("status") == 1) "已领取" else "待领取",
-                        statusCode = obj.optInt("status"),
-                        time = obj.displayField("finishDate", "").take(16).replace("T", " "),
-                        store = store?.displayField("name", "") ?: "",
-                        expressTrackingNo = obj.displayField("expressTrackingNo", ""),
-                        pickupQrContent = obj.displayField("pickupQrContent", ""),
-                        info = obj.displayField("itemInfo", ""),
-                    )
+                    packageItem(pickupData.getJSONObject(it))
                 }
             }
             loading = false
@@ -338,7 +321,9 @@ internal fun ProcessingScreenV2(
                 "逾期未开工" to (stat(stats, "overdueCount") to "overdue"),
                 "加工中" to (stat(stats, "processingCount") to "processing"),
                 "等待顾客" to (stat(stats, "waitingNoticeCount") to "notice"),
-                "明日加工" to (stat(stats, "tomorrowWaitingCount") to "tomorrow-waiting"),
+                // The API uses `tomorrow` for the next-day date filter. Using a
+                // different key here leaves the server view unfiltered.
+                "明日加工" to (stat(stats, "tomorrowWaitingCount") to "tomorrow"),
                 "全部" to (stat(stats, "processingPlanTotalCount") to "all"),
             )
 
@@ -1654,12 +1639,13 @@ internal fun WorkflowOperationScreen(
         // STEP 1: 调配
         Spacer(Modifier.height(12.dp))
         AppCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Surface(
                         shape = CircleShape,
                         color = PrimarySoft,
@@ -1672,21 +1658,24 @@ internal fun WorkflowOperationScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("调配", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (dispensingTimeLabel.isNotBlank()) {
-                        Text(dispensingTimeLabel, color = Muted, fontSize = 10.sp)
-                        Spacer(Modifier.width(5.dp))
-                    }
+                if (dispensingTimeLabel.isNotBlank()) {
                     Text(
-                        dispensingState,
-                        color = when {
-                            isDispensingCompleted -> Success
-                            status == 1 -> Primary
-                            else -> Muted
-                        },
-                        fontSize = 12.sp,
+                        dispensingTimeLabel,
+                        color = Muted,
+                        fontSize = 10.sp,
+                        modifier = Modifier.align(Alignment.Center),
                     )
                 }
+                Text(
+                    dispensingState,
+                    color = when {
+                        isDispensingCompleted -> Success
+                        status == 1 -> Primary
+                        else -> Muted
+                    },
+                    fontSize = 12.sp,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
             }
             Spacer(Modifier.height(6.dp))
             Text("称量调配完成后拍照留存凭证", color = Muted, fontSize = 12.sp)
@@ -1765,12 +1754,13 @@ internal fun WorkflowOperationScreen(
         if (isDecoction) {
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterStart),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = PrimarySoft,
@@ -1783,21 +1773,24 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (soakingTimeLabel.isNotBlank()) {
-                            Text(soakingTimeLabel, color = Muted, fontSize = 10.sp)
-                            Spacer(Modifier.width(5.dp))
-                        }
+                    if (soakingTimeLabel.isNotBlank()) {
                         Text(
-                            soakingState,
-                            color = when {
-                                isWorkflowCompleted -> Success
-                                activeSoakings.isNotEmpty() -> Primary
-                                else -> Muted
-                            },
-                            fontSize = 12.sp,
+                            soakingTimeLabel,
+                            color = Muted,
+                            fontSize = 10.sp,
+                            modifier = Modifier.align(Alignment.Center),
                         )
                     }
+                    Text(
+                        soakingState,
+                        color = when {
+                            isWorkflowCompleted -> Success
+                            activeSoakings.isNotEmpty() -> Primary
+                            else -> Muted
+                        },
+                        fontSize = 12.sp,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1862,12 +1855,13 @@ internal fun WorkflowOperationScreen(
             // STEP 3: 煎煮
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterStart),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = PrimarySoft,
@@ -1880,21 +1874,24 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (decoctionTimeLabel.isNotBlank()) {
-                            Text(decoctionTimeLabel, color = Muted, fontSize = 10.sp)
-                            Spacer(Modifier.width(5.dp))
-                        }
+                    if (decoctionTimeLabel.isNotBlank()) {
                         Text(
-                            decoctionState,
-                            color = when {
-                                isWorkflowCompleted -> Success
-                                activeDecoctions.isNotEmpty() -> Primary
-                                else -> Muted
-                            },
-                            fontSize = 12.sp,
+                            decoctionTimeLabel,
+                            color = Muted,
+                            fontSize = 10.sp,
+                            modifier = Modifier.align(Alignment.Center),
                         )
                     }
+                    Text(
+                        decoctionState,
+                        color = when {
+                            isWorkflowCompleted -> Success
+                            activeDecoctions.isNotEmpty() -> Primary
+                            else -> Muted
+                        },
+                        fontSize = 12.sp,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1981,12 +1978,13 @@ internal fun WorkflowOperationScreen(
             // STEP 4: 打包
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterStart),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = PrimarySoft,
@@ -1999,21 +1997,24 @@ internal fun WorkflowOperationScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (packagingTimeLabel.isNotBlank()) {
-                            Text(packagingTimeLabel, color = Muted, fontSize = 10.sp)
-                            Spacer(Modifier.width(5.dp))
-                        }
+                    if (packagingTimeLabel.isNotBlank()) {
                         Text(
-                            packagingState,
-                            color = when {
-                                isWorkflowCompleted -> Success
-                                activePackagings.isNotEmpty() -> Primary
-                                else -> Muted
-                            },
-                            fontSize = 12.sp,
+                            packagingTimeLabel,
+                            color = Muted,
+                            fontSize = 10.sp,
+                            modifier = Modifier.align(Alignment.Center),
                         )
                     }
+                    Text(
+                        packagingState,
+                        color = when {
+                            isWorkflowCompleted -> Success
+                            activePackagings.isNotEmpty() -> Primary
+                            else -> Muted
+                        },
+                        fontSize = 12.sp,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
 
