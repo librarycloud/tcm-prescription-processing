@@ -59,6 +59,12 @@ function effectiveCount(item) {
       : Number(item.firstCountQty);
 }
 
+function isRecountReady(item) {
+  return Number(item.checkStatus || 0) === CHECK_STATUS.PENDING_RECOUNT
+    && Number(item.reviewStatus || 0) === 1
+    && (item.recountQty === null || item.recountQty === undefined);
+}
+
 function normalizeItem(item, counted = true, actor = null) {
   const countedQty = effectiveCount(item);
   const systemQty = currentSystem(item);
@@ -66,7 +72,7 @@ function normalizeItem(item, counted = true, actor = null) {
   const needsAdjustment = countedQty !== null && (
     difference !== 0 || item.locationStatus === 1 || (Number(item.systemQty) === 0 && countedQty > 0)
   );
-  return {
+  const normalized = {
     id: item.id ?? null,
     checkId: item.checkId,
     storeId: item.storeId,
@@ -96,6 +102,7 @@ function normalizeItem(item, counted = true, actor = null) {
     effectiveCount: countedQty,
     difference,
     needsAdjustment,
+    needsRecount: isRecountReady(item),
     canEditInitial: Boolean(
       actor && item.firstCountQty !== null && item.firstCountQty !== undefined
       && Number(item.reviewStatus || 0) === 0
@@ -107,6 +114,13 @@ function normalizeItem(item, counted = true, actor = null) {
       && Number(item.recountedBy) === Number(actor.id),
     ),
   };
+  return redactInventoryForStoreStaff(normalized, actor);
+}
+
+function redactInventoryForStoreStaff(item, actor) {
+  if (!isStoreStaff(actor)) return item;
+  const { systemQty, recountSystemQty, quantity, difference, ...redacted } = item;
+  return redacted;
 }
 
 const productInclude = {
@@ -153,7 +167,7 @@ export async function listGoodsChecks(prisma, actor, query = {}) {
       const [itemTotal, counted, pendingRecount, confirmed, adjustment] = await Promise.all([
         prisma.ydGoodsCheckItem.count({ where: { checkId: check.id } }),
         prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
-        prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
+        prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT, reviewStatus: 1 } }),
         prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, reviewStatus: 1 } }),
         countAdjustmentItems(prisma, check.id, check.storeId),
       ]);
@@ -222,7 +236,10 @@ export async function getGoodsCheck(prisma, actor, id, query = {}) {
   const itemBaseWhere = { checkId: check.id, storeId: check.storeId };
   if (status === "counted") itemBaseWhere.firstCountQty = { not: null };
   if (status === "mine") itemBaseWhere.OR = [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }];
-  if (status === "recount") itemBaseWhere.checkStatus = CHECK_STATUS.PENDING_RECOUNT;
+  if (status === "recount") {
+    itemBaseWhere.checkStatus = CHECK_STATUS.PENDING_RECOUNT;
+    itemBaseWhere.reviewStatus = 1;
+  }
 
   const [allItemCount, itemCount] = includeSummary
     ? await Promise.all([
@@ -234,7 +251,7 @@ export async function getGoodsCheck(prisma, actor, id, query = {}) {
     ? await Promise.all([
       countMissingCandidates(prisma, check),
       prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, firstCountQty: { not: null } } }),
-      prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT } }),
+      prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, checkStatus: CHECK_STATUS.PENDING_RECOUNT, reviewStatus: 1 } }),
       prisma.ydGoodsCheckItem.count({ where: { checkId: check.id, OR: [{ firstCountedBy: Number(actor.id) }, { recountedBy: Number(actor.id) }] } }),
       countAdjustmentItems(prisma, check.id, check.storeId),
     ])
@@ -290,7 +307,7 @@ export async function getGoodsCheck(prisma, actor, id, query = {}) {
     });
   }
   const items = status === "missing"
-    ? rows
+    ? rows.map((item) => redactInventoryForStoreStaff(item, actor))
     : status === ""
       ? rows.map((item) => item.id === null ? normalizeItem(item, false, actor) : normalizeItem(item, true, actor))
       : addInventoryPrices(rows).map((item) => normalizeItem(item, true, actor));
@@ -419,14 +436,13 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   if (requestedItem && Number(requestedItem.productId) !== productId) throw new AppError("不能修改盘点记录的商品", 400);
   const product = await prisma.e6PharmacyProduct.findUnique({ where: { id: productId } });
   if (!product) throw new AppError("商品不存在或不属于该门店", 404);
-  const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
-  if (categoryCodes.length && !categoryCodes.includes(text(product.categoryCode))) throw new AppError("该商品不在本盘点计划的分类范围内", 400);
   const batchNo = text(payload.batchNo ?? requestedItem?.batchNo);
   if (requestedItem && batchNo !== text(requestedItem.batchNo)) throw new AppError("不能修改盘点记录的批号", 400);
   const requestedLocation = requestedItem
     ? requestedItem.systemLocationName
     : payload.locationName === undefined ? undefined : text(payload.locationName);
   const snapshot = await inventorySnapshot(prisma, check, productId, batchNo, requestedLocation);
+  if (snapshot.quantity <= 0) throw new AppError("当前批次无库存，无需盘点", 400);
   const systemLocationName = snapshot.locationName;
   const existing = requestedItem || await prisma.ydGoodsCheckItem.findFirst({ where: { checkId: check.id, productId, batchNo, systemLocationName } });
   if (existing?.firstCountQty !== null && existing?.firstCountQty !== undefined) {
@@ -438,11 +454,12 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   const systemQty = payload.systemQty === undefined || payload.systemQty === null || payload.systemQty === ""
     ? snapshot.quantity
     : quantity(payload.systemQty);
+  const requestedCountLocation = text(payload.countLocationName);
   const countLocationName = requestedItem
     ? (payload.countLocationName === undefined && payload.locationName === undefined
       ? requestedItem.countLocationName
-      : text(payload.countLocationName ?? payload.locationName) || null)
-    : requestedLocation !== undefined && requestedLocation !== "" ? requestedLocation : null;
+      : requestedCountLocation && requestedCountLocation !== systemLocationName ? requestedCountLocation : null)
+    : requestedCountLocation && requestedCountLocation !== systemLocationName ? requestedCountLocation : null;
   const data = {
     checkId: check.id, storeId: check.storeId, productId, batchNo, systemLocationName,
     countLocationName, systemQty, firstCountQty,
@@ -476,9 +493,19 @@ export async function recountGoodsCheckItem(prisma, actor, itemId, payload = {})
   }
   const recountQty = quantity(payload.recountQty ?? payload.countQty);
   const snapshot = await inventorySnapshot(prisma, item.check, item.productId, item.batchNo, item.systemLocationName);
+  if (snapshot.quantity <= 0) throw new AppError("当前批次无库存，无需盘点", 400);
   const status = recountQty === snapshot.quantity ? CHECK_STATUS.RECOUNT_MATCH_PENDING_REVIEW : CHECK_STATUS.PENDING_ADJUSTMENT;
+  const countLocationName = payload.countLocationName === undefined
+    ? item.countLocationName
+    : text(payload.countLocationName) && text(payload.countLocationName) !== text(item.systemLocationName)
+      ? text(payload.countLocationName)
+      : null;
   const updated = await prisma.ydGoodsCheckItem.update({
-    where: { id }, data: { recountQty, recountSystemQty: snapshot.quantity, recountedAt: new Date(), recountedBy: Number(actor.id), checkStatus: status, reviewStatus: 0 }, include: { product: productInclude },
+    where: { id }, data: {
+      recountQty, recountSystemQty: snapshot.quantity, recountedAt: new Date(), recountedBy: Number(actor.id),
+      checkStatus: status, reviewStatus: 0, countLocationName,
+      locationStatus: countLocationName && countLocationName !== text(item.systemLocationName) ? 1 : 0,
+    }, include: { product: productInclude },
   });
   return normalizeItem(updated, true, actor);
 }
@@ -487,11 +514,13 @@ export async function updateGoodsCheckLocation(prisma, actor, itemId, payload = 
   const id = toPositiveInt(itemId, 0);
   const item = await prisma.ydGoodsCheckItem.findUnique({ where: { id }, include: { check: true } });
   if (!item) throw new AppError("盘点明细不存在", 404);
-  await getCheck(prisma, actor, item.checkId);
+  const check = await getCheck(prisma, actor, item.checkId);
+  if (Number(check.status) === 2) throw new AppError("盘点单已完成", 400);
+  if (Number(item.reviewStatus || 0) === 1) throw new AppError("该记录已复核，不能修改货位", 403);
   const location = text(payload.countLocationName ?? payload.locationName);
   const changed = Boolean(location) && location !== text(item.systemLocationName);
   const updated = await prisma.ydGoodsCheckItem.update({ where: { id }, data: { countLocationName: changed ? location : null, locationStatus: changed ? 1 : 0 }, include: { product: productInclude } });
-  return normalizeItem(updated);
+  return normalizeItem(updated, true, actor);
 }
 
 export async function reviewGoodsCheckItem(prisma, actor, itemId, payload = {}) {
@@ -556,18 +585,19 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
   const checkStatus = query.checkStatus ?? query.check_status;
   const missingRequested = String(checkStatus ?? "") === "missing" || text(query.status) === "missing";
   if (checkStatus !== undefined && checkStatus !== "" && !missingRequested) where.checkStatus = Number(checkStatus);
+  if (Number(checkStatus) === CHECK_STATUS.PENDING_RECOUNT) where.reviewStatus = 1;
   const locationStatus = query.locationStatus ?? query.location_status;
   if (locationStatus !== undefined && locationStatus !== "") where.locationStatus = Number(locationStatus);
   const rows = await prisma.ydGoodsCheckItem.findMany({ where, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }] });
   const pricedRows = missingRequested ? rows : addInventoryPrices(rows);
   let list = pricedRows.map((item) => normalizeItem(item, true, actor));
   const status = missingRequested ? "missing" : text(query.status);
-  if (status === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
+  if (status === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT && row.reviewStatus === 1);
   if (status === "adjustment") list = list.filter((row) => row.needsAdjustment);
   if (status === "unreviewed") list = list.filter((row) => row.reviewStatus === 0 && row.firstCountQty !== null);
   if (status === "new") list = list.filter((row) => row.checkStatus === CHECK_STATUS.NEW_BATCH);
   if (status === "missing") {
-    const missing = await missingCandidates(prisma, check, rows, keyword);
+    const missing = await missingCandidates(prisma, check, rows, keyword, actor);
     const page = toPositiveInt(query.page, 1); const pageSize = Math.min(toPositiveInt(query.pageSize, 50), 200);
     return { list: missing.slice((page - 1) * pageSize, page * pageSize), pagination: { page, pageSize, total: missing.length, pages: Math.ceil(missing.length / pageSize) } };
   }
@@ -575,12 +605,24 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
   return { list: list.slice((page - 1) * pageSize, page * pageSize), pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) } };
 }
 
-async function missingCandidates(prisma, check, rows, keyword) {
+async function missingCandidates(prisma, check, rows, keyword, actor = null) {
   const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
   const productWhere = productFilter(categoryCodes, keyword);
   const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(Object.keys(productWhere).length ? { product: productWhere } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
   const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationName)));
-  return inventories.filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationName))).map((row) => normalizeItem({ checkId: check.id, storeId: check.storeId, productId: row.productId, product: row.product, batchNo: row.batchNo, systemLocationName: row.locationName, systemQty: row.quantity, firstCountQty: null, checkStatus: 0 } , false));
+  return inventories
+    .filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationName)))
+    .map((row) => normalizeItem({
+      checkId: check.id,
+      storeId: check.storeId,
+      productId: row.productId,
+      product: row.product,
+      batchNo: row.batchNo,
+      systemLocationName: row.locationName,
+      systemQty: row.quantity,
+      firstCountQty: null,
+      checkStatus: 0,
+    }, false, actor));
 }
 
 export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {}) {
@@ -588,8 +630,7 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   const keyword = text(query.keyword);
   const myCounted = isStoreStaff(actor) && (query.myCounted === true || text(query.myCounted) === "1");
   const countedOnly = query.countedOnly === true || text(query.countedOnly) === "1";
-  const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
-  const productWhere = productFilter(categoryCodes, keyword);
+  const productWhere = productFilter([], keyword);
   const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(Object.keys(productWhere).length ? { product: productWhere } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { locationName: "asc" }] });
   const rows = await prisma.ydGoodsCheckItem.findMany({
     where: { checkId: check.id },
@@ -622,49 +663,12 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
       recountedBy: item?.recountedBy ?? null,
       checkStatus: item ? Number(item.checkStatus || 0) : CHECK_STATUS.UNCOUNTED,
       reviewStatus: item ? Number(item.reviewStatus || 0) : 0,
+      needsRecount: Boolean(item && isRecountReady(item)),
       canEditInitial: Boolean(item && item.firstCountQty !== null && item.firstCountQty !== undefined && Number(item.reviewStatus || 0) === 0 && Number(item.firstCountedBy) === Number(actor.id)),
       canEditRecount: Boolean(item && item.recountQty !== null && item.recountQty !== undefined && Number(item.reviewStatus || 0) === 0 && Number(item.recountedBy) === Number(actor.id)),
     };
   });
-  if (myCounted || countedOnly) {
-    const inventoryKeys = new Set(inventories.map((row) => itemKey(row.productId, row.batchNo, row.locationName)));
-    visibleRows
-      .filter((row) => !inventoryKeys.has(itemKey(row.productId, row.batchNo, row.systemLocationName)))
-      .forEach((row) => {
-        result.push({
-          productId: row.productId,
-          product: row.product,
-          batchNo: row.batchNo,
-          locationName: row.systemLocationName,
-          quantity: Number(row.systemQty || 0),
-          counted: row.firstCountQty !== null && row.firstCountQty !== undefined,
-          checkItemId: row.id,
-          countLocationName: row.countLocationName || null,
-          systemQty: Number(row.systemQty || 0),
-          firstCountQty: row.firstCountQty === null || row.firstCountQty === undefined ? null : Number(row.firstCountQty),
-          recountQty: row.recountQty === null || row.recountQty === undefined ? null : Number(row.recountQty),
-          recountSystemQty: row.recountSystemQty === null || row.recountSystemQty === undefined ? null : Number(row.recountSystemQty),
-          firstCountedBy: row.firstCountedBy ?? null,
-          recountedBy: row.recountedBy ?? null,
-          checkStatus: Number(row.checkStatus || 0),
-          reviewStatus: Number(row.reviewStatus || 0),
-          canEditInitial: row.firstCountQty !== null && row.firstCountQty !== undefined && Number(row.reviewStatus || 0) === 0 && Number(row.firstCountedBy) === Number(actor.id),
-          canEditRecount: row.recountQty !== null && row.recountQty !== undefined && Number(row.reviewStatus || 0) === 0 && Number(row.recountedBy) === Number(actor.id),
-        });
-      });
-  }
-  if (keyword) {
-    const products = await prisma.e6PharmacyProduct.findMany({
-      where: productFilter(categoryCodes, keyword),
-      select: productInclude.select,
-      orderBy: { name: "asc" },
-      take: 100,
-    });
-    products.forEach((product) => {
-      result.push({ productId: product.id, product, batchNo: "", locationName: "", quantity: 0, counted: false, manualBatch: true });
-    });
-  }
-  return result;
+  return result.map((item) => redactInventoryForStoreStaff(item, actor));
 }
 
 export async function finishGoodsCheck(prisma, actor, checkId) {
@@ -678,7 +682,7 @@ export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   const rows = await prisma.ydGoodsCheckItem.findMany({ where: { checkId: check.id }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
   const pricedRows = addInventoryPrices(rows);
   let list = pricedRows.map(normalizeItem);
-  if (type === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
+  if (type === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT && row.reviewStatus === 1);
   if (type === "adjustment") list = list.filter((row) => row.needsAdjustment);
   const userIds = [...new Set(list.flatMap((row) => [row.firstCountedBy, row.recountedBy, row.reviewedBy]).filter(Boolean))];
   const users = userIds.length
@@ -688,7 +692,7 @@ export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   const checkStatusText = (row) => row.needsAdjustment ? "需调整库存" : ({
     [CHECK_STATUS.UNCOUNTED]: "未盘",
     [CHECK_STATUS.MATCH_PENDING_REVIEW]: "待复核",
-    [CHECK_STATUS.PENDING_RECOUNT]: "待复盘",
+    [CHECK_STATUS.PENDING_RECOUNT]: row.reviewStatus === 1 ? "待复盘" : "待复核",
     [CHECK_STATUS.RECOUNT_MATCH_PENDING_REVIEW]: "复盘待复核",
     [CHECK_STATUS.PENDING_ADJUSTMENT]: "需调整库存",
     [CHECK_STATUS.NEW_BATCH]: "新增批号",

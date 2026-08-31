@@ -70,7 +70,6 @@ test('admin route registration only admits staff to explicitly marked routes', a
     ['POST', '/admin/prescriptions'],
     ['POST', '/admin/yd-goods-check'],
     ['POST', '/admin/yd-goods-check/1/finish'],
-    ['PUT', '/admin/yd-goods-check/items/1/location'],
     ['POST', '/admin/yd-goods-check/items/1/review'],
     ['PUT', '/admin/herb-locations/herbs/1'],
     ['DELETE', '/admin/herb-locations/assignments/1'],
@@ -80,6 +79,13 @@ test('admin route registration only admits staff to explicitly marked routes', a
     });
     assert.equal(response.statusCode, 403, `${method} ${url} should reject staff write access`);
   }
+
+  const locationUpdate = await app.inject({
+    method: 'PUT',
+    url: '/admin/yd-goods-check/items/1/location',
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.notEqual(locationUpdate.statusCode, 403, 'staff should be able to update an unreviewed count location');
 
   await app.close();
 });

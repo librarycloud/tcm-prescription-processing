@@ -66,7 +66,7 @@ function candidateProducts(rows) {
 
 function filterCandidateRows(rows, filter) {
   if (filter === 'missing') return rows.filter((row) => !row.manualBatch && !row.counted);
-  if (filter === 'recount') return rows.filter((row) => !row.manualBatch && Number(row.checkStatus) === 2 && row.checkItemId);
+  if (filter === 'recount') return rows.filter((row) => !row.manualBatch && row.needsRecount && row.checkItemId);
   if (filter === 'mine') return rows.filter((row) => !row.manualBatch && row.counted);
   return rows;
 }
@@ -333,7 +333,7 @@ Page({
     if (!row) return;
     const status = Number(row.checkStatus || 0);
     const isEditingRecount = Boolean(row.canEditRecount);
-    const isRecount = isEditingRecount || (status === 2 && Number(row.reviewStatus || 0) === 1 && row.checkItemId);
+    const isRecount = isEditingRecount || (row.needsRecount && row.checkItemId);
     const isEditingInitial = Boolean(row.canEditInitial) && !isEditingRecount;
     if (row.counted && !isRecount && !isEditingInitial) return;
     const systemQty = isRecount && row.recountSystemQty !== null && row.recountSystemQty !== undefined

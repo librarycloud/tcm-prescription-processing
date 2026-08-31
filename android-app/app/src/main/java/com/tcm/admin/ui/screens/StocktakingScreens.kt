@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -47,7 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -266,23 +264,20 @@ internal fun StocktakingScreen(
 internal fun StocktakingDetailScreen(
     checkId: Int,
     user: JSONObject? = null,
+    scrollState: ScrollState,
+    refreshKey: Int,
+    onStartEntry: (JSONObject?) -> Unit,
 ) {
-    var check by remember { mutableStateOf<JSONObject?>(null) }
-    var summaryData by remember { mutableStateOf<JSONObject?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
-    var locationItem by remember { mutableStateOf<JSONObject?>(null) }
-    var locationValue by remember { mutableStateOf("") }
-    var entryItem by remember { mutableStateOf<JSONObject?>(null) }
-    var entryKeyword by remember { mutableStateOf("") }
-    var itemFilter by remember { mutableStateOf<String?>(null) }
-    var itemPage by remember { mutableStateOf(1) }
-    var itemPages by remember { mutableStateOf(1) }
+    val detailOwner = "stocktaking-detail-$checkId"
+    var check by rememberRetainedListValue(detailOwner, "check") { null as JSONObject? }
+    var summaryData by rememberRetainedListValue(detailOwner, "summary") { null as JSONObject? }
+    var error by rememberRetainedListValue(detailOwner, "error") { null as String? }
+    var itemFilter by rememberRetainedListValue(detailOwner, "filter") { "all" }
+    var itemPage by rememberRetainedListValue(detailOwner, "page") { 1 }
+    var itemPages by rememberRetainedListValue(detailOwner, "pages") { 1 }
     val isStoreStaff = user?.optInt("role", -1) == 3
-    var entryActive by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(checkId, reload, itemPage, itemFilter) {
+    LaunchedEffect(checkId, refreshKey, itemPage, itemFilter) {
         val requestedPage = itemPage
         val requestedFilter = itemFilter
         fun requestStatus() = when (requestedFilter) {
@@ -300,31 +295,13 @@ internal fun StocktakingDetailScreen(
                     page = requestedPage,
                     pageSize = 10,
                     status = requestStatus(),
-                    includeSummary = false,
-                    loadItems = requestedFilter != null,
                 )
             }
-        }.onSuccess {
-            check = it
-            it.optJSONObject("summary")?.let { value -> summaryData = value }
-            itemPages = it.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            if (requestedFilter != null) scope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        ApiClient.goodsCheck(
-                            checkId,
-                            page = requestedPage,
-                            pageSize = 10,
-                            status = requestStatus(),
-                            includeSummary = true,
-                        )
-                    }
-                }.onSuccess { summaryResult ->
-                    if (itemPage != requestedPage || itemFilter != requestedFilter) return@onSuccess
-                    itemPages = summaryResult.optJSONObject("pagination")?.optInt("pages", itemPages)?.coerceAtLeast(1) ?: itemPages
-                    summaryResult.optJSONObject("summary")?.let { value -> summaryData = value }
-                }
-            }
+        }.onSuccess { result ->
+            if (itemPage != requestedPage || itemFilter != requestedFilter) return@onSuccess
+            check = result
+            summaryData = result.optJSONObject("summary")
+            itemPages = result.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
         }
             .onFailure { error = it.message ?: "加载盘点详情失败" }
     }
@@ -332,7 +309,7 @@ internal fun StocktakingDetailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         if (check == null && error == null) AppEmptyState("加载盘点明细中...")
@@ -350,7 +327,7 @@ internal fun StocktakingDetailScreen(
             val myRecords = summary?.optInt("mine", 0) ?: 0
             val paginationTotal = selected.optJSONObject("pagination")?.optInt("total", 0) ?: 0
             fun selectFilter(filter: String) {
-                itemFilter = if (itemFilter == filter && filter != "all") null else filter
+                itemFilter = if (itemFilter == filter && filter != "all") "all" else filter
                 itemPage = 1
             }
 
@@ -395,20 +372,19 @@ internal fun StocktakingDetailScreen(
 
                 Spacer(Modifier.height(14.dp))
 
-                StocktakingEntryScreen(
-                    checkId = checkId,
-                    initialItem = entryItem,
-                    initialKeyword = entryKeyword,
-                    onActiveChanged = { entryActive = it },
-                    onSaved = {
-                        entryItem = null
-                        entryKeyword = ""
-                        reload++
-                    },
-                )
+                Button(
+                    onClick = { onStartEntry(null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("搜索或扫码录入")
+                }
             }
 
-            if (!entryActive && itemFilter != null) {
+            run {
                 Spacer(Modifier.height(16.dp))
 
                 SectionHeader(
@@ -423,12 +399,13 @@ internal fun StocktakingDetailScreen(
                     val recountQty = nullableDouble(item, "recountQty")
                     val canEditInitial = item.optBoolean("canEditInitial", false)
                     val canEditRecount = item.optBoolean("canEditRecount", false)
-                    val canStartRecount = item.optInt("checkStatus", 0) == 2 &&
-                        item.optInt("reviewStatus", 0) == 1 && recountQty == null && item.optInt("id", 0) > 0
+                    val canStartRecount = item.optBoolean("needsRecount", false) &&
+                        recountQty == null && item.optInt("id", 0) > 0
+                    val canEditLocation = item.optInt("id", 0) > 0 && item.optInt("reviewStatus", 0) != 1
                     val isRecount = canEditRecount || canStartRecount
                     val effectiveQty = recountQty ?: firstQty
                     val systemQty = if (recountQty != null) item.optDouble("recountSystemQty", item.optDouble("systemQty", 0.0)) else item.optDouble("systemQty", 0.0)
-                    val diffQty = effectiveQty?.let { item.optDouble("difference", it - systemQty) }
+                    val diffQty = if (isStoreStaff) null else effectiveQty?.let { item.optDouble("difference", it - systemQty) }
                     val systemLocation = item.displayField("systemLocationName", "")
                     val countLocation = item.displayField("countLocationName", "")
                     val actionLabel = when {
@@ -436,6 +413,7 @@ internal fun StocktakingDetailScreen(
                         firstQty == null -> "录入初盘"
                         canStartRecount -> "录入复盘"
                         canEditInitial -> "修改初盘"
+                        canEditLocation -> "修改货位"
                         else -> null
                     }
 
@@ -461,7 +439,19 @@ internal fun StocktakingDetailScreen(
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text = "系统库存：${quantityText(systemQty, "0")} · 初盘：${quantityText(firstQty)} · 复盘：${quantityText(recountQty)}",
+                                    text = if (isStoreStaff) {
+                                        if (item.optBoolean("needsRecount", false) || recountQty != null) {
+                                            "初盘：${quantityText(firstQty)} · 复盘：${quantityText(recountQty)}"
+                                        } else {
+                                            "初盘：${quantityText(firstQty)}"
+                                        }
+                                    } else {
+                                        if (item.optBoolean("needsRecount", false) || recountQty != null) {
+                                            "系统库存：${quantityText(systemQty, "0")} · 初盘：${quantityText(firstQty)} · 复盘：${quantityText(recountQty)}"
+                                        } else {
+                                            "系统库存：${quantityText(systemQty, "0")} · 初盘：${quantityText(firstQty)}"
+                                        }
+                                    },
                                     color = RegularText,
                                     fontSize = 12.sp,
                                 )
@@ -471,6 +461,7 @@ internal fun StocktakingDetailScreen(
                                 StatusPill(
                                     text = goodsCheckItemStatus(
                                         item.optInt("checkStatus", 0),
+                                        item.optInt("reviewStatus", 0),
                                         diffQty,
                                         item.optBoolean("needsAdjustment", false),
                                     ),
@@ -484,22 +475,10 @@ internal fun StocktakingDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            if (!isStoreStaff) OutlinedButton(
-                                onClick = {
-                                    locationItem = item
-                                    locationValue = item.displayField("countLocationName", "")
-                                },
-                                shape = FieldShape,
-                                enabled = item.optInt("id", 0) > 0,
-                            ) {
-                                Text("修改货位")
-                            }
-                            if (!isStoreStaff) Spacer(Modifier.width(8.dp))
                             if (actionLabel != null) {
                                 Button(
                                     onClick = {
-                                        entryItem = item
-                                        entryKeyword = ""
+                                        onStartEntry(item)
                                     },
                                     shape = FieldShape,
                                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -508,7 +487,11 @@ internal fun StocktakingDetailScreen(
                                 }
                             } else {
                                 Text(
-                                    text = if (item.optInt("checkStatus", 0) == 2 && item.optInt("reviewStatus", 0) == 1) "初盘已复核" else if (item.optInt("reviewStatus", 0) == 1) "已复核" else "待复核",
+                                    text = when {
+                                        item.optInt("reviewStatus", 0) == 2 -> "复核未通过"
+                                        item.optInt("reviewStatus", 0) == 1 -> "已复核"
+                                        else -> "待复核"
+                                    },
                                     color = Muted,
                                     fontSize = 12.sp,
                                 )
@@ -528,68 +511,31 @@ internal fun StocktakingDetailScreen(
         Spacer(Modifier.height(16.dp))
     }
 
-    locationItem?.let { item ->
-        AlertDialog(
-            onDismissRequest = { locationItem = null },
-            title = { Text("修改商品货位", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
-                    OutlinedTextField(
-                        value = locationValue,
-                        onValueChange = { locationValue = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("货位名称") },
-                        placeholder = { Text("例如：A-01-02") },
-                        singleLine = true,
-                        shape = FieldShape,
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    ApiClient.updateCheckItemLocation(
-                                        checkId,
-                                        item.optInt("id"),
-                                        JSONObject().put("locationName", locationValue.trim()),
-                                    )
-                                }
-                            }.onSuccess {
-                                locationItem = null
-                                reload++
-                            }.onFailure {
-                                error = it.message ?: "修改货位失败"
-                            }
-                        }
-                    },
-                    shape = FieldShape,
-                ) {
-                    Text("保存")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { locationItem = null }) { Text("取消") }
-            },
-        )
-    }
-
 }
 
 @Composable
 internal fun StocktakingEntryScreen(
     checkId: Int,
+    user: JSONObject? = null,
     initialItem: JSONObject? = null,
-    initialKeyword: String = "",
-    onActiveChanged: (Boolean) -> Unit,
     onSaved: () -> Unit,
 ) {
+    val isStoreStaff = user?.optInt("role", -1) == 3
     var selectedItem by remember(initialItem) { mutableStateOf(initialItem) }
-    var keyword by remember(initialKeyword) { mutableStateOf(initialKeyword) }
-    var candidates by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var keyword by remember(initialItem) { mutableStateOf("") }
+    var candidates by remember(initialItem) { mutableStateOf<List<JSONObject>>(emptyList()) }
     var batchNo by remember(initialItem) { mutableStateOf(initialItem?.displayField("batchNo", "").orEmpty()) }
+    var countLocation by remember(initialItem) {
+        mutableStateOf(
+            initialItem?.let { item ->
+                item.displayField(
+                    "countLocationName",
+                    item.displayField("systemLocationName", item.displayField("locationName", "")),
+                )
+            }.orEmpty(),
+        )
+    }
+    var editingLocation by remember(initialItem) { mutableStateOf(false) }
     var value by remember(initialItem) {
         mutableStateOf(
             initialItem?.let {
@@ -618,14 +564,6 @@ internal fun StocktakingEntryScreen(
         }
     }
 
-    LaunchedEffect(initialKeyword) {
-        if (initialItem == null && initialKeyword.isNotBlank()) search()
-    }
-
-    LaunchedEffect(selectedItem, keyword, candidates, loading) {
-        onActiveChanged(selectedItem != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading)
-    }
-
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
@@ -635,14 +573,20 @@ internal fun StocktakingEntryScreen(
     }
     val isRecount = selectedItem?.let {
         it.optBoolean("canEditRecount", false) ||
-            (it.optInt("checkStatus", 0) == 2 && it.optInt("reviewStatus", 0) == 1 && it.optInt("id", it.optInt("checkItemId", 0)) > 0)
+            (it.optBoolean("needsRecount", false) && it.optInt("id", it.optInt("checkItemId", 0)) > 0)
     } == true
     val isEditingInitial = selectedItem?.optBoolean("canEditInitial", false) == true
     val isEditingRecount = selectedItem?.optBoolean("canEditRecount", false) == true
+    val selectedCheckItemId = selectedItem?.let { it.optInt("checkItemId", it.optInt("id", 0)) } ?: 0
+    val hasCount = selectedItem?.let { nullableDouble(it, "firstCountQty") != null || nullableDouble(it, "recountQty") != null } == true
+    val locationOnly = selectedCheckItemId > 0 && hasCount && !isEditingInitial && !isRecount
     val product = selectedItem?.optJSONObject("product") ?: JSONObject()
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .imePadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -693,10 +637,15 @@ internal fun StocktakingEntryScreen(
                         onClick = {
                             selectedItem = candidate
                             batchNo = candidate.displayField("batchNo", "")
+                            countLocation = candidate.displayField(
+                                "countLocationName",
+                                candidate.displayField("systemLocationName", candidate.displayField("locationName", "")),
+                            )
+                            editingLocation = false
                             val recount = nullableDouble(candidate, "recountQty")
                             val first = nullableDouble(candidate, "firstCountQty")
                             value = quantityText(
-                                if (candidate.optBoolean("canEditRecount", false) || (candidate.optInt("checkStatus", 0) == 2 && candidate.optInt("reviewStatus", 0) == 1)) recount ?: first else first,
+                                if (candidate.optBoolean("canEditRecount", false) || candidate.optBoolean("needsRecount", false)) recount ?: first else first,
                                 "",
                             )
                         },
@@ -718,52 +667,93 @@ internal fun StocktakingEntryScreen(
                     Text("${product.displayField("productCode")} · ${product.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
                     Spacer(Modifier.height(4.dp))
                     Text("系统货位：${selectedItem!!.displayField("systemLocationName", selectedItem!!.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
-                    Text("系统库存：${quantityText(selectedItem!!.optDouble("systemQty", 0.0), "0")} ${product.displayField("unit")}", color = Muted, fontSize = 12.sp)
+                    if (!isStoreStaff) {
+                        Text("系统库存：${quantityText(selectedItem!!.optDouble("systemQty", 0.0), "0")} ${product.displayField("unit")}", color = Muted, fontSize = 12.sp)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = batchNo,
-                onValueChange = { batchNo = it },
+            if (!locationOnly) {
+                OutlinedTextField(
+                    value = batchNo,
+                    onValueChange = { batchNo = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("批号") },
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("批号") },
-                singleLine = true,
-                shape = FieldShape,
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(if (isRecount) "复盘数量" else "初盘数量") },
-                supportingText = { Text("请输入实际盘点数量，支持小数") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true,
-                shape = FieldShape,
-            )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = countLocation,
+                    onValueChange = { countLocation = it },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("盘点货位") },
+                    singleLine = true,
+                    enabled = editingLocation,
+                    shape = FieldShape,
+                )
+                OutlinedButton(
+                    onClick = { editingLocation = !editingLocation },
+                    shape = FieldShape,
+                ) { Text(if (editingLocation) "完成" else "修改") }
+            }
+            if (!locationOnly) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isRecount) "复盘数量" else "初盘数量") },
+                    supportingText = { Text("请输入实际盘点数量，支持小数") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+            }
         }
 
         if (selectedItem != null) {
             Button(
                 onClick = {
                     val item = selectedItem ?: return@Button
-                    val amount = value.toDoubleOrNull() ?: return@Button
+                    val amount = value.toDoubleOrNull()
+                    if (!locationOnly && amount == null) return@Button
                     saving = true
                     error = null
                     scope.launch {
                         runCatching {
                             withContext(Dispatchers.IO) {
-                                if (isRecount) {
-                                    ApiClient.recountGoodsCheckItem(item.optInt("id", item.optInt("checkItemId", 0)), JSONObject().put("recountQty", amount))
+                                val checkItemId = item.optInt("checkItemId", item.optInt("id", 0))
+                                val systemLocation = item.displayField("systemLocationName", item.displayField("locationName", ""))
+                                if (locationOnly) {
+                                    ApiClient.updateCheckItemLocation(
+                                        checkId,
+                                        checkItemId,
+                                        JSONObject().put("countLocationName", countLocation.trim()),
+                                    )
+                                } else if (isRecount) {
+                                    ApiClient.recountGoodsCheckItem(
+                                        checkItemId,
+                                        JSONObject()
+                                            .put("recountQty", amount!!)
+                                            .put("countLocationName", countLocation.trim()),
+                                    )
                                 } else {
                                     ApiClient.addGoodsCheckItem(
                                         checkId,
                                         JSONObject()
-                                            .also { payload -> if (isEditingInitial) payload.put("itemId", item.optInt("id", item.optInt("checkItemId", 0))) }
+                                            .also { payload -> if (isEditingInitial) payload.put("itemId", checkItemId) }
                                             .put("productId", item.optInt("productId"))
                                             .put("batchNo", batchNo.trim())
-                                            .put("locationName", item.displayField("systemLocationName", item.displayField("locationName", "")))
-                                            .put("firstCountQty", amount),
+                                            .put("locationName", systemLocation)
+                                            .put("countLocationName", countLocation.trim())
+                                            .put("firstCountQty", amount!!),
                                     )
                                 }
                             }
@@ -777,12 +767,13 @@ internal fun StocktakingEntryScreen(
                         saving = false
                     }
                 },
-                enabled = !saving && value.toDoubleOrNull() != null,
+                enabled = !saving && (locationOnly || value.toDoubleOrNull() != null),
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = FieldShape,
             ) {
                 Text(
                     if (saving) "保存中..."
+                    else if (locationOnly) "保存货位"
                     else if (isEditingRecount) "保存修改复盘"
                     else if (isEditingInitial) "保存修改初盘"
                     else "保存${if (isRecount) "复盘" else "初盘"}",
@@ -825,7 +816,10 @@ private fun goodsCheckStatus(status: Int): String = when (status) {
     else -> "未知"
 }
 
-private fun goodsCheckItemStatus(status: Int, difference: Double?, needsAdjustment: Boolean): String = when {
+private fun goodsCheckItemStatus(status: Int, reviewStatus: Int, difference: Double?, needsAdjustment: Boolean): String = when {
+    reviewStatus == 2 -> "复核未通过"
+    reviewStatus == 0 && (status == 3 || status == 4) -> "复盘待复核"
+    reviewStatus == 0 && status != 0 -> "待复核"
     needsAdjustment && status == 4 -> "需调整库存"
     status == 2 -> "待复盘"
     status == 1 -> "待复核"

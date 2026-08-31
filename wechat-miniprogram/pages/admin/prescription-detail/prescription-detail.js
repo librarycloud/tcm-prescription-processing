@@ -92,8 +92,6 @@ Page({
               ? '等待顾客通知'
               : String(plan.processDate || '').slice(0, 10),
           finishDateText: formatDate(plan.finishDate),
-          canViewWorkflow: [1, 2, 3, 4].includes(Number(plan.status)),
-          workflowLabel: Number(plan.status) === 1 ? '工序操作' : '工序详情',
           canEdit: !this.data.isStoreStaff && [0, 1].includes(Number(plan.status)),
           canDelete: !this.data.isStoreStaff && Number(plan.status) === 0
         };

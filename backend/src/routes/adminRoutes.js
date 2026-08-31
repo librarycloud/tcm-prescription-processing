@@ -276,7 +276,7 @@ export default async function adminRoutes(fastify) {
   fastify.post("/yd-goods-check/:id/finish", finishGoodsCheckController);
   fastify.get("/yd-goods-check/:id/export", exportGoodsCheckController);
   fastify.put("/yd-goods-check/items/:itemId/recount", storeStaffRoute, recountGoodsCheckItemController);
-  fastify.put("/yd-goods-check/items/:itemId/location", updateGoodsCheckLocationController);
+  fastify.put("/yd-goods-check/items/:itemId/location", storeStaffRoute, updateGoodsCheckLocationController);
   fastify.post("/yd-goods-check/items/review-batch", storeStaffRoute, reviewGoodsCheckItemsController);
   fastify.post("/yd-goods-check/items/:itemId/review", reviewGoodsCheckItemController);
   fastify.get("/products/import-template", productImportTemplateController);

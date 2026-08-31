@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -267,7 +267,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
 }
 
 @Composable
-internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (ScreenTarget) -> Unit, onBack: () -> Unit) {
+internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
     val readOnly = isStoreStaff(user)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -405,7 +405,9 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
                         border = BorderStroke(1.dp, CardBorderColor),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
                     ) {
                         Column(Modifier.padding(12.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -422,20 +424,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                                // 工序详情 / 流程操作
-                                OutlinedButton(
-                                    onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
-                                    shape = FieldShape,
-                                    modifier = Modifier.height(30.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                ) {
-                                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(13.dp))
-                                    Spacer(Modifier.width(2.dp))
-                                    Text("工序详情", fontSize = 11.5.sp)
-                                }
-
                                 pkg?.let { pItem ->
-                                    Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
                                         onClick = {
                                             scope.launch {
@@ -479,8 +468,6 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                 }
             }
         }
-        Spacer(Modifier.height(20.dp))
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(44.dp), shape = FieldShape) { Text("返回处方列表") }
         Spacer(Modifier.height(16.dp))
     }
     if (deleteAttachment) AlertDialog(

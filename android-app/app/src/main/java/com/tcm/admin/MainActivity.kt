@@ -123,6 +123,7 @@ internal sealed class ScreenTarget {
     data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
+    data class StocktakingEntry(val checkId: Int, val initialItem: JSONObject? = null) : ScreenTarget()
     object Differences : ScreenTarget()
     data class DifferenceRegister(val defaultProduct: JSONObject? = null) : ScreenTarget()
     object Transfers : ScreenTarget()
@@ -207,6 +208,7 @@ private fun TcmAdminApp() {
     val profileScrollState = rememberScrollState()
     val inventoryScrollState = rememberScrollState()
     val stocktakingScrollState = rememberScrollState()
+    val stocktakingDetailScrollState = rememberScrollState()
     val differencesScrollState = rememberScrollState()
     val transfersScrollState = rememberScrollState()
     val currentScreen = backStack.lastOrNull() ?: ScreenTarget.Login
@@ -217,6 +219,7 @@ private fun TcmAdminApp() {
     var dashboardStoreId by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
+    var stocktakingDetailRevision by remember { mutableStateOf(0) }
     val updatePreferences = remember(appContext) {
         appContext.getSharedPreferences("android_update_check", android.content.Context.MODE_PRIVATE)
     }
@@ -438,7 +441,6 @@ private fun TcmAdminApp() {
                         id = currentScreen.id,
                         user = session?.user,
                         onNavigate = ::navigateTo,
-                        onBack = { navigateBack() },
                     )
                 }
                 is ScreenTarget.PrescriptionEdit -> DetailShell(
@@ -513,10 +515,24 @@ private fun TcmAdminApp() {
                 is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }, scrollState = stocktakingScrollState) {
                     StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = stocktakingScrollState)
                 }
-                is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }) {
+                is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }, scrollState = stocktakingDetailScrollState) {
                     StocktakingDetailScreen(
                         checkId = currentScreen.checkId,
                         user = session?.user,
+                        scrollState = stocktakingDetailScrollState,
+                        refreshKey = stocktakingDetailRevision,
+                        onStartEntry = { item -> navigateTo(ScreenTarget.StocktakingEntry(currentScreen.checkId, item)) },
+                    )
+                }
+                is ScreenTarget.StocktakingEntry -> DetailShell("盘点录入", onBack = { navigateBack() }) {
+                    StocktakingEntryScreen(
+                        checkId = currentScreen.checkId,
+                        user = session?.user,
+                        initialItem = currentScreen.initialItem,
+                        onSaved = {
+                            stocktakingDetailRevision++
+                            navigateBack()
+                        },
                     )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {

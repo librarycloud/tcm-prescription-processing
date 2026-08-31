@@ -54,7 +54,7 @@
     </view>
   </view>
 
-  <view class="app-card plan-card" wx:for="{{plans}}" wx:key="id">
+  <view class="app-card plan-card" wx:for="{{plans}}" wx:key="id" data-id="{{item.id}}" bind:tap="goWorkflow">
     <view class="status-row">
       <view class="plan-title">第 {{item.batchNo}} 批 · {{item.processTypeName}}</view>
       <t-tag theme="{{item.statusTheme}}">{{item.statusText}}</t-tag>
@@ -67,11 +67,10 @@
       <view wx:if="{{item.finishDate}}">完成：{{item.finishDateText}}</view>
       <view wx:if="{{item.processRemark || item.remark}}">备注：{{item.processRemark || item.remark}}</view>
     </view>
-    <view wx:if="{{item.canViewWorkflow || item.package || item.canEdit || item.canDelete}}" class="plan-actions">
-      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canViewWorkflow}}" size="small" theme="primary" variant="outline" data-id="{{item.id}}" bind:tap="goWorkflow">{{item.workflowLabel}}</t-button>
-      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.package}}" size="small" theme="primary" variant="outline" data-id="{{item.package.id}}" bind:tap="goPackage">取货码 {{item.package.pickupCode}}</t-button>
-      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canEdit}}" size="small" theme="primary" variant="outline" data-id="{{item.id}}" bind:tap="editPlan">编辑</t-button>
-      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canDelete}}" size="small" theme="danger" variant="outline" data-id="{{item.id}}" bind:tap="removePlan">删除</t-button>
+    <view wx:if="{{item.package || item.canEdit || item.canDelete}}" class="plan-actions">
+      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.package}}" size="small" theme="primary" variant="outline" data-id="{{item.package.id}}" catch:tap="goPackage">取货码 {{item.package.pickupCode}}</t-button>
+      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canEdit}}" size="small" theme="primary" variant="outline" data-id="{{item.id}}" catch:tap="editPlan">编辑</t-button>
+      <t-button custom-class="batch-action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" wx:if="{{item.canDelete}}" size="small" theme="danger" variant="outline" data-id="{{item.id}}" catch:tap="removePlan">删除</t-button>
     </view>
   </view>
 
