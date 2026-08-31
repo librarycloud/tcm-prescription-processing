@@ -170,7 +170,6 @@ internal fun ProcessingScreenV2(
     var refreshing by remember { mutableStateOf(false) }
 
     // Dialog states
-    var selectedPlan by remember { mutableStateOf<JSONObject?>(null) }
     var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
@@ -516,7 +515,7 @@ internal fun ProcessingScreenV2(
 
                     AppCard(
                         modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { selectedPlan = plan },
+                        onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
                     ) {
                         // Header Row
                         Row(
@@ -593,16 +592,6 @@ internal fun ProcessingScreenV2(
                                 ) {
                                     Text("处方", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
-                            }
-
-                            // 无论进行中还是已完成，均可查看/操作工序详情
-                            OutlinedButton(
-                                onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
-                                modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(6.dp),
-                            ) {
-                                Text(if (status == 1) "流程操作" else "工序详情", fontSize = 11.sp, maxLines = 1, softWrap = false)
                             }
 
                             if (status == 0) { // 待加工
@@ -723,16 +712,6 @@ internal fun ProcessingScreenV2(
         }
         }
 
-    // Dialogs
-    selectedPlan?.let { plan ->
-        PlanDetailDialog(
-            plan = plan,
-            showStore = showStore,
-            onClose = { selectedPlan = null },
-            onReload = { selectedPlan = null; reload++ },
-        )
-    }
-
     generatePackagePlan?.let { plan ->
         var packageRemark by remember(plan) {
             mutableStateOf(
@@ -790,49 +769,6 @@ internal fun ProcessingScreenV2(
     }
 
     }
-}
-
-@Composable
-internal fun PlanDetailDialog(
-    plan: JSONObject,
-    showStore: Boolean,
-    onClose: () -> Unit,
-    onReload: () -> Unit,
-) {
-    val prescription = plan.optJSONObject("prescription")
-    val processType = plan.optJSONObject("processType")
-    val store = plan.optJSONObject("store")
-    val customerName = plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "-" }
-    val phone = plan.displayField("customerPhone", "").ifBlank { prescription?.displayField("phone") ?: "-" }
-    val status = plan.optInt("status")
-
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("加工计划详情", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                InfoRowItem("顾客姓名", customerName)
-                InfoRowItem("联系电话", phone)
-                InfoRowItem("加工类型", processType?.displayField("name", "加工") ?: "加工")
-                InfoRowItem("加工状态", planStatus(status), isBold = true, valueColor = Primary)
-                InfoRowItem("批次剂数", "第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂")
-                InfoRowItem("取货方式", pickupMethodLabel(plan.optInt("pickupMethod", 0)))
-                InfoRowItem("计划开工", serverDateOnly(plan.opt("processDate"), "未安排"))
-                if (showStore) {
-                    store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("加工门店", it) }
-                }
-                plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", serverDateTime(it)) }
-                plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", serverDateTime(it)) }
-                plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
-                plan.displayField("processRemark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("加工备注", it) }
-            }
-        },
-        confirmButton = {
-            Button(onClick = onClose) {
-                Text("关闭")
-            }
-        },
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1346,7 +1282,6 @@ internal fun ProcessingPlanFormDialog(
 internal fun WorkflowOperationScreen(
     plan: JSONObject,
     onNavigatePrescription: ((Int) -> Unit)? = null,
-    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1519,7 +1454,7 @@ internal fun WorkflowOperationScreen(
     val activeSoakings = usages.filter { it.optInt("stage") == 3 && it.optInt("status") == 1 }
     val activeDecoctions = usages.filter { it.optInt("stage") == 4 && it.optInt("status") == 1 }
     val activePackagings = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
-    val allUsageRecords = usages.sortedByDescending { it.displayField("startedAt", "") }
+    val allUsageRecords = usages.sortedBy { it.displayField("startedAt", "") }
 
     val photos = detail?.optJSONArray("photos")
     val photoCount = photos?.length() ?: 0
@@ -1589,6 +1524,9 @@ internal fun WorkflowOperationScreen(
         activeDecoctions.isNotEmpty() -> "等待煎煮完成"
         else -> "等待打包"
     }
+    val prescriptionCardClick: (() -> Unit)? = if (prescriptionId > 0) {
+        onNavigatePrescription?.let { callback -> { callback(prescriptionId) } }
+    } else null
     val isDispensingCompleted = status == 2 || photoCount > 0
     val isWorkflowCompleted = status == 2
     val dispensingTimeLabel = when {
@@ -1614,7 +1552,7 @@ internal fun WorkflowOperationScreen(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         // Top Summary Card - 顶部显示加工方式、剂数、代煎显示袋数毫升数
-        AppCard {
+        AppCard(onClick = prescriptionCardClick) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1667,23 +1605,6 @@ internal fun WorkflowOperationScreen(
                 }
             }
 
-            if (prescriptionId > 0) {
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    OutlinedButton(
-                        onClick = {
-                            if (onNavigatePrescription != null) {
-                                onNavigatePrescription(prescriptionId)
-                            }
-                        },
-                        shape = FieldShape,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    ) {
-                        Text("查看对应处方", fontSize = 12.sp)
-                    }
-                }
-            }
         }
 
         if (error != null) {
@@ -2307,12 +2228,6 @@ internal fun WorkflowOperationScreen(
             ) { Text("加工完成", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         }
 
-        Spacer(Modifier.height(14.dp))
-        OutlinedButton(
-            onClick = onBack,
-            modifier = Modifier.fillMaxWidth().height(44.dp),
-            shape = FieldShape,
-        ) { Text("返回加工计划列表") }
         Spacer(Modifier.height(20.dp))
     }
 

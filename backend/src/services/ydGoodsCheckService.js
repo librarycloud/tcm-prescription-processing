@@ -58,7 +58,7 @@ function effectiveCount(item) {
       : Number(item.firstCountQty);
 }
 
-function normalizeItem(item, counted = true) {
+function normalizeItem(item, counted = true, actor = null) {
   const countedQty = effectiveCount(item);
   const systemQty = currentSystem(item);
   const difference = countedQty === null ? null : countedQty - systemQty;
@@ -95,6 +95,16 @@ function normalizeItem(item, counted = true) {
     effectiveCount: countedQty,
     difference,
     needsAdjustment,
+    canEditInitial: Boolean(
+      actor && item.firstCountQty !== null && item.firstCountQty !== undefined
+      && Number(item.reviewStatus || 0) === 0
+      && Number(item.firstCountedBy) === Number(actor.id),
+    ),
+    canEditRecount: Boolean(
+      actor && item.recountQty !== null && item.recountQty !== undefined
+      && Number(item.reviewStatus || 0) === 0
+      && Number(item.recountedBy) === Number(actor.id),
+    ),
   };
 }
 
@@ -206,7 +216,11 @@ export async function getGoodsCheck(prisma, actor, id) {
     where: { checkId: check.id }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }],
   });
   const pricedItems = addInventoryPrices(items);
-  return { ...check, items: pricedItems.map(normalizeItem) };
+  const missing = await missingCandidates(prisma, check, items, "");
+  return {
+    ...check,
+    items: pricedItems.map((item) => normalizeItem(item, true, actor)).concat(missing),
+  };
 }
 
 async function inventorySnapshot(prisma, check, productId, batchNo, locationName) {
@@ -226,48 +240,83 @@ function checkStatusForInitial(systemQty, countedQty) {
 export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   const check = await getCheck(prisma, actor, checkId);
   if (Number(check.status) === 2) throw new AppError("盘点单已完成", 400);
+  const requestedItemId = toPositiveInt(payload.itemId ?? payload.checkItemId, 0);
+  const requestedItem = requestedItemId
+    ? await prisma.ydGoodsCheckItem.findFirst({ where: { id: requestedItemId, checkId: check.id } })
+    : null;
+  if (requestedItemId && !requestedItem) throw new AppError("盘点明细不存在或不属于当前盘点单", 404);
+  if (requestedItem && (
+    requestedItem.firstCountQty === null || requestedItem.firstCountQty === undefined
+    || Number(requestedItem.reviewStatus || 0) !== 0
+    || Number(requestedItem.firstCountedBy) !== Number(actor.id)
+  )) throw new AppError("只能修改本人未复核的初盘记录", 403);
   const productId = toPositiveInt(payload.productId, 0);
   if (!productId) throw new AppError("请选择商品", 400);
+  if (requestedItem && Number(requestedItem.productId) !== productId) throw new AppError("不能修改盘点记录的商品", 400);
   const product = await prisma.e6PharmacyProduct.findUnique({ where: { id: productId } });
   if (!product) throw new AppError("商品不存在或不属于该门店", 404);
   const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
   if (categoryCodes.length && !categoryCodes.includes(text(product.categoryCode))) throw new AppError("该商品不在本盘点计划的分类范围内", 400);
-  const batchNo = text(payload.batchNo);
-  const requestedLocation = payload.locationName === undefined ? undefined : text(payload.locationName);
+  const batchNo = text(payload.batchNo ?? requestedItem?.batchNo);
+  if (requestedItem && batchNo !== text(requestedItem.batchNo)) throw new AppError("不能修改盘点记录的批号", 400);
+  const requestedLocation = requestedItem
+    ? requestedItem.systemLocationName
+    : payload.locationName === undefined ? undefined : text(payload.locationName);
   const snapshot = await inventorySnapshot(prisma, check, productId, batchNo, requestedLocation);
   const systemLocationName = snapshot.locationName;
-  const existing = await prisma.ydGoodsCheckItem.findFirst({ where: { checkId: check.id, productId, batchNo, systemLocationName } });
-  if (existing?.firstCountQty !== null && existing?.firstCountQty !== undefined) throw new AppError("该批次已经完成初盘", 409);
+  const existing = requestedItem || await prisma.ydGoodsCheckItem.findFirst({ where: { checkId: check.id, productId, batchNo, systemLocationName } });
+  if (existing?.firstCountQty !== null && existing?.firstCountQty !== undefined) {
+    if (Number(existing.reviewStatus || 0) !== 0 || Number(existing.firstCountedBy) !== Number(actor.id)) {
+      throw new AppError("该记录已被其他盘点员录入或已复核，不能修改", 403);
+    }
+  }
   const firstCountQty = quantity(payload.firstCountQty ?? payload.countQty);
   const systemQty = payload.systemQty === undefined || payload.systemQty === null || payload.systemQty === ""
     ? snapshot.quantity
     : quantity(payload.systemQty);
-  const countLocationName = requestedLocation !== undefined && requestedLocation !== "" ? requestedLocation : null;
+  const countLocationName = requestedItem
+    ? (payload.countLocationName === undefined && payload.locationName === undefined
+      ? requestedItem.countLocationName
+      : text(payload.countLocationName ?? payload.locationName) || null)
+    : requestedLocation !== undefined && requestedLocation !== "" ? requestedLocation : null;
   const data = {
     checkId: check.id, storeId: check.storeId, productId, batchNo, systemLocationName,
     countLocationName, systemQty, firstCountQty,
     firstCountedAt: new Date(), firstCountedBy: Number(actor.id),
-    locationStatus: countLocationName && countLocationName !== systemLocationName ? 1 : 0, checkStatus: checkStatusForInitial(snapshot.quantity, firstCountQty), reviewStatus: 0,
+    recountQty: null, recountSystemQty: null, recountedAt: null, recountedBy: null,
+    locationStatus: countLocationName && countLocationName !== systemLocationName ? 1 : 0,
+    checkStatus: checkStatusForInitial(snapshot.quantity, firstCountQty), reviewStatus: 0,
+    reviewedBy: null, reviewedAt: null,
   };
   const item = existing
     ? await prisma.ydGoodsCheckItem.update({ where: { id: existing.id }, data, include: { product: productInclude } })
     : await prisma.ydGoodsCheckItem.create({ data, include: { product: productInclude } });
   await prisma.ydGoodsCheck.update({ where: { id: check.id }, data: { status: 1, startedAt: check.startedAt || new Date() } });
-  return normalizeItem(item);
+  return normalizeItem(item, true, actor);
 }
 
 export async function recountGoodsCheckItem(prisma, actor, itemId, payload = {}) {
   const id = toPositiveInt(itemId, 0);
   const item = await prisma.ydGoodsCheckItem.findUnique({ where: { id }, include: { check: true } });
   if (!item) throw new AppError("盘点明细不存在", 404);
-  await getCheck(prisma, actor, item.checkId);
+  const check = await getCheck(prisma, actor, item.checkId);
+  if (Number(check.status) === 2) throw new AppError("盘点单已完成", 400);
+  const hasRecount = item.recountQty !== null && item.recountQty !== undefined;
+  if (!hasRecount) {
+    if (Number(item.checkStatus) !== CHECK_STATUS.PENDING_RECOUNT || Number(item.reviewStatus || 0) !== 1) {
+      throw new AppError("初盘记录复核通过后才能进行复盘", 403);
+    }
+  } else {
+    if (Number(item.reviewStatus || 0) !== 0) throw new AppError("该复盘记录已复核，不能修改", 403);
+    if (Number(item.recountedBy) !== Number(actor.id)) throw new AppError("只能修改本人未复核的复盘记录", 403);
+  }
   const recountQty = quantity(payload.recountQty ?? payload.countQty);
   const snapshot = await inventorySnapshot(prisma, item.check, item.productId, item.batchNo, item.systemLocationName);
   const status = recountQty === snapshot.quantity ? CHECK_STATUS.RECOUNT_MATCH_PENDING_REVIEW : CHECK_STATUS.PENDING_ADJUSTMENT;
   const updated = await prisma.ydGoodsCheckItem.update({
     where: { id }, data: { recountQty, recountSystemQty: snapshot.quantity, recountedAt: new Date(), recountedBy: Number(actor.id), checkStatus: status, reviewStatus: 0 }, include: { product: productInclude },
   });
-  return normalizeItem(updated);
+  return normalizeItem(updated, true, actor);
 }
 
 export async function updateGoodsCheckLocation(prisma, actor, itemId, payload = {}) {
@@ -286,9 +335,21 @@ export async function reviewGoodsCheckItem(prisma, actor, itemId, payload = {}) 
   const item = await prisma.ydGoodsCheckItem.findUnique({ where: { id } });
   if (!item) throw new AppError("盘点明细不存在", 404);
   await getCheck(prisma, actor, item.checkId);
+  if (item.firstCountQty === null || item.firstCountQty === undefined) throw new AppError("只能复核已完成盘点的记录", 400);
+  if (Number(item.reviewStatus || 0) === 1) throw new AppError("该记录已经复核", 409);
   if ((item.firstCountedBy && Number(item.firstCountedBy) === Number(actor.id)) || (item.recountedBy && Number(item.recountedBy) === Number(actor.id))) throw new AppError("需要第二名盘点员确认", 400);
   const approved = payload.approved === false || Number(payload.reviewStatus) === 2 ? false : true;
-  const updated = await prisma.ydGoodsCheckItem.update({ where: { id }, data: { reviewStatus: approved ? 1 : 2, reviewedBy: Number(actor.id), reviewedAt: new Date(), checkStatus: approved ? CHECK_STATUS.CONFIRMED : item.checkStatus }, include: { product: productInclude } });
+  const isInitialRecountGate = Number(item.checkStatus) === CHECK_STATUS.PENDING_RECOUNT && item.recountQty === null;
+  const updated = await prisma.ydGoodsCheckItem.update({
+    where: { id },
+    data: {
+      reviewStatus: approved ? 1 : 2,
+      reviewedBy: Number(actor.id),
+      reviewedAt: new Date(),
+      ...(approved && !isInitialRecountGate ? { checkStatus: CHECK_STATUS.CONFIRMED } : {}),
+    },
+    include: { product: productInclude },
+  });
   return normalizeItem(updated);
 }
 
@@ -306,11 +367,19 @@ export async function reviewGoodsCheckItems(prisma, actor, itemIds, payload = {}
     if ((item.firstCountedBy && Number(item.firstCountedBy) === Number(actor.id)) || (item.recountedBy && Number(item.recountedBy) === Number(actor.id))) throw new AppError("需要第二名盘点员确认", 400);
   }
   const approved = !(payload.approved === false || Number(payload.reviewStatus) === 2);
-  const result = await prisma.ydGoodsCheckItem.updateMany({
-    where: { id: { in: ids }, reviewStatus: { not: 1 } },
-    data: { reviewStatus: approved ? 1 : 2, reviewedBy: Number(actor.id), reviewedAt: new Date(), ...(approved ? { checkStatus: CHECK_STATUS.CONFIRMED } : {}) },
-  });
-  return { count: result.count, approved };
+  await prisma.$transaction(items.map((item) => {
+    const isInitialRecountGate = Number(item.checkStatus) === CHECK_STATUS.PENDING_RECOUNT && item.recountQty === null;
+    return prisma.ydGoodsCheckItem.update({
+      where: { id: item.id },
+      data: {
+        reviewStatus: approved ? 1 : 2,
+        reviewedBy: Number(actor.id),
+        reviewedAt: new Date(),
+        ...(approved && !isInitialRecountGate ? { checkStatus: CHECK_STATUS.CONFIRMED } : {}),
+      },
+    });
+  }));
+  return { count: items.length, approved };
 }
 
 export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
@@ -327,7 +396,7 @@ export async function listGoodsCheckItems(prisma, actor, checkId, query = {}) {
   if (locationStatus !== undefined && locationStatus !== "") where.locationStatus = Number(locationStatus);
   const rows = await prisma.ydGoodsCheckItem.findMany({ where, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }, { systemLocationName: "asc" }] });
   const pricedRows = missingRequested ? rows : addInventoryPrices(rows);
-  let list = pricedRows.map(normalizeItem);
+  let list = pricedRows.map((item) => normalizeItem(item, true, actor));
   const status = missingRequested ? "missing" : text(query.status);
   if (status === "recount") list = list.filter((row) => row.checkStatus === CHECK_STATUS.PENDING_RECOUNT);
   if (status === "adjustment") list = list.filter((row) => row.needsAdjustment);
@@ -385,8 +454,12 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
       firstCountQty: item?.firstCountQty === null || item?.firstCountQty === undefined ? null : Number(item.firstCountQty),
       recountQty: item?.recountQty === null || item?.recountQty === undefined ? null : Number(item.recountQty),
       recountSystemQty: item?.recountSystemQty === null || item?.recountSystemQty === undefined ? null : Number(item.recountSystemQty),
+      firstCountedBy: item?.firstCountedBy ?? null,
+      recountedBy: item?.recountedBy ?? null,
       checkStatus: item ? Number(item.checkStatus || 0) : CHECK_STATUS.UNCOUNTED,
       reviewStatus: item ? Number(item.reviewStatus || 0) : 0,
+      canEditInitial: Boolean(item && item.firstCountQty !== null && item.firstCountQty !== undefined && Number(item.reviewStatus || 0) === 0 && Number(item.firstCountedBy) === Number(actor.id)),
+      canEditRecount: Boolean(item && item.recountQty !== null && item.recountQty !== undefined && Number(item.reviewStatus || 0) === 0 && Number(item.recountedBy) === Number(actor.id)),
     };
   });
   if (myCounted || countedOnly) {
@@ -407,8 +480,12 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
           firstCountQty: row.firstCountQty === null || row.firstCountQty === undefined ? null : Number(row.firstCountQty),
           recountQty: row.recountQty === null || row.recountQty === undefined ? null : Number(row.recountQty),
           recountSystemQty: row.recountSystemQty === null || row.recountSystemQty === undefined ? null : Number(row.recountSystemQty),
+          firstCountedBy: row.firstCountedBy ?? null,
+          recountedBy: row.recountedBy ?? null,
           checkStatus: Number(row.checkStatus || 0),
           reviewStatus: Number(row.reviewStatus || 0),
+          canEditInitial: row.firstCountQty !== null && row.firstCountQty !== undefined && Number(row.reviewStatus || 0) === 0 && Number(row.firstCountedBy) === Number(actor.id),
+          canEditRecount: row.recountQty !== null && row.recountQty !== undefined && Number(row.reviewStatus || 0) === 0 && Number(row.recountedBy) === Number(actor.id),
         });
       });
   }

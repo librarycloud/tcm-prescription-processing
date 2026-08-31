@@ -461,7 +461,6 @@ private fun TcmAdminApp() {
                     WorkflowOperationScreen(
                         plan = currentScreen.plan,
                         onNavigatePrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
-                        onBack = { navigateBack() },
                     )
                 }
                 is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
@@ -505,7 +504,6 @@ private fun TcmAdminApp() {
                     StocktakingDetailScreen(
                         checkId = currentScreen.checkId,
                         user = session?.user,
-                        onBack = { navigateBack() },
                     )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
