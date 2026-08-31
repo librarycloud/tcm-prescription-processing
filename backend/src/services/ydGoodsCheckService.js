@@ -211,6 +211,9 @@ export async function deleteGoodsCheck(prisma, actor, id) {
 
 export async function getGoodsCheck(prisma, actor, id, query = {}) {
   const check = await getCheck(prisma, actor, id);
+  if (text(query.items) === "0") {
+    return { ...check, items: [], summary: null, pagination: { page: 1, pageSize: 0, total: 0, pages: 0 } };
+  }
   const status = text(query.status);
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 10), 100);

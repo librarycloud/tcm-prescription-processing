@@ -269,11 +269,10 @@ internal fun StocktakingDetailScreen(
     var locationValue by remember { mutableStateOf("") }
     var entryItem by remember { mutableStateOf<JSONObject?>(null) }
     var entryKeyword by remember { mutableStateOf("") }
-    var itemFilter by remember { mutableStateOf("mine") }
+    var itemFilter by remember { mutableStateOf<String?>(null) }
     var itemPage by remember { mutableStateOf(1) }
     var itemPages by remember { mutableStateOf(1) }
     val isStoreStaff = user?.optInt("role", -1) == 3
-    val currentUserId = user?.optInt("id", -1) ?: -1
     var entryActive by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -296,12 +295,13 @@ internal fun StocktakingDetailScreen(
                     pageSize = 10,
                     status = requestStatus(),
                     includeSummary = false,
+                    loadItems = requestedFilter != null,
                 )
             }
         }.onSuccess {
             check = it
             itemPages = it.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            scope.launch {
+            if (requestedFilter != null) scope.launch {
                 runCatching {
                     withContext(Dispatchers.IO) {
                         ApiClient.goodsCheck(
@@ -337,19 +337,15 @@ internal fun StocktakingDetailScreen(
             val items = selected.optJSONArray("items") ?: JSONArray()
             val itemList = (0 until items.length()).map { items.getJSONObject(it) }
             val summary = selected.optJSONObject("summary")
-            val total = summary?.optInt("total", itemList.size) ?: itemList.size
-            val counted = summary?.optInt("counted", itemList.count { nullableDouble(it, "firstCountQty") != null })
-                ?: itemList.count { nullableDouble(it, "firstCountQty") != null }
+            val total = summary?.optInt("total", itemList.size) ?: 0
+            val counted = summary?.optInt("counted", 0) ?: 0
             val missing = summary?.optInt("missing", 0) ?: 0
             val pendingRecount = summary?.optInt("pendingRecount", 0) ?: 0
-            val diff = summary?.optInt("adjustment", itemList.count { it.optBoolean("needsAdjustment", false) })
-                ?: itemList.count { it.optBoolean("needsAdjustment", false) }
-            val myRecords = summary?.optInt("mine", 0) ?: itemList.count {
-                it.optInt("firstCountedBy", -1) == currentUserId || it.optInt("recountedBy", -1) == currentUserId
-            }
-            val paginationTotal = selected.optJSONObject("pagination")?.optInt("total", itemList.size) ?: itemList.size
+            val diff = summary?.optInt("adjustment", 0) ?: 0
+            val myRecords = summary?.optInt("mine", 0) ?: 0
+            val paginationTotal = selected.optJSONObject("pagination")?.optInt("total", 0) ?: 0
             fun selectFilter(filter: String) {
-                itemFilter = if (itemFilter == filter && filter != "all") "all" else filter
+                itemFilter = if (itemFilter == filter && filter != "all") null else filter
                 itemPage = 1
             }
 
@@ -407,7 +403,7 @@ internal fun StocktakingDetailScreen(
                 )
             }
 
-            if (!entryActive) {
+            if (!entryActive && itemFilter != null) {
                 Spacer(Modifier.height(16.dp))
 
                 SectionHeader(
