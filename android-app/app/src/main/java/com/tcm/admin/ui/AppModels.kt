@@ -17,6 +17,10 @@ internal data class PackageItem(
     val methodCode: Int = 0,
     val expressTrackingNo: String = "",
     val pickupQrContent: String = "",
+    val createdAt: String = "-",
+    val pickedAt: String = "",
+    val creatorName: String = "-",
+    val verifierName: String = "",
 )
 
 internal fun packageItem(value: JSONObject): PackageItem {
@@ -25,13 +29,20 @@ internal fun packageItem(value: JSONObject): PackageItem {
     val methodCode = value.optInt("pickupMethod", 0)
     val method = when (methodCode) { 0 -> "自提"; 1 -> "跑腿"; 2 -> "快递"; else -> "未设置" }
     val status = when (statusCode) { 0 -> "待领取"; 1 -> "已领取"; else -> "已关闭" }
-    val timestamp = value.displayField(if (statusCode == 1) "pickedAt" else "createdAt", "").ifBlank { value.displayField("createdAt") }
+    fun operatorName(key: String): String {
+        val operator = value.optJSONObject(key) ?: return ""
+        return operator.displayField("nickname", "")
+            .ifBlank { operator.displayField("name", "") }
+            .ifBlank { operator.displayField("phone", "") }
+    }
+    val createdAt = serverDateTime(value.opt("createdAt"))
+    val pickedAt = serverDateTime(value.opt("pickedAt"), "")
     return PackageItem(
         name = value.displayField("itemName", "包裹"),
         customer = value.displayField("receiverName", "客户"),
         code = value.displayField("pickupCode"),
         status = status,
-        time = serverDateTime(timestamp),
+        time = pickedAt.ifBlank { "未领取" },
         id = value.optInt("id", 0),
         phone = value.displayField("receiverPhone"),
         store = store,
@@ -41,5 +52,9 @@ internal fun packageItem(value: JSONObject): PackageItem {
         methodCode = methodCode,
         expressTrackingNo = value.displayField("expressTrackingNo", ""),
         pickupQrContent = value.displayField("pickupQrContent", ""),
+        createdAt = createdAt,
+        pickedAt = pickedAt,
+        creatorName = operatorName("creator").ifBlank { "-" },
+        verifierName = operatorName("verifier"),
     )
 }

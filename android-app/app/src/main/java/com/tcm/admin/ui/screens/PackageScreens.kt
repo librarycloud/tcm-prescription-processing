@@ -381,7 +381,7 @@ internal fun PackageSummaryCard(
         if (showStore && item.store.isNotBlank()) {
             InfoRowItem(label = "所属门店", value = item.store)
         }
-        InfoRowItem(label = "记录时间", value = item.time)
+        InfoRowItem(label = "领取时间", value = item.time)
         item.info.takeIf { it.isNotBlank() }?.let {
             InfoRowItem(label = "备注", value = it)
         }
@@ -469,7 +469,10 @@ internal fun PackageDetailPage(
             if (showStore && pkg.store.isNotBlank()) InfoRowItem(label = "所属门店", value = pkg.store)
             if (pkg.expressTrackingNo.isNotBlank()) InfoRowItem(label = "快递单号", value = pkg.expressTrackingNo)
             InfoRowItem(label = "包裹状态", value = pkg.status)
-            InfoRowItem(label = "时间记录", value = pkg.time)
+            InfoRowItem(label = "录入时间", value = pkg.createdAt)
+            InfoRowItem(label = "取货时间", value = pkg.pickedAt.ifBlank { "未领取" })
+            InfoRowItem(label = "录入人", value = pkg.creatorName)
+            InfoRowItem(label = "核销人", value = pkg.verifierName.ifBlank { "未核销" })
 
             if (pkg.info.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
