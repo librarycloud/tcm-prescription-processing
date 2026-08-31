@@ -74,6 +74,8 @@ internal fun StocktakingScreen(
     var checks by rememberRetainedListValue(listOwner, "checks") { null as List<JSONObject>? }
     var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
     var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
     var error by rememberRetainedListValue(listOwner, "error") { null as String? }
     var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
@@ -84,18 +86,19 @@ internal fun StocktakingScreen(
     val isManager = isSuperAdmin || user?.optInt("role", -1) == 2
     val isStoreStaff = user?.optInt("role", -1) == 3
 
-    LaunchedEffect(reload, selectedStoreId) {
-        val queryKey = listOf(reload, selectedStoreId).joinToString("|")
+    LaunchedEffect(reload, selectedStoreId, page) {
+        val queryKey = listOf(reload, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && checks != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
-                val values = ApiClient.stocktaking(selectedStoreId.toIntOrNull())
+                val values = ApiClient.stocktakings(selectedStoreId.toIntOrNull(), page = page, pageSize = 10)
                 val storeValues = if (isSuperAdmin) ApiClient.availableStores() else JSONArray()
                 Pair(values, storeValues)
             }
         }.onSuccess { (values, storeValues) ->
             checks = (0 until (values.optJSONArray("list")?.length() ?: 0)).map { values.getJSONArray("list").getJSONObject(it) }
+            pages = values.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
             if (isSuperAdmin && selectedStoreId.isBlank() && stores.size == 1) {
                 selectedStoreId = stores.first().optInt("id").toString()
@@ -139,7 +142,7 @@ internal fun StocktakingScreen(
             StoreChipsRow(
                 stores = stores,
                 selectedStoreId = selectedStoreId,
-                onSelectStore = { selectedStoreId = it },
+                onSelectStore = { selectedStoreId = it; page = 1 },
             )
             Spacer(Modifier.height(14.dp))
         }
@@ -206,6 +209,9 @@ internal fun StocktakingScreen(
 
             }
             }
+        }
+        if (checks != null && pages > 1) {
+            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
         }
 
         Spacer(Modifier.height(16.dp))

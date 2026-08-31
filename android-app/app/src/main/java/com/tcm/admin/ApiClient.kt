@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class AdminSession(val token: String, val user: JSONObject)
 
 object ApiClient {
+    var onUnauthorized: (() -> Unit)? = null
     private val client = OkHttpClient.Builder()
         .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -184,6 +185,8 @@ object ApiClient {
     }
     fun pickupTasks(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray =
         packages(status = status, keyword = keyword, storeId = storeId)
+    fun pickupTasksPaged(status: Int? = null, keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject =
+        packagesPaged(status = status, keyword = keyword, storeId = storeId, page = page, pageSize = pageSize)
     fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
     fun updatePlan(id: Int, payload: JSONObject): JSONObject = updateProcessingPlan(id, payload)
     fun cancelPlan(id: Int, reason: String = ""): JSONObject = transitionPlan(id, 5)
@@ -239,6 +242,11 @@ object ApiClient {
             (storeId?.let { "&storeId=$it" } ?: "") +
             (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
     ).getJSONObject("data"))
+    fun inventoryPaged(keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject = request(
+        "/admin/e6-pharmacy/products?page=$page&pageSize=$pageSize" +
+            (storeId?.let { "&storeId=$it" } ?: "") +
+            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
+    ).getJSONObject("data")
     fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
     fun differences(): JSONArray = differenceProducts()
     fun productCatalog(keyword: String = ""): JSONArray = list(request(
@@ -265,6 +273,20 @@ object ApiClient {
             }
         }
     }
+    fun differenceProductsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
+        val data = request("/admin/products?onlyDifference=1&page=$page&pageSize=$pageSize").getJSONObject("data")
+        val list = data.optJSONArray("list") ?: data.optJSONArray("items") ?: JSONArray()
+        val normalized = JSONArray().also { result ->
+            for (index in 0 until list.length()) {
+                val product = list.getJSONObject(index)
+                val difference = product.optDouble("diffQuantity", 0.0)
+                result.put(JSONObject(product.toString())
+                    .put("preReceiptQuantity", if (difference > 0) difference else 0.0)
+                    .put("preShipmentQuantity", if (difference < 0) -difference else 0.0))
+            }
+        }
+        return JSONObject(data.toString()).put("list", normalized)
+    }
     fun differenceLogs(): JSONArray {
         val values = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
         return JSONArray().also { result ->
@@ -274,6 +296,18 @@ object ApiClient {
                     .put("quantity", kotlin.math.abs(log.optDouble("changeQuantity", 0.0))))
             }
         }
+    }
+    fun differenceLogsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
+        val data = request("/admin/product-differences/logs?page=$page&pageSize=$pageSize").getJSONObject("data")
+        val source = data.optJSONArray("list") ?: data.optJSONArray("items") ?: JSONArray()
+        val normalized = JSONArray().also { result ->
+            for (index in 0 until source.length()) {
+                val log = source.getJSONObject(index)
+                result.put(JSONObject(log.toString()).put("quantity", kotlin.math.abs(log.optDouble("changeQuantity", 0.0))))
+            }
+        }
+        data.put("list", normalized)
+        return data
     }
     fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList { add("page=$page"); add("pageSize=$pageSize"); storeId?.let { add("storeId=$it") } }.joinToString("&")
@@ -403,6 +437,15 @@ object ApiClient {
         }.joinToString("&")
         return list(request("/admin/store-transfers?$query").getJSONObject("data"))
     }
+    fun transfersPaged(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false, page: Int = 1, pageSize: Int = 10): JSONObject {
+        val query = buildList {
+            add("page=$page"); add("pageSize=$pageSize")
+            keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            if (overdue) add("overdue=1")
+        }.joinToString("&")
+        return request("/admin/store-transfers?$query").getJSONObject("data")
+    }
     fun transferStats(storeId: Int? = null): JSONObject = request("/admin/store-transfers/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun herbLocations(storeId: String? = null): JSONObject = request("/admin/herb-locations${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun stores(): JSONArray = request("/admin/herb-locations/stores").getJSONArray("data")
@@ -482,7 +525,10 @@ object ApiClient {
         val response = client.newCall(requestBuilder.build()).execute()
         val responseBodyString = response.body?.string().orEmpty()
         val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
-        if (response.code == 401) token = null
+        if (response.code == 401) {
+            token = null
+            onUnauthorized?.invoke()
+        }
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "上传失败"))
         clearResponseCache()
         return json
@@ -521,7 +567,10 @@ object ApiClient {
         val response = client.newCall(requestBuilder.build()).execute()
         val responseBodyString = response.body?.string().orEmpty()
         val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
-        if (response.code == 401) token = null
+        if (response.code == 401) {
+            token = null
+            onUnauthorized?.invoke()
+        }
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "请求失败"))
         if (normalizedMethod != "GET") clearResponseCache()
         else if (cacheTtl != null) cacheResponse(path, json.toString())

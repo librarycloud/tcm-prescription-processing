@@ -81,6 +81,8 @@ internal fun TransfersScreen(
     var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
     var error by rememberRetainedListValue(listOwner, "error") { null as String? }
     var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var createVisible by remember { mutableStateOf(false) }
     var fromStoreId by remember { mutableStateOf("") }
@@ -94,20 +96,23 @@ internal fun TransfersScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    LaunchedEffect(reload, keyword, statusFilter, overdueOnly, selectedStoreId) {
-        val queryKey = listOf(reload, keyword, statusFilter, overdueOnly, selectedStoreId).joinToString("|")
+    LaunchedEffect(reload, keyword, statusFilter, overdueOnly, selectedStoreId, page) {
+        kotlinx.coroutines.delay(300)
+        val queryKey = listOf(reload, keyword, statusFilter, overdueOnly, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && transfers != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
                 Triple(
-                    ApiClient.transfers(keyword, statusFilter, selectedStoreId.takeIf { showStore }?.toIntOrNull(), overdueOnly),
+                    ApiClient.transfersPaged(keyword, statusFilter, selectedStoreId.takeIf { showStore }?.toIntOrNull(), overdueOnly, page, 10),
                     ApiClient.transferStores(),
                     ApiClient.transferStats(selectedStoreId.takeIf { showStore }?.toIntOrNull()),
                 )
             }
-        }.onSuccess { (transferValues, storeValues, summary) ->
+        }.onSuccess { (transferData, storeValues, summary) ->
+            val transferValues = transferData.optJSONArray("list") ?: JSONArray()
             transfers = (0 until transferValues.length()).map { transferValues.getJSONObject(it) }
+            pages = transferData.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
             stats = summary
             loadedQueryKey = queryKey
@@ -184,7 +189,7 @@ internal fun TransfersScreen(
         // Search Bar
         SearchBarField(
             value = keyword,
-            onValueChange = { keyword = it },
+            onValueChange = { keyword = it; page = 1 },
             placeholder = "输入单号、门店、物品或批号",
             onSearch = { reload++ },
         )
@@ -199,18 +204,22 @@ internal fun TransfersScreen(
             SegmentedButton("全部状态", statusFilter == null && !overdueOnly, onClick = {
                 statusFilter = null
                 overdueOnly = false
+                page = 1
             })
             SegmentedButton("借出中", statusFilter == 0 && !overdueOnly, onClick = {
                 statusFilter = 0
                 overdueOnly = false
+                page = 1
             })
             SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly, onClick = {
                 statusFilter = 1
                 overdueOnly = false
+                page = 1
             })
             SegmentedButton("已逾期", overdueOnly, onClick = {
                 statusFilter = null
                 overdueOnly = true
+                page = 1
             })
         }
 
@@ -219,7 +228,7 @@ internal fun TransfersScreen(
             StoreChipsRow(
                 stores = stores,
                 selectedStoreId = selectedStoreId,
-                onSelectStore = { selectedStoreId = it },
+                onSelectStore = { selectedStoreId = it; page = 1 },
             )
         }
 
@@ -316,6 +325,10 @@ internal fun TransfersScreen(
                 Spacer(Modifier.height(12.dp))
             }
             }
+        }
+
+        if (transfers != null && pages > 1) {
+            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
         }
 
         Spacer(Modifier.height(16.dp))

@@ -76,6 +76,8 @@ internal class E6ImportsListState internal constructor(
     val keyword = mutableStateOf("")
     val orderDate = mutableStateOf(serverToday().toString())
     val page = mutableStateOf(1)
+    var pages by mutableStateOf(1)
+    var total by mutableStateOf(0)
     var items by mutableStateOf<List<JSONObject>?>(null)
     var loaded by mutableStateOf(false)
 }
@@ -170,9 +172,20 @@ internal fun E6ImportsScreen(
         refreshing = true
         error = null
         try {
-            val data = withContext(Dispatchers.IO) { ApiClient.e6ImportsAll() }
+            val data = withContext(Dispatchers.IO) {
+                ApiClient.e6Imports(
+                    keyword = keyword.trim(),
+                    orderDate = orderDate,
+                    page = page,
+                    pageSize = 10,
+                )
+            }
             val list = data.optJSONArray("list") ?: JSONArray()
             items = (0 until list.length()).map { list.getJSONObject(it) }
+            data.optJSONObject("pagination")?.let { pagination ->
+                listState.pages = pagination.optInt("pages", 1).coerceAtLeast(1)
+                listState.total = pagination.optInt("total", list.length())
+            }
             ApiClient.saveE6ImportCache(context, data)
             listState.loaded = true
             selectedIds = emptySet()
@@ -220,23 +233,16 @@ internal fun E6ImportsScreen(
         }
     }
 
-    LaunchedEffect(keyword, orderDate) { page = 1 }
-
-    val filteredItems = remember(items, keyword, orderDate) {
-        val needle = keyword.trim().lowercase()
-        items.orEmpty().filter { item ->
-            val matchesKeyword = needle.isBlank() || listOf(
-                item.optString("externalOrderNo"), item.optString("customerName"),
-                item.optString("phone"), item.optString("e6DoctorCode"), item.optString("cashierName"),
-            ).any { it.lowercase().contains(needle) }
-            val matchesDate = orderDate.isBlank() || serverDateOnly(item.optString("sourceCreatedAt")) == orderDate
-            matchesKeyword && matchesDate
-        }.sortedByDescending { it.optString("sourceCreatedAt") }
+    LaunchedEffect(keyword, orderDate) {
+        kotlinx.coroutines.delay(300)
+        if (page != 1) page = 1 else if (listState.loaded) refreshFromServer()
     }
-    val total = filteredItems.size
-    val pages = ((total + 9) / 10).coerceAtLeast(1)
-    val currentPage = page.coerceIn(1, pages)
-    val currentItems = filteredItems.drop((currentPage - 1) * 10).take(10)
+    LaunchedEffect(page) {
+        if (page != 1 && listState.loaded) refreshFromServer()
+    }
+
+    val currentPage = page.coerceIn(1, listState.pages)
+    val currentItems = items.orEmpty()
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -255,7 +261,7 @@ internal fun E6ImportsScreen(
             value = keyword,
             onValueChange = { page = 1; keyword = it },
             placeholder = "搜索订单号、顾客、电话或医师编码",
-            onSearch = {},
+            onSearch = { page = 1; scope.launch { refreshFromServer() } },
         )
         Spacer(Modifier.height(8.dp))
         Row(
@@ -338,7 +344,7 @@ internal fun E6ImportsScreen(
             loading && items == null -> LoadingState("正在加载E6导入记录")
             currentItems.isEmpty() -> EmptyState("暂无符合条件的E6处方导入记录")
             else -> {
-                Text("共 $total 条记录 · 第 $currentPage / $pages 页", color = Muted, fontSize = 12.sp)
+                Text("共 ${listState.total} 条记录 · 第 $currentPage / ${listState.pages} 页", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(7.dp))
                 currentItems.forEach { item ->
                     E6ImportCard(
@@ -358,12 +364,12 @@ internal fun E6ImportsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Primary),
                     ) { Text("合并选中订单并生成处方 (${mergeItems.size})", fontWeight = FontWeight.SemiBold) }
                 }
-                if (pages > 1) {
+                if (listState.pages > 1) {
                     AppPagination(
                         page = currentPage,
-                        pages = pages,
+                        pages = listState.pages,
                         onPrev = { if (currentPage > 1) page-- },
-                        onNext = { if (currentPage < pages) page++ },
+                        onNext = { if (currentPage < listState.pages) page++ },
                     )
                 }
             }

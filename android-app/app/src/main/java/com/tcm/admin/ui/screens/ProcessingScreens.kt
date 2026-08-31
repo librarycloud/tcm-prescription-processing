@@ -197,6 +197,7 @@ internal fun ProcessingScreenV2(
     }
 
     LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page) {
+        kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page).joinToString("|")
         val existingItems = if (mode == "plans") plans else pickupTasks
         if (loadedQueryKey == queryKey && existingItems != null) return@LaunchedEffect
@@ -214,14 +215,16 @@ internal fun ProcessingScreenV2(
                         page = page,
                         pageSize = 10,
                     )
-                    Triple<JSONObject, JSONObject?, JSONArray?>(summary, paged, null)
+                    Triple<JSONObject, JSONObject?, JSONObject?>(summary, paged, null)
                 } else {
-                    val pickupData = ApiClient.pickupTasks(
+                    val pickupData = ApiClient.pickupTasksPaged(
                         status = pickupStatus,
                         keyword = keyword.trim(),
                         storeId = storeIdInt,
+                        page = page,
+                        pageSize = 10,
                     )
-                    Triple<JSONObject, JSONObject?, JSONArray?>(summary, null, pickupData)
+                    Triple<JSONObject, JSONObject?, JSONObject?>(summary, null, pickupData)
                 }
             }
         }.onSuccess { (summary, pagedPlans, pickupData) ->
@@ -232,9 +235,11 @@ internal fun ProcessingScreenV2(
                 pages = pagedPlans.optJSONObject("pagination")?.optInt("pages", 1) ?: 1
             }
             if (pickupData != null) {
-                pickupTasks = (0 until pickupData.length()).map {
-                    packageItem(pickupData.getJSONObject(it))
+                val list = pickupData.optJSONArray("list") ?: JSONArray()
+                pickupTasks = (0 until list.length()).map {
+                    packageItem(list.getJSONObject(it))
                 }
+                pages = pickupData.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             }
             loading = false
             refreshing = false
@@ -417,7 +422,7 @@ internal fun ProcessingScreenV2(
                             if (isSelected) 1.5.dp else 1.dp,
                             if (isSelected) Primary else CardBorderColor,
                         ),
-                        onClick = { pickupStatus = status },
+                        onClick = { pickupStatus = status; page = 1 },
                     ) {
                         Column(
                             modifier = Modifier
@@ -448,7 +453,7 @@ internal fun ProcessingScreenV2(
         // Search Field
         SearchBarField(
             value = keyword,
-            onValueChange = { keyword = it },
+            onValueChange = { keyword = it; page = 1 },
             placeholder = "搜索顾客姓名、手机号或备注",
             onSearch = { page = 1; reload++ },
         )
@@ -710,6 +715,9 @@ internal fun ProcessingScreenV2(
                             },
                         )
                     }
+                }
+                if (pages > 1) {
+                    AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
                 }
             }
         }

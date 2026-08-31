@@ -75,6 +75,8 @@ internal fun InventoryScreen(
     var loading by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var searchRequest by rememberRetainedListValue(listOwner, "searchRequest") { if (initialQuery.isBlank()) 0 else 1 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
     val context = LocalContext.current
@@ -98,20 +100,22 @@ internal fun InventoryScreen(
             }
     }
 
-    LaunchedEffect(searchRequest, selectedStoreId) {
+    LaunchedEffect(searchRequest, selectedStoreId, page) {
         if (searchRequest == 0) return@LaunchedEffect
-        val queryKey = listOf(searchRequest, query, selectedStoreId).joinToString("|")
+        val queryKey = listOf(searchRequest, query, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && products != null) return@LaunchedEffect
         error = null
         selectedProduct = null
         loading = true
         runCatching {
             withContext(Dispatchers.IO) {
-                ApiClient.inventory(query.trim(), selectedStoreId.toIntOrNull())
+                ApiClient.inventoryPaged(query.trim(), selectedStoreId.toIntOrNull(), page, 10)
             }
         }.onSuccess { values ->
-            val list = (0 until values.length()).map { values.getJSONObject(it) }
+            val array = values.optJSONArray("list") ?: JSONArray()
+            val list = (0 until array.length()).map { array.getJSONObject(it) }
             products = list
+            pages = values.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             if (list.size == 1) {
                 selectedProduct = list.first()
             }
@@ -172,7 +176,7 @@ internal fun InventoryScreen(
         // Search Input with Scan Icon
         SearchBarField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = { query = it; page = 1 },
             placeholder = "输入商品名称、编码或条码",
             onSearch = { searchRequest++ },
             onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
@@ -185,7 +189,8 @@ internal fun InventoryScreen(
                 stores = stores,
                 selectedStoreId = selectedStoreId,
                 onSelectStore = { id ->
-                    selectedStoreId = id
+                selectedStoreId = id
+                    page = 1
                     if (query.isNotBlank()) searchRequest++
                 },
             )
@@ -417,7 +422,7 @@ internal fun InventoryScreen(
                     )
                     Spacer(Modifier.height(10.dp))
 
-                    products!!.forEach { product ->
+                products!!.forEach { product ->
                         val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
                         val unit = product.displayField("unit", "")
                         val spec = product.displayField("specification", "")
@@ -462,6 +467,9 @@ internal fun InventoryScreen(
                             }
                         }
                     }
+                }
+                if (pages > 1) {
+                    AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
                 }
             } else if (searchRequest == 0) {
                 AppEmptyState(

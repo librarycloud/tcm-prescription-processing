@@ -52,6 +52,8 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
     var logs by rememberRetainedListValue(listOwner, "logs") { null as List<JSONObject>? }
     var error by rememberRetainedListValue(listOwner, "error") { null as String? }
     var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var writeOff by remember { mutableStateOf<Pair<JSONObject, String>?>(null) }
     var writeOffQuantity by remember { mutableStateOf("") }
@@ -62,17 +64,30 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
     var registerKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(reload, tab) {
-        val queryKey = listOf(reload, tab).joinToString("|")
-        if (loadedQueryKey == queryKey && products != null && logs != null) return@LaunchedEffect
+    LaunchedEffect(reload, tab, page) {
+        val queryKey = listOf(reload, tab, page).joinToString("|")
+        val loaded = if (tab == "current") products else logs
+        if (loadedQueryKey == queryKey && loaded != null) return@LaunchedEffect
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
-                Pair(ApiClient.differenceProducts(), ApiClient.differenceLogs())
+                if (tab == "current") {
+                    Pair(ApiClient.differenceProductsPaged(page, 10), null)
+                } else {
+                    Pair(null, ApiClient.differenceLogsPaged(page, 10))
+                }
             }
-        }.onSuccess { (list, logList) ->
-            products = (0 until list.length()).map { list.getJSONObject(it) }
-            logs = (0 until logList.length()).map { logList.getJSONObject(it) }
+        }.onSuccess { (productData, logData) ->
+            productData?.let { data ->
+                val list = data.optJSONArray("list") ?: JSONArray()
+                products = (0 until list.length()).map { list.getJSONObject(it) }
+                pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+            }
+            logData?.let { data ->
+                val list = data.optJSONArray("list") ?: JSONArray()
+                logs = (0 until list.length()).map { list.getJSONObject(it) }
+                pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+            }
             loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载库存差异失败"
@@ -116,8 +131,8 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
         Spacer(Modifier.height(14.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegmentedButton("当前差异", tab == "current", onClick = { tab = "current" })
-            SegmentedButton("差异流水", tab == "logs", onClick = { tab = "logs" })
+            SegmentedButton("当前差异", tab == "current", onClick = { tab = "current"; page = 1 })
+            SegmentedButton("差异流水", tab == "logs", onClick = { tab = "logs"; page = 1 })
         }
 
         Spacer(Modifier.height(14.dp))
@@ -220,6 +235,9 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
                     Text("变动数量：${quantityText(qty)} ${product.displayField("unit")}", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
+        }
+        if (pages > 1) {
+            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
         }
     }
 

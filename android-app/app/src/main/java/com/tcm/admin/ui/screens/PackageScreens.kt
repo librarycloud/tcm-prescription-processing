@@ -139,6 +139,7 @@ internal fun PackagesScreen(
     }
 
     LaunchedEffect(status, sortBy, keyword, selectedStoreId, reload, page) {
+        kotlinx.coroutines.delay(300)
         val queryKey = listOf(status, sortBy, keyword, selectedStoreId, reload, page).joinToString("|")
         if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
         error = null

@@ -113,6 +113,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
             }
     }
     LaunchedEffect(reload, keyword, status, doctorId, selectedStoreId, page) {
+        kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, keyword, status, doctorId, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
         error = null
@@ -161,7 +162,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
             }
         }
         Spacer(Modifier.height(12.dp))
-        SearchBarField(keyword, { keyword = it }, "搜索患者姓名、手机号、处方号或医生", onSearch = { page = 1; reload++ })
+        SearchBarField(keyword, { keyword = it; page = 1 }, "搜索患者姓名、手机号、处方号或医生", onSearch = { page = 1; reload++ })
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SegmentedButton("全部状态", status == null, onClick = { status = null; page = 1 })

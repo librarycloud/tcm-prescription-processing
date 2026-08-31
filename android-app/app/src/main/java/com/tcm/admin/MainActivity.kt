@@ -68,6 +68,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -107,7 +108,6 @@ internal sealed class ScreenTarget {
     data class PrescriptionDetail(val id: Int) : ScreenTarget()
     data class PrescriptionEdit(val initial: JSONObject = JSONObject()) : ScreenTarget()
     object Processing : ScreenTarget()
-    data class ProcessingPlanDetail(val id: Int) : ScreenTarget()
     data class ProcessingPlanForm(val initial: JSONObject = JSONObject()) : ScreenTarget()
     data class WorkflowOperation(val plan: JSONObject, val currentStep: String, val action: String) : ScreenTarget()
     object Packages : ScreenTarget()
@@ -124,10 +124,8 @@ internal sealed class ScreenTarget {
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
     object Differences : ScreenTarget()
-    data class DifferenceRegister(val defaultProduct: JSONObject? = null) : ScreenTarget()
     object Transfers : ScreenTarget()
     data class TransferDetail(val id: Int) : ScreenTarget()
-    object TransferCreate : ScreenTarget()
 }
 
 /** Stable Material 3 roles for the pharmacy workspace. */
@@ -238,6 +236,23 @@ private fun TcmAdminApp() {
     }
 
     val scope = rememberCoroutineScope()
+
+    DisposableEffect(appContext) {
+        ApiClient.onUnauthorized = {
+            scope.launch {
+                ApiClient.clearSession(appContext)
+                clearRetainedListValues()
+                session = null
+                stats = null
+                dashboardStores = emptyList()
+                dashboardStoreId = ""
+                backStack.clear()
+                backStack.add(ScreenTarget.Login)
+                Toast.makeText(appContext, "登录已过期，请重新登录", Toast.LENGTH_SHORT).show()
+            }
+        }
+        onDispose { ApiClient.onUnauthorized = null }
+    }
 
     fun navigateTo(target: ScreenTarget) {
         backStack.add(target)
@@ -455,9 +470,6 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.ProcessingPlanDetail -> DetailShell("加工计划详情", onBack = { navigateBack() }) {
-                    Text("请从加工工作台打开加工计划详情")
-                }
                 is ScreenTarget.ProcessingPlanForm -> DetailShell(
                     if (currentScreen.initial.has("id")) "编辑加工计划" else "新建加工计划",
                     onBack = { navigateBack() },
@@ -525,17 +537,11 @@ private fun TcmAdminApp() {
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
                     DifferencesScreen(scrollState = differencesScrollState)
                 }
-                is ScreenTarget.DifferenceRegister -> DetailShell("登记库存差异", onBack = { navigateBack() }) {
-                    DifferencesScreen(scrollState = differencesScrollState)
-                }
                 is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, scrollState = transfersScrollState) {
                     TransfersScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = transfersScrollState)
                 }
                 is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
                     TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
-                }
-                is ScreenTarget.TransferCreate -> DetailShell("新建门店调拨", onBack = { navigateBack() }) {
-                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = transfersScrollState)
                 }
             }
         }
@@ -543,6 +549,7 @@ private fun TcmAdminApp() {
 
     LaunchedEffect(session) {
         if (session != null) {
+            checkForAppUpdateIfDue()
             if (session?.user?.optInt("role", -1) == 0) {
                 runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
                     .onSuccess { values -> dashboardStores = (0 until values.length()).map { values.getJSONObject(it) } }
