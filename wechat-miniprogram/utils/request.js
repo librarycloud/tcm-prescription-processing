@@ -67,6 +67,8 @@ function hash(value) {
 }
 
 function cacheKey(options, token) {
+  const forceRefresh = options.forceRefresh || options.bypassCache;
+  if (forceRefresh) return '';
   const source = `${options.method || 'GET'}|${options.url}|${stableSerialize(options.data || {})}|${token || ''}`;
   return `${CACHE_PREFIX}${hash(source)}`;
 }
@@ -96,7 +98,6 @@ function writeCached(key, data) {
   try {
     wx.setStorageSync(key, cached);
   } catch (error) {
-    // A full or unavailable storage must not make a successful API call fail.
     delete memoryCache[key];
   }
 }
@@ -118,7 +119,8 @@ export function request(options) {
     cacheToken = token;
   }
   const method = String(options.method || 'GET').toUpperCase();
-  const ttl = method === 'GET' ? cacheTtl(options.url) : 0;
+  const bypass = Boolean(options.forceRefresh || options.bypassCache);
+  const ttl = (method === 'GET' && !bypass) ? cacheTtl(options.url) : 0;
   const key = ttl ? cacheKey(options, token) : '';
   if (ttl) {
     const cached = readCached(key, ttl);
@@ -168,28 +170,23 @@ export function uploadFile(options) {
       filePath: options.filePath,
       name: options.name || 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
-      formData: options.formData || {},
       success(res) {
-        let body = {};
         try {
-          body = JSON.parse(res.data || '{}');
-        } catch {
-          body = {};
+          const body = JSON.parse(res.data || '{}');
+          if (body.code === 0) {
+            clearResponseCache();
+            resolve(body.data);
+            return;
+          }
+          wx.showToast({ title: body.message || '上传失败', icon: 'none' });
+          reject(new Error(body.message || '上传失败'));
+        } catch (error) {
+          wx.showToast({ title: '解析响应失败', icon: 'none' });
+          reject(error);
         }
-        if (body.code === 0) {
-          clearResponseCache();
-          resolve(body.data);
-          return;
-        }
-        if (res.statusCode === 401) {
-          clearSession();
-          wx.reLaunch({ url: '/pages/login/login' });
-        }
-        wx.showToast({ title: body.message || '上传失败', icon: 'none' });
-        reject(new Error(body.message || '上传失败'));
       },
       fail(error) {
-        wx.showToast({ title: '网络异常', icon: 'none' });
+        wx.showToast({ title: '上传失败', icon: 'none' });
         reject(error);
       }
     });

@@ -63,7 +63,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -496,6 +498,7 @@ internal fun ProcessingScreenV2(
                 AppEmptyState("暂无加工计划")
             } else {
                 plans!!.forEach { plan ->
+                    key(plan.optInt("id")) {
                     val prescription = plan.optJSONObject("prescription")
                     val processType = plan.optJSONObject("processType")
                     val store = plan.optJSONObject("store")
@@ -671,6 +674,7 @@ internal fun ProcessingScreenV2(
                             }
                         }
                     }
+                    }
                 }
 
                 // Pagination
@@ -691,19 +695,21 @@ internal fun ProcessingScreenV2(
                 AppEmptyState(if (pickupStatus == 0) "暂无待领取记录" else "暂无已领取记录")
             } else {
                 pickupTasks!!.forEach { item ->
-                    PackageSummaryCard(
-                        item = item,
-                        showStore = showStore,
-                        modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                        onVerify = {
-                            scope.launch {
-                                runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
-                                    .onSuccess { reload++ }
-                                    .onFailure { error = it.message ?: "核销失败" }
-                            }
-                        },
-                    )
+                    key(item.id) {
+                        PackageSummaryCard(
+                            item = item,
+                            showStore = showStore,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
+                            onVerify = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
+                                        .onSuccess { reload++ }
+                                        .onFailure { error = it.message ?: "核销失败" }
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

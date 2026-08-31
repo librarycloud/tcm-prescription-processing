@@ -1,3 +1,4 @@
+import { safeScanCode } from '../../../utils/scanner';
 import { createPackage, getPackageDetail, getStores, matchAdminUsers, updatePackage } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { normalizeExpressTrackingNo, PICKUP_METHOD_OPTIONS, pickupMethodText } from '../../../utils/format';
@@ -155,7 +156,7 @@ Page({
   },
 
   scanTrackingNo() {
-    wx.scanCode({
+    safeScanCode({
       scanType: ['barCode', 'qrCode'],
       success: (res) => {
         this.setData({ 'form.expressTrackingNo': normalizeExpressTrackingNo(res.result) });

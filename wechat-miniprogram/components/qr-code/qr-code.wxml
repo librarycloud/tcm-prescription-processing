@@ -1,3 +1,15 @@
-<view class="qr-wrap">
+<view class="qr-wrap" bindtap="onTapQr">
   <canvas canvas-id="{{canvasId}}" class="qr-canvas" style="width: {{size}}px; height: {{size}}px;"></canvas>
+  <view wx:if="{{enablePreview}}" class="qr-tip">点击放大二维码</view>
+</view>
+
+<view wx:if="{{previewing}}" class="qr-mask" bindtap="closePreview">
+  <view class="qr-dialog" catchtap="true">
+    <view class="qr-dialog-title">出示取货二维码</view>
+    <view class="qr-big-wrap">
+      <canvas canvas-id="{{previewCanvasId}}" class="qr-big-canvas" style="width: {{bigSize}}px; height: {{bigSize}}px;"></canvas>
+    </view>
+    <view class="qr-dialog-desc">已自动调亮屏幕，方便扫码核销</view>
+    <button class="qr-dialog-btn" bindtap="closePreview">完成</button>
+  </view>
 </view>

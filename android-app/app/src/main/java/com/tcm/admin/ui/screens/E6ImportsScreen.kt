@@ -849,7 +849,17 @@ private fun DetailLine(label: String, value: String, color: Color = RegularText)
 @Composable
 private fun RejectE6Dialog(loading: Boolean, onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     var reason by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("驳回E6订单") }, text = { OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("驳回原因 *") }, minLines = 3, shape = FieldShape) }, confirmButton = { Button(enabled = reason.isNotBlank() && !loading, onClick = { onSubmit(reason.trim()) }, colors = ButtonDefaults.buttonColors(containerColor = Danger), shape = FieldShape) { Text("确认驳回") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("驳回E6订单") },
+        text = {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
+                OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("驳回原因 *") }, minLines = 3, shape = FieldShape)
+            }
+        },
+        confirmButton = { Button(enabled = reason.isNotBlank() && !loading, onClick = { onSubmit(reason.trim()) }, colors = ButtonDefaults.buttonColors(containerColor = Danger), shape = FieldShape) { Text("确认驳回") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }
 
 @Composable

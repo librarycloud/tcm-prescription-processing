@@ -1,3 +1,4 @@
+import { safeScanCode } from '../../../utils/scanner';
 import { getPackageByPickupCode, verifyPackage } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import {
@@ -47,7 +48,7 @@ Page({
   },
 
   scan() {
-    wx.scanCode({
+    safeScanCode({
       onlyFromCamera: false,
       success: (res) => {
         const value = String(res.result || '').trim();
@@ -110,7 +111,7 @@ Page({
   },
 
   scanTrackingNo() {
-    wx.scanCode({
+    safeScanCode({
       scanType: ['barCode', 'qrCode'],
       success: (res) => {
         this.setData({ expressTrackingNo: normalizeExpressTrackingNo(res.result) });

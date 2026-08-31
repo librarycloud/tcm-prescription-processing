@@ -1,3 +1,4 @@
+import { safeScanCode } from '../../../utils/scanner';
 import { getE6PharmacyProducts, getStores } from '../../../api/admin';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
@@ -135,7 +136,7 @@ Page({
   },
 
   scan() {
-    wx.scanCode({
+    safeScanCode({
       scanType: ['barCode'],
       success: (res) => {
         this.setData({ keyword: String(res.result || '').trim() }, () => this.search(true, true));

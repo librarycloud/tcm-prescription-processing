@@ -2,6 +2,7 @@ package com.tcm.admin
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -273,8 +274,19 @@ private fun TcmAdminApp() {
         }
     }
 
-    BackHandler(enabled = backStack.size > 1) {
-        navigateBack()
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+    BackHandler(enabled = currentScreen !is ScreenTarget.Login) {
+        if (backStack.size > 1) {
+            navigateBack()
+        } else {
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressTime < 2000L) {
+                (context as? ComponentActivity)?.finish()
+            } else {
+                lastBackPressTime = now
+                Toast.makeText(context, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     val colorScheme = when (themeMode) {

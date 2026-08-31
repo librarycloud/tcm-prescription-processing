@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,7 +45,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -145,6 +148,7 @@ internal fun StocktakingScreen(
         if (checks != null && checks!!.isEmpty()) AppEmptyState("暂无盘点单记录")
 
         checks.orEmpty().forEach { check ->
+            key(check.optInt("id")) {
             val status = check.optInt("status")
             val summary = check.optJSONObject("summary") ?: JSONObject()
             val total = summary.optInt("total", 0)
@@ -199,6 +203,7 @@ internal fun StocktakingScreen(
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
 
+            }
             }
         }
 
@@ -263,6 +268,7 @@ internal fun StocktakingDetailScreen(
     user: JSONObject? = null,
 ) {
     var check by remember { mutableStateOf<JSONObject?>(null) }
+    var summaryData by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
     var locationItem by remember { mutableStateOf<JSONObject?>(null) }
@@ -300,6 +306,7 @@ internal fun StocktakingDetailScreen(
             }
         }.onSuccess {
             check = it
+            it.optJSONObject("summary")?.let { value -> summaryData = value }
             itemPages = it.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             if (requestedFilter != null) scope.launch {
                 runCatching {
@@ -312,12 +319,10 @@ internal fun StocktakingDetailScreen(
                             includeSummary = true,
                         )
                     }
-                }.onSuccess { summaryData ->
+                }.onSuccess { summaryResult ->
                     if (itemPage != requestedPage || itemFilter != requestedFilter) return@onSuccess
-                    itemPages = summaryData.optJSONObject("pagination")?.optInt("pages", itemPages)?.coerceAtLeast(1) ?: itemPages
-                    check = check?.let { current ->
-                        JSONObject(current.toString()).put("summary", summaryData.optJSONObject("summary") ?: JSONObject())
-                    }
+                    itemPages = summaryResult.optJSONObject("pagination")?.optInt("pages", itemPages)?.coerceAtLeast(1) ?: itemPages
+                    summaryResult.optJSONObject("summary")?.let { value -> summaryData = value }
                 }
             }
         }
@@ -336,7 +341,7 @@ internal fun StocktakingDetailScreen(
         check?.let { selected ->
             val items = selected.optJSONArray("items") ?: JSONArray()
             val itemList = (0 until items.length()).map { items.getJSONObject(it) }
-            val summary = selected.optJSONObject("summary")
+            val summary = summaryData ?: selected.optJSONObject("summary")
             val total = summary?.optInt("total", itemList.size) ?: 0
             val counted = summary?.optInt("counted", 0) ?: 0
             val missing = summary?.optInt("missing", 0) ?: 0
@@ -528,7 +533,7 @@ internal fun StocktakingDetailScreen(
             onDismissRequest = { locationItem = null },
             title = { Text("修改商品货位", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
+                Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
                     OutlinedTextField(
                         value = locationValue,
                         onValueChange = { locationValue = it },

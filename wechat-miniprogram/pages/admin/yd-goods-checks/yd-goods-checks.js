@@ -1,3 +1,4 @@
+import { safeScanCode } from '../../../utils/scanner';
 import {
   addInitialGoodsCheckCount,
   createGoodsCheck,
@@ -305,7 +306,7 @@ Page({
   },
 
   scan() {
-    wx.scanCode({
+    safeScanCode({
       scanType: ['barCode'],
       success: (res) => {
         this.setData({ keyword: String(res.result || '').trim() }, () => this.searchCandidates(false, true, true));

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,7 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -227,6 +230,7 @@ internal fun TransfersScreen(
         if (transfers != null && transfers!!.isEmpty()) AppEmptyState("暂无调拨单")
 
         transfers.orEmpty().forEach { transfer ->
+            key(transfer.optInt("id")) {
             val items = transfer.optJSONArray("items") ?: JSONArray()
             val status = transfer.optInt("status")
             val outboundStatus = transfer.optInt("outboundStatus")
@@ -311,6 +315,7 @@ internal fun TransfersScreen(
 
                 Spacer(Modifier.height(12.dp))
             }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -326,7 +331,7 @@ internal fun TransfersScreen(
             onDismissRequest = { createVisible = false },
             title = { Text("新建门店调拨", fontWeight = FontWeight.Bold) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
                     Text("调出门店", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(4.dp))
                     Row(

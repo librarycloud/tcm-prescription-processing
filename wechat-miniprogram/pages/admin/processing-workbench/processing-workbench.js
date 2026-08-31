@@ -1,3 +1,4 @@
+import { safeScanCode } from '../../../utils/scanner';
 import {
   delayProcessingPlan,
   deleteProcessingPlan,
@@ -120,6 +121,10 @@ Page({
   },
 
   async onPullDownRefresh() {
+    try {
+      const { clearResponseCache } = require('../../../utils/request');
+      clearResponseCache();
+    } catch (e) {}
     try {
       await this.reloadAll();
     } finally {
@@ -362,7 +367,7 @@ Page({
   },
 
   scanPlan() {
-    wx.scanCode({
+    safeScanCode({
       scanType: ['qrCode', 'barCode'],
       success: async (res) => {
         const plan = await findProcessingPlanByScan(res.result);

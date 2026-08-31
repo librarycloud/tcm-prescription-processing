@@ -51,7 +51,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -288,13 +290,15 @@ internal fun PackagesScreen(
             AppEmptyState("暂无匹配包裹")
         } else {
             items.orEmpty().forEach { item ->
-                PackageSummaryCard(
-                    item = item,
-                    showStore = showStore,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                    onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                    onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
-                )
+                key(item.id) {
+                    PackageSummaryCard(
+                        item = item,
+                        showStore = showStore,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
+                        onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
+                    )
+                }
             }
 
             if (pages > 1) {

@@ -1,3 +1,4 @@
+import { safeScanCode } from '../../../utils/scanner';
 import {
   deleteDispensingPhoto,
   finishProcessingEquipmentUsage,
@@ -124,7 +125,7 @@ function durationText(start, end) {
 
 function scanEquipment() {
   return new Promise((resolve, reject) => {
-    wx.scanCode({
+    safeScanCode({
       scanType: ['qrCode', 'barCode'],
       success: (res) => resolve(res.result),
       fail: reject

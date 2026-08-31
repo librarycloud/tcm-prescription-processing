@@ -49,7 +49,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -186,6 +188,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
         if (items == null && error == null) AppEmptyState("正在加载处方列表...")
         if (items != null && items!!.isEmpty()) AppEmptyState("暂无匹配处方", onRetry = { reload++ })
         items.orEmpty().forEach { item ->
+            key(item.optInt("id")) {
             val plans = item.optJSONArray("plans") ?: JSONArray()
             val remainingDose = (item.optInt("totalDose", 0) - item.optInt("takenDose", 0)).coerceAtLeast(0)
             AppCard(modifier = Modifier.padding(bottom = 12.dp), onClick = { onNavigate(ScreenTarget.PrescriptionDetail(item.optInt("id"))) }) {
@@ -241,6 +244,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
                         }
                     }
                 }
+            }
             }
         }
         if (items != null && pages > 1) {
