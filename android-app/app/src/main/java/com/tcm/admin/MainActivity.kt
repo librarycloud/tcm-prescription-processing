@@ -123,7 +123,6 @@ internal sealed class ScreenTarget {
     data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
-    data class StocktakingEntry(val checkId: Int, val initialItem: JSONObject? = null) : ScreenTarget()
     object Differences : ScreenTarget()
     data class DifferenceRegister(val defaultProduct: JSONObject? = null) : ScreenTarget()
     object Transfers : ScreenTarget()
@@ -521,18 +520,6 @@ private fun TcmAdminApp() {
                         user = session?.user,
                         scrollState = stocktakingDetailScrollState,
                         refreshKey = stocktakingDetailRevision,
-                        onStartEntry = { item -> navigateTo(ScreenTarget.StocktakingEntry(currentScreen.checkId, item)) },
-                    )
-                }
-                is ScreenTarget.StocktakingEntry -> DetailShell("盘点录入", onBack = { navigateBack() }) {
-                    StocktakingEntryScreen(
-                        checkId = currentScreen.checkId,
-                        user = session?.user,
-                        initialItem = currentScreen.initialItem,
-                        onSaved = {
-                            stocktakingDetailRevision++
-                            navigateBack()
-                        },
                     )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {

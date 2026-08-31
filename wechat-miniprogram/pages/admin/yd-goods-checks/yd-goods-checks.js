@@ -74,6 +74,9 @@ function filterCandidateRows(rows, filter) {
 Page({
   data: {
     initialCheckId: null,
+    initialProductId: null,
+    initialKeyword: '',
+    initialCandidateFilter: '',
     activeTab: 'overview',
     checksLoading: false,
     checks: [],
@@ -111,7 +114,15 @@ Page({
 
   onLoad(options = {}) {
     const checkId = Number(options.checkId);
-    if (checkId) this.setData({ initialCheckId: checkId });
+    const productId = Number(options.productId);
+    const initialKeyword = String(options.keyword || '');
+    const initialCandidateFilter = String(options.candidateFilter || '');
+    this.setData({
+      ...(checkId ? { initialCheckId: checkId } : {}),
+      ...(productId ? { initialProductId: productId } : {}),
+      initialKeyword,
+      initialCandidateFilter
+    });
   },
 
   async onShow() {
@@ -125,7 +136,18 @@ Page({
     }
     await this.loadChecks();
     if (this.data.initialCheckId && !this.data.selectedCheck) {
-      this.openCheckById(this.data.initialCheckId);
+      await this.openCheckById(this.data.initialCheckId);
+    }
+    if (this.data.initialProductId && this.data.selectedCheck && !this.data.selectedProduct) {
+      const filterIndex = this.data.candidateFilterOptions.findIndex(
+        (item) => item.value === this.data.initialCandidateFilter
+      );
+      this.setData({
+        keyword: this.data.initialKeyword,
+        candidateFilterIndex: Math.max(0, filterIndex),
+        candidateFilter: filterIndex >= 0 ? this.data.initialCandidateFilter : ''
+      });
+      await this.searchCandidates(true, true);
     }
   },
 
@@ -150,8 +172,8 @@ Page({
 
   openCheckById(checkId) {
     const selectedCheck = this.data.checks.find((item) => Number(item.id) === Number(checkId));
-    if (!selectedCheck) return;
-    this.setData({
+    if (!selectedCheck) return Promise.resolve();
+    return new Promise((resolve) => this.setData({
       selectedCheck,
       keyword: '',
       candidateFilterIndex: 0,
@@ -161,7 +183,7 @@ Page({
       candidateProducts: [],
       selectedProduct: null,
       selectedInventories: []
-    });
+    }, resolve));
   },
 
   backToChecks() {
@@ -239,7 +261,9 @@ Page({
     const filter = this.data.candidateFilter;
     if (!keyword) {
       if (filter && this.data.selectedCheck) {
-        const productId = preserveProduct ? this.data.selectedProduct?.id : null;
+        const productId = preserveProduct
+          ? (this.data.selectedProduct?.id || this.data.initialProductId)
+          : null;
         const requestId = ++candidateRequestId;
         this.setData({ candidateLoading: true, candidateSearched: true, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
         try {
@@ -271,7 +295,9 @@ Page({
       wx.showToast({ title: '请输入至少2个中文或4位数字', icon: 'none' });
       return;
     }
-    const productId = preserveProduct ? this.data.selectedProduct?.id : null;
+    const productId = preserveProduct
+      ? (this.data.selectedProduct?.id || this.data.initialProductId)
+      : null;
     const requestId = ++candidateRequestId;
     this.setData({ candidateLoading: true, candidateSearched: true, candidates: [], candidateProducts: [], selectedProduct: null, selectedInventories: [] });
     try {
@@ -319,11 +345,11 @@ Page({
     if (!selectedProduct) return;
     clearTimeout(candidateSearchTimer);
     candidateRequestId += 1;
-    this.setData({
-      candidateProducts: [],
-      candidateSearched: false,
-      selectedProduct,
-      selectedInventories: this.data.candidates.filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory)
+    wx.navigateTo({
+      url: `/pages/admin/yd-goods-checks/yd-goods-checks?checkId=${this.data.selectedCheck.id}` +
+        `&productId=${selectedProduct.id}` +
+        `&keyword=${encodeURIComponent(this.data.keyword || '')}` +
+        `&candidateFilter=${encodeURIComponent(this.data.candidateFilter || '')}`
     });
   },
 

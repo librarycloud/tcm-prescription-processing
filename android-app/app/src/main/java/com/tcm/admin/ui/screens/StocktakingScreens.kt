@@ -2,6 +2,7 @@ package com.tcm.admin
 
 import android.app.Activity
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -267,18 +268,18 @@ internal fun StocktakingDetailScreen(
     user: JSONObject? = null,
     scrollState: ScrollState,
     refreshKey: Int,
-    onStartEntry: (JSONObject?) -> Unit,
 ) {
     val detailOwner = "stocktaking-detail-$checkId"
     var check by rememberRetainedListValue(detailOwner, "check") { null as JSONObject? }
-    var summaryData by rememberRetainedListValue(detailOwner, "summary") { null as JSONObject? }
     var error by rememberRetainedListValue(detailOwner, "error") { null as String? }
+    var reload by rememberRetainedListValue(detailOwner, "reload") { 0 }
     var itemFilter by rememberRetainedListValue(detailOwner, "filter") { "all" }
     var itemPage by rememberRetainedListValue(detailOwner, "page") { 1 }
     var itemPages by rememberRetainedListValue(detailOwner, "pages") { 1 }
+    var entryItem by remember { mutableStateOf<JSONObject?>(null) }
     val isStoreStaff = user?.optInt("role", -1) == 3
 
-    LaunchedEffect(checkId, refreshKey, itemPage, itemFilter) {
+    LaunchedEffect(checkId, refreshKey, reload, itemPage, itemFilter) {
         val requestedPage = itemPage
         val requestedFilter = itemFilter
         fun requestStatus() = when (requestedFilter) {
@@ -301,7 +302,6 @@ internal fun StocktakingDetailScreen(
         }.onSuccess { result ->
             if (itemPage != requestedPage || itemFilter != requestedFilter) return@onSuccess
             check = result
-            summaryData = result.optJSONObject("summary")
             itemPages = result.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
         }
             .onFailure { error = it.message ?: "加载盘点详情失败" }
@@ -319,13 +319,6 @@ internal fun StocktakingDetailScreen(
         check?.let { selected ->
             val items = selected.optJSONArray("items") ?: JSONArray()
             val itemList = (0 until items.length()).map { items.getJSONObject(it) }
-            val summary = summaryData ?: selected.optJSONObject("summary")
-            val total = summary?.optInt("total", itemList.size) ?: 0
-            val counted = summary?.optInt("counted", 0) ?: 0
-            val missing = summary?.optInt("missing", 0) ?: 0
-            val pendingRecount = summary?.optInt("pendingRecount", 0) ?: 0
-            val diff = summary?.optInt("adjustment", 0) ?: 0
-            val myRecords = summary?.optInt("mine", 0) ?: 0
             val paginationTotal = selected.optJSONObject("pagination")?.optInt("total", 0) ?: 0
             fun selectFilter(filter: String) {
                 itemFilter = if (itemFilter == filter && filter != "all") "all" else filter
@@ -357,33 +350,32 @@ internal fun StocktakingDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    MetricCell("总项数", total.toString(), Modifier.weight(1f), selected = itemFilter == "all") { selectFilter("all") }
-                    MetricCell("已盘", counted.toString(), Modifier.weight(1f), selected = itemFilter == "counted") { selectFilter("counted") }
-                    MetricCell("我的记录", myRecords.toString(), Modifier.weight(1f), selected = itemFilter == "mine") { selectFilter("mine") }
+                    MetricCell("总项数", "", Modifier.weight(1f), selected = itemFilter == "all") { selectFilter("all") }
+                    MetricCell("已盘", "", Modifier.weight(1f), selected = itemFilter == "counted") { selectFilter("counted") }
+                    MetricCell("我的记录", "", Modifier.weight(1f), selected = itemFilter == "mine") { selectFilter("mine") }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    MetricCell("漏盘", missing.toString(), Modifier.weight(1f), selected = itemFilter == "missing") { selectFilter("missing") }
-                    MetricCell("待复盘", pendingRecount.toString(), Modifier.weight(1f), selected = itemFilter == "recount") { selectFilter("recount") }
-                    MetricCell("有差异", diff.toString(), Modifier.weight(1f), selected = itemFilter == "diff") { selectFilter("diff") }
+                    MetricCell("漏盘", "", Modifier.weight(1f), selected = itemFilter == "missing") { selectFilter("missing") }
+                    MetricCell("待复盘", "", Modifier.weight(1f), selected = itemFilter == "recount") { selectFilter("recount") }
+                    MetricCell("有差异", "", Modifier.weight(1f), selected = itemFilter == "diff") { selectFilter("diff") }
                 }
 
-                Spacer(Modifier.height(14.dp))
-
-                Button(
-                    onClick = { onStartEntry(null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = FieldShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                ) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("搜索或扫码录入")
-                }
             }
+
+            Spacer(Modifier.height(14.dp))
+            StocktakingEntryScreen(
+                checkId = checkId,
+                user = user,
+                initialItem = entryItem,
+                onSaved = {
+                    entryItem = null
+                    reload++
+                },
+            )
 
             run {
                 Spacer(Modifier.height(16.dp))
@@ -479,7 +471,7 @@ internal fun StocktakingDetailScreen(
                             if (actionLabel != null) {
                                 Button(
                                     onClick = {
-                                        onStartEntry(item)
+                                        entryItem = item
                                     },
                                     shape = FieldShape,
                                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -582,6 +574,17 @@ internal fun StocktakingEntryScreen(
     val hasCount = selectedItem?.let { nullableDouble(it, "firstCountQty") != null || nullableDouble(it, "recountQty") != null } == true
     val locationOnly = selectedCheckItemId > 0 && hasCount && !isEditingInitial && !isRecount
     val product = selectedItem?.optJSONObject("product") ?: JSONObject()
+
+    BackHandler(enabled = selectedItem != null || keyword.isNotBlank() || candidates.isNotEmpty()) {
+        if (selectedItem != null) {
+            selectedItem = null
+            batchNo = ""
+            value = ""
+        } else {
+            keyword = ""
+            candidates = emptyList()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -800,12 +803,14 @@ private fun MetricCell(
     ) {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
             Text(label, color = if (selected) MaterialTheme.colorScheme.onPrimary else Muted, fontSize = 11.sp)
-            Text(
-                text = value,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary else PrimaryDark,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-            )
+            if (value.isNotBlank()) {
+                Text(
+                    text = value,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary else PrimaryDark,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                )
+            }
         }
     }
 }
