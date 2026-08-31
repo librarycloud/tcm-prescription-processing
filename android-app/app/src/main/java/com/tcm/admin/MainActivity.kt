@@ -274,6 +274,7 @@ private fun TcmAdminApp() {
         }
     }
 
+    val activity = LocalContext.current as? ComponentActivity
     var lastBackPressTime by remember { mutableStateOf(0L) }
     BackHandler(enabled = currentScreen !is ScreenTarget.Login) {
         if (backStack.size > 1) {
@@ -281,10 +282,10 @@ private fun TcmAdminApp() {
         } else {
             val now = System.currentTimeMillis()
             if (now - lastBackPressTime < 2000L) {
-                (context as? ComponentActivity)?.finish()
+                activity?.finish()
             } else {
                 lastBackPressTime = now
-                Toast.makeText(context, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+                Toast.makeText(appContext, "再按一次退出应用", Toast.LENGTH_SHORT).show()
             }
         }
     }
