@@ -199,20 +199,6 @@ internal fun StocktakingScreen(
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
 
-                Spacer(Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    OutlinedButton(
-                        onClick = { onNavigate(ScreenTarget.StocktakingDetail(check.optInt("id"))) },
-                        modifier = Modifier.height(CompactControlHeight),
-                        shape = FieldShape,
-                    ) {
-                        Text("进入盘点明细")
-                    }
-                }
             }
         }
 
@@ -275,7 +261,6 @@ internal fun StocktakingScreen(
 internal fun StocktakingDetailScreen(
     checkId: Int,
     user: JSONObject? = null,
-    onNavigate: (ScreenTarget) -> Unit,
     onBack: () -> Unit,
 ) {
     var check by remember { mutableStateOf<JSONObject?>(null) }
@@ -283,8 +268,20 @@ internal fun StocktakingDetailScreen(
     var reload by remember { mutableStateOf(0) }
     var locationItem by remember { mutableStateOf<JSONObject?>(null) }
     var locationValue by remember { mutableStateOf("") }
+    var entryVisible by remember { mutableStateOf(false) }
+    var entryItem by remember { mutableStateOf<JSONObject?>(null) }
+    var entryKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val isStoreStaff = user?.optInt("role", -1) == 3
+    val context = LocalContext.current
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
+            entryItem = null
+            entryKeyword = scanned
+            entryVisible = true
+        }
+    }
 
     LaunchedEffect(checkId, reload) {
         runCatching {
@@ -346,7 +343,11 @@ internal fun StocktakingDetailScreen(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { onNavigate(ScreenTarget.StocktakingEntry(checkId)) },
+                        onClick = {
+                            entryItem = null
+                            entryKeyword = ""
+                            entryVisible = true
+                        },
                         modifier = Modifier.weight(1f),
                         shape = FieldShape,
                         colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -356,20 +357,36 @@ internal fun StocktakingDetailScreen(
                         Text("录入盘点")
                     }
                     OutlinedButton(
-                        onClick = { onNavigate(ScreenTarget.StocktakingEntry(checkId)) },
+                        onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
                         shape = FieldShape,
                     ) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码录入", modifier = Modifier.size(18.dp))
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            if (entryVisible) {
+                Spacer(Modifier.height(12.dp))
+                StocktakingEntryScreen(
+                    checkId = checkId,
+                    initialItem = entryItem,
+                    initialKeyword = entryKeyword,
+                    onSaved = {
+                        entryVisible = false
+                        entryItem = null
+                        entryKeyword = ""
+                        reload++
+                    },
+                )
+            }
 
-            SectionHeader("盘点条目明细", "共 ${items.length()} 个商品条目")
-            Spacer(Modifier.height(10.dp))
+            if (!entryVisible) {
+                Spacer(Modifier.height(16.dp))
 
-            (0 until items.length()).forEach { index ->
+                SectionHeader("盘点条目明细", "共 ${items.length()} 个商品条目")
+                Spacer(Modifier.height(10.dp))
+
+                (0 until items.length()).forEach { index ->
                 val item = items.getJSONObject(index)
                 val product = item.optJSONObject("product") ?: JSONObject()
                 val firstQty = nullableDouble(item, "firstCountQty")
@@ -440,7 +457,9 @@ internal fun StocktakingDetailScreen(
                         if (!isStoreStaff) Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                onNavigate(ScreenTarget.StocktakingEntry(checkId, item))
+                                entryItem = item
+                                entryKeyword = ""
+                                entryVisible = true
                             },
                             shape = FieldShape,
                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -449,6 +468,7 @@ internal fun StocktakingDetailScreen(
                             Text(if (isRecount) "录入复盘" else if (firstQty == null) "录入初盘" else "已完成")
                         }
                     }
+                }
                 }
             }
         }
@@ -521,10 +541,11 @@ internal fun StocktakingDetailScreen(
 internal fun StocktakingEntryScreen(
     checkId: Int,
     initialItem: JSONObject? = null,
+    initialKeyword: String = "",
     onSaved: () -> Unit,
 ) {
     var selectedItem by remember(initialItem) { mutableStateOf(initialItem) }
-    var keyword by remember { mutableStateOf("") }
+    var keyword by remember(initialKeyword) { mutableStateOf(initialKeyword) }
     var candidates by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var batchNo by remember(initialItem) { mutableStateOf(initialItem?.displayField("batchNo", "").orEmpty()) }
     var value by remember(initialItem) {
@@ -555,6 +576,10 @@ internal fun StocktakingEntryScreen(
         }
     }
 
+    LaunchedEffect(initialKeyword) {
+        if (initialItem == null && initialKeyword.isNotBlank()) search()
+    }
+
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
@@ -566,10 +591,7 @@ internal fun StocktakingEntryScreen(
     val product = selectedItem?.optJSONObject("product") ?: JSONObject()
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppCard {

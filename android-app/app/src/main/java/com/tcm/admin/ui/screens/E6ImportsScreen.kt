@@ -74,7 +74,7 @@ internal class E6ImportsListState internal constructor(
     val scrollState: ScrollState,
 ) {
     val keyword = mutableStateOf("")
-    val orderDate = mutableStateOf(LocalDate.now().toString())
+    val orderDate = mutableStateOf(serverToday().toString())
     val page = mutableStateOf(1)
     var items by mutableStateOf<List<JSONObject>?>(null)
     var loaded by mutableStateOf(false)
@@ -110,7 +110,7 @@ private fun e6Money(value: Any?): String {
     if (value == null || value == JSONObject.NULL || value.toString().equals("null", ignoreCase = true)) return "-"
     return runCatching { "%.2f".format(java.util.Locale.US, value.toString().toDouble()) }.getOrDefault("-")
 }
-private fun e6Date(value: String): String = value.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }?.take(16)?.replace("T", " ") ?: "-"
+private fun e6Date(value: String): String = serverDateTime(value)
 private fun e6DateMillis(value: String): Long? = runCatching {
     LocalDate.parse(value.take(10)).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
 }.getOrNull()
@@ -134,7 +134,7 @@ private fun e6Batches(totalDose: Int, count: Int): JSONArray {
     val safeCount = count.coerceIn(1, totalDose)
     val base = totalDose / safeCount
     val remainder = totalDose % safeCount
-    var processDate = LocalDate.now()
+    var processDate = serverToday()
     repeat(safeCount) { index ->
         val batchDose = base + if (index < remainder) 1 else 0
         result.put(JSONObject().put("totalDose", batchDose).put("scheduleType", 1).put("processDate", processDate.toString()))
@@ -229,7 +229,7 @@ internal fun E6ImportsScreen(
                 item.optString("externalOrderNo"), item.optString("customerName"),
                 item.optString("phone"), item.optString("e6DoctorCode"), item.optString("cashierName"),
             ).any { it.lowercase().contains(needle) }
-            val matchesDate = orderDate.isBlank() || item.optString("sourceCreatedAt").take(10) == orderDate
+            val matchesDate = orderDate.isBlank() || serverDateOnly(item.optString("sourceCreatedAt")) == orderDate
             matchesKeyword && matchesDate
         }.sortedByDescending { it.optString("sourceCreatedAt") }
     }
@@ -264,8 +264,8 @@ internal fun E6ImportsScreen(
         ) {
             SegmentedButton(
                 label = "今日订单",
-                selected = orderDate == LocalDate.now().toString(),
-                onClick = { page = 1; orderDate = LocalDate.now().toString() },
+                selected = orderDate == serverToday().toString(),
+                onClick = { page = 1; orderDate = serverToday().toString() },
                 modifier = Modifier.weight(1f),
                 centerLabel = true,
             )
@@ -391,7 +391,12 @@ internal fun E6ImportsScreen(
             },
             dismissButton = { TextButton(onClick = { datePickerOpen = false }) { Text("取消") } },
         ) {
-            DatePicker(state = pickerState, title = { Text("选择订单日期") })
+            DatePicker(
+                state = pickerState,
+                modifier = Modifier.height(420.dp),
+                title = null,
+                showModeToggle = false,
+            )
         }
     }
 
@@ -479,7 +484,7 @@ private fun e6DraftBatches(totalDose: Int, count: Int): List<E6BatchDraft> {
         E6BatchDraft(
             key = index,
             dose = batch.optInt("totalDose").toString(),
-            date = batch.displayField("processDate", LocalDate.now().toString()),
+            date = batch.displayField("processDate", serverToday().toString()),
             scheduleType = batch.optInt("scheduleType", 1),
         )
     }
@@ -727,7 +732,7 @@ internal fun E6ImportConfirmScreen(
                         label = "指定日期",
                         selected = batch.scheduleType == 1,
                         onClick = {
-                            batches = batches.toMutableList().also { it[index] = batch.copy(scheduleType = 1, date = batch.date.ifBlank { LocalDate.now().toString() }) }
+                            batches = batches.toMutableList().also { it[index] = batch.copy(scheduleType = 1, date = batch.date.ifBlank { serverToday().toString() }) }
                         },
                         modifier = Modifier.weight(1f),
                         centerLabel = true,
@@ -756,7 +761,7 @@ internal fun E6ImportConfirmScreen(
                 if (index < batches.lastIndex) Spacer(Modifier.height(7.dp))
             }
             Spacer(Modifier.height(8.dp)); Text("已分配 $allocatedDose / $totalDose 剂", color = if (allocatedDose == totalDose) Success else Danger, fontSize = 12.sp)
-            if (totalDose > 0 && batches.size < totalDose) TextButton(onClick = { batches = batches + E6BatchDraft(batches.size, "1", LocalDate.now().toString()); batchCount = batches.size.toString() }) { Text("新增批次") }
+            if (totalDose > 0 && batches.size < totalDose) TextButton(onClick = { batches = batches + E6BatchDraft(batches.size, "1", serverToday().toString()); batchCount = batches.size.toString() }) { Text("新增批次") }
         }
         if (isDecoction) {
             Spacer(Modifier.height(12.dp)); AppCard {

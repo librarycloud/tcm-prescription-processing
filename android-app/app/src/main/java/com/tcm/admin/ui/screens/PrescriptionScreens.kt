@@ -327,7 +327,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                 InfoRowItem("处方来源", p.optJSONObject("source")?.displayField("name") ?: "-")
                 InfoRowItem("处方类型", if (p.optBoolean("isExternal")) "外方" else "本方")
                 InfoRowItem("剂数进度", "$takenDose / $totalDose 剂，剩余 $remainingDose 剂", isBold = true, valueColor = PrimaryDark)
-                InfoRowItem("录入时间", p.displayField("createdAt", "").take(16).replace("T", " "))
+                InfoRowItem("录入时间", serverDateTime(p.opt("createdAt")))
                 p.optJSONObject("creator")?.displayField("nickname")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("录入人", it) }
                 p.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
             }
@@ -409,7 +409,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                                 StatusPill(planStatus(plan.optInt("status")))
                             }
                             Spacer(Modifier.height(6.dp))
-                            Text("剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  安排：${plan.displayField("processDate", "等待安排").take(10)}", color = RegularText, fontSize = 12.sp)
+                            Text("剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  安排：${serverDateOnly(plan.opt("processDate"), "等待安排")}", color = RegularText, fontSize = 12.sp)
                             if (isDecoction) {
                                 Text("规格：${plan.optInt("bagCount", 0)} 袋 · ${plan.optInt("volumeMl", 0)} ml", color = Muted, fontSize = 12.sp)
                             }

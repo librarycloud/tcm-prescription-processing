@@ -129,8 +129,8 @@ object ApiClient {
 
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun androidAppVersion(): JSONObject = request("/app/version/android").getJSONObject("data")
-    fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray {
-        val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100)
+    fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
+        val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)
         return data.optJSONArray("list") ?: JSONArray()
     }
     fun prescriptionsPaged(
@@ -140,11 +140,13 @@ object ApiClient {
         doctorId: Int? = null,
         page: Int = 1,
         pageSize: Int = 15,
+        createdDate: String? = null,
     ): JSONObject {
         val query = buildList {
             add("page=$page"); add("pageSize=$pageSize")
             status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
             doctorId?.let { add("doctorId=$it") }
+            createdDate?.takeIf { it.isNotBlank() }?.let { add("createdDate=${java.net.URLEncoder.encode(it, "UTF-8")}") }
             if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
         }.joinToString("&")
         return request("/admin/prescriptions?$query").getJSONObject("data")

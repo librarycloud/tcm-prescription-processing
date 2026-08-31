@@ -82,7 +82,7 @@ internal fun TransfersScreen(
     var createVisible by remember { mutableStateOf(false) }
     var fromStoreId by remember { mutableStateOf("") }
     var toStoreId by remember { mutableStateOf("") }
-    var expectedReturnDate by remember { mutableStateOf(LocalDate.now().plusDays(7).toString()) }
+    var expectedReturnDate by remember { mutableStateOf(serverToday().plusDays(7).toString()) }
     var itemName by remember { mutableStateOf("") }
     var itemSpecification by remember { mutableStateOf("") }
     var itemQuantity by remember { mutableStateOf("1") }
@@ -295,11 +295,11 @@ internal fun TransfersScreen(
                 )
                 InfoRowItem(
                     label = "调拨日期",
-                            value = transfer.displayField("transferDate").take(10),
+                            value = serverDateOnly(transfer.opt("transferDate"), "-"),
                 )
                 InfoRowItem(
                     label = "预计归还",
-                            value = transfer.displayField("expectedReturnDate").take(10),
+                            value = serverDateOnly(transfer.opt("expectedReturnDate"), "-"),
                     valueColor = if (isOverdue) Danger else Ink,
                     isBold = isOverdue,
                 )
@@ -511,10 +511,10 @@ internal fun TransferDetailScreen(
         SectionHeader("调拨信息")
         Spacer(Modifier.height(8.dp))
         AppCard {
-            InfoRowItem("调拨日期", current.displayField("transferDate").take(10))
+            InfoRowItem("调拨日期", serverDateOnly(current.opt("transferDate"), "-"))
             InfoRowItem(
                 "预计归还",
-                current.displayField("expectedReturnDate").take(10),
+                serverDateOnly(current.opt("expectedReturnDate"), "-"),
                 valueColor = if (isOverdue) Danger else Ink,
                 isBold = isOverdue,
             )
@@ -597,7 +597,7 @@ internal fun TransferDetailScreen(
                     }
                     Spacer(Modifier.height(4.dp))
                     InfoRowItem("归还数量", quantityText(record.opt("quantity"), "0"))
-                    InfoRowItem("归还日期", record.displayField("returnDate").take(10))
+                    InfoRowItem("归还日期", serverDateOnly(record.opt("returnDate"), "-"))
                     InfoRowItem("发起人", transferOperatorLabel(record.optJSONObject("operator")))
                     InfoRowItem("发起时间", transferDateTime(record.opt("createdAt")))
                     InfoRowItem("确认人", transferOperatorLabel(record.optJSONObject("confirmer")))
@@ -700,7 +700,7 @@ internal fun TransferDetailScreen(
                                     ApiClient.addTransferReturns(
                                         id,
                                         JSONObject()
-                                            .put("returnDate", LocalDate.now().toString())
+                                            .put("returnDate", serverToday().toString())
                                             .put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()))),
                                     )
                                 }
@@ -725,6 +725,5 @@ private fun transferOperatorLabel(operator: JSONObject?): String = operator?.let
 } ?: "-"
 
 private fun transferDateTime(value: Any?): String {
-    val text = displayText(value)
-    return if (text == "-") text else text.replace("T", " ").replace("Z", "").take(16)
+    return serverDateTime(value)
 }

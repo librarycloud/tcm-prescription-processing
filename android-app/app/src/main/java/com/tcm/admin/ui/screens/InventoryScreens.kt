@@ -485,5 +485,5 @@ private fun inventoryDate(item: JSONObject, vararg keys: String): String {
 }
 
 private fun inventoryExpiryWarning(value: String): Boolean = runCatching {
-    LocalDate.parse(value.take(10)).isBefore(LocalDate.now().plusMonths(6))
+    LocalDate.parse(value.take(10)).isBefore(serverToday().plusMonths(6))
 }.getOrDefault(false)

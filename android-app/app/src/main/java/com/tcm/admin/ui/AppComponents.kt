@@ -56,6 +56,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -148,6 +155,35 @@ internal fun priceText(value: Any?, fallback: String = "-"): String {
     if (raw.isBlank() || raw == "null") return fallback
     return runCatching { BigDecimal(raw).setScale(2, RoundingMode.HALF_UP).toPlainString() }.getOrDefault(fallback)
 }
+
+private val ServerDisplayZone: ZoneId = ZoneId.of("Asia/Shanghai")
+private val ServerDisplayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+/** Formats API timestamps in China Standard Time (UTC+08:00), regardless of device timezone. */
+internal fun serverDateTime(value: Any?, fallback: String = "-"): String {
+    val raw = value?.toString()?.trim().orEmpty()
+    if (raw.isBlank() || raw.equals("null", ignoreCase = true)) return fallback
+    if (raw.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return raw
+
+    val instant = runCatching { Instant.parse(raw) }
+        .recoverCatching { OffsetDateTime.parse(raw).toInstant() }
+        .recoverCatching {
+            LocalDateTime.parse(raw.replace(" ", "T"), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                .atOffset(ZoneOffset.UTC)
+                .toInstant()
+        }
+        .getOrNull()
+        ?: return raw.replace("T", " ").replace("Z", "").take(16)
+    return ServerDisplayFormatter.format(instant.atZone(ServerDisplayZone))
+}
+
+internal fun serverDateOnly(value: Any?, fallback: String = ""): String {
+    val raw = value?.toString()?.trim().orEmpty()
+    if (raw.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return raw
+    return serverDateTime(value, fallback).take(10)
+}
+
+internal fun serverToday(): LocalDate = LocalDate.now(ServerDisplayZone)
 
 // ==================== Helper Mappings ====================
 internal fun planStatus(status: Int): String = when (status) {

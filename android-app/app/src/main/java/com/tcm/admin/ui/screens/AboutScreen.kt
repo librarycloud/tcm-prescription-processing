@@ -217,7 +217,9 @@ internal fun AboutScreen(
                     error != null -> Text(error!!, color = Danger, fontSize = 13.sp)
                     latest != null && hasUpdate -> {
                         Text("发现新版本 ${latest!!.displayField("versionName")}", color = Primary, fontWeight = FontWeight.SemiBold)
-                        latest!!.displayField("publishedAt", "").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
+                        latest!!.opt("publishedAt")?.let { publishedAt ->
+                            serverDateTime(publishedAt, "").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
+                        }
                         val notes = latest!!.optJSONArray("releaseNotes")
                         if (notes != null && notes.length() > 0) {
                             Spacer(Modifier.height(6.dp))

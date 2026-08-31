@@ -122,7 +122,6 @@ internal sealed class ScreenTarget {
     data class Inventory(val initialQuery: String = "") : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
-    data class StocktakingEntry(val checkId: Int, val item: JSONObject? = null) : ScreenTarget()
     object Differences : ScreenTarget()
     data class DifferenceRegister(val defaultProduct: JSONObject? = null) : ScreenTarget()
     object Transfers : ScreenTarget()
@@ -506,18 +505,7 @@ private fun TcmAdminApp() {
                     StocktakingDetailScreen(
                         checkId = currentScreen.checkId,
                         user = session?.user,
-                        onNavigate = ::navigateTo,
                         onBack = { navigateBack() },
-                    )
-                }
-                is ScreenTarget.StocktakingEntry -> DetailShell("录入盘点", onBack = { navigateBack() }) {
-                    StocktakingEntryScreen(
-                        checkId = currentScreen.checkId,
-                        initialItem = currentScreen.item,
-                        onSaved = {
-                            invalidateRetainedList("stocktaking")
-                            navigateBack()
-                        },
                     )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
@@ -722,7 +710,7 @@ private fun MainShell(
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = CardBorderColor)
                 Spacer(Modifier.height(8.dp))
 
-                DrawerItem("工作台概览", current is ScreenTarget.Dashboard, Icons.AutoMirrored.Filled.Assignment) {
+                DrawerItem("首页", current is ScreenTarget.Dashboard, Icons.AutoMirrored.Filled.Assignment) {
                     onSwitchTab(ScreenTarget.Dashboard)
                     scope.launch { drawerState.close() }
                 }
@@ -911,7 +899,7 @@ private fun BottomNav(
     onReselect: () -> Unit,
 ) {
     val items = listOf(
-        ScreenTarget.Dashboard to ("概览" to Icons.AutoMirrored.Filled.Assignment),
+        ScreenTarget.Dashboard to ("首页" to Icons.AutoMirrored.Filled.Assignment),
         ScreenTarget.Herbs to ("斗谱" to Icons.Default.Inventory),
         ScreenTarget.Processing to ("加工" to Icons.Default.Sync),
         ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),

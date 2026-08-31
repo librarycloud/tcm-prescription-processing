@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -71,10 +72,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -507,7 +510,7 @@ internal fun ProcessingScreenV2(
                     val bagCount = plan.optInt("bagCount", 0)
                     val volumeMl = plan.optInt("volumeMl", 0)
                     val pickupMethod = plan.optInt("pickupMethod", 0)
-                    val scheduleDate = plan.displayField("processDate", "").take(10)
+                    val scheduleDate = serverDateOnly(plan.opt("processDate"), "")
                     val isDecoction = processType?.displayField("name", "")?.contains("煎") == true || plan.displayField("processTypeName", "").contains("煎")
                     val packageCreated = plan.optBoolean("packageCreated") || plan.optInt("packageId", 0) > 0
 
@@ -559,10 +562,10 @@ internal fun ProcessingScreenV2(
                             }
                         }
                         plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let {
-                            InfoRowItem("实际开工", it.take(16).replace("T", " "), verticalPadding = 0.dp)
+                            InfoRowItem("实际开工", serverDateTime(it), verticalPadding = 0.dp)
                         }
                         plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let {
-                            InfoRowItem("完成时间", it.take(16).replace("T", " "), verticalPadding = 0.dp)
+                            InfoRowItem("完成时间", serverDateTime(it), verticalPadding = 0.dp)
                         }
                         plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
                             InfoRowItem("备注", it, verticalPadding = 0.dp)
@@ -814,12 +817,12 @@ internal fun PlanDetailDialog(
                 InfoRowItem("加工状态", planStatus(status), isBold = true, valueColor = Primary)
                 InfoRowItem("批次剂数", "第 ${plan.optInt("batchNo", 1)} 批 · ${plan.optInt("totalDose", 0)} 剂")
                 InfoRowItem("取货方式", pickupMethodLabel(plan.optInt("pickupMethod", 0)))
-                InfoRowItem("计划开工", plan.displayField("processDate", "未安排").take(10))
+                InfoRowItem("计划开工", serverDateOnly(plan.opt("processDate"), "未安排"))
                 if (showStore) {
                     store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("加工门店", it) }
                 }
-                plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", it.take(16).replace("T", " ")) }
-                plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", it.take(16).replace("T", " ")) }
+                plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("开工时间", serverDateTime(it)) }
+                plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("完成时间", serverDateTime(it)) }
                 plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
                 plan.displayField("processRemark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("加工备注", it) }
             }
@@ -849,6 +852,8 @@ internal fun ProcessingPlanFormScreen(
     }
     var prescriptionKeyword by remember { mutableStateOf("") }
     var prescriptions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var prescriptionOptionsVisible by remember { mutableStateOf(false) }
+    var prescriptionLoading by remember { mutableStateOf(false) }
     var processTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var notifyTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var totalDose by remember(initial) { mutableStateOf(initial.optInt("totalDose", 1).toString()) }
@@ -859,7 +864,7 @@ internal fun ProcessingPlanFormScreen(
     var expressAddress by remember(initial) { mutableStateOf(initial.displayField("expressAddress", "")) }
     var scheduleType by remember(initial) { mutableStateOf(initial.optInt("scheduleType", 1)) }
     var processDate by remember(initial) {
-        mutableStateOf(initial.displayField("processDate", "").take(10).ifBlank { LocalDate.now().toString() })
+        mutableStateOf(serverDateOnly(initial.opt("processDate"), "").ifBlank { serverToday().toString() })
     }
     var priority by remember(initial) { mutableStateOf(initial.optInt("priority", 0)) }
     var notifyType by remember(initial) { mutableStateOf(initial.optInt("notifyType", 0)) }
@@ -880,9 +885,7 @@ internal fun ProcessingPlanFormScreen(
                         initialPrescription?.let { put(it) }
                             ?: prescriptionId.takeIf { it > 0 }?.let { put(ApiClient.prescriptionDetail(it)) }
                     }
-                } else {
-                    ApiClient.prescriptions(keyword = "")
-                }
+                } else JSONArray()
                 Triple(prescriptionData, ApiClient.dictionaries("ProcessType"), ApiClient.dictionaries("NotifyType"))
             }
         }.onSuccess { (prescriptionData, processData, notifyData) ->
@@ -898,13 +901,33 @@ internal fun ProcessingPlanFormScreen(
         }
     }
 
+    LaunchedEffect(prescriptionKeyword, prescriptionOptionsVisible, isEdit) {
+        if (isEdit || !prescriptionOptionsVisible) return@LaunchedEffect
+        kotlinx.coroutines.delay(250)
+        prescriptionLoading = true
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val keyword = prescriptionKeyword.trim()
+                ApiClient.prescriptionsPaged(
+                    keyword = keyword,
+                    page = 1,
+                    pageSize = 50,
+                    createdDate = keyword.takeIf { it.isBlank() }?.let { serverToday().toString() },
+                )
+            }
+        }.onSuccess { data ->
+            val list = data.optJSONArray("list") ?: JSONArray()
+            prescriptions = (0 until list.length()).map { list.getJSONObject(it) }
+        }.onFailure {
+            error = it.message ?: "加载处方失败"
+        }
+        prescriptionLoading = false
+    }
+
     val selectedPrescription = prescriptions.firstOrNull { it.optInt("id") == prescriptionId } ?: initialPrescription
     val selectedProcessType = processTypes.firstOrNull { it.optInt("id") == processTypeId }
     val isDecoction = selectedProcessType?.displayField("code", "") == "DECOCTION" || selectedProcessType?.displayField("name", "") == "代煎"
-    val visiblePrescriptions = prescriptions.filter { item ->
-        val query = prescriptionKeyword.trim()
-        query.isBlank() || listOf(item.displayField("prescriptionNo", ""), item.displayField("customerName", ""), item.displayField("phone", "")).any { it.contains(query, ignoreCase = true) }
-    }.take(30)
+    val visiblePrescriptions = prescriptions.take(50)
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -931,17 +954,61 @@ internal fun ProcessingPlanFormScreen(
                     onValueChange = { prescriptionKeyword = it },
                     label = { Text("搜索处方编号、姓名或手机号") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { if (it.isFocused) prescriptionOptionsVisible = true },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { prescriptionOptionsVisible = true }),
                     shape = FieldShape,
                 )
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    visiblePrescriptions.forEach { item ->
-                        SegmentedButton(
-                            label = "${item.displayField("customerName", "顾客")} · ${item.displayField("prescriptionNo", "处方")}",
-                            selected = prescriptionId == item.optInt("id"),
-                            onClick = { prescriptionId = item.optInt("id") },
+                if (prescriptionOptionsVisible) {
+                    Spacer(Modifier.height(8.dp))
+                    if (prescriptionLoading) {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Primary, modifier = Modifier.size(24.dp))
+                        }
+                    } else if (visiblePrescriptions.isEmpty()) {
+                        Text(
+                            if (prescriptionKeyword.isBlank()) "今日暂无可加工处方" else "暂无匹配处方",
+                            color = Muted,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 6.dp),
                         )
+                    } else {
+                        Text(
+                            if (prescriptionKeyword.isBlank()) "今日创建的处方" else "搜索结果",
+                            color = Muted,
+                            fontSize = 12.sp,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            visiblePrescriptions.forEach { item ->
+                                Surface(
+                                    onClick = {
+                                        prescriptionId = item.optInt("id")
+                                        prescriptionOptionsVisible = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = FieldShape,
+                                    color = if (prescriptionId == item.optInt("id")) PrimarySoft else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(0.5.dp, CardBorderColor),
+                                ) {
+                                    Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+                                        Text(
+                                            "${item.displayField("customerName", "顾客")} · ${item.displayField("prescriptionNo", "处方")}",
+                                            color = if (prescriptionId == item.optInt("id")) PrimaryDark else Ink,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp,
+                                        )
+                                        Text(
+                                            "${item.displayField("phone", "未填写手机号")} · ${item.optJSONObject("doctor")?.displayField("name", "未指定医生") ?: "未指定医生"}",
+                                            color = Muted,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1144,7 +1211,7 @@ internal fun ProcessingPlanFormDialog(
     var volumeMl by remember(initial) { mutableStateOf(initial?.optInt("volumeMl", 200)?.toString() ?: "200") }
     var pickupMethod by remember(initial) { mutableStateOf(initial?.optInt("pickupMethod", 0) ?: 0) }
     var scheduledDate by remember(initial) {
-        mutableStateOf(initial?.displayField("scheduledDate", "").orEmpty().take(10).ifBlank { LocalDate.now().toString() })
+        mutableStateOf(serverDateOnly(initial?.opt("scheduledDate"), "").ifBlank { serverToday().toString() })
     }
     var isUrgent by remember(initial) { mutableStateOf(initial?.optBoolean("isUrgent") == true || initial?.optInt("isUrgent") == 1) }
     var remark by remember(initial) { mutableStateOf(initial?.displayField("remark", "").orEmpty()) }
@@ -1464,7 +1531,7 @@ internal fun WorkflowOperationScreen(
         (0 until arr.length()).map { arr.getJSONObject(it) }
     }.orEmpty()
     val formatWorkflowTime: (String) -> String = { value ->
-        value.take(16).replace("T", " ")
+        serverDateTime(value)
     }
     val latestStageCompletedAt: (Int) -> String = { stage ->
         usages
@@ -1821,7 +1888,7 @@ internal fun WorkflowOperationScreen(
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
-                                    Text("操作人：$operator · 开始：${item.displayField("startedAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                                    Text("操作人：$operator · 开始：${serverDateTime(item.opt("startedAt"))}", color = Muted, fontSize = 11.sp)
                                 }
                                 if (status == 1) {
                                     OutlinedButton(
@@ -1958,7 +2025,7 @@ internal fun WorkflowOperationScreen(
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment · 煎煮中", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
-                                    Text("操作人：$operator · 开始：${item.displayField("startedAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                                    Text("操作人：$operator · 开始：${serverDateTime(item.opt("startedAt"))}", color = Muted, fontSize = 11.sp)
                                 }
                                 if (status == 1) {
                                     OutlinedButton(
@@ -2081,7 +2148,7 @@ internal fun WorkflowOperationScreen(
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment · 打包中", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
-                                    Text("操作人：$operator · 开始：${item.displayField("startedAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                                    Text("操作人：$operator · 开始：${serverDateTime(item.opt("startedAt"))}", color = Muted, fontSize = 11.sp)
                                 }
                             }
                         }
@@ -2124,8 +2191,8 @@ internal fun WorkflowOperationScreen(
                         op.displayField("nickname", "").ifBlank { op.displayField("name", op.displayField("phone", "-")) }
                     } ?: "-"
                     val voidReason = item.displayField("voidReason", "")
-                    val startTime = item.displayField("startedAt", "").take(16).replace("T", " ")
-                    val endTime = item.displayField("endedAt", "").take(16).replace("T", " ").ifBlank { if (isRunning) "进行中..." else "-" }
+                    val startTime = serverDateTime(item.opt("startedAt"))
+                    val endTime = serverDateTime(item.opt("endedAt"), "").ifBlank { if (isRunning) "进行中..." else "-" }
 
                     Surface(
                         color = if (isRunning) PrimarySoft else MaterialTheme.colorScheme.surfaceVariant,
@@ -2210,7 +2277,7 @@ internal fun WorkflowOperationScreen(
                         Column(Modifier.padding(10.dp)) {
                             Text("$typeText · ${ex.displayField("reason", "无原因说明")}", fontWeight = FontWeight.SemiBold, color = Danger, fontSize = 12.5.sp)
                             Spacer(Modifier.height(2.dp))
-                            Text("操作人：$operator · 时间：${ex.displayField("createdAt", "").take(16).replace("T", " ")}", color = Muted, fontSize = 11.sp)
+                            Text("操作人：$operator · 时间：${serverDateTime(ex.opt("createdAt"))}", color = Muted, fontSize = 11.sp)
                         }
                     }
                 }

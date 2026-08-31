@@ -47,8 +47,6 @@ import java.time.LocalDate
 internal fun DifferencesScreen(scrollState: ScrollState) {
     val listOwner = "differences"
     var tab by rememberRetainedListValue(listOwner, "tab") { "current" }
-    var differenceFilter by rememberRetainedListValue(listOwner, "differenceFilter") { null as String? } // null=全部, receipt=先到货, shipment=先出货
-    var stats by rememberRetainedListValue(listOwner, "stats") { null as JSONObject? }
     var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
     var registerProducts by rememberRetainedListValue(listOwner, "registerProducts") { emptyList<JSONObject>() }
     var logs by rememberRetainedListValue(listOwner, "logs") { null as List<JSONObject>? }
@@ -70,10 +68,9 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
         error = null
         runCatching {
             withContext(Dispatchers.IO) {
-                Triple(ApiClient.differenceSummary(), ApiClient.differenceProducts(), ApiClient.differenceLogs())
+                Pair(ApiClient.differenceProducts(), ApiClient.differenceLogs())
             }
-        }.onSuccess { (summary, list, logList) ->
-            stats = summary
+        }.onSuccess { (list, logList) ->
             products = (0 until list.length()).map { list.getJSONObject(it) }
             logs = (0 until logList.length()).map { logList.getJSONObject(it) }
             loadedQueryKey = queryKey
@@ -118,31 +115,6 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
 
         Spacer(Modifier.height(14.dp))
 
-        stats?.let { s ->
-            StatsGrid(
-                listOf(
-                    "先到货未入库" to quantityText(s.optDouble("preReceiptQuantity", 0.0)),
-                    "先出货未销库" to quantityText(s.optDouble("preShipmentQuantity", 0.0)),
-                    "差异商品数" to s.optInt("affectedProducts", 0).toString(),
-                ),
-                selectedIndex = when (differenceFilter) {
-                    "receipt" -> 0
-                    "shipment" -> 1
-                    else -> if (tab == "current") 2 else null
-                },
-                onItemClick = { index ->
-                    tab = "current"
-                    differenceFilter = when (index) {
-                        0 -> "receipt"
-                        1 -> "shipment"
-                        else -> null
-                    }
-                },
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SegmentedButton("当前差异", tab == "current", onClick = { tab = "current" })
             SegmentedButton("差异流水", tab == "logs", onClick = { tab = "logs" })
@@ -155,17 +127,7 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
         if (tab == "current") {
             if (products == null && error == null) AppEmptyState("加载中...")
             if (products != null && products!!.isEmpty()) AppEmptyState("暂无未销账差异")
-            val filteredProducts = products.orEmpty().filter { product ->
-                when (differenceFilter) {
-                    "receipt" -> product.optDouble("preReceiptQuantity", 0.0) > 0
-                    "shipment" -> product.optDouble("preShipmentQuantity", 0.0) > 0
-                    else -> true
-                }
-            }
-            if (products?.isNotEmpty() == true && filteredProducts.isEmpty()) {
-                AppEmptyState("暂无符合当前筛选的差异商品")
-            }
-            filteredProducts.forEach { product ->
+            products.orEmpty().forEach { product ->
                 val preReceipt = product.optDouble("preReceiptQuantity", 0.0)
                 val preShipment = product.optDouble("preShipmentQuantity", 0.0)
                 val unit = product.displayField("unit")
@@ -292,7 +254,7 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
                                         JSONObject()
                                             .put("productId", product.optInt("id"))
                                             .put("quantity", qty)
-                                            .put("businessDate", LocalDate.now().toString()),
+                                            .put("businessDate", serverToday().toString()),
                                     )
                                 }
                             }.onSuccess {
@@ -374,7 +336,7 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
                                         ApiClient.registerDifference(
                                             JSONObject()
                                                 .put("operationType", registerType)
-                                                .put("businessDate", LocalDate.now().toString())
+                                                .put("businessDate", serverToday().toString())
                                                 .put(
                                                     "items",
                                                     JSONArray().put(

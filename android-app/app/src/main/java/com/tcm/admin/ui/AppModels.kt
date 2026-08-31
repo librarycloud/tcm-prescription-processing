@@ -31,7 +31,7 @@ internal fun packageItem(value: JSONObject): PackageItem {
         customer = value.displayField("receiverName", "客户"),
         code = value.displayField("pickupCode"),
         status = status,
-        time = timestamp.replace("T", " ").take(16),
+        time = serverDateTime(timestamp),
         id = value.optInt("id", 0),
         phone = value.displayField("receiverPhone"),
         store = store,
