@@ -18,6 +18,20 @@ function canSearchKeyword(value) {
   return (keyword.match(/[\u4e00-\u9fff]/g) || []).length >= 2 || /\d{4}/.test(keyword);
 }
 
+function decodePageParam(value) {
+  let text = String(value || '');
+  for (let index = 0; index < 2 && /%[0-9a-f]{2}/i.test(text); index += 1) {
+    try {
+      const decoded = decodeURIComponent(text);
+      if (decoded === text) break;
+      text = decoded;
+    } catch (error) {
+      break;
+    }
+  }
+  return text;
+}
+
 function numberText(value) {
   const number = Number(value || 0);
   return Number.isInteger(number) ? String(number) : number.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
@@ -50,7 +64,7 @@ function candidateProducts(rows) {
   const products = new Map();
   rows.forEach((row) => {
     if (!row.product || products.has(row.product.id)) return;
-    const inventories = rows.filter((item) => item.productId === row.product.id && !item.manualBatch);
+    const inventories = rows.filter((item) => Number(item.productId) === Number(row.product.id) && !item.manualBatch);
     const totalQuantity = inventories.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     products.set(row.product.id, {
       ...row.product,
@@ -115,8 +129,8 @@ Page({
   onLoad(options = {}) {
     const checkId = Number(options.checkId);
     const productId = Number(options.productId);
-    const initialKeyword = String(options.keyword || '');
-    const initialCandidateFilter = String(options.candidateFilter || '');
+    const initialKeyword = decodePageParam(options.keyword);
+    const initialCandidateFilter = decodePageParam(options.candidateFilter);
     this.setData({
       ...(checkId ? { initialCheckId: checkId } : {}),
       ...(productId ? { initialProductId: productId } : {}),
@@ -274,13 +288,17 @@ Page({
           if (requestId !== candidateRequestId) return;
           const candidates = filterCandidateRows(rawCandidates || [], filter);
           const products = candidateProducts(candidates || []);
-          const selectedProduct = productId ? products.find((item) => item.id === productId) || null : null;
+          const selectedProduct = productId
+            ? products.find((item) => Number(item.id) === Number(productId)) || null
+            : null;
           this.setData({
             candidates,
             candidateProducts: selectedProduct ? [] : products,
             candidateSearched: true,
             selectedProduct,
-            selectedInventories: selectedProduct ? candidates.filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory) : []
+            selectedInventories: selectedProduct
+              ? candidates.filter((item) => Number(item.productId) === Number(selectedProduct.id) && !item.manualBatch).map(decorateInventory)
+              : []
           });
         } finally {
           if (requestId === candidateRequestId) this.setData({ candidateLoading: false });
@@ -312,7 +330,7 @@ Page({
         String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
       );
       const selectedProduct = productId
-        ? products.find((item) => item.id === productId) || null
+        ? products.find((item) => Number(item.id) === Number(productId)) || null
         : exactMatches.length === 1 ? exactMatches[0] : null;
       const shouldShowInventories = Boolean(selectedProduct);
       this.setData({
@@ -320,7 +338,9 @@ Page({
         candidateProducts: shouldShowInventories ? [] : products,
         candidateSearched: !shouldShowInventories,
         selectedProduct,
-        selectedInventories: shouldShowInventories ? (candidates || []).filter((item) => item.productId === selectedProduct.id && !item.manualBatch).map(decorateInventory) : []
+        selectedInventories: shouldShowInventories
+          ? (candidates || []).filter((item) => Number(item.productId) === Number(selectedProduct.id) && !item.manualBatch).map(decorateInventory)
+          : []
       });
     } finally {
       if (requestId === candidateRequestId) this.setData({ candidateLoading: false });

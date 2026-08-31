@@ -277,6 +277,7 @@ internal fun StocktakingDetailScreen(
     var itemPage by rememberRetainedListValue(detailOwner, "page") { 1 }
     var itemPages by rememberRetainedListValue(detailOwner, "pages") { 1 }
     var entryItem by remember { mutableStateOf<JSONObject?>(null) }
+    var entryMode by remember { mutableStateOf(false) }
     val isStoreStaff = user?.optInt("role", -1) == 3
 
     LaunchedEffect(checkId, refreshKey, reload, itemPage, itemFilter) {
@@ -367,17 +368,31 @@ internal fun StocktakingDetailScreen(
             }
 
             Spacer(Modifier.height(14.dp))
-            StocktakingEntryScreen(
-                checkId = checkId,
-                user = user,
-                initialItem = entryItem,
-                onSaved = {
-                    entryItem = null
-                    reload++
-                },
-            )
-
-            run {
+            if (entryMode) {
+                StocktakingEntryScreen(
+                    checkId = checkId,
+                    user = user,
+                    initialItem = entryItem,
+                    onDismiss = {
+                        entryItem = null
+                        entryMode = false
+                    },
+                    onSaved = {
+                        entryItem = null
+                        entryMode = false
+                        reload++
+                    },
+                )
+            } else {
+                Button(
+                    onClick = { entryMode = true },
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    shape = FieldShape,
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("搜索或扫码盘点")
+                }
                 Spacer(Modifier.height(16.dp))
 
                 SectionHeader(
@@ -472,6 +487,7 @@ internal fun StocktakingDetailScreen(
                                 Button(
                                     onClick = {
                                         entryItem = item
+                                        entryMode = true
                                     },
                                     shape = FieldShape,
                                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -511,6 +527,7 @@ internal fun StocktakingEntryScreen(
     checkId: Int,
     user: JSONObject? = null,
     initialItem: JSONObject? = null,
+    onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
     val isStoreStaff = user?.optInt("role", -1) == 3
@@ -575,14 +592,20 @@ internal fun StocktakingEntryScreen(
     val locationOnly = selectedCheckItemId > 0 && hasCount && !isEditingInitial && !isRecount
     val product = selectedItem?.optJSONObject("product") ?: JSONObject()
 
-    BackHandler(enabled = selectedItem != null || keyword.isNotBlank() || candidates.isNotEmpty()) {
+    BackHandler {
         if (selectedItem != null) {
+            if (keyword.isBlank() && candidates.isEmpty()) {
+                onDismiss()
+                return@BackHandler
+            }
             selectedItem = null
             batchNo = ""
             value = ""
-        } else {
+        } else if (keyword.isNotBlank() || candidates.isNotEmpty()) {
             keyword = ""
             candidates = emptyList()
+        } else {
+            onDismiss()
         }
     }
 
