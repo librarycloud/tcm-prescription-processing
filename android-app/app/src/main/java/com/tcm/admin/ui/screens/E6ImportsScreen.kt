@@ -567,7 +567,8 @@ internal fun E6ImportDetailScreen(
                     DetailLine("订单时间", e6Date(value.optString("sourceCreatedAt")))
                     DetailLine("顾客", value.displayField("customerName"))
                     DetailLine("手机号", maskPhone(value.optString("phone")))
-                    DetailLine("操作员 / 系统医生", "${e6OperatorName(value)}　·　${e6DoctorName(value) ?: "-"}")
+                    DetailLine("操作员", e6OperatorName(value))
+                    DetailLine("系统医生", e6DoctorName(value) ?: "-")
                     if (value.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(value)) {
                         DetailLine("操作员映射", "未配置，请在门店 E6 配置中维护", Danger)
                     }
