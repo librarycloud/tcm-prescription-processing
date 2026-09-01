@@ -578,6 +578,23 @@ internal fun StocktakingEntryScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    fun selectCandidate(candidate: JSONObject) {
+        selectedItem = candidate
+        addingBatch = false
+        batchNo = candidate.displayField("batchNo", "")
+        countLocation = candidate.displayField(
+            "countLocationName",
+            candidate.displayField("systemLocationName", candidate.displayField("locationName", "")),
+        )
+        editingLocation = false
+        val recount = nullableDouble(candidate, "recountQty")
+        val first = nullableDouble(candidate, "firstCountQty")
+        value = quantityText(
+            if (candidate.optBoolean("canEditRecount", false) || candidate.optBoolean("needsRecount", false)) recount ?: first else first,
+            "",
+        )
+    }
+
     suspend fun search(term: String = keyword.trim(), force: Boolean = false) {
         if (term.length < 2) return
         if (!force && term == lastSearchedTerm && !loading) return
@@ -589,23 +606,7 @@ internal fun StocktakingEntryScreen(
         }.onSuccess { values ->
             val result = (0 until values.length()).map { values.getJSONObject(it) }
             candidates = result
-            if (result.size == 1) {
-                val candidate = result.first()
-                selectedItem = candidate
-                addingBatch = false
-                batchNo = candidate.displayField("batchNo", "")
-                countLocation = candidate.displayField(
-                    "countLocationName",
-                    candidate.displayField("systemLocationName", candidate.displayField("locationName", "")),
-                )
-                editingLocation = false
-                val recount = nullableDouble(candidate, "recountQty")
-                val first = nullableDouble(candidate, "firstCountQty")
-                value = quantityText(
-                    if (candidate.optBoolean("canEditRecount", false) || candidate.optBoolean("needsRecount", false)) recount ?: first else first,
-                    "",
-                )
-            }
+            candidateProductGroups(result).singleOrNull()?.batches?.singleOrNull()?.let(::selectCandidate)
         }.onFailure { error = it.message ?: "搜索商品失败" }
         loading = false
     }
@@ -703,41 +704,40 @@ internal fun StocktakingEntryScreen(
             }
             if (candidates.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                Text("匹配批次", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
+                Text("匹配商品", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
-                candidates.forEach { candidate ->
-                    val candidateProduct = candidate.optJSONObject("product") ?: JSONObject()
-                    OutlinedButton(
-                        onClick = {
-                            selectedItem = candidate
-                            addingBatch = false
-                            batchNo = candidate.displayField("batchNo", "")
-                            countLocation = candidate.displayField(
-                                "countLocationName",
-                                candidate.displayField("systemLocationName", candidate.displayField("locationName", "")),
-                            )
-                            editingLocation = false
-                            val recount = nullableDouble(candidate, "recountQty")
-                            val first = nullableDouble(candidate, "firstCountQty")
-                            value = quantityText(
-                                if (candidate.optBoolean("canEditRecount", false) || candidate.optBoolean("needsRecount", false)) recount ?: first else first,
-                                "",
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                        shape = FieldShape,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 9.dp),
-                    ) {
+                candidateProductGroups(candidates).forEach { group ->
+                    val candidateProduct = group.product
+                    AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                            Column(Modifier.weight(1f)) {
                                 Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink)
                                 Spacer(Modifier.height(3.dp))
                                 Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
                                 Text("厂家：${candidateProduct.displayField("manufacturer", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
-                                Text("批号：${candidate.displayField("batchNo", "-")}", color = Muted, fontSize = 12.sp)
+                                Text("${group.batches.size} 个库存批次", color = Muted, fontSize = 12.sp)
                             }
                             candidateProduct.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
                                 Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        group.batches.forEachIndexed { index, candidate ->
+                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectCandidate(candidate) }
+                                    .padding(vertical = 9.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("批号：${candidate.displayField("batchNo", "-")}", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    Text("系统货位：${candidate.displayField("systemLocationName", candidate.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
+                                    Text("生产日期：${serverDateOnly(candidate.displayField("productionDate", ""), "-")}　有效期：${serverDateOnly(candidate.displayField("expiryDate", ""), "-")}", color = Muted, fontSize = 12.sp)
+                                }
+                                Text("选择", color = Primary, fontSize = 13.sp)
                             }
                         }
                     }
@@ -763,7 +763,7 @@ internal fun StocktakingEntryScreen(
                     Text("规格：${product.displayField("specification", "-")}　单位：${product.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
                     Text("生产厂商：${product.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp)
                     Text("系统货位：${selectedItem!!.displayField("systemLocationName", selectedItem!!.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
-                    Text("生产日期：${selectedItem!!.displayField("productionDate", "-")}　有效期：${selectedItem!!.displayField("expiryDate", "-")}", color = Muted, fontSize = 12.sp)
+                    Text("生产日期：${serverDateOnly(selectedItem!!.displayField("productionDate", ""), "-")}　有效期：${serverDateOnly(selectedItem!!.displayField("expiryDate", ""), "-")}", color = Muted, fontSize = 12.sp)
                     if (!isStoreStaff) {
                         Text("系统库存：${quantityText(selectedItem!!.optDouble("systemQty", 0.0), "0")} ${product.displayField("unit")}", color = Muted, fontSize = 12.sp)
                     }
@@ -894,6 +894,36 @@ internal fun StocktakingEntryScreen(
             error?.let { Text(it, color = Danger, fontSize = 12.sp) }
         }
     }
+}
+
+private data class CandidateProductGroup(
+    val product: JSONObject,
+    val batches: List<JSONObject>,
+)
+
+private fun candidateProductGroups(candidates: List<JSONObject>): List<CandidateProductGroup> {
+    val groups = linkedMapOf<String, MutableList<JSONObject>>()
+    val products = linkedMapOf<String, JSONObject>()
+
+    candidates.forEach { candidate ->
+        val product = candidate.optJSONObject("product") ?: JSONObject()
+        val key = product.opt("id")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+            ?: candidate.opt("productId")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+            ?: listOf(
+                product.displayField("productCode", ""),
+                product.displayField("barcode", ""),
+                product.displayField("name", "商品"),
+            ).joinToString("|")
+        groups.getOrPut(key) { mutableListOf() }.add(candidate)
+        val existingProduct = products[key]
+        if (existingProduct == null ||
+            (existingProduct.length() == 0 && product.length() > 0)
+        ) {
+            products[key] = product
+        }
+    }
+
+    return groups.map { (key, batches) -> CandidateProductGroup(products.getValue(key), batches) }
 }
 
 @Composable
