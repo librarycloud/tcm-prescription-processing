@@ -93,10 +93,11 @@ internal fun TransfersScreen(
     var itemQuantity by remember { mutableStateOf("1") }
     var itemUnit by remember { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    LaunchedEffect(reload, keyword, statusFilter, overdueOnly, selectedStoreId, page) {
+    LaunchedEffect(reload, statusFilter, overdueOnly, selectedStoreId, page) {
         kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, keyword, statusFilter, overdueOnly, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && transfers != null) return@LaunchedEffect
@@ -121,6 +122,20 @@ internal fun TransfersScreen(
             refreshing = false
         }
         refreshing = false
+    }
+
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (term.isBlank() || !shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            page = 1
+            reload++
+        }
     }
 
     PullToRefreshBox(
@@ -189,9 +204,9 @@ internal fun TransfersScreen(
         // Search Bar
         SearchBarField(
             value = keyword,
-            onValueChange = { keyword = it; page = 1 },
+            onValueChange = { keyword = it; page = 1; if (it.isBlank()) reload++ },
             placeholder = "输入单号、门店、物品或批号",
-            onSearch = { reload++ },
+            onSearch = { lastAutoKeyword = keyword.trim(); reload++ },
         )
 
         Spacer(Modifier.height(10.dp))

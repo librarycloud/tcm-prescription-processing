@@ -108,17 +108,9 @@ internal fun InventoryScreen(
         searchRequest++
     }
 
-    fun shouldAutoSearch(value: String): Boolean {
-        val text = value.trim()
-        val chineseCount = text.count { it in '一'..'鿿' }
-        val digitCount = text.count(Char::isDigit)
-        val hasLatinLetter = text.any { it in 'a'..'z' || it in 'A'..'Z' }
-        return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
-    }
-
     LaunchedEffect(query) {
         val searchTerm = query.trim()
-        if (!shouldAutoSearch(searchTerm)) {
+        if (!shouldAutoSearchQuery(searchTerm)) {
             lastAutoSearchQuery = ""
             return@LaunchedEffect
         }
@@ -239,7 +231,11 @@ internal fun InventoryScreen(
         // Search Input with Scan Icon
         SearchBarField(
             value = query,
-            onValueChange = { query = it; page = 1 },
+            onValueChange = {
+                query = it
+                page = 1
+                if (it.isBlank()) clearSearchResults()
+            },
             placeholder = "输入商品名称、编码或条码",
             onSearch = ::searchInventory,
             onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },

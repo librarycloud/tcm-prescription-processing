@@ -173,6 +173,7 @@ internal fun E6ImportsScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     suspend fun refreshFromServer() {
@@ -241,9 +242,25 @@ internal fun E6ImportsScreen(
         }
     }
 
-    LaunchedEffect(keyword, orderDate) {
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (term.isBlank()) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        if (!shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
         kotlinx.coroutines.delay(300)
+        if (keyword.trim() != term || lastAutoKeyword == term) return@LaunchedEffect
+        lastAutoKeyword = term
         if (page != 1) page = 1 else if (listState.loaded) refreshFromServer()
+    }
+    LaunchedEffect(orderDate) {
+        if (listState.loaded) {
+            if (page != 1) page = 1 else refreshFromServer()
+        }
     }
     LaunchedEffect(page) {
         if (page != 1 && listState.loaded) refreshFromServer()
@@ -267,9 +284,17 @@ internal fun E6ImportsScreen(
         Spacer(Modifier.height(12.dp))
         SearchBarField(
             value = keyword,
-            onValueChange = { page = 1; keyword = it },
+            onValueChange = {
+                page = 1
+                keyword = it
+                if (it.isBlank()) scope.launch { refreshFromServer() }
+            },
             placeholder = "搜索订单号、顾客、电话或医师编码",
-            onSearch = { page = 1; scope.launch { refreshFromServer() } },
+            onSearch = {
+                page = 1
+                lastAutoKeyword = keyword.trim()
+                scope.launch { refreshFromServer() }
+            },
         )
         Spacer(Modifier.height(8.dp))
         Row(
@@ -462,7 +487,7 @@ private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolea
                     fontSize = 12.sp,
                 )
                 Text(
-                    "操作员：${e6OperatorName(item)}　·　系统医生：${e6DoctorName(item) ?: \"-\"}",
+                    "操作员：${e6OperatorName(item)}　·　系统医生：${e6DoctorName(item) ?: "-"}",
                     color = Muted,
                     fontSize = 12.sp,
                     maxLines = 1,
@@ -542,7 +567,7 @@ internal fun E6ImportDetailScreen(
                     DetailLine("订单时间", e6Date(value.optString("sourceCreatedAt")))
                     DetailLine("顾客", value.displayField("customerName"))
                     DetailLine("手机号", maskPhone(value.optString("phone")))
-                    DetailLine("操作员 / 系统医生", "${e6OperatorName(value)}　·　${e6DoctorName(value) ?: \"-\"}")
+                    DetailLine("操作员 / 系统医生", "${e6OperatorName(value)}　·　${e6DoctorName(value) ?: "-"}")
                     if (value.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(value)) {
                         DetailLine("操作员映射", "未配置，请在门店 E6 配置中维护", Danger)
                     }

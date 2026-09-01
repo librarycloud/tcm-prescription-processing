@@ -93,6 +93,16 @@ internal fun clearRetainedListValues() {
     synchronized(retainedListValues) { retainedListValues.clear() }
 }
 
+/** Automatic list searches wait for enough input to avoid a request per keystroke. */
+internal fun shouldAutoSearchQuery(value: String): Boolean {
+    val text = value.trim()
+    if (text.isBlank()) return false
+    val chineseCount = text.count { it in '\u4e00'..'\u9fff' }
+    val digitCount = text.count(Char::isDigit)
+    val hasLatinLetter = text.any { it in 'a'..'z' || it in 'A'..'Z' }
+    return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
+}
+
 // ==================== Color Palette ====================
 internal val PageBackground: Color @Composable get() = MaterialTheme.colorScheme.background
 internal val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary

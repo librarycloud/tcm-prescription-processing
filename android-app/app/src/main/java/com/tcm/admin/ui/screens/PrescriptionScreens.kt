@@ -99,6 +99,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
     var deleteTarget by remember { mutableStateOf<JSONObject?>(null) }
     var deleting by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -112,7 +113,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
                 if (!isSuperAdmin(user) && stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
             }
     }
-    LaunchedEffect(reload, keyword, status, doctorId, selectedStoreId, page) {
+    LaunchedEffect(reload, status, doctorId, selectedStoreId, page) {
         kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, keyword, status, doctorId, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
@@ -130,6 +131,20 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
         }.onFailure {
             error = it.message ?: "加载处方失败"
             refreshing = false
+        }
+    }
+
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (!shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            page = 1
+            reload++
         }
     }
 
@@ -162,7 +177,16 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
             }
         }
         Spacer(Modifier.height(12.dp))
-        SearchBarField(keyword, { keyword = it; page = 1 }, "搜索患者姓名、手机号、处方号或医生", onSearch = { page = 1; reload++ })
+        SearchBarField(
+            keyword,
+            {
+                keyword = it
+                page = 1
+                if (it.isBlank()) reload++
+            },
+            "搜索患者姓名、手机号、处方号或医生",
+            onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
+        )
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SegmentedButton("全部状态", status == null, onClick = { status = null; page = 1 })

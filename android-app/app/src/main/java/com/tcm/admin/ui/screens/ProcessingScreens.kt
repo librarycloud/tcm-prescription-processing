@@ -170,6 +170,7 @@ internal fun ProcessingScreenV2(
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
     var refreshing by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
 
     // A retained list can outlive the screen branch. Refresh whenever this page is entered.
     LaunchedEffect(Unit) {
@@ -201,7 +202,7 @@ internal fun ProcessingScreenV2(
             }
     }
 
-    LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page) {
+    LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, page) {
         kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page).joinToString("|")
         val existingItems = if (mode == "plans") plans else pickupTasks
@@ -253,6 +254,20 @@ internal fun ProcessingScreenV2(
             error = it.message ?: "加载加工数据失败"
             loading = false
             refreshing = false
+        }
+    }
+
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (!shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            page = 1
+            reload++
         }
     }
 
@@ -458,9 +473,13 @@ internal fun ProcessingScreenV2(
         // Search Field
         SearchBarField(
             value = keyword,
-            onValueChange = { keyword = it; page = 1 },
+            onValueChange = {
+                keyword = it
+                page = 1
+                if (it.isBlank()) reload++
+            },
             placeholder = "搜索顾客姓名、手机号或备注",
-            onSearch = { page = 1; reload++ },
+            onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
         )
 
         // Store chips stay compact and wrap naturally below the search field.

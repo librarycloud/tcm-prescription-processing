@@ -100,6 +100,7 @@ internal fun HerbsScreen(
     var error by listState::error
     var reload by listState::reload
     var refreshing by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     LaunchedEffect(showStore) {
@@ -113,7 +114,7 @@ internal fun HerbsScreen(
             }
     }
 
-    LaunchedEffect(selectedStoreId, keyword, type, reload) {
+    LaunchedEffect(selectedStoreId, type, reload) {
         val queryKey = listOf(selectedStoreId.orEmpty(), keyword, type).joinToString("|")
         if (listState.loadedQueryKey == queryKey && data != null) return@LaunchedEffect
         error = null
@@ -130,6 +131,19 @@ internal fun HerbsScreen(
                 error = it.message ?: "加载斗谱失败"
                 refreshing = false
             }
+    }
+
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (!shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            reload++
+        }
     }
 
     PullToRefreshBox(
@@ -184,9 +198,9 @@ internal fun HerbsScreen(
         // Search bar
         SearchBarField(
             value = keyword,
-            onValueChange = { keyword = it },
+            onValueChange = { keyword = it; if (it.isBlank()) reload++ },
             placeholder = "搜索药材名称、拼音或位置编码",
-            onSearch = { reload++ },
+            onSearch = { lastAutoKeyword = keyword.trim(); reload++ },
         )
 
         Spacer(Modifier.height(10.dp))

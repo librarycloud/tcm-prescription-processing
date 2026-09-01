@@ -116,6 +116,7 @@ internal fun PackagesScreen(
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
     var refreshing by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -138,7 +139,7 @@ internal fun PackagesScreen(
             }
     }
 
-    LaunchedEffect(status, sortBy, keyword, selectedStoreId, reload, page) {
+    LaunchedEffect(status, sortBy, selectedStoreId, reload, page) {
         kotlinx.coroutines.delay(300)
         val queryKey = listOf(status, sortBy, keyword, selectedStoreId, reload, page).joinToString("|")
         if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
@@ -170,6 +171,21 @@ internal fun PackagesScreen(
             error = it.message ?: "加载包裹列表失败"
             loading = false
             refreshing = false
+        }
+    }
+
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (term.isBlank() || !shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            if (term.isBlank()) reload++
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            page = 1
+            reload++
         }
     }
 
@@ -231,7 +247,7 @@ internal fun PackagesScreen(
                 page = 1
             },
             placeholder = "搜索姓名、手机号或取货码",
-            onSearch = { page = 1; reload++ },
+            onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
             onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
         )
 
