@@ -43,8 +43,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,7 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -81,8 +81,9 @@ internal fun InventoryScreen(
     var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
-    var listScrollPosition by remember { mutableStateOf(0) }
-    val scope = rememberCoroutineScope()
+    var listScrollPosition by rememberRetainedListValue(listOwner, "scrollPosition") { 0 }
+    var restoreListScroll by remember { mutableStateOf(false) }
+    var lastAutoSearchQuery by rememberRetainedListValue(listOwner, "lastAutoSearchQuery") { query.trim() }
     val context = LocalContext.current
 
     fun clearSearchResults() {
@@ -103,13 +104,38 @@ internal fun InventoryScreen(
             return
         }
         page = 1
+        lastAutoSearchQuery = query.trim()
         searchRequest++
+    }
+
+    fun shouldAutoSearch(value: String): Boolean {
+        val text = value.trim()
+        val chineseCount = text.count { it in '一'..'鿿' }
+        val digitCount = text.count(Char::isDigit)
+        val hasLatinLetter = text.any { it in 'a'..'z' || it in 'A'..'Z' }
+        return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
+    }
+
+    LaunchedEffect(query) {
+        val searchTerm = query.trim()
+        if (!shouldAutoSearch(searchTerm)) {
+            lastAutoSearchQuery = ""
+            return@LaunchedEffect
+        }
+        delay(300)
+        if (query.trim() == searchTerm && lastAutoSearchQuery != searchTerm) {
+            page = 1
+            lastAutoSearchQuery = searchTerm
+            searchRequest++
+        }
     }
 
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
             query = value
+            page = 1
+            lastAutoSearchQuery = value
             searchRequest++
         }
     }
@@ -159,7 +185,15 @@ internal fun InventoryScreen(
 
     BackHandler(enabled = selectedProduct != null) {
         selectedProduct = null
-        scope.launch { scrollState.scrollTo(listScrollPosition) }
+        restoreListScroll = true
+    }
+
+    LaunchedEffect(selectedProduct, restoreListScroll) {
+        if (selectedProduct == null && restoreListScroll) {
+            withFrameNanos { }
+            scrollState.scrollTo(listScrollPosition)
+            restoreListScroll = false
+        }
     }
 
     PullToRefreshBox(
@@ -273,7 +307,7 @@ internal fun InventoryScreen(
                     OutlinedButton(
                         onClick = {
                             selectedProduct = null
-                            scope.launch { scrollState.scrollTo(listScrollPosition) }
+                            restoreListScroll = true
                         },
                         shape = RoundedCornerShape(6.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
