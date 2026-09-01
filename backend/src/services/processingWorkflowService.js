@@ -18,6 +18,7 @@ import {
 import { businessScope } from "./permissionService.js";
 import { recordOperation } from "./operationLogService.js";
 import { processingPlanQrContent, scanValue } from "../utils/processingCode.js";
+import { withPickupQrContent } from "../utils/pickupQr.js";
 import {
   readUploadFile,
   removeUploadFile,
@@ -48,6 +49,9 @@ function workflowInclude() {
     },
     processType: true,
     store: { select: { id: true, name: true, code: true } },
+    package: {
+      select: { id: true, pickupCode: true },
+    },
     photos: {
       where: { deletedAt: null },
       select: PHOTO_METADATA,
@@ -178,6 +182,7 @@ function decoratePlan(plan) {
   });
   return {
     ...plan,
+    package: withPickupQrContent(plan.package),
     qrContent: processingPlanQrContent(plan.scanToken),
     isDecoction: isDecoction(plan),
     canCompleteWorkflow: completion.canComplete,

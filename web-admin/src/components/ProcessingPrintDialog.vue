@@ -164,7 +164,7 @@ watch(
       props.templateType === PROCESSING_TEMPLATE_TYPE
         ? props.planInfo?.qrContent ||
           (props.planInfo?.scanToken ? `TCM:PLAN:1:${props.planInfo.scanToken}` : '')
-        : props.planInfo?.pickupCode || props.planInfo?.package?.pickupCode || '';
+        : props.planInfo?.package?.pickupQrContent || '';
     createQRCodeDataUrl(qrContent, {
       width: 360
     }).then((value) => {
