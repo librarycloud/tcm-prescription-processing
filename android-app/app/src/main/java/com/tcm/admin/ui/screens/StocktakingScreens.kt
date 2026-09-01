@@ -646,7 +646,7 @@ internal fun StocktakingEntryScreen(
     val isEditingRecount = selectedItem?.optBoolean("canEditRecount", false) == true
     val selectedCheckItemId = selectedItem?.let { it.optInt("checkItemId", it.optInt("id", 0)) } ?: 0
     val hasCount = selectedItem?.let { nullableDouble(it, "firstCountQty") != null || nullableDouble(it, "recountQty") != null } == true
-    val locationOnly = selectedCheckItemId > 0 && hasCount && !isEditingInitial && !isRecount
+    val locationOnly = !addingBatch && selectedCheckItemId > 0 && hasCount && !isEditingInitial && !isRecount
     val product = selectedItem?.optJSONObject("product") ?: JSONObject()
 
     val entryBackHandlerEnabled = selectedItem != null || selectedProductGroup != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading
@@ -739,7 +739,24 @@ internal fun StocktakingEntryScreen(
         } else if (selectedItem == null && selectedProductGroup != null) {
             val group = selectedProductGroup!!
             val candidateProduct = group.product
-            SectionHeader("商品盘点", "${group.batches.size} 个库存批次")
+            SectionHeader(
+                "商品盘点",
+                "${group.batches.size} 个库存批次",
+                action = {
+                    TextButton(
+                        onClick = {
+                            selectedItem = group.batches.firstOrNull()
+                            addingBatch = true
+                            batchNo = ""
+                            countLocation = ""
+                            value = ""
+                            editingLocation = false
+                        },
+                    ) {
+                        Text("新增批号")
+                    }
+                },
+            )
             AppCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
