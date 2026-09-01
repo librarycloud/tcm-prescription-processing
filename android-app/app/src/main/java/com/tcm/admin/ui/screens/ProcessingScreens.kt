@@ -171,6 +171,11 @@ internal fun ProcessingScreenV2(
     var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
     var refreshing by remember { mutableStateOf(false) }
 
+    // A retained list can outlive the screen branch. Refresh whenever this page is entered.
+    LaunchedEffect(Unit) {
+        reload++
+    }
+
     // Dialog states
     var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
 

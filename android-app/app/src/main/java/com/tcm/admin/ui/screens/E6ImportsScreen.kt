@@ -131,6 +131,14 @@ private fun e6DoctorName(item: JSONObject): String? {
         .mapNotNull { doctor -> doctor?.displayField("name", "")?.trim() }
         .firstOrNull { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
 }
+
+private fun e6OperatorName(item: JSONObject): String {
+    val mapped = item.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty()
+    return mapped.ifBlank { item.displayField("cashierName", "-") }
+}
+
+private fun e6OperatorMapped(item: JSONObject): Boolean =
+    item.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty().isNotBlank()
 private fun e6Batches(totalDose: Int, count: Int): JSONArray {
     val result = JSONArray()
     val safeCount = count.coerceIn(1, totalDose)
@@ -456,6 +464,10 @@ private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolea
                 e6DoctorName(item)?.let { mapped ->
                     Text("系统医生：$mapped", color = Muted, fontSize = 12.sp)
                 }
+                Text("操作员：${e6OperatorName(item)}", color = Muted, fontSize = 12.sp)
+                if (item.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(item)) {
+                    Text("未配置操作员映射，请在门店 E6 配置中维护", color = Danger, fontSize = 12.sp)
+                }
                 val errorMessage = item.displayField("errorMessage", "")
                 if (errorMessage.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
@@ -528,7 +540,10 @@ internal fun E6ImportDetailScreen(
                     DetailLine("订单时间", e6Date(value.optString("sourceCreatedAt")))
                     DetailLine("顾客", value.displayField("customerName"))
                     DetailLine("手机号", maskPhone(value.optString("phone")))
-                    DetailLine("操作员", value.displayField("cashierName"))
+                    DetailLine("操作员", e6OperatorName(value))
+                    if (value.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(value)) {
+                        DetailLine("操作员映射", "未配置，请在门店 E6 配置中维护", Danger)
+                    }
                     DetailLine("医师编码", value.displayField("e6DoctorCode"))
                     DetailLine("系统医生", e6DoctorName(value) ?: "-")
                     DetailLine("剂数", "${value.optInt("doseCount", 0)}剂")

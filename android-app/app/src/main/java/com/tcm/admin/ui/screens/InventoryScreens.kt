@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -79,7 +81,30 @@ internal fun InventoryScreen(
     var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
     var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
     var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
+    var listScrollPosition by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    fun clearSearchResults() {
+        searchRequest++
+        products = null
+        selectedProduct = null
+        error = null
+        loading = false
+        refreshing = false
+        page = 1
+        pages = 1
+        loadedQueryKey = null
+    }
+
+    fun searchInventory() {
+        if (query.isBlank()) {
+            clearSearchResults()
+            return
+        }
+        page = 1
+        searchRequest++
+    }
 
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
@@ -101,7 +126,8 @@ internal fun InventoryScreen(
     }
 
     LaunchedEffect(searchRequest, selectedStoreId, page) {
-        if (searchRequest == 0) return@LaunchedEffect
+        if (searchRequest == 0 || query.isBlank()) return@LaunchedEffect
+        val requestId = searchRequest
         val queryKey = listOf(searchRequest, query, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && products != null) return@LaunchedEffect
         error = null
@@ -112,6 +138,7 @@ internal fun InventoryScreen(
                 ApiClient.inventoryPaged(query.trim(), selectedStoreId.toIntOrNull(), page, 10)
             }
         }.onSuccess { values ->
+            if (requestId != searchRequest || query.isBlank()) return@onSuccess
             val array = values.optJSONArray("list") ?: JSONArray()
             val list = (0 until array.length()).map { array.getJSONObject(it) }
             products = list
@@ -123,6 +150,7 @@ internal fun InventoryScreen(
             refreshing = false
             loadedQueryKey = queryKey
         }.onFailure {
+            if (requestId != searchRequest || query.isBlank()) return@onFailure
             error = it.message ?: "加载库存失败"
             loading = false
             refreshing = false
@@ -131,12 +159,13 @@ internal fun InventoryScreen(
 
     BackHandler(enabled = selectedProduct != null) {
         selectedProduct = null
+        scope.launch { scrollState.scrollTo(listScrollPosition) }
     }
 
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
-            if (!refreshing) {
+            if (!refreshing && query.isNotBlank()) {
                 refreshing = true
                 ApiClient.clearResponseCache(context)
                 searchRequest++
@@ -178,7 +207,7 @@ internal fun InventoryScreen(
             value = query,
             onValueChange = { query = it; page = 1 },
             placeholder = "输入商品名称、编码或条码",
-            onSearch = { searchRequest++ },
+            onSearch = ::searchInventory,
             onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
         )
 
@@ -242,7 +271,10 @@ internal fun InventoryScreen(
                 )
                 if (products != null && products!!.size > 1) {
                     OutlinedButton(
-                        onClick = { selectedProduct = null },
+                        onClick = {
+                            selectedProduct = null
+                            scope.launch { scrollState.scrollTo(listScrollPosition) }
+                        },
                         shape = RoundedCornerShape(6.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     ) {
@@ -431,7 +463,10 @@ internal fun InventoryScreen(
 
                         AppCard(
                             modifier = Modifier.padding(bottom = 10.dp),
-                            onClick = { selectedProduct = product },
+                            onClick = {
+                                listScrollPosition = scrollState.value
+                                selectedProduct = product
+                            },
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
