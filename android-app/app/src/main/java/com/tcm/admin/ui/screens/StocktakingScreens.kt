@@ -385,8 +385,9 @@ internal fun StocktakingDetailScreen(
                     entryMode = false
                 },
                 onSaved = {
+                    val editingExistingItem = entryItem != null
                     entryItem = null
-                    entryMode = false
+                    if (editingExistingItem) entryMode = false
                     reload++
                 },
             )
@@ -547,6 +548,7 @@ internal fun StocktakingEntryScreen(
 ) {
     val isStoreStaff = user?.optInt("role", -1) == 3
     var selectedItem by remember(initialItem) { mutableStateOf(initialItem) }
+    var selectedProductGroup by remember(initialItem) { mutableStateOf<CandidateProductGroup?>(null) }
     var keyword by remember(initialItem) { mutableStateOf("") }
     var candidates by remember(initialItem) { mutableStateOf<List<JSONObject>>(emptyList()) }
     var addingBatch by remember(initialItem) { mutableStateOf(false) }
@@ -606,19 +608,20 @@ internal fun StocktakingEntryScreen(
         }.onSuccess { values ->
             val result = (0 until values.length()).map { values.getJSONObject(it) }
             candidates = result
-            candidateProductGroups(result).singleOrNull()?.batches?.singleOrNull()?.let(::selectCandidate)
+            val groups = candidateProductGroups(result)
+            selectedProductGroup = groups.singleOrNull()
         }.onFailure { error = it.message ?: "搜索商品失败" }
         loading = false
     }
 
     LaunchedEffect(keyword, selectedItem) {
-        if (selectedItem != null || keyword.trim().length < 2 || keyword.trim() == lastSearchedTerm) return@LaunchedEffect
+        if (selectedItem != null || !shouldAutoSearchQuery(keyword) || keyword.trim() == lastSearchedTerm) return@LaunchedEffect
         delay(350)
         search(keyword.trim())
     }
 
-    LaunchedEffect(selectedItem, keyword, candidates, loading) {
-        onModeChanged(selectedItem != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading)
+    LaunchedEffect(selectedItem, selectedProductGroup, keyword, candidates, loading) {
+        onModeChanged(selectedItem != null || selectedProductGroup != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading)
     }
 
     fun manualSearch() {
@@ -630,6 +633,8 @@ internal fun StocktakingEntryScreen(
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
             keyword = scanned
+            selectedProductGroup = null
+            candidates = emptyList()
             scope.launch { search(scanned, force = true) }
         }
     }
@@ -644,16 +649,19 @@ internal fun StocktakingEntryScreen(
     val locationOnly = selectedCheckItemId > 0 && hasCount && !isEditingInitial && !isRecount
     val product = selectedItem?.optJSONObject("product") ?: JSONObject()
 
-    val entryBackHandlerEnabled = selectedItem != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading
+    val entryBackHandlerEnabled = selectedItem != null || selectedProductGroup != null || keyword.isNotBlank() || candidates.isNotEmpty() || loading
     BackHandler(enabled = entryBackHandlerEnabled) {
         if (selectedItem != null) {
-            if (keyword.isBlank() && candidates.isEmpty()) {
+            if (selectedProductGroup == null && keyword.isBlank() && candidates.isEmpty()) {
                 onDismiss()
                 return@BackHandler
             }
             selectedItem = null
+            addingBatch = false
             batchNo = ""
             value = ""
+        } else if (selectedItem == null && selectedProductGroup != null) {
+            selectedProductGroup = null
         } else if (keyword.isNotBlank() || candidates.isNotEmpty()) {
             keyword = ""
             candidates = emptyList()
@@ -681,6 +689,7 @@ internal fun StocktakingEntryScreen(
                         batchNo = ""
                         value = ""
                     }
+                    selectedProductGroup = null
                     candidates = emptyList()
                 },
                 placeholder = "搜索商品名称、编码或条码",
@@ -689,7 +698,7 @@ internal fun StocktakingEntryScreen(
                 modifier = Modifier.weight(1f),
             )
         }
-        if (selectedItem == null) {
+        if (selectedItem == null && selectedProductGroup == null) {
             if (loading) {
                 Spacer(Modifier.height(12.dp))
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
@@ -708,7 +717,10 @@ internal fun StocktakingEntryScreen(
                 Spacer(Modifier.height(6.dp))
                 candidateProductGroups(candidates).forEach { group ->
                     val candidateProduct = group.product
-                    AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
+                    AppCard(
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        onClick = { selectedProductGroup = group },
+                    ) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                             Column(Modifier.weight(1f)) {
                                 Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink)
@@ -721,25 +733,55 @@ internal fun StocktakingEntryScreen(
                                 Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        group.batches.forEachIndexed { index, candidate ->
-                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectCandidate(candidate) }
-                                    .padding(vertical = 9.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("批号：${candidate.displayField("batchNo", "-")}", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                    Text("系统货位：${candidate.displayField("systemLocationName", candidate.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
-                                    Text("生产日期：${serverDateOnly(candidate.displayField("productionDate", ""), "-")}　有效期：${serverDateOnly(candidate.displayField("expiryDate", ""), "-")}", color = Muted, fontSize = 12.sp)
-                                }
-                                Text("选择", color = Primary, fontSize = 13.sp)
+                    }
+                }
+            }
+        } else if (selectedItem == null && selectedProductGroup != null) {
+            val group = selectedProductGroup!!
+            val candidateProduct = group.product
+            SectionHeader("商品盘点", "${group.batches.size} 个库存批次")
+            AppCard {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
+                        Spacer(Modifier.height(3.dp))
+                        Text("编码：${candidateProduct.displayField("productCode", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
+                        Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
+                        Text("厂家：${candidateProduct.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp)
+                    }
+                    candidateProduct.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
+                        Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            group.batches.forEach { candidate ->
+                val firstQty = nullableDouble(candidate, "firstCountQty")
+                val canEditRecount = candidate.optBoolean("canEditRecount", false)
+                val canStartRecount = candidate.optBoolean("needsRecount", false) && candidate.optInt("id", candidate.optInt("checkItemId", 0)) > 0
+                val canEditInitial = candidate.optBoolean("canEditInitial", false)
+                val status = when {
+                    canEditRecount -> "修改复盘"
+                    canStartRecount -> "复盘"
+                    canEditInitial -> "修改初盘"
+                    firstQty == null -> "盘点"
+                    else -> "查看"
+                }
+                AppCard(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    onClick = { selectCandidate(candidate) },
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f)) {
+                            Text("批号：${candidate.displayField("batchNo", "-")}", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text("系统货位：${candidate.displayField("systemLocationName", candidate.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
+                            Text("盘点货位：${candidate.displayField("countLocationName", "未设置")}", color = Muted, fontSize = 12.sp)
+                            Text("生产日期：${serverDateOnly(candidate.displayField("productionDate", ""), "-")}　有效期：${serverDateOnly(candidate.displayField("expiryDate", ""), "-")}", color = Muted, fontSize = 12.sp)
+                            if (!isStoreStaff) {
+                                Text("系统库存：${quantityText(candidate.opt("systemQty"), "0")} ${candidateProduct.displayField("unit", "")}", color = Muted, fontSize = 12.sp)
                             }
                         }
+                        Text(status, color = if (status == "查看") Muted else Primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -871,9 +913,13 @@ internal fun StocktakingEntryScreen(
                         }.onSuccess {
                             selectedItem = null
                             addingBatch = false
-                            keyword = ""
-                            candidates = emptyList()
                             onSaved()
+                            if (selectedProductGroup != null) {
+                                scope.launch { search(keyword, force = true) }
+                            } else {
+                                keyword = ""
+                                candidates = emptyList()
+                            }
                         }
                             .onFailure { error = it.message ?: "录入实盘失败" }
                         saving = false
