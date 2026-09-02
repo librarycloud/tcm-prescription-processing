@@ -17,5 +17,7 @@
 .inventory-card { margin-bottom: 14rpx; }
 .inventory-row { display: flex; justify-content: space-between; gap: 24rpx; margin-bottom: 12rpx; color: #4e5969; }
 .inventory-row text:last-child { min-width: 0; color: #1f2329; text-align: right; word-break: break-all; }
+.inventory-row.location-row { font-size: 32rpx; font-weight: 700; color: #1f2329; }
+.inventory-row.location-row text:last-child { color: #1f2329; }
 .inventory-row.strong { font-size: 30rpx; font-weight: 600; }
 .inventory-dates { padding-top: 14rpx; border-top: 1rpx solid #eef0f5; line-height: 1.6; }

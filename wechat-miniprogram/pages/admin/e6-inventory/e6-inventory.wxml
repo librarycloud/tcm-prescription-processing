@@ -28,7 +28,7 @@
     <view wx:for="{{selectedProduct.inventories}}" wx:key="id" class="app-card inventory-card">
       <view wx:if="{{isSuperAdmin}}" class="inventory-row"><text>门店</text><text>{{item.store.name || '-'}}</text></view>
       <view class="inventory-row"><text>批号</text><text>{{item.batchNo}}</text></view>
-      <view class="inventory-row"><text>货位</text><text>{{item.locationName}}</text></view>
+      <view class="inventory-row location-row"><text>货位</text><text>{{item.locationName || '-'}}</text></view>
       <view class="inventory-row strong"><text>库存数量</text><text>{{item.quantityText}} {{selectedProduct.unit || ''}}</text></view>
       <view class="muted inventory-dates">生产：{{item.productionDateText}}　有效期：{{item.expiryDateText}}　入库：{{item.inboundDateText}}</view>
     </view>

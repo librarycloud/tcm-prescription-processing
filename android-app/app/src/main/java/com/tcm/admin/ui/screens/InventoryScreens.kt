@@ -430,8 +430,9 @@ internal fun InventoryScreen(
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 text = "货位：$location",
-                                color = RegularText,
-                                fontSize = 12.sp,
+                                color = Ink,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                         Text(
