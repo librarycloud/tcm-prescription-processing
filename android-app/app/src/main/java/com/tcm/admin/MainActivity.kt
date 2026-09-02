@@ -194,7 +194,7 @@ private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
     val backStack = remember {
-        mutableStateListOf<ScreenTarget>(if (restoredSession != null) ScreenTarget.Dashboard else ScreenTarget.Login)
+        mutableStateListOf<ScreenTarget>(if (restoredSession != null) ScreenTarget.Inventory() else ScreenTarget.Login)
     }
     val e6ImportsListState = rememberE6ImportsListState()
     val dashboardScrollState = rememberScrollState()
@@ -335,7 +335,7 @@ private fun TcmAdminApp() {
                             ApiClient.saveSession(appContext, value)
                             session = value
                             backStack.clear()
-                            backStack.add(ScreenTarget.Dashboard)
+                            backStack.add(ScreenTarget.Inventory())
                         }.onFailure {
                             loginError = it.message ?: "登录失败"
                         }
@@ -443,7 +443,7 @@ private fun TcmAdminApp() {
                 }
 
                 // Sub-screens & Details (Page navigation instead of dialogs)
-                is ScreenTarget.Inventory -> DetailShell("库存查询", onBack = { navigateBack() }, scrollState = inventoryScrollState) {
+                is ScreenTarget.Inventory -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, inventoryScrollState) {
                     InventoryScreen(
                         user = session?.user,
                         initialQuery = currentScreen.initialQuery,
@@ -731,8 +731,8 @@ private fun MainShell(
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = CardBorderColor)
                 Spacer(Modifier.height(8.dp))
 
-                DrawerItem("首页", current is ScreenTarget.Dashboard, Icons.AutoMirrored.Filled.Assignment) {
-                    onSwitchTab(ScreenTarget.Dashboard)
+                DrawerItem("库存查询", current is ScreenTarget.Inventory, Icons.Default.Inventory) {
+                    onSwitchTab(ScreenTarget.Inventory())
                     scope.launch { drawerState.close() }
                 }
                 DrawerItem("处方管理", current is ScreenTarget.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {
@@ -756,10 +756,6 @@ private fun MainShell(
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
-                DrawerItem("库存查询", false, Icons.Default.Inventory) {
-                    onNavigate(ScreenTarget.Inventory())
-                    scope.launch { drawerState.close() }
-                }
                 DrawerItem("商品盘点", false, Icons.Default.Tune) {
                     onNavigate(ScreenTarget.Stocktaking)
                     scope.launch { drawerState.close() }
@@ -920,7 +916,7 @@ private fun BottomNav(
     onReselect: () -> Unit,
 ) {
     val items = listOf(
-        ScreenTarget.Dashboard to ("首页" to Icons.AutoMirrored.Filled.Assignment),
+        ScreenTarget.Inventory() to ("库存查询" to Icons.Default.Inventory),
         ScreenTarget.Herbs to ("斗谱" to Icons.Default.Inventory),
         ScreenTarget.Processing to ("加工" to Icons.Default.Sync),
         ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
@@ -935,7 +931,7 @@ private fun BottomNav(
         ) {
             items.forEach { (target, pair) ->
                 val isSelected = when (target) {
-                    is ScreenTarget.Dashboard -> current is ScreenTarget.Dashboard
+                    is ScreenTarget.Inventory -> current is ScreenTarget.Inventory
                     is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
                     is ScreenTarget.Processing -> current is ScreenTarget.Processing
                     is ScreenTarget.Packages -> current is ScreenTarget.Packages
