@@ -529,13 +529,11 @@ internal fun InventoryScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("生产", color = Muted, fontSize = 9.sp)
-                            Spacer(Modifier.height(2.dp))
+                            Text("生产日期", color = Muted, fontSize = 9.sp)
                             Text(prodDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
                         }
                         Column(Modifier.weight(1f)) {
                             Text("有效期", color = Muted, fontSize = 9.sp)
-                            Spacer(Modifier.height(2.dp))
                             Text(
                                 expDate.ifBlank { "-" },
                                 color = if (expiringSoon) Danger else Muted,
@@ -544,8 +542,7 @@ internal fun InventoryScreen(
                             )
                         }
                         Column(Modifier.weight(1f)) {
-                            Text("入库", color = Muted, fontSize = 9.sp)
-                            Spacer(Modifier.height(2.dp))
+                            Text("入库日期", color = Muted, fontSize = 9.sp)
                             Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
                         }
                     }
