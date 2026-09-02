@@ -216,11 +216,8 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-<<<<<<< HEAD
-        private val skuPattern = Regex("(?i)\\bSKU\\s+([0-9]+)\\b")
-=======
-        private val skuPattern = Regex("(?i)\\bSKU ([0-9]+)\\b")
->>>>>>> 00cf73c (为库存查询增加SKU文字识别)
+        // OCR only accepts the label's exact SKU format: "SKU " followed by 9 digits.
+        private val skuPattern = Regex("(?i)\\bSKU ([0-9]{9})(?![0-9])\\b")
 
         fun extractSku(text: String): String? {
             return skuPattern.find(text)

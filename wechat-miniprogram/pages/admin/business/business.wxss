@@ -1,0 +1,8 @@
+.business-page { padding-bottom: 180rpx; }
+.page-heading { margin-bottom: 28rpx; }
+.page-title { font-size: 36rpx; font-weight: 700; }
+.business-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rpx; }
+.business-item { display: flex; min-height: 190rpx; margin-bottom: 0; flex-direction: column; align-items: center; justify-content: center; padding: 24rpx 16rpx; text-align: center; }
+.business-item-title { margin-top: 14rpx; color: #1f2329; font-size: 30rpx; font-weight: 600; }
+.business-item .muted { margin-top: 8rpx; font-size: 23rpx; }
+.business-item-active { background: #f2f7ff; }

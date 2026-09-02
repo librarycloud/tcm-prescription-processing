@@ -38,7 +38,7 @@ export function redirectByRole(user) {
   }
 
   const url = role === 0 || role === 2 || role === 3
-    ? '/pages/admin/dashboard/dashboard'
+    ? '/pages/admin/e6-inventory/e6-inventory'
     : '/pages/user/packages/packages';
   wx.reLaunch({ url });
 }

@@ -731,6 +731,10 @@ private fun MainShell(
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = CardBorderColor)
                 Spacer(Modifier.height(8.dp))
 
+                DrawerItem("库存查询", current is ScreenTarget.Inventory, Icons.Default.Inventory) {
+                    onNavigate(ScreenTarget.Inventory())
+                    scope.launch { drawerState.close() }
+                }
                 DrawerItem("处方管理", current is ScreenTarget.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {
                     onSwitchTab(ScreenTarget.Prescriptions)
                     scope.launch { drawerState.close() }

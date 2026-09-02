@@ -1,8 +1,9 @@
 const ADMIN_TAB_URLS = {
-  overview: '/pages/admin/dashboard/dashboard',
+  overview: '/pages/admin/e6-inventory/e6-inventory',
   herbs: '/pages/admin/herb-locations/herb-locations',
   processing: '/pages/admin/processing-workbench/processing-workbench',
   packages: '/pages/admin/packages/packages',
+  business: '/pages/admin/business/business',
   profile: '/pages/admin/profile/profile'
 };
 
