@@ -337,31 +337,8 @@ internal fun InventoryScreen(
             val unit = product.displayField("unit", "")
             val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SectionHeader(
-                    title = "商品信息",
-                    modifier = Modifier.weight(1f),
-                )
-                if (products != null && products!!.size > 1) {
-                    OutlinedButton(
-                        onClick = {
-                            selectedProduct = null
-                            restoreListScroll = true
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("返回列表", fontSize = 12.sp)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
+            SectionHeader(title = "商品信息")
+            Spacer(Modifier.height(6.dp))
 
             // Product Main Card
             AppCard {
@@ -473,22 +450,22 @@ internal fun InventoryScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Spacer(Modifier.weight(1f))
+                        Text("共 ", color = RegularText, fontSize = 13.sp)
                         Text(
-                            text = "共 ${product.optInt("batchCount", inventories.length())} 个库存批次",
-                            color = Muted,
-                            fontSize = 12.sp,
+                            text = "${product.optInt("batchCount", inventories.length())}",
+                            color = PrimaryDark,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
                         )
+                        Text(" 个库存批次", color = RegularText, fontSize = 13.sp)
                     }
                 }
             }
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(12.dp))
 
-            SectionHeader(
-                title = "库存批次明细",
-                subtitle = "共 ${inventories.length()} 笔批次记录",
-            )
-            Spacer(Modifier.height(10.dp))
+            SectionHeader(title = "库存批次明细")
+            Spacer(Modifier.height(6.dp))
 
             if (inventories.length() == 0) {
                 AppEmptyState("该商品暂无库存批次")
@@ -540,9 +517,9 @@ internal fun InventoryScreen(
                         )
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -631,44 +608,47 @@ internal fun InventoryScreen(
                                 selectedProduct = product
                             },
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.Top,
-                            ) {
-                                Column(Modifier.weight(1f)) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
                                     HighlightedText(
                                         text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                         highlight = query,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
                                         color = Ink,
+                                        modifier = Modifier.weight(1f),
                                     )
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = "规格：${spec.ifBlank { "-" }}　单位：${unit.ifBlank { "-" }}",
-                                        color = Muted,
-                                        fontSize = 12.sp,
-                                    )
-                                    Row {
+                                    if (!retailPrice.isNullOrBlank()) {
+                                        Spacer(Modifier.width(8.dp))
                                         Text(
-                                            text = "厂家：${manufacturer.ifBlank { "-" }}　条码：",
-                                            color = Muted,
-                                            fontSize = 12.sp,
-                                        )
-                                        HighlightedText(
-                                            text = barcode.ifBlank { "无" },
-                                            highlight = query,
-                                            color = Muted,
-                                            fontSize = 12.sp,
+                                            text = "¥${priceText(retailPrice)}",
+                                            color = Danger,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
                                         )
                                     }
                                 }
-                                if (!retailPrice.isNullOrBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "规格：${spec.ifBlank { "-" }}　单位：${unit.ifBlank { "-" }}",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Row(modifier = Modifier.fillMaxWidth()) {
                                     Text(
-                                        text = "¥${priceText(retailPrice)}",
-                                        color = Danger,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
+                                        text = "厂家：${manufacturer.ifBlank { "-" }}　条码：",
+                                        color = Muted,
+                                        fontSize = 12.sp,
+                                    )
+                                    HighlightedText(
+                                        text = barcode.ifBlank { "无" },
+                                        highlight = query,
+                                        color = Muted,
+                                        fontSize = 12.sp,
                                     )
                                 }
                             }

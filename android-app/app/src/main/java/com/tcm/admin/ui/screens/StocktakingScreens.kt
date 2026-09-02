@@ -721,17 +721,23 @@ internal fun StocktakingEntryScreen(
                         modifier = Modifier.padding(bottom = 8.dp),
                         onClick = { selectedProductGroup = group },
                     ) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                            Column(Modifier.weight(1f)) {
-                                Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink)
-                                Spacer(Modifier.height(3.dp))
-                                Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
-                                Text("厂家：${candidateProduct.displayField("manufacturer", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
-                                Text("${group.batches.size} 个库存批次", color = Muted, fontSize = 12.sp)
+                        Column(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                                Text(
+                                    text = "${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Ink,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                candidateProduct.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
                             }
-                            candidateProduct.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
-                                Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            }
+                            Spacer(Modifier.height(3.dp))
+                            Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                            Text("厂家：${candidateProduct.displayField("manufacturer", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                            Text("${group.batches.size} 个库存批次", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -758,17 +764,24 @@ internal fun StocktakingEntryScreen(
                 },
             )
             AppCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f)) {
-                        Text("${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
-                        Spacer(Modifier.height(3.dp))
-                        Text("编码：${candidateProduct.displayField("productCode", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
-                        Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
-                        Text("厂家：${candidateProduct.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp)
+                Column(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = "${candidateProduct.displayField("productCode")} · ${candidateProduct.displayField("name", "商品")}",
+                            fontWeight = FontWeight.Bold,
+                            color = Ink,
+                            fontSize = 15.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        candidateProduct.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
+                            Spacer(Modifier.width(8.dp))
+                            Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
                     }
-                    candidateProduct.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
-                        Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    }
+                    Spacer(Modifier.height(3.dp))
+                    Text("编码：${candidateProduct.displayField("productCode", "-")}　条码：${candidateProduct.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                    Text("规格：${candidateProduct.displayField("specification", "-")}　单位：${candidateProduct.displayField("unit", "-")}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                    Text("厂家：${candidateProduct.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -807,15 +820,20 @@ internal fun StocktakingEntryScreen(
             Surface(color = PrimarySoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                        Column(Modifier.weight(1f)) {
-                            Text(product.displayField("name", "商品"), fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
-                            Spacer(Modifier.height(3.dp))
-                            Text("编码：${product.displayField("productCode", "-")}　条码：${product.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
-                        }
+                        Text(
+                            text = product.displayField("name", "商品"),
+                            fontWeight = FontWeight.Bold,
+                            color = Ink,
+                            fontSize = 15.sp,
+                            modifier = Modifier.weight(1f),
+                        )
                         product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let { price ->
+                            Spacer(Modifier.width(8.dp))
                             Text("¥${priceText(price)}", color = Danger, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
+                    Spacer(Modifier.height(3.dp))
+                    Text("编码：${product.displayField("productCode", "-")}　条码：${product.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(6.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(Modifier.height(6.dp))
