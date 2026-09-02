@@ -150,8 +150,17 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun handleCandidateDetected(candidate: String) {
-        // Zero delay: deliver immediately upon valid extraction
-        deliverResult(candidate)
+        // Require 2 consecutive identical frames (~50-100ms) to ensure 100% OCR stability and avoid jitter
+        if (candidate == lastCandidate) {
+            candidateHitCount++
+            if (candidateHitCount >= 2) {
+                deliverResult(candidate)
+            }
+        } else {
+            lastCandidate = candidate
+            candidateHitCount = 1
+            candidateFirstSeenTime = SystemClock.elapsedRealtime()
+        }
     }
 
     override fun onDestroy() {
@@ -255,8 +264,9 @@ class ScannerActivity : ComponentActivity() {
         // Strictly match receipt item rows starting with numbers (e.g. "1. [云南白药]云南白药酊50ml" or "1、连花清瘟胶囊")
         // Delimiters for brand exclude round parentheses (which represent unit specs like (50ml/瓶/盒))
         // Extracts the actual product name AFTER the brand brackets, avoiding non-item brackets like [减配送费]
-        // Pocket marker (e.g. "-----------------1号口袋-----------------", "1号袋", "口袋")
-        private val pocketPattern = Regex("""(?:[0-9一二三四五六七八九十]+\s*号\s*口?\s*袋|口\s*袋)""")
+        // Pocket marker (e.g. "-----------------1号口袋-----------------", "—1号袋—", "1号口袋", "口袋")
+        // Handles surrounding dashed dividers (----), em-dashes (——), underscores, and digit/Chinese prefixes
+        private val pocketPattern = Regex("""(?:[-—_~\s]*[0-9一二三四五六七八九十]*\s*号?\s*口?\s*袋[-—_~\s]*)""")
         // Matches brand bracket delimiters [xx], 【xx】, ［xx］, |xx| and captures product name right after
         private val brandBracketPattern = Regex("""(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|)\s*([\u4e00-\u9fa5]{2,30})""")
         // Matches line starting with item numbering / symbols (1. / l. / I. / 1、 / 一、) and captures product name
