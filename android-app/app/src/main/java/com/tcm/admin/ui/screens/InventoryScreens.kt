@@ -637,26 +637,20 @@ internal fun InventoryScreen(
                                         )
                                     }
                                 }
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.height(3.dp))
                                 Text(
                                     text = "规格：${spec.ifBlank { "-" }}　单位：${unit.ifBlank { "-" }}",
                                     color = Muted,
                                     fontSize = 12.sp,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        text = "厂家：${manufacturer.ifBlank { "-" }}　条码：",
-                                        color = Muted,
-                                        fontSize = 12.sp,
-                                    )
-                                    HighlightedText(
-                                        text = barcode.ifBlank { "无" },
-                                        highlight = query,
-                                        color = Muted,
-                                        fontSize = 12.sp,
-                                    )
-                                }
+                                HighlightedText(
+                                    text = "厂家：${manufacturer.ifBlank { "-" }}　条码：${barcode.ifBlank { "无条码" }}",
+                                    highlight = query,
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                         }
                     }
