@@ -262,10 +262,10 @@ class ScannerActivity : ComponentActivity() {
             }.filter(Char::isDigit).joinToString("")
         }
 
-        // Match brand/tag wrapper with standard brackets [], 【】, ［］ as well as common OCR vertical misrecognitions (|, /, I, l, (, （)
-        private val bracketProductPattern = Regex("(?:[\u005B\u3010\uFF3B|/(\uFF08Il][\u4e00-\u9fa5A-Za-z0-9_\-\s]+[\u005D\u3011\uFF3D|/)\uFF09Il])\\s*([\u4e00-\u9fa5]{2,30})")
-        // Match numbered item lines: e.g. "1. 云南白药酊50ml" or "1、感冒清热颗粒"
-        private val numberedProductPattern = Regex("^\\s*(?:\\d+[\\.、\\s\-]+)(?:[\u005B\u3010\uFF3B|/(\uFF08Il][^\u005D\u3011\uFF3D|/)\uFF09Il]+[\u005D\u3011\uFF3D|/)\uFF09Il]\\s*)?([\u4e00-\u9fa5]{2,30})")
+        // Strictly match receipt item rows starting with numbers (e.g. "1. [云南白药]云南白药酊50ml" or "1、连花清瘟胶囊")
+        // Delimiters for brand exclude round parentheses (which represent unit specs like (50ml/瓶/盒))
+        // Extracts the actual product name AFTER the brand brackets, avoiding non-item brackets like [减配送费]
+        private val itemProductPattern = Regex("^\\s*(?:\\d+[\\.、\\s\-]+)(?:[\u005B\u3010\uFF3B|/Il][^\u005D\u3011\uFF3D|/Il]+[\u005D\u3011\uFF3D|/Il]\\s*)?([\u4e00-\u9fa5]{2,30})")
 
         fun extractSku(text: String): String? {
             if (text.isBlank()) return null
@@ -306,21 +306,12 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Priority 2: Extract Chinese product name following '[xx]', '|xx|', '【xx】' or item numbering (e.g. 1. [云南白药]云南白药酊50ml -> 云南白药酊)
+            // Priority 2: Extract Chinese product name from numbered item rows (e.g. 1. [云南白药]云南白药酊50ml -> 云南白药酊)
             for (line in lines) {
                 if (excludeLinePattern.containsMatchIn(line)) continue
-                // 1. Try bracket/delimiter extraction
-                val bracketMatch = bracketProductPattern.find(line)
-                if (bracketMatch != null) {
-                    val chineseName = bracketMatch.groupValues.getOrNull(1)?.trim()
-                    if (!chineseName.isNullOrBlank() && chineseName.length >= 2) {
-                        return chineseName
-                    }
-                }
-                // 2. Try numbered item line extraction
-                val numberedMatch = numberedProductPattern.find(line)
-                if (numberedMatch != null) {
-                    val chineseName = numberedMatch.groupValues.getOrNull(1)?.trim()
+                val match = itemProductPattern.find(line)
+                if (match != null) {
+                    val chineseName = match.groupValues.getOrNull(1)?.trim()
                     if (!chineseName.isNullOrBlank() && chineseName.length >= 2) {
                         return chineseName
                     }
