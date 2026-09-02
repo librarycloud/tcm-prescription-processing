@@ -29,7 +29,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -65,7 +65,7 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
         if (ocrEnabled) {
-            textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+            textRecognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
         }
         val root = FrameLayout(this)
         previewView = PreviewView(this)
@@ -234,7 +234,7 @@ class ScannerActivity : ComponentActivity() {
 
             // Text hint below frame
             val hint = if (ocrEnabled) {
-                "将条形码、二维码或 SKU 区域对准框内并保持稳定"
+                "将条形码、二维码、SKU 或商品名称对准框内"
             } else {
                 "将条形码或二维码放入框内即可自动扫描"
             }
@@ -262,6 +262,8 @@ class ScannerActivity : ComponentActivity() {
             }.filter(Char::isDigit).joinToString("")
         }
 
+        private val bracketProductPattern = Regex("(?:[\u005B\u3010\uFF3B][^\u005D\u3011\uFF3D]+[\u005D\u3011\uFF3D])\\s*([\u4e00-\u9fa5]{2,30})")
+
         fun extractSku(text: String): String? {
             if (text.isBlank()) return null
             val normalized = text
@@ -270,11 +272,10 @@ class ScannerActivity : ComponentActivity() {
 
             val lines = normalized.split(Regex("[\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
 
-            // Priority 1: Check lines with SKU/5KU/货号 labels
+            // Priority 1: Check lines with SKU / 5KU / 货号 / 编码 labels (e.g. SKU 303827503)
             lines.forEachIndexed { index, line ->
                 val match = skuLabelPattern.find(line)
                 if (match != null) {
-                    // Check remainder of the current line, splitting by spaces / colons
                     val afterLabel = line.substring(match.range.last + 1)
                     val tokens = afterLabel.split(Regex("[\\s:：,，;；|/]+")).filter { it.isNotBlank() }
                     for (token in tokens) {
@@ -283,7 +284,7 @@ class ScannerActivity : ComponentActivity() {
                         if (d.length == 9) return d
                     }
 
-                    // Check up to 3 subsequent lines (to handle multi-column block OCR reading)
+                    // Multi-column or wrapped block OCR reading (up to 3 subsequent lines)
                     for (offset in 1..3) {
                         val nextLine = lines.getOrNull(index + offset) ?: break
                         if (excludeLinePattern.containsMatchIn(nextLine) && !skuLabelPattern.containsMatchIn(nextLine)) {
@@ -302,14 +303,25 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Priority 2: Safe fallback across non-excluded lines without phone / order prefixes
+            // Priority 2: Extract Chinese product name following '[xx]' or '【xx】' (e.g. 1. [云南白药]云南白药酊50ml -> 云南白药酊)
+            for (line in lines) {
+                if (excludeLinePattern.containsMatchIn(line)) continue
+                val match = bracketProductPattern.find(line)
+                if (match != null) {
+                    val chineseName = match.groupValues.getOrNull(1)?.trim()
+                    if (!chineseName.isNullOrBlank() && chineseName.length >= 2) {
+                        return chineseName
+                    }
+                }
+            }
+
+            // Priority 3: Safe fallback across non-excluded lines for standalone 9 digits
             for (line in lines) {
                 if (excludeLinePattern.containsMatchIn(line)) continue
                 val tokens = line.split(Regex("[\\s:：,，;；|/]+")).filter { it.isNotBlank() }
                 for (token in tokens) {
                     if (token.contains("UPC", ignoreCase = true)) continue
                     val d = cleanDigits(token)
-                    // Strict 9 digits (skips 11-digit phone numbers and 13-digit UPCs)
                     if (d.length == 9) return d
                 }
             }
