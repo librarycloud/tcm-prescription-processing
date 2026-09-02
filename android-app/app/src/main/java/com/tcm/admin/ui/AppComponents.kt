@@ -50,6 +50,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
@@ -578,9 +585,13 @@ internal fun SearchBarField(
                         innerTextField()
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val haptic = LocalHapticFeedback.current
                         if (value.isNotEmpty()) {
                             IconButton(
-                                onClick = { onValueChange("") },
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onValueChange("")
+                                },
                                 modifier = Modifier.size(28.dp),
                             ) {
                                 Icon(
@@ -791,6 +802,116 @@ internal fun LoadingButton(
             Text(loadingText, fontSize = 14.sp)
         } else {
             Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+
+@Composable
+internal fun HighlightedText(
+    text: String,
+    highlight: String,
+    modifier: Modifier = Modifier,
+    color: Color = Ink,
+    highlightColor: Color = Primary,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    fontWeight: FontWeight = FontWeight.Normal,
+    highlightFontWeight: FontWeight = FontWeight.Bold,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+) {
+    val annotatedString = remember(text, highlight, color, highlightColor, fontWeight, highlightFontWeight) {
+        val trimmedHighlight = highlight.trim()
+        if (trimmedHighlight.isEmpty()) {
+            androidx.compose.ui.text.AnnotatedString(text, androidx.compose.ui.text.SpanStyle(color = color, fontWeight = fontWeight))
+        } else {
+            androidx.compose.ui.text.buildAnnotatedString {
+                var currentIndex = 0
+                val lowerText = text.lowercase()
+                val lowerHighlight = trimmedHighlight.lowercase()
+                while (currentIndex < text.length) {
+                    val matchIndex = lowerText.indexOf(lowerHighlight, currentIndex)
+                    if (matchIndex < 0) {
+                        append(text.substring(currentIndex))
+                        break
+                    }
+                    if (matchIndex > currentIndex) {
+                        append(text.substring(currentIndex, matchIndex))
+                    }
+                    withStyle(androidx.compose.ui.text.SpanStyle(color = highlightColor, fontWeight = highlightFontWeight)) {
+                        append(text.substring(matchIndex, matchIndex + lowerHighlight.length))
+                    }
+                    currentIndex = matchIndex + lowerHighlight.length
+                }
+            }
+        }
+    }
+    Text(
+        text = annotatedString,
+        modifier = modifier,
+        fontSize = fontSize,
+        color = color,
+        fontWeight = fontWeight,
+        maxLines = maxLines,
+        overflow = overflow,
+    )
+}
+
+@Composable
+internal fun RecentSearchChipsRow(
+    history: List<String>,
+    onSelect: (String) -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (history.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "最近搜索",
+                color = Muted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(
+                    Icons.Default.Clear,
+                    contentDescription = "清空历史",
+                    tint = Muted,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            history.forEach { item ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.clickable { onSelect(item) },
+                ) {
+                    Text(
+                        text = item,
+                        color = Ink,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+            }
         }
     }
 }

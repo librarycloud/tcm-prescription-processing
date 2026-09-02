@@ -49,6 +49,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,6 +87,26 @@ internal fun InventoryScreen(
     var restoreListScroll by remember { mutableStateOf(false) }
     var lastAutoSearchQuery by rememberRetainedListValue(listOwner, "lastAutoSearchQuery") { query.trim() }
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val prefs = remember(context) { context.getSharedPreferences("inventory_search_prefs", android.content.Context.MODE_PRIVATE) }
+    var searchHistory by remember {
+        mutableStateOf(
+            prefs.getString("history", "")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+        )
+    }
+
+    fun addSearchHistory(term: String) {
+        val t = term.trim()
+        if (t.isBlank()) return
+        val updated = (listOf(t) + searchHistory.filter { it != t }).take(8)
+        searchHistory = updated
+        prefs.edit().putString("history", updated.joinToString(",")).apply()
+    }
+
+    fun clearSearchHistory() {
+        searchHistory = emptyList()
+        prefs.edit().remove("history").apply()
+    }
 
     fun clearSearchResults() {
         searchRequest++
@@ -103,6 +125,7 @@ internal fun InventoryScreen(
             clearSearchResults()
             return
         }
+        addSearchHistory(query)
         page = 1
         lastAutoSearchQuery = query.trim()
         searchRequest++
@@ -125,7 +148,9 @@ internal fun InventoryScreen(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             query = value
+            addSearchHistory(value)
             page = 1
             lastAutoSearchQuery = value
             searchRequest++
@@ -246,6 +271,22 @@ internal fun InventoryScreen(
             },
         )
 
+        // Recent Search History (shown when query is empty & not viewing a detail)
+        if (query.isBlank() && selectedProduct == null && searchHistory.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            RecentSearchChipsRow(
+                history = searchHistory,
+                onSelect = { term ->
+                    query = term
+                    addSearchHistory(term)
+                    page = 1
+                    lastAutoSearchQuery = term
+                    searchRequest++
+                },
+                onClear = ::clearSearchHistory,
+            )
+        }
+
         // Store Chips
         if (showStore && stores.size > 1) {
             Spacer(Modifier.height(10.dp))
@@ -346,9 +387,9 @@ internal fun InventoryScreen(
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -371,7 +412,7 @@ internal fun InventoryScreen(
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
-                Spacer(Modifier.height(5.dp))
+                Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -393,7 +434,24 @@ internal fun InventoryScreen(
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
-                InfoRowItem("生产厂商", product.displayField("manufacturer"))
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "生产厂商",
+                        color = Muted,
+                        fontSize = 11.sp,
+                    )
+                    Text(
+                        text = product.displayField("manufacturer").ifBlank { "-" },
+                        color = Muted,
+                        fontSize = 11.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    )
+                }
 
                 Spacer(Modifier.height(10.dp))
 
@@ -516,7 +574,42 @@ internal fun InventoryScreen(
         if (selectedProduct == null && !loading) {
             if (products != null) {
                 if (products!!.isEmpty()) {
-                    AppEmptyState("暂无匹配商品，请更换搜索词或重扫条码")
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AppEmptyState(
+                            message = "未找到与 \"$query\" 匹配的商品",
+                            icon = Icons.Default.Search,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    scannerLauncher.launch(
+                                        Intent(context, ScannerActivity::class.java)
+                                            .putExtra(ScannerActivity.EXTRA_ENABLE_SKU_OCR, true),
+                                    )
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("重新扫描", fontSize = 13.sp)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    query = ""
+                                    clearSearchResults()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("清空搜索", fontSize = 13.sp)
+                            }
+                        }
+                    }
                 } else {
                     SectionHeader(
                         title = "匹配商品",
@@ -543,8 +636,9 @@ internal fun InventoryScreen(
                                 verticalAlignment = Alignment.Top,
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(
+                                    HighlightedText(
                                         text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
+                                        highlight = query,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
                                         color = Ink,
@@ -555,11 +649,19 @@ internal fun InventoryScreen(
                                         color = Muted,
                                         fontSize = 12.sp,
                                     )
-                                    Text(
-                                        text = "厂家：${manufacturer.ifBlank { "-" }}　条码：${barcode.ifBlank { "无" }}",
-                                        color = Muted,
-                                        fontSize = 12.sp,
-                                    )
+                                    Row {
+                                        Text(
+                                            text = "厂家：${manufacturer.ifBlank { "-" }}　条码：",
+                                            color = Muted,
+                                            fontSize = 12.sp,
+                                        )
+                                        HighlightedText(
+                                            text = barcode.ifBlank { "无" },
+                                            highlight = query,
+                                            color = Muted,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
                                 }
                                 if (!retailPrice.isNullOrBlank()) {
                                     Text(
