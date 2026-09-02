@@ -225,28 +225,51 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-        private val skuLabelPattern = Regex("(?i)SKU")
+        private val skuLabelPattern = Regex("(?i)\\bSKU\\b")
+        private val nineDigitPattern = Regex("(?<![0-9])([0-9]{9})(?![0-9])")
 
         fun extractSku(text: String): String? {
             val normalized = text
                 .replace('\u00A0', ' ')
                 .replace('\u3000', ' ')
-            val lines = normalized.split(Regex("[\\r\\n]+"))
-            fun digitsOnly(value: String): String = value
-                .map { when (it) { 'O', 'o' -> '0'; 'I', 'l' -> '1'; else -> it } }
+
+            fun normalizeDigits(value: String): String = value
+                .map { when (it) { 'O', 'o' -> '0'; 'I', 'l', '|' -> '1'; else -> it } }
                 .filter(Char::isDigit)
                 .joinToString("")
 
-            // On printed receipts OCR commonly returns "SKU" and its value as
-            // separate lines. Read the label line and the immediately following
-            // line, taking only the first nine digits.
+            val lines = normalized.split(Regex("[\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
+
+            // 1. Check line containing SKU and subsequent lines (up to 3 lines down)
             lines.forEachIndexed { index, line ->
                 if (skuLabelPattern.containsMatchIn(line)) {
                     val afterLabel = line.substringAfter(skuLabelPattern.find(line)?.value ?: "", "")
-                    val candidate = digitsOnly(afterLabel) + lines.getOrNull(index + 1).orEmpty().let(::digitsOnly)
-                    if (candidate.length >= 9) return candidate.take(9)
+                    val lineDigits = normalizeDigits(afterLabel)
+                    val direct9 = nineDigitPattern.find(lineDigits)?.groupValues?.getOrNull(1)
+                    if (direct9 != null) return direct9
+                    if (lineDigits.length >= 9) return lineDigits.take(9)
+
+                    var accumulated = lineDigits
+                    for (offset in 1..3) {
+                        val nextLine = lines.getOrNull(index + offset) ?: break
+                        val nextDigits = normalizeDigits(nextLine)
+                        val next9 = nineDigitPattern.find(nextDigits)?.groupValues?.getOrNull(1)
+                        if (next9 != null) return next9
+
+                        accumulated += nextDigits
+                        val acc9 = nineDigitPattern.find(accumulated)?.groupValues?.getOrNull(1)
+                        if (acc9 != null) return acc9
+                        if (accumulated.length >= 9) return accumulated.take(9)
+                    }
                 }
             }
+
+            // 2. Fallback: Search for any standalone 9-digit number across the entire recognition result
+            val tokens = normalized.split(Regex("\\s+")).map { token ->
+                val cleaned = normalizeDigits(token)
+                if (cleaned.length == 9) cleaned else token
+            }
+            nineDigitPattern.find(tokens.joinToString(" "))?.groupValues?.getOrNull(1)?.let { return it }
 
             return null
         }
