@@ -330,12 +330,6 @@ internal fun InventoryScreen(
                             fontWeight = FontWeight.Bold,
                             color = Ink,
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "编码：${product.displayField("productCode")}",
-                            color = Muted,
-                            fontSize = 12.sp,
-                        )
                     }
                     if (!retailPrice.isNullOrBlank()) {
                         Text(
@@ -351,9 +345,49 @@ internal fun InventoryScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(Modifier.height(8.dp))
 
-                InfoRowItem("条形码", product.displayField("barcode"))
-                InfoRowItem("规格", product.displayField("specification"))
-                InfoRowItem("单位", unit.ifBlank { "-" })
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "编码：${product.displayField("productCode")}",
+                        modifier = Modifier.weight(1f),
+                        color = Muted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = "条形码：${product.displayField("barcode").ifBlank { "-" }}",
+                        modifier = Modifier.weight(1f),
+                        color = Muted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "规格：${product.displayField("specification").ifBlank { "-" }}",
+                        modifier = Modifier.weight(1f),
+                        color = Muted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = "单位：${unit.ifBlank { "-" }}",
+                        modifier = Modifier.weight(1f),
+                        color = Muted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    )
+                }
                 InfoRowItem("生产厂商", product.displayField("manufacturer"))
 
                 Spacer(Modifier.height(10.dp))
