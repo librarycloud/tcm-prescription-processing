@@ -150,18 +150,8 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun handleCandidateDetected(candidate: String) {
-        val now = SystemClock.elapsedRealtime()
-        if (candidate == lastCandidate) {
-            candidateHitCount++
-            // Responsive confirmation: confirmed after 2 consecutive identical frames OR held steady for >= 150ms
-            if (candidateHitCount >= 2 || (now - candidateFirstSeenTime >= STABLE_HOLD_MS)) {
-                deliverResult(candidate)
-            }
-        } else {
-            lastCandidate = candidate
-            candidateHitCount = 1
-            candidateFirstSeenTime = now
-        }
+        // Zero delay: deliver immediately upon valid extraction
+        deliverResult(candidate)
     }
 
     override fun onDestroy() {
@@ -269,8 +259,8 @@ class ScannerActivity : ComponentActivity() {
         private val pocketPattern = Regex("""(?:[0-9一二三四五六七八九十]+\s*号\s*口?\s*袋|口\s*袋)""")
         // Matches brand bracket delimiters [xx], 【xx】, ［xx］, |xx| and captures product name right after
         private val brandBracketPattern = Regex("""(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|)\s*([\u4e00-\u9fa5]{2,30})""")
-        // Matches line starting with optional item numbering / symbols (1. / l. / I. / 一、) and captures product name
-        private val numberedOrPureProductPattern = Regex("""^(?:[0-9a-zA-Z一二三四五六七八九十]+[.、\s\-_|/]+)?\s*(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|\s*)?([\u4e00-\u9fa5]{2,30})""")
+        // Matches line starting with item numbering / symbols (1. / l. / I. / 1、 / 一、) and captures product name
+        private val numberedProductPattern = Regex("""^(?:[0-9a-zA-Z一二三四五六七八九十]+[.、\s\-_|/]+)\s*(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|\s*)?([\u4e00-\u9fa5]{2,30})""")
 
         fun extractSku(text: String): String? {
             if (text.isBlank()) return null
@@ -311,7 +301,20 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Priority 2: Extract Chinese product name directly under "口袋" section (e.g. "1号口袋" -> "1. [云南白药]云南白药酊50ml" -> "云南白药酊")
+            // Priority 2: Extract Chinese product name following brand brackets anywhere (e.g. "1. [云南白药]云南白药酊50ml" or "[云南白药]云南白药酊" -> "云南白药酊")
+            for (line in lines) {
+                if (excludeLinePattern.containsMatchIn(line)) continue
+                if (line.startsWith("/") || line.startsWith("(") || line.startsWith("（")) continue
+                val brandMatch = brandBracketPattern.find(line)
+                if (brandMatch != null) {
+                    val name = brandMatch.groupValues.getOrNull(1)?.trim()
+                    if (!name.isNullOrBlank() && name.length >= 2) {
+                        return name
+                    }
+                }
+            }
+
+            // Priority 3: Extract Chinese product name under "口袋" section if present
             val pocketIndex = lines.indexOfFirst { pocketPattern.containsMatchIn(it) }
             if (pocketIndex != -1) {
                 for (offset in 1..5) {
@@ -320,17 +323,7 @@ class ScannerActivity : ComponentActivity() {
                     if (nextLine.contains("sku", ignoreCase = true) || nextLine.contains("upc", ignoreCase = true)) continue
                     if (nextLine.startsWith("/") || nextLine.startsWith("(") || nextLine.startsWith("（")) continue
 
-                    // 1. Try bracketed brand (e.g. [云南白药]云南白药酊50ml or |云南白药|云南白药酊)
-                    val brandMatch = brandBracketPattern.find(nextLine)
-                    if (brandMatch != null) {
-                        val name = brandMatch.groupValues.getOrNull(1)?.trim()
-                        if (!name.isNullOrBlank() && name.length >= 2) {
-                            return name
-                        }
-                    }
-
-                    // 2. Try numbered or pure product name (e.g. 1. 云南白药酊 or l. 云南白药酊)
-                    val productMatch = numberedOrPureProductPattern.find(nextLine)
+                    val productMatch = numberedProductPattern.find(nextLine)
                     if (productMatch != null) {
                         val name = productMatch.groupValues.getOrNull(1)?.trim()
                         if (!name.isNullOrBlank() && name.length >= 2) {
@@ -340,7 +333,20 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Priority 3: Safe fallback across non-excluded lines for standalone 9 digits
+            // Priority 4: Numbered product item line across non-excluded lines (e.g. "1. 连花清瘟胶囊 24粒" -> "连花清瘟胶囊")
+            for (line in lines) {
+                if (excludeLinePattern.containsMatchIn(line)) continue
+                if (line.startsWith("/") || line.startsWith("(") || line.startsWith("（")) continue
+                val productMatch = numberedProductPattern.find(line)
+                if (productMatch != null) {
+                    val name = productMatch.groupValues.getOrNull(1)?.trim()
+                    if (!name.isNullOrBlank() && name.length >= 2) {
+                        return name
+                    }
+                }
+            }
+
+            // Priority 5: Safe fallback across non-excluded lines for standalone 9 digits
             for (line in lines) {
                 if (excludeLinePattern.containsMatchIn(line)) continue
                 val tokens = line.split(Regex("[\\s:：,，;；|/]+")).filter { it.isNotBlank() }
