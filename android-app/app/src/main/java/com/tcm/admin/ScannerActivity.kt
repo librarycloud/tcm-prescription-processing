@@ -265,7 +265,7 @@ class ScannerActivity : ComponentActivity() {
         // Strictly match receipt item rows starting with numbers (e.g. "1. [云南白药]云南白药酊50ml" or "1、连花清瘟胶囊")
         // Delimiters for brand exclude round parentheses (which represent unit specs like (50ml/瓶/盒))
         // Extracts the actual product name AFTER the brand brackets, avoiding non-item brackets like [减配送费]
-        private val itemProductPattern = Regex("^\\s*(?:\\d+[\\.、\\s\-]+)(?:[\u005B\u3010\uFF3B|/Il][^\u005D\u3011\uFF3D|/Il]+[\u005D\u3011\uFF3D|/Il]\\s*)?([\u4e00-\u9fa5]{2,30})")
+        private val itemProductPattern = Regex("""^\s*(?:\d+[.、\s-]+)(?:[\[\u3010\uFF3B|/Il][^\]\u3011\uFF3D|/Il]+[\]\u3011\uFF3D|/Il]\s*)?([\u4e00-\u9fa5]{2,30})""")
 
         fun extractSku(text: String): String? {
             if (text.isBlank()) return null

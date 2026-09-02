@@ -105,6 +105,7 @@ androidComponents {
                 "**/libbarhopper_v3.so",
                 "**/libimage_processing_util_jni.so",
                 "**/libsurface_util_jni.so",
+                "**/libmlkit_google_ocr_pipeline.so",
             ),
         )
     }
