@@ -26,6 +26,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
@@ -119,8 +120,12 @@ class ScannerActivity : ComponentActivity() {
                 }
                 val barcodeTask = scanner.process(image)
                     .addOnSuccessListener { barcodes ->
-                        val value = barcodes.firstOrNull()?.rawValue
-                        if (!value.isNullOrBlank()) deliverResult(value)
+                        barcodes.firstOrNull()?.let { barcode ->
+                            val value = barcode.rawValue
+                            if (!value.isNullOrBlank()) {
+                                handleBarcodeDetected(value, barcode.format)
+                            }
+                        }
                     }
                     .addOnCompleteListener { taskFinished() }
 
@@ -150,7 +155,7 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun handleCandidateDetected(candidate: String) {
-        // Require 2 consecutive identical frames (~50-100ms) to ensure 100% OCR stability and avoid jitter
+        // Require two identical reads before returning OCR or one-dimensional barcode values.
         if (candidate == lastCandidate) {
             candidateHitCount++
             if (candidateHitCount >= 2) {
@@ -160,6 +165,14 @@ class ScannerActivity : ComponentActivity() {
             lastCandidate = candidate
             candidateHitCount = 1
             candidateFirstSeenTime = SystemClock.elapsedRealtime()
+        }
+    }
+
+    private fun handleBarcodeDetected(value: String, format: Int) {
+        if (format == Barcode.FORMAT_QR_CODE) {
+            deliverResult(value)
+        } else {
+            handleCandidateDetected(value)
         }
     }
 
