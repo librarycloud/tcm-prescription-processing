@@ -391,7 +391,6 @@ internal fun InventoryScreen(
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
-                Spacer(Modifier.height(1.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -412,7 +411,6 @@ internal fun InventoryScreen(
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
-                Spacer(Modifier.height(1.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

@@ -435,6 +435,7 @@ internal fun SegmentedButton(
 @Composable
 internal fun AppCard(
     modifier: Modifier = Modifier,
+    paddingValues: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 9.dp),
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -446,7 +447,7 @@ internal fun AppCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(paddingValues),
             content = content,
         )
     }
