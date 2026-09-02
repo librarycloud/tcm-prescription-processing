@@ -11,6 +11,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -41,6 +42,12 @@ class ScannerActivity : ComponentActivity() {
     private var textRecognizer: TextRecognizer? = null
     private val ocrInFlight = AtomicBoolean(false)
     private lateinit var previewView: PreviewView
+
+    @Volatile
+    private var lastCandidate: String? = null
+    @Volatile
+    private var candidateFirstSeenTime: Long = 0L
+    private val STABLE_HOLD_MS = 500L
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -115,15 +122,16 @@ class ScannerActivity : ComponentActivity() {
                     }
                     .addOnCompleteListener { taskFinished() }
 
-                // Run OCR independently of barcode scanning. Printed SKU labels are
-                // not barcodes, and waiting for barcode processing made recognition
-                // noticeably slower on some devices.
+                // Run OCR independently of barcode scanning.
                 if (ocrEnabled) {
                     val recognizer = textRecognizer
                     if (recognizer != null && ocrInFlight.compareAndSet(false, true)) {
                         recognizer.process(image)
                             .addOnSuccessListener { text ->
-                                extractSku(text.text)?.let(::deliverResult)
+                                val sku = extractSku(text.text)
+                                if (sku != null) {
+                                    handleCandidateDetected(sku)
+                                }
                             }
                             .addOnCompleteListener {
                                 ocrInFlight.set(false)
@@ -137,6 +145,19 @@ class ScannerActivity : ComponentActivity() {
             provider.unbindAll()
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun handleCandidateDetected(candidate: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (candidate == lastCandidate) {
+            // Require candidate to remain steady in the camera view for at least 0.5s (500ms)
+            if (now - candidateFirstSeenTime >= STABLE_HOLD_MS) {
+                deliverResult(candidate)
+            }
+        } else {
+            lastCandidate = candidate
+            candidateFirstSeenTime = now
+        }
     }
 
     override fun onDestroy() {
@@ -198,22 +219,18 @@ class ScannerActivity : ComponentActivity() {
             canvas.drawRoundRect(boxRect, 16f, 16f, transparentPaint)
 
             // Draw 4 corner highlights
-            // Top-Left
             canvas.drawLine(left, top + cornerLength, left, top, cornerPaint)
             canvas.drawLine(left, top, left + cornerLength, top, cornerPaint)
-            // Top-Right
             canvas.drawLine(right - cornerLength, top, right, top, cornerPaint)
             canvas.drawLine(right, top, right, top + cornerLength, cornerPaint)
-            // Bottom-Left
             canvas.drawLine(left, bottom - cornerLength, left, bottom, cornerPaint)
             canvas.drawLine(left, bottom, left + cornerLength, bottom, cornerPaint)
-            // Bottom-Right
             canvas.drawLine(right - cornerLength, bottom, right, bottom, cornerPaint)
             canvas.drawLine(right, bottom, right, bottom - cornerLength, cornerPaint)
 
             // Text hint below frame
             val hint = if (ocrEnabled) {
-                "将条形码、二维码或 SKU 文字放入框内"
+                "将条形码、二维码或 SKU 区域对准框内并保持稳定"
             } else {
                 "将条形码或二维码放入框内即可自动扫描"
             }
@@ -227,6 +244,7 @@ class ScannerActivity : ComponentActivity() {
 
         private val skuLabelPattern = Regex("(?i)\\bSKU\\b")
         private val nineDigitPattern = Regex("(?<![0-9])([0-9]{9})(?![0-9])")
+        private val excludeLinePattern = Regex("(?:电话|手机|虚拟|备用|订单|下单|时间|配送|原价|付款|编号|口袋|总数|减配送)")
 
         fun extractSku(text: String): String? {
             val normalized = text
@@ -234,42 +252,51 @@ class ScannerActivity : ComponentActivity() {
                 .replace('\u3000', ' ')
 
             fun normalizeDigits(value: String): String = value
-                .map { when (it) { 'O', 'o' -> '0'; 'I', 'l', '|' -> '1'; else -> it } }
+                .map { when (it) { 'O', 'o' -> '0'; 'I', 'l', '|' -> '1'; 'S', 's' -> '5'; 'B', 'b' -> '8'; else -> it } }
                 .filter(Char::isDigit)
                 .joinToString("")
 
             val lines = normalized.split(Regex("[\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
 
-            // 1. Check line containing SKU and subsequent lines (up to 3 lines down)
+            // Strictly locate the SKU label and search within its row or immediately succeeding rows
             lines.forEachIndexed { index, line ->
                 if (skuLabelPattern.containsMatchIn(line)) {
+                    // Check remainder of the SKU line
                     val afterLabel = line.substringAfter(skuLabelPattern.find(line)?.value ?: "", "")
                     val lineDigits = normalizeDigits(afterLabel)
                     val direct9 = nineDigitPattern.find(lineDigits)?.groupValues?.getOrNull(1)
                     if (direct9 != null) return direct9
-                    if (lineDigits.length >= 9) return lineDigits.take(9)
+                    if (lineDigits.length == 9) return lineDigits
 
+                    // Check up to 3 subsequent lines (to handle multi-column block OCR reading)
                     var accumulated = lineDigits
                     for (offset in 1..3) {
                         val nextLine = lines.getOrNull(index + offset) ?: break
+                        // Stop if hitting unrelated phone/order/price sections
+                        if (excludeLinePattern.containsMatchIn(nextLine) && !skuLabelPattern.containsMatchIn(nextLine)) {
+                            break
+                        }
+                        // Skip standalone "UPC" label
+                        if (nextLine.matches(Regex("(?i)^\\s*UPC\\s*$"))) {
+                            continue
+                        }
+                        // Ignore lines that are explicitly UPC numbers
+                        if (nextLine.contains("UPC", ignoreCase = true)) {
+                            continue
+                        }
+
                         val nextDigits = normalizeDigits(nextLine)
                         val next9 = nineDigitPattern.find(nextDigits)?.groupValues?.getOrNull(1)
                         if (next9 != null) return next9
+                        if (nextDigits.length == 9) return nextDigits
 
                         accumulated += nextDigits
                         val acc9 = nineDigitPattern.find(accumulated)?.groupValues?.getOrNull(1)
                         if (acc9 != null) return acc9
-                        if (accumulated.length >= 9) return accumulated.take(9)
+                        if (accumulated.length == 9) return accumulated
                     }
                 }
             }
-
-            // 2. Fallback: Search for any standalone 9-digit number across the entire recognition result
-            val tokens = normalized.split(Regex("\\s+")).map { token ->
-                val cleaned = normalizeDigits(token)
-                if (cleaned.length == 9) cleaned else token
-            }
-            nineDigitPattern.find(tokens.joinToString(" "))?.groupValues?.getOrNull(1)?.let { return it }
 
             return null
         }
