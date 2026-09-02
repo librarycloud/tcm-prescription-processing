@@ -265,7 +265,12 @@ class ScannerActivity : ComponentActivity() {
         // Strictly match receipt item rows starting with numbers (e.g. "1. [云南白药]云南白药酊50ml" or "1、连花清瘟胶囊")
         // Delimiters for brand exclude round parentheses (which represent unit specs like (50ml/瓶/盒))
         // Extracts the actual product name AFTER the brand brackets, avoiding non-item brackets like [减配送费]
-        private val itemProductPattern = Regex("""^\s*(?:\d+[.、\s-]+)(?:[\[\u3010\uFF3B|/Il][^\]\u3011\uFF3D|/Il]+[\]\u3011\uFF3D|/Il]\s*)?([\u4e00-\u9fa5]{2,30})""")
+        // Pocket marker (e.g. "-----------------1号口袋-----------------", "1号袋", "口袋")
+        private val pocketPattern = Regex("""(?:[0-9一二三四五六七八九十]+\s*号\s*口?\s*袋|口\s*袋)""")
+        // Matches brand bracket delimiters [xx], 【xx】, ［xx］, |xx| and captures product name right after
+        private val brandBracketPattern = Regex("""(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|)\s*([\u4e00-\u9fa5]{2,30})""")
+        // Matches line starting with optional item numbering / symbols (1. / l. / I. / 一、) and captures product name
+        private val numberedOrPureProductPattern = Regex("""^(?:[0-9a-zA-Z一二三四五六七八九十]+[.、\s\-_|/]+)?\s*(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|\s*)?([\u4e00-\u9fa5]{2,30})""")
 
         fun extractSku(text: String): String? {
             if (text.isBlank()) return null
@@ -306,14 +311,31 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Priority 2: Extract Chinese product name from numbered item rows (e.g. 1. [云南白药]云南白药酊50ml -> 云南白药酊)
-            for (line in lines) {
-                if (excludeLinePattern.containsMatchIn(line)) continue
-                val match = itemProductPattern.find(line)
-                if (match != null) {
-                    val chineseName = match.groupValues.getOrNull(1)?.trim()
-                    if (!chineseName.isNullOrBlank() && chineseName.length >= 2) {
-                        return chineseName
+            // Priority 2: Extract Chinese product name directly under "口袋" section (e.g. "1号口袋" -> "1. [云南白药]云南白药酊50ml" -> "云南白药酊")
+            val pocketIndex = lines.indexOfFirst { pocketPattern.containsMatchIn(it) }
+            if (pocketIndex != -1) {
+                for (offset in 1..5) {
+                    val nextLine = lines.getOrNull(pocketIndex + offset) ?: break
+                    if (excludeLinePattern.containsMatchIn(nextLine)) break
+                    if (nextLine.contains("sku", ignoreCase = true) || nextLine.contains("upc", ignoreCase = true)) continue
+                    if (nextLine.startsWith("/") || nextLine.startsWith("(") || nextLine.startsWith("（")) continue
+
+                    // 1. Try bracketed brand (e.g. [云南白药]云南白药酊50ml or |云南白药|云南白药酊)
+                    val brandMatch = brandBracketPattern.find(nextLine)
+                    if (brandMatch != null) {
+                        val name = brandMatch.groupValues.getOrNull(1)?.trim()
+                        if (!name.isNullOrBlank() && name.length >= 2) {
+                            return name
+                        }
+                    }
+
+                    // 2. Try numbered or pure product name (e.g. 1. 云南白药酊 or l. 云南白药酊)
+                    val productMatch = numberedOrPureProductPattern.find(nextLine)
+                    if (productMatch != null) {
+                        val name = productMatch.groupValues.getOrNull(1)?.trim()
+                        if (!name.isNullOrBlank() && name.length >= 2) {
+                            return name
+                        }
                     }
                 }
             }

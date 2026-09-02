@@ -163,44 +163,20 @@ internal fun Modifier.trackFocusedBounds(): Modifier {
 internal fun Modifier.dismissKeyboardOnTap(): Modifier {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val activeInputBounds = LocalActiveInputBounds.current
-    var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    val nestedScrollConnection = remember(focusManager, keyboardController, activeInputBounds) {
+    val nestedScrollConnection = remember(focusManager, keyboardController) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.UserInput && (available.x.absoluteValue > 0.5f || available.y.absoluteValue > 0.5f)) {
+                if (source == NestedScrollSource.UserInput && (available.x.absoluteValue > 1.5f || available.y.absoluteValue > 1.5f)) {
                     keyboardController?.hide()
                     focusManager.clearFocus(force = false)
-                    activeInputBounds.value = null
                 }
                 return Offset.Zero
             }
         }
     }
 
-    return this
-        .onGloballyPositioned { coords -> containerCoordinates = coords }
-        .nestedScroll(nestedScrollConnection)
-        .pointerInput(focusManager, keyboardController, activeInputBounds) {
-            awaitEachGesture {
-                val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                val targetBounds = activeInputBounds.value
-                if (targetBounds != null) {
-                    val coords = containerCoordinates
-                    val downInRoot = if (coords != null && coords.isAttached) {
-                        coords.localToRoot(down.position)
-                    } else {
-                        down.position
-                    }
-                    if (!targetBounds.contains(downInRoot)) {
-                        keyboardController?.hide()
-                        focusManager.clearFocus(force = false)
-                        activeInputBounds.value = null
-                    }
-                }
-            }
-        }
+    return this.nestedScroll(nestedScrollConnection)
 }
 
 // ==================== Color Palette ====================

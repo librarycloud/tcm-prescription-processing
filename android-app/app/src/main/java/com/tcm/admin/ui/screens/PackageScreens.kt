@@ -28,6 +28,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SwapVert
@@ -554,6 +556,7 @@ internal fun PackageFormScreen(
     onSaved: () -> Unit,
 ) {
     val isEdit = initial != null && initial.id > 0
+    val context = androidx.compose.ui.platform.LocalContext.current
     var itemName by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
     var itemInfo by remember(initial) { mutableStateOf(initial?.info.orEmpty()) }
     var receiverName by remember(initial) { mutableStateOf(initial?.customer.orEmpty()) }
@@ -563,6 +566,13 @@ internal fun PackageFormScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val expressScannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            tracking = extractExpressTrackingNo(value)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -641,6 +651,14 @@ internal fun PackageFormScreen(
                     value = tracking,
                     onValueChange = { tracking = it },
                     label = { Text("快递单号 *") },
+                    placeholder = { Text("输入或扫描快递单号") },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            expressScannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        }) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = "扫描快递单号", tint = Primary)
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = FieldShape,
@@ -700,6 +718,7 @@ internal fun PackageVerifyScreen(
     initialCode: String,
     onVerified: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var signedQrContent by remember(initialCode) {
         mutableStateOf(initialCode.takeIf { it.startsWith("TCM:PICKUP:1:") })
     }
@@ -713,6 +732,13 @@ internal fun PackageVerifyScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val expressScannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            tracking = extractExpressTrackingNo(value)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -759,6 +785,14 @@ internal fun PackageVerifyScreen(
                     value = tracking,
                     onValueChange = { tracking = it },
                     label = { Text("快递单号 *") },
+                    placeholder = { Text("输入或扫描快递单号") },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            expressScannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        }) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = "扫描快递单号", tint = Primary)
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = FieldShape,
@@ -799,4 +833,27 @@ internal fun PackageVerifyScreen(
 
         Spacer(Modifier.height(16.dp))
     }
+}
+
+
+/** 提取快递单号（支持顺丰等主流快递条码、二维码 URL 及标准单号文本） */
+internal fun extractExpressTrackingNo(raw: String): String {
+    val text = raw.trim()
+    if (text.isBlank()) return ""
+    // 匹配 SF 开头的单号（例如 SF1432567890123、SF-123456789012、包含在URL中等）
+    val sfMatch = Regex("(?i)(?:SF|sf)[\\s-]*([0-9]{10,16})").find(text)
+    if (sfMatch != null) {
+        return "SF" + sfMatch.groupValues[1]
+    }
+    // 匹配 12-15 位纯数字顺丰或快递单号（包括从网址或二维码参数中提取）
+    val digitsMatch = Regex("(?<!\\d)(\\d{12,16})(?!\\d)").find(text)
+    if (digitsMatch != null) {
+        return digitsMatch.groupValues[1]
+    }
+    // 去除空格和短横线后的连续字母数字（>=10位）
+    val cleaned = text.replace(Regex("[\\s-]+"), "")
+    if (cleaned.length >= 10 && cleaned.all { it.isLetterOrDigit() }) {
+        return cleaned
+    }
+    return text
 }
