@@ -797,7 +797,7 @@ private fun MainShell(
             },
             containerColor = PageBackground,
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            Box(Modifier.fillMaxSize().padding(padding).dismissKeyboardOnTap()) {
                 content()
                 ScrollToTopButton(
                     scrollState = scrollState,
@@ -870,7 +870,7 @@ private fun DetailShell(
         },
         containerColor = PageBackground,
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).dismissKeyboardOnTap()) {
             content()
             ScrollToTopButton(
                 scrollState = scrollState,

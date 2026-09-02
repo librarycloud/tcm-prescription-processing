@@ -56,6 +56,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -101,6 +105,20 @@ internal fun shouldAutoSearchQuery(value: String): Boolean {
     val digitCount = text.count(Char::isDigit)
     val hasLatinLetter = text.any { it in 'a'..'z' || it in 'A'..'Z' }
     return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
+}
+
+@Composable
+internal fun Modifier.dismissKeyboardOnTap(): Modifier {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    return pointerInput(focusManager, keyboardController) {
+        detectTapGestures(
+            onTap = {
+                focusManager.clearFocus(force = false)
+                keyboardController?.hide()
+            },
+        )
+    }
 }
 
 // ==================== Color Palette ====================
@@ -425,6 +443,7 @@ internal fun SearchBarField(
     modifier: Modifier = Modifier,
     onScan: (() -> Unit)? = null,
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -440,7 +459,10 @@ internal fun SearchBarField(
             textStyle = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, color = Ink),
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            keyboardActions = KeyboardActions(onSearch = {
+                keyboardController?.hide()
+                onSearch()
+            }),
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { innerTextField ->
                 Row(
@@ -449,7 +471,10 @@ internal fun SearchBarField(
                 ) {
                     if (onScan != null) {
                         IconButton(
-                            onClick = { onScan.invoke() },
+                            onClick = {
+                                keyboardController?.hide()
+                                onScan.invoke()
+                            },
                             modifier = Modifier.size(36.dp),
                         ) {
                             Icon(
@@ -492,7 +517,10 @@ internal fun SearchBarField(
                             }
                         }
                         IconButton(
-                            onClick = onSearch,
+                            onClick = {
+                                keyboardController?.hide()
+                                onSearch()
+                            },
                             modifier = Modifier.size(36.dp),
                         ) {
                             Icon(
