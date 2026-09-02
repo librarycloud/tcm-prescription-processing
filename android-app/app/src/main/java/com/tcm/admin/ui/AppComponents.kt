@@ -60,6 +60,23 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlin.math.absoluteValue
+
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -107,18 +124,76 @@ internal fun shouldAutoSearchQuery(value: String): Boolean {
     return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
 }
 
+val LocalActiveInputBounds = compositionLocalOf { mutableStateOf<Rect?>(null) }
+
+@Composable
+internal fun Modifier.trackFocusedBounds(): Modifier {
+    val activeInputBounds = LocalActiveInputBounds.current
+    var isFocused by remember { mutableStateOf(false) }
+    var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    return this
+        .onFocusChanged { state ->
+            isFocused = state.isFocused
+            if (isFocused) {
+                layoutCoordinates?.let { coords ->
+                    if (coords.isAttached) {
+                        activeInputBounds.value = coords.boundsInRoot()
+                    }
+                }
+            } else {
+                activeInputBounds.value = null
+            }
+        }
+        .onGloballyPositioned { coords ->
+            layoutCoordinates = coords
+            if (isFocused && coords.isAttached) {
+                activeInputBounds.value = coords.boundsInRoot()
+            }
+        }
+}
+
 @Composable
 internal fun Modifier.dismissKeyboardOnTap(): Modifier {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    return pointerInput(focusManager, keyboardController) {
-        detectTapGestures(
-            onTap = {
-                focusManager.clearFocus(force = false)
-                keyboardController?.hide()
-            },
-        )
+    val activeInputBounds = LocalActiveInputBounds.current
+    var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    val nestedScrollConnection = remember(focusManager, keyboardController, activeInputBounds) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && (available.x.absoluteValue > 0.5f || available.y.absoluteValue > 0.5f)) {
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = false)
+                    activeInputBounds.value = null
+                }
+                return Offset.Zero
+            }
+        }
     }
+
+    return this
+        .onGloballyPositioned { coords -> containerCoordinates = coords }
+        .nestedScroll(nestedScrollConnection)
+        .pointerInput(focusManager, keyboardController, activeInputBounds) {
+            awaitEachGesture {
+                val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                val targetBounds = activeInputBounds.value
+                if (targetBounds != null) {
+                    val coords = containerCoordinates
+                    val downInRoot = if (coords != null && coords.isAttached) {
+                        coords.localToRoot(down.position)
+                    } else {
+                        down.position
+                    }
+                    if (!targetBounds.contains(downInRoot)) {
+                        keyboardController?.hide()
+                        focusManager.clearFocus(force = false)
+                        activeInputBounds.value = null
+                    }
+                }
+            }
+        }
 }
 
 // ==================== Color Palette ====================
@@ -463,7 +538,7 @@ internal fun SearchBarField(
                 keyboardController?.hide()
                 onSearch()
             }),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().trackFocusedBounds(),
             decorationBox = { innerTextField ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
