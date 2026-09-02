@@ -225,8 +225,8 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-        // Match the printed label format: "SKU      xxxxxxxxx".
-        private val skuPattern = Regex("(?i)\\bSKU\\s+([A-Z0-9][A-Z0-9_-]{3,31})\\b")
+        // Match the printed label format: "SKU      123456789".
+        private val skuPattern = Regex("(?i)\\bSKU\\s+([0-9]{9})(?![0-9])\\b")
 
         fun extractSku(text: String): String? {
             val normalized = text
