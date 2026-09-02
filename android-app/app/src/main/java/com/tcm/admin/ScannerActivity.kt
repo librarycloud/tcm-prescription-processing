@@ -225,19 +225,35 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-        // Match the printed label format: "SKU      123456789".
-        private val skuPattern = Regex("(?i)\\bSKU\\s+([0-9]{9})(?![0-9])\\b")
+        private val skuLabelPattern = Regex("(?i)SKU")
+        private val skuDigitsPattern = Regex("(?<![0-9])(?:[0-9OIl][\\s-]*){9}(?![0-9])")
 
         fun extractSku(text: String): String? {
             val normalized = text
                 .replace('\u00A0', ' ')
                 .replace('\u3000', ' ')
                 .replace(Regex("[\\r\\n]+"), " ")
-            return skuPattern.find(normalized)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
+            // OCR may collapse/insert spaces in the printed code, so locate the
+            // SKU label first and then accept exactly nine digits nearby.
+            skuLabelPattern.findAll(normalized).forEach { label ->
+                val tailStart = label.range.last + 1
+                val tailEnd = (tailStart + 80).coerceAtMost(normalized.length)
+                if (tailStart >= tailEnd) return@forEach
+                val digits = skuDigitsPattern.find(normalized.substring(tailStart, tailEnd))
+                    ?.value
+                    ?.map { when (it) { 'O', 'o' -> '0'; 'I', 'l' -> '1'; else -> it } }
+                    ?.filter(Char::isDigit)
+                    ?.joinToString("")
+                if (digits?.length == 9) return digits
+            }
+            // Some OCR engines omit the literal "SKU" label entirely.
+            skuDigitsPattern.find(normalized)?.value
+                ?.map { when (it) { 'O', 'o' -> '0'; 'I', 'l' -> '1'; else -> it } }
+                ?.filter(Char::isDigit)
+                ?.joinToString("")
+                ?.takeIf { it.length == 9 }
+                ?.let { return it }
+            return null
         }
     }
 }
