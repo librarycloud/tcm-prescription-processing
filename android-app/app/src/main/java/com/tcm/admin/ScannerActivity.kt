@@ -31,6 +31,7 @@ import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class ScannerActivity : ComponentActivity() {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
@@ -38,6 +39,7 @@ class ScannerActivity : ComponentActivity() {
     private val scanner = BarcodeScanning.getClient()
     private var ocrEnabled = false
     private var textRecognizer: TextRecognizer? = null
+    private val ocrInFlight = AtomicBoolean(false)
     private lateinit var previewView: PreviewView
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -102,27 +104,34 @@ class ScannerActivity : ComponentActivity() {
                     if (frameClosed.compareAndSet(false, true)) proxy.close()
                 }
                 val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
+                val tasksRemaining = AtomicInteger(if (ocrEnabled) 2 else 1)
+                fun taskFinished() {
+                    if (tasksRemaining.decrementAndGet() == 0) closeFrame()
+                }
                 val barcodeTask = scanner.process(image)
-                barcodeTask
                     .addOnSuccessListener { barcodes ->
                         val value = barcodes.firstOrNull()?.rawValue
                         if (!value.isNullOrBlank()) deliverResult(value)
                     }
+                    .addOnCompleteListener { taskFinished() }
+
+                // Run OCR independently of barcode scanning. Printed SKU labels are
+                // not barcodes, and waiting for barcode processing made recognition
+                // noticeably slower on some devices.
                 if (ocrEnabled) {
-                    barcodeTask.addOnCompleteListener {
-                        if (delivered.get()) {
-                            closeFrame()
-                        } else {
-                            textRecognizer?.process(image)
-                                ?.addOnSuccessListener { text ->
-                                    extractSku(text.text)?.let(::deliverResult)
-                                }
-                                ?.addOnCompleteListener { closeFrame() }
-                                ?: closeFrame()
-                        }
+                    val recognizer = textRecognizer
+                    if (recognizer != null && ocrInFlight.compareAndSet(false, true)) {
+                        recognizer.process(image)
+                            .addOnSuccessListener { text ->
+                                extractSku(text.text)?.let(::deliverResult)
+                            }
+                            .addOnCompleteListener {
+                                ocrInFlight.set(false)
+                                taskFinished()
+                            }
+                    } else {
+                        taskFinished()
                     }
-                } else {
-                    barcodeTask.addOnCompleteListener { closeFrame() }
                 }
             }
             provider.unbindAll()
@@ -216,14 +225,18 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-        // OCR only accepts the label's exact SKU format: "SKU " followed by 9 digits.
-        private val skuPattern = Regex("(?i)\\bSKU ([0-9]{9})(?![0-9])\\b")
+        // Match the printed label format: "SKU      xxxxxxxxx".
+        private val skuPattern = Regex("(?i)\\bSKU\\s+([A-Z0-9][A-Z0-9_-]{3,31})\\b")
 
         fun extractSku(text: String): String? {
-            return skuPattern.find(text)
+            val normalized = text
+                .replace('\u00A0', ' ')
+                .replace('\u3000', ' ')
+                .replace(Regex("[\\r\\n]+"), " ")
+            return skuPattern.find(normalized)
                 ?.groupValues
                 ?.getOrNull(1)
-                ?.filter(Char::isDigit)
+                ?.trim()
                 ?.takeIf { it.isNotBlank() }
         }
     }
