@@ -378,21 +378,20 @@ internal fun InventoryScreen(
                 ) {
                     Text(
                         text = "编码：${product.displayField("productCode")}",
-                        modifier = Modifier.weight(1f),
                         color = Muted,
                         fontSize = 11.sp,
                         maxLines = 1,
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "条形码：${product.displayField("barcode").ifBlank { "-" }}",
-                        modifier = Modifier.weight(1f),
+                        text = "条码：${product.displayField("barcode").ifBlank { "-" }}",
                         color = Muted,
                         fontSize = 11.sp,
                         maxLines = 1,
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(1.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -400,21 +399,20 @@ internal fun InventoryScreen(
                 ) {
                     Text(
                         text = "规格：${product.displayField("specification").ifBlank { "-" }}",
-                        modifier = Modifier.weight(1f),
                         color = Muted,
                         fontSize = 11.sp,
                         maxLines = 1,
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = "单位：${unit.ifBlank { "-" }}",
-                        modifier = Modifier.weight(1f),
                         color = Muted,
                         fontSize = 11.sp,
                         maxLines = 1,
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(1.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -425,10 +423,12 @@ internal fun InventoryScreen(
                         color = Muted,
                         fontSize = 11.sp,
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = product.displayField("manufacturer").ifBlank { "-" },
                         color = Muted,
                         fontSize = 11.sp,
+                        maxLines = 1,
                         textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     )
                 }
@@ -486,7 +486,7 @@ internal fun InventoryScreen(
                 val expiringSoon = inventoryExpiryWarning(expDate)
                 val inDate = inventoryDate(item, "inboundDate", "receivedAt")
 
-                AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
+                AppCard(modifier = Modifier.padding(bottom = 6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -530,10 +530,12 @@ internal fun InventoryScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text("生产", color = Muted, fontSize = 9.sp)
+                            Spacer(Modifier.height(2.dp))
                             Text(prodDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
                         }
                         Column(Modifier.weight(1f)) {
                             Text("有效期", color = Muted, fontSize = 9.sp)
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 expDate.ifBlank { "-" },
                                 color = if (expiringSoon) Danger else Muted,
@@ -543,6 +545,7 @@ internal fun InventoryScreen(
                         }
                         Column(Modifier.weight(1f)) {
                             Text("入库", color = Muted, fontSize = 9.sp)
+                            Spacer(Modifier.height(2.dp))
                             Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
                         }
                     }
