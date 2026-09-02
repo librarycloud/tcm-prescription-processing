@@ -238,7 +238,12 @@ internal fun InventoryScreen(
             },
             placeholder = "输入商品名称、编码或条码",
             onSearch = ::searchInventory,
-            onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+            onScan = {
+                scannerLauncher.launch(
+                    Intent(context, ScannerActivity::class.java)
+                        .putExtra(ScannerActivity.EXTRA_ENABLE_SKU_OCR, true),
+                )
+            },
         )
 
         // Store Chips

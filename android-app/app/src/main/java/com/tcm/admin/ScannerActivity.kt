@@ -16,7 +16,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.View
 import android.widget.FrameLayout
-import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -27,6 +26,9 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -34,6 +36,8 @@ class ScannerActivity : ComponentActivity() {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val delivered = AtomicBoolean(false)
     private val scanner = BarcodeScanning.getClient()
+    private var ocrEnabled = false
+    private var textRecognizer: TextRecognizer? = null
     private lateinit var previewView: PreviewView
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -48,11 +52,15 @@ class ScannerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
+        if (ocrEnabled) {
+            textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        }
         val root = FrameLayout(this)
         previewView = PreviewView(this)
         root.addView(previewView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        val overlay = ScannerOverlayView(this)
+        val overlay = ScannerOverlayView(this, ocrEnabled)
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         setContentView(root)
@@ -89,16 +97,33 @@ class ScannerActivity : ComponentActivity() {
                     proxy.close()
                     return@setAnalyzer
                 }
-                scanner.process(InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees))
+                val frameClosed = AtomicBoolean(false)
+                fun closeFrame() {
+                    if (frameClosed.compareAndSet(false, true)) proxy.close()
+                }
+                val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
+                val barcodeTask = scanner.process(image)
+                barcodeTask
                     .addOnSuccessListener { barcodes ->
                         val value = barcodes.firstOrNull()?.rawValue
-                        if (!value.isNullOrBlank() && delivered.compareAndSet(false, true)) {
-                            triggerVibration()
-                            setResult(RESULT_OK, Intent().putExtra(SCAN_RESULT, value))
-                            finish()
+                        if (!value.isNullOrBlank()) deliverResult(value)
+                    }
+                if (ocrEnabled) {
+                    barcodeTask.addOnCompleteListener {
+                        if (delivered.get()) {
+                            closeFrame()
+                        } else {
+                            textRecognizer?.process(image)
+                                ?.addOnSuccessListener { text ->
+                                    extractSku(text.text)?.let(::deliverResult)
+                                }
+                                ?.addOnCompleteListener { closeFrame() }
+                                ?: closeFrame()
                         }
                     }
-                    .addOnCompleteListener { proxy.close() }
+                } else {
+                    barcodeTask.addOnCompleteListener { closeFrame() }
+                }
             }
             provider.unbindAll()
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
@@ -107,11 +132,20 @@ class ScannerActivity : ComponentActivity() {
 
     override fun onDestroy() {
         scanner.close()
+        textRecognizer?.close()
         cameraExecutor.shutdown()
         super.onDestroy()
     }
 
-    private class ScannerOverlayView(context: Context) : View(context) {
+    private fun deliverResult(value: String) {
+        if (delivered.compareAndSet(false, true)) {
+            triggerVibration()
+            setResult(RESULT_OK, Intent().putExtra(SCAN_RESULT, value))
+            finish()
+        }
+    }
+
+    private class ScannerOverlayView(context: Context, private val ocrEnabled: Boolean) : View(context) {
         private val maskPaint = Paint().apply {
             color = 0x88000000.toInt()
         }
@@ -169,11 +203,27 @@ class ScannerActivity : ComponentActivity() {
             canvas.drawLine(right, bottom, right, bottom - cornerLength, cornerPaint)
 
             // Text hint below frame
-            canvas.drawText("将条形码或二维码放入框内即可自动扫描", width / 2f, bottom + 70f, textPaint)
+            val hint = if (ocrEnabled) {
+                "将条形码、二维码或 SKU 文字放入框内"
+            } else {
+                "将条形码或二维码放入框内即可自动扫描"
+            }
+            canvas.drawText(hint, width / 2f, bottom + 70f, textPaint)
         }
     }
 
     companion object {
         const val SCAN_RESULT = "scan_result"
+        const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
+
+        private val skuPattern = Regex("(?i)\\bSKU\\s+([0-9]+)\\b")
+
+        fun extractSku(text: String): String? {
+            return skuPattern.find(text)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.isNotBlank() }
+        }
     }
 }
