@@ -150,10 +150,7 @@ class ScannerActivity : ComponentActivity() {
         }
     }
 
-    @Volatile
-    private var lastCandidate: String? = null
-    @Volatile
-    private var candidateHitCount: Int = 0
+    private val candidateHitWindow = java.util.Collections.synchronizedList(mutableListOf<Pair<String, Long>>())
     private var lastLoggedOcrText: String? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -522,8 +519,14 @@ class ScannerActivity : ComponentActivity() {
         providerFuture.addListener({
             val provider = providerFuture.get()
             cameraProvider = provider
-            val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
-            val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
+            val preview = Preview.Builder()
+                .setTargetResolution(android.util.Size(1280, 720))
+                .build()
+                .also { it.surfaceProvider = previewView.surfaceProvider }
+            val analysis = ImageAnalysis.Builder()
+                .setTargetResolution(android.util.Size(1280, 720))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
             analysis.setAnalyzer(cameraExecutor) { proxy ->
                 val mediaImage = proxy.image
                 if (mediaImage == null || delivered.get() || isRecognitionPaused) {
@@ -659,6 +662,16 @@ class ScannerActivity : ComponentActivity() {
             }
             provider.unbindAll()
             currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            currentCamera?.let { cam ->
+                previewView.post {
+                    val factory = previewView.meteringPointFactory
+                    val centerPoint = factory.createPoint(previewView.width / 2f, previewView.height / 2f)
+                    val action = FocusMeteringAction.Builder(centerPoint, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                        .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    cam.cameraControl.startFocusAndMetering(action)
+                }
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -668,16 +681,15 @@ class ScannerActivity : ComponentActivity() {
             return
         }
         if (delivered.get()) return
-        // 2 consecutive matching frames confirmation to prevent transient OCR flicker
-        val requiredHits = 2
-        if (candidate == lastCandidate) {
-            candidateHitCount++
-            if (candidateHitCount >= requiredHits) {
+
+        val now = System.currentTimeMillis()
+        synchronized(candidateHitWindow) {
+            candidateHitWindow.removeAll { now - it.second > 1500L }
+            candidateHitWindow.add(candidate to now)
+            val hits = candidateHitWindow.count { it.first == candidate }
+            if (hits >= 2) {
                 deliverResult(candidate)
             }
-        } else {
-            lastCandidate = candidate
-            candidateHitCount = 1
         }
     }
 
@@ -699,6 +711,7 @@ class ScannerActivity : ComponentActivity() {
         debugPauseBtn = null
         overlayView = null
         ocrLogHistory.clear()
+        candidateHitWindow.clear()
         super.onDestroy()
     }
 
@@ -797,19 +810,30 @@ class ScannerActivity : ComponentActivity() {
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
         // SKU Patterns
+        // SKU prefix pattern supporting:
+        // SKU, SHU, SU, 5KU, 5HU, 5U, S0, SK0, SH0, SK, SH, KU, HU,
+        // with dots/dashes/spaces e.g. S.K.U, S-K-U, S/K/U, S H U, S U,
+        // and Chinese labels: 商品编码, 编码, 货号, 物料号
+        private const val SKU_PREFIX_RAW =
+            """(?:[S5$][\s.\-_/]*[KHXkhx]?[\s.\-_/]*[U0OVuv]?|[KHXkhx][\s.\-_/]*[U0OVuv]|(?:商品)?编码|货号|物料[号码]?)"""
+
         private val skuLabelRegex = Regex(
-            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0|S\s*K|K\s*U)(?:[^a-zA-Z0-9]|$)"""
+            """(?i)(?:^|[^a-zA-Z0-9\u4e00-\u9fa5])$SKU_PREFIX_RAW(?::|：|#|\s|$)"""
         )
         private val multilineSkuRegex = Regex(
-            """(?i)(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0|S\s*K|K\s*U)[\s:：#\-_/|]*([0-9OolILsSbB|\s\-_]{9,20})"""
+            """(?i)$SKU_PREFIX_RAW[\s:：#\-_/|]*([0-9A-Za-z|!〇\s.\-_]{8,24})"""
         )
-        private val candidate9Pattern = Regex("""(?<!\d)[0-9OolILsSbB|]{9}(?!\d)""")
+        private val candidate9Pattern = Regex(
+            """(?<![a-zA-Z0-9])[0-9OolILsSbBaArRcCzZgGqQtTDd|!〇]{9}(?![a-zA-Z0-9])"""
+        )
         private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
 
         // Exclusion pattern for lines containing irrelevant text/numbers (UPC, barcodes, phones, orders, dates, amounts, etc.)
         private val excludeLinePattern = Regex(
             """(?i)(?:UPC|条码|条形码|EAN|手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水|原价|已付款)"""
         )
+
+        private val tokenCharPattern = Regex("""(?<=[0-9A-Za-z|!〇])\s+(?=[0-9A-Za-z|!〇])""")
 
         private fun isInsideScanBox(itemRect: RectF, scanBox: RectF): Boolean {
             val cx = itemRect.centerX()
@@ -819,13 +843,19 @@ class ScannerActivity : ComponentActivity() {
         }
 
         internal fun cleanDigits(token: String): String {
-            return token.map {
-                when (it) {
-                    'O', 'o' -> '0'
-                    'I', 'l', '|' -> '1'
-                    'S', 's' -> '5'
-                    'B', 'b' -> '8'
-                    else -> it
+            return token.map { c ->
+                when (c) {
+                    'O', 'o', 'C', 'c', 'D', 'd', 'Q', 'q', '〇' -> '0'
+                    'I', 'l', '|', 'i', '!', 'J', 'j' -> '1'
+                    'Z', 'z' -> '2'
+                    'E' -> '3'
+                    'A', 'a' -> '4'
+                    'S', 's', '$' -> '5'
+                    'b', 'G' -> '6'
+                    'T', 't' -> '7'
+                    'B', 'R', 'r' -> '8'
+                    'g', 'q' -> '9'
+                    else -> c
                 }
             }.filter(Char::isDigit).joinToString("")
         }
@@ -834,6 +864,7 @@ class ScannerActivity : ComponentActivity() {
             return text.map { char ->
                 when (char) {
                     '\u3000', '\u00A0' -> ' '
+                    '〇' -> '0'
                     in '０'..'９' -> ('0'.code + (char.code - '０'.code)).toChar()
                     in 'Ａ'..'Ｚ' -> ('A'.code + (char.code - 'Ａ'.code)).toChar()
                     in 'ａ'..'ｚ' -> ('a'.code + (char.code - 'ａ'.code)).toChar()
@@ -940,8 +971,8 @@ class ScannerActivity : ComponentActivity() {
                 val row = logicalRows[i]
                 if (row.isExcluded) continue
 
-                // Normalize spaces between digits on the row (e.g. "303 827 503" -> "303827503")
-                val collapsed = row.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                // Normalize spaces between alphanumerics/digits on the row (e.g. "303 A27 503" -> "303A27503")
+                val collapsed = row.text.replace(tokenCharPattern, "")
 
                 // 1.1 Regex match on row text
                 multilineSkuRegex.findAll(collapsed).forEach { match ->
@@ -969,7 +1000,7 @@ class ScannerActivity : ComponentActivity() {
                     for (offset in 1..2) {
                         val nextRow = logicalRows.getOrNull(i + offset) ?: break
                         if (nextRow.isExcluded) continue
-                        val nextCollapsed = nextRow.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                        val nextCollapsed = nextRow.text.replace(tokenCharPattern, "")
                         val nextCleaned = cleanDigits(nextCollapsed)
                         if (nextCleaned.length == 9) {
                             skuCandidates.add(CandidateResult(nextCleaned, kotlin.math.abs(nextRow.centerY - boxCenterY)))
@@ -988,7 +1019,7 @@ class ScannerActivity : ComponentActivity() {
             // 1.3 Combined text regex
             if (skuCandidates.isEmpty()) {
                 val combinedText = logicalRows.filter { !it.isExcluded }.joinToString("\n") {
-                    it.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                    it.text.replace(tokenCharPattern, "")
                 }
                 multilineSkuRegex.findAll(combinedText).forEach { match ->
                     val cleaned = cleanDigits(match.groupValues[1])
@@ -1002,7 +1033,7 @@ class ScannerActivity : ComponentActivity() {
             if (skuCandidates.isEmpty()) {
                 for (row in logicalRows) {
                     if (row.isExcluded) continue
-                    val collapsed = row.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                    val collapsed = row.text.replace(tokenCharPattern, "")
                     if (Regex("""\d{10,}""").containsMatchIn(collapsed)) continue
                     for (match in standalone9Pattern.findAll(collapsed)) {
                         skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(row.centerY - boxCenterY)))
@@ -1041,7 +1072,7 @@ class ScannerActivity : ComponentActivity() {
             if (rawText.isNullOrBlank()) return null
             val normalized = normalizeOcrText(rawText)
             val lines = normalized.split(Regex("[\\r\\n]+"))
-                .map { it.trim().replace(Regex("""(?<=\d)\s+(?=\d)"""), "") }
+                .map { it.trim().replace(tokenCharPattern, "") }
                 .filter { it.isNotEmpty() }
 
             // 1. SKU with label
