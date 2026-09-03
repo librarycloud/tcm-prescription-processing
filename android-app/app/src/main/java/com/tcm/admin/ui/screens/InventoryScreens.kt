@@ -69,9 +69,10 @@ import java.time.LocalDate
 internal fun InventoryScreen(
     user: JSONObject?,
     initialQuery: String = "",
+    scanRequestId: Long = 0L,
     scrollState: ScrollState,
 ) {
-    val listOwner = "inventory:$initialQuery"
+    val listOwner = "inventory:$initialQuery:$scanRequestId"
     val showStore = user?.optInt("role", -1) == 0
     var query by rememberRetainedListValue(listOwner, "query") { initialQuery }
     var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }

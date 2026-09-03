@@ -120,7 +120,7 @@ internal sealed class ScreenTarget {
     object ProfileDetail : ScreenTarget()
     object Settings : ScreenTarget()
     object About : ScreenTarget()
-    data class Inventory(val initialQuery: String = "") : ScreenTarget()
+    data class Inventory(val initialQuery: String = "", val scanRequestId: Long = 0L) : ScreenTarget()
     object Stocktaking : ScreenTarget()
     data class StocktakingDetail(val checkId: Int) : ScreenTarget()
     object Differences : ScreenTarget()
@@ -447,6 +447,7 @@ private fun TcmAdminApp() {
                     InventoryScreen(
                         user = session?.user,
                         initialQuery = currentScreen.initialQuery,
+                        scanRequestId = currentScreen.scanRequestId,
                         scrollState = inventoryScrollState,
                     )
                 }
@@ -695,7 +696,7 @@ private fun MainShell(
             if (value.startsWith("TCM:PICKUP:1:")) {
                 onNavigate(ScreenTarget.PackageVerify(value))
             } else {
-                onNavigate(ScreenTarget.Inventory(value))
+                onNavigate(ScreenTarget.Inventory(value, System.nanoTime()))
             }
         }
     }

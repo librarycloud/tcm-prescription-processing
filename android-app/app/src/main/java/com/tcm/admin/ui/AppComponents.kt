@@ -868,19 +868,15 @@ internal fun RecentSearchChipsRow(
             }
         }
         Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             history.forEach { item ->
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.clickable { onSelect(item) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(item) },
                 ) {
                     Text(
                         text = item,
