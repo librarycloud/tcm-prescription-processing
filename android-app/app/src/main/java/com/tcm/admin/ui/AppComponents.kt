@@ -72,6 +72,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import kotlin.math.absoluteValue
 
 import java.time.Instant
@@ -142,9 +152,9 @@ internal fun Modifier.dismissKeyboardOnTap(): Modifier {
         .nestedScroll(nestedScrollConnection)
         .pointerInput(Unit) {
             awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                if (up != null) {
+                awaitFirstDown(pass = PointerEventPass.Final)
+                val up = waitForUpOrCancellation(pass = PointerEventPass.Final)
+                if (up != null && !up.isConsumed) {
                     keyboardController?.hide()
                     focusManager.clearFocus(force = false)
                 }

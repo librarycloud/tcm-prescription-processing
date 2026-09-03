@@ -52,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +93,8 @@ internal fun InventoryScreen(
     var restoreListScroll by remember { mutableStateOf(false) }
     var lastAutoSearchQuery by rememberRetainedListValue(listOwner, "lastAutoSearchQuery") { query.trim() }
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val haptic = LocalHapticFeedback.current
     val prefs = remember(context) { context.getSharedPreferences("inventory_search_prefs", android.content.Context.MODE_PRIVATE) }
     var searchHistory by remember {
@@ -293,6 +297,8 @@ internal fun InventoryScreen(
             RecentSearchChipsRow(
                 history = searchHistory,
                 onSelect = { term ->
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = false)
                     query = term
                     addSearchHistory(term)
                     page = 1
@@ -310,7 +316,9 @@ internal fun InventoryScreen(
                 stores = stores,
                 selectedStoreId = selectedStoreId,
                 onSelectStore = { id ->
-                selectedStoreId = id
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = false)
+                    selectedStoreId = id
                     page = 1
                     if (query.isNotBlank()) searchRequest++
                 },
@@ -618,6 +626,8 @@ internal fun InventoryScreen(
                         AppCard(
                             modifier = Modifier.padding(bottom = 10.dp),
                             onClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = false)
                                 listScrollPosition = scrollState.value
                                 selectedProduct = product
                             },
