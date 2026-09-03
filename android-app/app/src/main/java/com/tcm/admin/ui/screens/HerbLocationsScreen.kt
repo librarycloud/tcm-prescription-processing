@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -60,7 +65,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Stable
-internal class HerbsListState(val scrollState: ScrollState) {
+internal class HerbsListState(
+    val scrollState: ScrollState,
+    val lazyListState: LazyListState = LazyListState(),
+) {
     var stores by mutableStateOf<List<JSONObject>>(emptyList())
     var selectedStoreId by mutableStateOf<String?>(null)
     var data by mutableStateOf<JSONObject?>(null)
@@ -80,7 +88,8 @@ internal class HerbsListState(val scrollState: ScrollState) {
 @Composable
 internal fun rememberHerbsListState(): HerbsListState {
     val scrollState = rememberScrollState()
-    return remember { HerbsListState(scrollState) }
+    val lazyListState = rememberLazyListState()
+    return remember { HerbsListState(scrollState, lazyListState) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -156,192 +165,200 @@ internal fun HerbsScreen(
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(listState.scrollState)
-            .padding(16.dp),
+    LazyColumn(
+        state = listState.lazyListState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                SectionHeader("斗谱管理", "中药斗谱布局与货位药材维护")
-            }
-            Spacer(Modifier.width(10.dp))
-            Button(
-                onClick = {
-                    onNavigate(ScreenTarget.HerbLocationAssign(JSONObject(), selectedStoreId?.toIntOrNull()))
-                },
-                shape = FieldShape,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+        item(key = "header") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("配置药材", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Column(Modifier.weight(1f)) {
+                    SectionHeader("斗谱管理", "中药斗谱布局与货位药材维护")
+                }
+                Spacer(Modifier.width(10.dp))
+                Button(
+                    onClick = {
+                        onNavigate(ScreenTarget.HerbLocationAssign(JSONObject(), selectedStoreId?.toIntOrNull()))
+                    },
+                    shape = FieldShape,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) {
+                    Text("配置药材", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
-        }
 
-        Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(14.dp))
 
-        // Store Chips
-        if (showStore && stores.size > 1) {
-            StoreChipsRow(
-                stores = stores,
-                selectedStoreId = selectedStoreId.orEmpty(),
-                onSelectStore = { selectedStoreId = it.ifBlank { null } },
+            // Store Chips
+            if (showStore && stores.size > 1) {
+                StoreChipsRow(
+                    stores = stores,
+                    selectedStoreId = selectedStoreId.orEmpty(),
+                    onSelectStore = { selectedStoreId = it.ifBlank { null } },
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // Search bar
+            SearchBarField(
+                value = keyword,
+                onValueChange = { keyword = it; if (it.isBlank()) reload++ },
+                placeholder = "搜索药材名称、拼音或位置编码",
+                onSearch = { lastAutoKeyword = keyword.trim(); reload++ },
             )
+
             Spacer(Modifier.height(10.dp))
+
+            // Type filter chips
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("" to "全部区域", "D" to "药斗", "G" to "药柜", "F" to "冰箱", "C" to "仓库").forEach { (key, label) ->
+                    SegmentedButton(label, type == key, onClick = { type = key })
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
         }
 
-        // Search bar
-        SearchBarField(
-            value = keyword,
-            onValueChange = { keyword = it; if (it.isBlank()) reload++ },
-            placeholder = "搜索药材名称、拼音或位置编码",
-            onSearch = { lastAutoKeyword = keyword.trim(); reload++ },
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        // Type filter chips
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            listOf("" to "全部区域", "D" to "药斗", "G" to "药柜", "F" to "冰箱", "C" to "仓库").forEach { (key, label) ->
-                SegmentedButton(label, type == key, onClick = { type = key })
+        if (data == null && error == null) {
+            item(key = "loading") {
+                AppEmptyState("加载斗谱数据中...")
             }
         }
-
-        Spacer(Modifier.height(14.dp))
-
-        if (data == null && error == null) AppEmptyState("加载斗谱数据中...")
-        if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
+        if (error != null) {
+            item(key = "error") {
+                Text(error!!, color = Danger, fontSize = 13.sp)
+                Spacer(Modifier.height(10.dp))
+            }
+        }
 
         data?.let { root ->
             val units = root.optJSONArray("units") ?: JSONArray()
             if (units.length() == 0) {
-                AppEmptyState("未找到匹配的货位数据")
-            }
+                item(key = "empty") {
+                    AppEmptyState("未找到匹配的货位数据")
+                }
+            } else {
+                items(units.length(), key = { idx ->
+                    val u = units.getJSONObject(idx)
+                    "${u.optString("unitNo")}_${u.optString("type")}_$idx"
+                }) { uIndex ->
+                    val unit = units.getJSONObject(uIndex)
+                    val unitNo = unit.displayField("unitNo")
+                    val unitType = unit.displayField("type")
+                    val locations = unit.optJSONArray("locations") ?: JSONArray()
 
-            (0 until units.length()).forEach { uIndex ->
-                val unit = units.getJSONObject(uIndex)
-                val unitNo = unit.displayField("unitNo")
-                val unitType = unit.displayField("type")
-                val locations = unit.optJSONArray("locations") ?: JSONArray()
-
-                AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = PrimarySoft,
-                                shape = RoundedCornerShape(6.dp),
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Default.Inventory,
-                                        contentDescription = null,
-                                        tint = Primary,
-                                        modifier = Modifier.size(16.dp),
-                                    )
+                    AppCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = PrimarySoft,
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Inventory,
+                                            contentDescription = null,
+                                            tint = Primary,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
                                 }
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "${locationTypeLabel(unitType)} $unitNo 组",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Ink,
+                                )
                             }
-                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "${locationTypeLabel(unitType)} $unitNo 组",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = Ink,
+                                text = "${locations.length()} 个货位",
+                                color = Muted,
+                                fontSize = 12.sp,
                             )
                         }
-                        Text(
-                            text = "共 ${locations.length()} 个位置",
-                            color = Muted,
-                            fontSize = 12.sp,
-                        )
-                    }
 
-                    Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(8.dp))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        (0 until locations.length()).forEach { lIndex ->
-                            val loc = locations.getJSONObject(lIndex)
-                            val herbs = loc.optJSONArray("herbs") ?: JSONArray()
-                            val code = loc.displayField("code")
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
-                                    },
-                                shape = FieldShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                border = BorderStroke(1.dp, CardBorderColor),
-                            ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            (0 until locations.length()).chunked(2).forEach { rowIndices ->
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            SearchHighlightedText(
-                                                text = code,
-                                                keyword = keyword,
-                                                modifier = Modifier.weight(1f),
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 13.sp,
-                                                color = Ink,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.surface,
-                                                shape = RoundedCornerShape(5.dp),
-                                                border = BorderStroke(1.dp, Primary.copy(alpha = 0.35f)),
-                                            ) {
-                                                SearchHighlightedText(
-                                                    text = positionLabel(loc),
-                                                    keyword = keyword,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                                    color = PrimaryDark,
-                                                    fontSize = 10.sp,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
+                                    rowIndices.forEach { locIndex ->
+                                        val loc = locations.getJSONObject(locIndex)
+                                        val herbs = loc.optJSONArray("herbs") ?: JSONArray()
+                                        Surface(
+                                            color = CardBackground,
+                                            shape = RoundedCornerShape(6.dp),
+                                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                                            modifier = Modifier.weight(1f).clickable {
+                                                onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
+                                            },
+                                        ) {
+                                            Column(Modifier.padding(8.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    Surface(
+                                                        color = PrimarySoft,
+                                                        shape = RoundedCornerShape(4.dp),
+                                                    ) {
+                                                        SearchHighlightedText(
+                                                            text = loc.displayField("locationCode"),
+                                                            keyword = keyword,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                            color = PrimaryDark,
+                                                            fontSize = 10.sp,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(Modifier.height(3.dp))
+                                                Text(
+                                                    text = locationTypeLabel(loc.displayField("type")),
+                                                    color = Muted,
+                                                    fontSize = 11.sp,
                                                 )
+                                                Spacer(Modifier.height(2.dp))
+                                                if (herbs.length() == 0) {
+                                                    Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
+                                                } else {
+                                                    Text(
+                                                        text = buildAnnotatedString {
+                                                            (0 until herbs.length()).forEach { index ->
+                                                                if (index > 0) append("、")
+                                                                val name = herbs.getJSONObject(index).displayField("name")
+                                                                append(searchHighlightedText(name, keyword, Primary.copy(alpha = 0.28f), PrimaryDark, matchPinyin = true))
+                                                            }
+                                                        },
+                                                        color = RegularText,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                    )
+                                                }
                                             }
                                         }
-                                        Spacer(Modifier.height(3.dp))
-                                        Text(
-                                            text = locationTypeLabel(loc.displayField("type")),
-                                            color = Muted,
-                                            fontSize = 11.sp,
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                        if (herbs.length() == 0) {
-                                            Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
-                                        } else {
-                                            Text(
-                                                text = buildAnnotatedString {
-                                                    (0 until herbs.length()).forEach { index ->
-                                                        if (index > 0) append("、")
-                                                        val name = herbs.getJSONObject(index).displayField("name")
-                                                        append(searchHighlightedText(name, keyword, Primary.copy(alpha = 0.28f), PrimaryDark, matchPinyin = true))
-                                                    }
-                                                },
-                                                color = RegularText,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                            )
-                                        }
                                     }
-
+                                    if (rowIndices.size == 1) {
+                                        Spacer(Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -350,7 +367,9 @@ internal fun HerbsScreen(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        item(key = "spacer_bottom") {
+            Spacer(Modifier.height(16.dp))
+        }
     }
     }
 }

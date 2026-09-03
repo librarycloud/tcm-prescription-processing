@@ -41,7 +41,16 @@ object ApiClient {
     private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
     private var token: String? = null
     private var cacheContext: Context? = null
-    private val memoryCache = ConcurrentHashMap<String, String>()
+    private data class CacheEntry(val route: String, val savedAt: Long, val data: String)
+    private val memoryCache = object : LinkedHashMap<String, CacheEntry>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry>?): Boolean {
+            return size > 64
+        }
+    }
+
+    private fun cacheDir(context: Context): File {
+        return File(context.cacheDir, "api_response_cache").apply { if (!exists()) mkdirs() }
+    }
 
     // Use short TTLs for operational data and a longer TTL for stable references.
     private fun cacheTtlMillis(path: String): Long? {
@@ -78,6 +87,12 @@ object ApiClient {
 
     fun setToken(value: String?) { token = value }
 
+    private fun encodeSecret(value: String): String =
+        android.util.Base64.encodeToString(value.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+    private fun decodeSecret(value: String): String = runCatching {
+        String(android.util.Base64.decode(value, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+    }.getOrDefault(value)
+
     fun saveSession(context: Context, session: AdminSession) {
         cacheContext = context.applicationContext
         clearE6ImportCache(context)
@@ -86,16 +101,18 @@ object ApiClient {
         token = session.token
         context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(TOKEN_KEY, session.token)
-            .putString(USER_KEY, session.user.toString())
+            .putString(TOKEN_KEY, encodeSecret(session.token))
+            .putString(USER_KEY, encodeSecret(session.user.toString()))
             .apply()
     }
 
     fun loadSession(context: Context): AdminSession? {
         cacheContext = context.applicationContext
         val preferences = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
-        val savedToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
-        val savedUser = preferences.getString(USER_KEY, null) ?: return null
+        val rawToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
+        val rawUser = preferences.getString(USER_KEY, null) ?: return null
+        val savedToken = decodeSecret(rawToken).takeIf { it.isNotBlank() } ?: rawToken
+        val savedUser = decodeSecret(rawUser).takeIf { it.isNotBlank() } ?: rawUser
         val user = runCatching { JSONObject(savedUser) }.getOrNull() ?: return null
         token = savedToken
         return AdminSession(savedToken, user)
@@ -376,11 +393,50 @@ object ApiClient {
             .apply()
     }
     fun clearResponseCache(context: Context? = cacheContext) {
-        memoryCache.clear()
-        context?.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)
-            ?.edit()
-            ?.clear()
-            ?.apply()
+        synchronized(memoryCache) { memoryCache.clear() }
+        val ctx = context ?: cacheContext ?: return
+        runCatching {
+            cacheDir(ctx).listFiles()?.forEach { it.delete() }
+        }
+    }
+
+    fun invalidateCachedRoutes(prefixes: List<String>, context: Context? = cacheContext) {
+        if (prefixes.isEmpty()) return
+        synchronized(memoryCache) {
+            val iterator = memoryCache.entries.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next().value
+                if (prefixes.any { entry.route.startsWith(it) }) {
+                    iterator.remove()
+                }
+            }
+        }
+        val ctx = context ?: cacheContext ?: return
+        runCatching {
+            cacheDir(ctx).listFiles()?.forEach { file ->
+                val firstLine = file.bufferedReader().use { it.readLine() }.orEmpty()
+                if (prefixes.any { firstLine.startsWith(it) }) {
+                    file.delete()
+                }
+            }
+        }
+    }
+
+    private fun invalidateCacheForMutation(path: String) {
+        val route = path.substringBefore('?')
+        val prefixesToInvalidate = when {
+            route.startsWith("/admin/prescriptions") -> listOf("/admin/prescriptions", "/admin/processing-plans", "/admin/stats")
+            route.startsWith("/admin/processing-plans") -> listOf("/admin/processing-plans", "/admin/packages", "/admin/stats")
+            route.startsWith("/admin/packages") -> listOf("/admin/packages", "/admin/processing-plans", "/admin/stats")
+            route.startsWith("/admin/store-transfers") -> listOf("/admin/store-transfers")
+            route.startsWith("/admin/yd-goods-check") -> listOf("/admin/yd-goods-check")
+            route.startsWith("/admin/product-differences") -> listOf("/admin/product-differences", "/admin/products")
+            route.startsWith("/admin/herb-locations") -> listOf("/admin/herb-locations")
+            route.startsWith("/admin/e6/imports") -> listOf("/admin/e6/imports", "/admin/prescriptions")
+            route.startsWith("/user/me") -> emptyList()
+            else -> listOf("/admin/prescriptions", "/admin/processing-plans", "/admin/packages", "/admin/stats")
+        }
+        invalidateCachedRoutes(prefixesToInvalidate)
     }
     fun e6ImportDetail(id: Int): JSONObject = request("/admin/e6/imports/$id").getJSONObject("data")
     fun confirmE6Import(id: Int, payload: JSONObject): JSONObject = request("/admin/e6/imports/$id/confirm", "POST", payload).getJSONObject("data")
@@ -530,7 +586,7 @@ object ApiClient {
             onUnauthorized?.invoke()
         }
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "上传失败"))
-        clearResponseCache()
+        invalidateCacheForMutation(path)
         return json
     }
 
@@ -572,7 +628,7 @@ object ApiClient {
             onUnauthorized?.invoke()
         }
         if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "请求失败"))
-        if (normalizedMethod != "GET") clearResponseCache()
+        if (normalizedMethod != "GET") invalidateCacheForMutation(path)
         else if (cacheTtl != null) cacheResponse(path, json.toString())
         return json
     }
@@ -580,34 +636,42 @@ object ApiClient {
     private fun cacheResponse(path: String, value: String) {
         val context = cacheContext ?: return
         val key = cacheKey(path)
-        val cached = JSONObject()
-            .put("savedAt", System.currentTimeMillis())
-            .put("data", JSONObject(value))
-            .toString()
-        memoryCache[key] = cached
-        context.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(key, cached)
-            .apply()
+        val route = path.substringBefore('?')
+        val now = System.currentTimeMillis()
+        val entry = CacheEntry(route, now, value)
+        synchronized(memoryCache) {
+            memoryCache[key] = entry
+        }
+        runCatching {
+            val file = File(cacheDir(context), key)
+            file.writeText("$route\n$now\n$value")
+        }
     }
 
     private fun cachedResponse(path: String, ttlMillis: Long): JSONObject? {
         val key = cacheKey(path)
-        val value = memoryCache[key]
-            ?: cacheContext?.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)?.getString(key, null)
-            ?: return null
-        val cached = runCatching { JSONObject(value) }.getOrNull() ?: return null
-        val savedAt = cached.optLong("savedAt", 0L)
-        val data = cached.optJSONObject("data")
-        if (data == null || savedAt <= 0L || System.currentTimeMillis() - savedAt > ttlMillis) {
-            memoryCache.remove(key)
-            cacheContext?.getSharedPreferences(RESPONSE_CACHE_PREFS, Context.MODE_PRIVATE)
-                ?.edit()
-                ?.remove(key)
-                ?.apply()
+        val now = System.currentTimeMillis()
+        val entry = synchronized(memoryCache) { memoryCache[key] } ?: run {
+            val context = cacheContext ?: return null
+            val file = File(cacheDir(context), key)
+            if (!file.exists()) return null
+            runCatching {
+                val lines = file.readLines()
+                if (lines.size >= 3) {
+                    val route = lines[0]
+                    val savedAt = lines[1].toLongOrNull() ?: 0L
+                    val data = lines.drop(2).joinToString("\n")
+                    CacheEntry(route, savedAt, data)
+                } else null
+            }.getOrNull()
+        } ?: return null
+
+        if (entry.savedAt <= 0L || now - entry.savedAt > ttlMillis) {
+            synchronized(memoryCache) { memoryCache.remove(key) }
+            cacheContext?.let { File(cacheDir(it), key).delete() }
             return null
         }
-        return data
+        return runCatching { JSONObject(entry.data) }.getOrNull()
     }
 
     private fun cacheKey(path: String): String = MessageDigest

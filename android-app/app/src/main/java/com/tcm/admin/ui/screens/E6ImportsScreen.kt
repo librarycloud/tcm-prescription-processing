@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +76,7 @@ private data class E6Status(val value: Int?, val label: String)
 
 internal class E6ImportsListState internal constructor(
     val scrollState: ScrollState,
+    val lazyListState: LazyListState = LazyListState(),
 ) {
     val keyword = mutableStateOf("")
     val orderDate = mutableStateOf(serverToday().toString())
@@ -84,7 +90,8 @@ internal class E6ImportsListState internal constructor(
 @Composable
 internal fun rememberE6ImportsListState(): E6ImportsListState {
     val scrollState = rememberScrollState()
-    return remember(scrollState) { E6ImportsListState(scrollState) }
+    val lazyListState = rememberLazyListState()
+    return remember(scrollState, lazyListState) { E6ImportsListState(scrollState, lazyListState) }
 }
 
 private val e6Statuses = listOf(
@@ -278,111 +285,139 @@ internal fun E6ImportsScreen(
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-        Column(Modifier.fillMaxSize().verticalScroll(listState.scrollState).padding(16.dp)) {
-        SectionHeader("E6诊所处方导入", "核对E6订单，确认后生成处方与加工计划")
-        Spacer(Modifier.height(12.dp))
-        SearchBarField(
-            value = keyword,
-            onValueChange = {
-                page = 1
-                keyword = it
-                if (it.isBlank()) scope.launch { refreshFromServer() }
-            },
-            placeholder = "搜索订单号、顾客、电话或医师编码",
-            onSearch = {
-                page = 1
-                lastAutoKeyword = keyword.trim()
-                scope.launch { refreshFromServer() }
-            },
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        LazyColumn(
+            state = listState.lazyListState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
         ) {
-            SegmentedButton(
-                label = "今日订单",
-                selected = orderDate == serverToday().toString(),
-                onClick = { page = 1; orderDate = serverToday().toString() },
-                modifier = Modifier.weight(1f),
-                centerLabel = true,
-            )
-            SegmentedButton(
-                label = "全部日期",
-                selected = orderDate.isBlank(),
-                onClick = { page = 1; orderDate = "" },
-                modifier = Modifier.weight(1f),
-                centerLabel = true,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                onClick = { datePickerOpen = true },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp),
-                shape = FieldShape,
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, CardBorderColor),
-            ) {
+            item(key = "header") {
+                SectionHeader("E6诊所处方导入", "核对E6订单，确认后生成处方与加工计划")
+                Spacer(Modifier.height(12.dp))
+                SearchBarField(
+                    value = keyword,
+                    onValueChange = {
+                        page = 1
+                        keyword = it
+                        if (it.isBlank()) scope.launch { refreshFromServer() }
+                    },
+                    placeholder = "搜索订单号、顾客、电话或医师编码",
+                    onSearch = {
+                        page = 1
+                        lastAutoKeyword = keyword.trim()
+                        scope.launch { refreshFromServer() }
+                    },
+                )
+                Spacer(Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        Icons.Default.CalendarMonth,
-                        contentDescription = "选择订单日期",
-                        tint = Primary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = orderDate.takeIf { it.isNotBlank() }?.let { "订单日期：$it" } ?: "选择订单日期",
+                    SegmentedButton(
+                        label = "今日订单",
+                        selected = orderDate == serverToday().toString(),
+                        onClick = { page = 1; orderDate = serverToday().toString() },
                         modifier = Modifier.weight(1f),
-                        color = if (orderDate.isBlank()) Muted else Ink,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        softWrap = false,
+                        centerLabel = true,
+                    )
+                    SegmentedButton(
+                        label = "全部日期",
+                        selected = orderDate.isBlank(),
+                        onClick = { page = 1; orderDate = "" },
+                        modifier = Modifier.weight(1f),
+                        centerLabel = true,
                     )
                 }
-            }
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        ApiClient.clearResponseCache(context)
-                        refreshFromServer()
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        onClick = { datePickerOpen = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = FieldShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, CardBorderColor),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                contentDescription = "选择订单日期",
+                                tint = Primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = orderDate.takeIf { it.isNotBlank() }?.let { "订单日期：$it" } ?: "选择订单日期",
+                                modifier = Modifier.weight(1f),
+                                color = if (orderDate.isBlank()) Muted else Ink,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
                     }
-                },
-                enabled = !refreshing,
-                modifier = Modifier.height(SearchControlHeight),
-                shape = FieldShape,
-            ) {
-                Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("刷新", fontSize = 12.sp)
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                ApiClient.clearResponseCache(context)
+                                refreshFromServer()
+                            }
+                        },
+                        enabled = !refreshing,
+                        modifier = Modifier.height(SearchControlHeight),
+                        shape = FieldShape,
+                    ) {
+                        Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("刷新", fontSize = 12.sp)
+                    }
+                }
             }
-        }
-        notice?.let { Text(it, color = Success, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp)) }
-        error?.let { Text(it, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp)) }
-        Spacer(Modifier.height(12.dp))
 
-        when {
-            loading && items == null -> LoadingState("正在加载E6导入记录")
-            currentItems.isEmpty() -> EmptyState("暂无符合条件的E6处方导入记录")
-            else -> {
-                Text("共 ${listState.total} 条记录 · 第 $currentPage / ${listState.pages} 页", color = Muted, fontSize = 12.sp)
-                Spacer(Modifier.height(7.dp))
-                currentItems.forEach { item ->
+            if (notice != null) {
+                item(key = "notice") {
+                    Text(notice!!, color = Success, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp))
+                }
+            }
+
+            if (error != null) {
+                item(key = "error") {
+                    Text(error!!, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp))
+                }
+            }
+
+            if (loading && items == null) {
+                item(key = "loading") {
+                    Spacer(Modifier.height(12.dp))
+                    LoadingState("正在加载E6导入记录")
+                }
+            } else if (currentItems.isEmpty()) {
+                item(key = "empty") {
+                    Spacer(Modifier.height(12.dp))
+                    EmptyState("暂无符合条件的E6处方导入记录")
+                }
+            } else {
+                item(key = "count_header") {
+                    Spacer(Modifier.height(12.dp))
+                    Text("共 ${listState.total} 条记录 · 第 $currentPage / ${listState.pages} 页", color = Muted, fontSize = 12.sp)
+                    Spacer(Modifier.height(7.dp))
+                }
+                items(currentItems, key = { it.optInt("id") }) { item ->
                     E6ImportCard(
-                        item = item, selected = selectedIds.contains(item.optInt("id")), selectable = e6CanReview(item),
+                        item = item,
+                        selected = selectedIds.contains(item.optInt("id")),
+                        selectable = e6CanReview(item),
                         onSelect = { checked -> selectedIds = if (checked) selectedIds + item.optInt("id") else selectedIds - item.optInt("id") },
-                        onDetail = { onNavigate(ScreenTarget.E6ImportDetail(item.optInt("id"))) }, onConfirm = { onNavigate(ScreenTarget.E6ImportConfirm(item)) },
+                        onDetail = { onNavigate(ScreenTarget.E6ImportDetail(item.optInt("id"))) },
+                        onConfirm = { onNavigate(ScreenTarget.E6ImportConfirm(item)) },
                         onRevalidate = { runAction({ ApiClient.revalidateE6Import(item.optInt("id")) }, "已完成重新校验") },
                         onReject = { rejectTarget = item },
                     )
@@ -390,19 +425,26 @@ internal fun E6ImportsScreen(
                 }
                 if (selectedIds.size >= 2) {
                     val mergeItems = currentItems.filter { selectedIds.contains(it.optInt("id")) && e6CanReview(it) }
-                    Button(
-                        enabled = mergeItems.size >= 2 && !actionLoading,
-                        onClick = { onNavigate(ScreenTarget.E6ImportConfirm(mergeItems.first(), mergeItems.map { it.optInt("id") })) }, modifier = Modifier.fillMaxWidth().height(44.dp), shape = FieldShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                    ) { Text("合并选中订单并生成处方 (${mergeItems.size})", fontWeight = FontWeight.SemiBold) }
+                    item(key = "merge_button") {
+                        Button(
+                            enabled = mergeItems.size >= 2 && !actionLoading,
+                            onClick = { onNavigate(ScreenTarget.E6ImportConfirm(mergeItems.first(), mergeItems.map { it.optInt("id") })) },
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            shape = FieldShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        ) { Text("合并选中订单并生成处方 (${mergeItems.size})", fontWeight = FontWeight.SemiBold) }
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
                 if (listState.pages > 1) {
-                    AppPagination(
-                        page = currentPage,
-                        pages = listState.pages,
-                        onPrev = { if (currentPage > 1) page-- },
-                        onNext = { if (currentPage < listState.pages) page++ },
-                    )
+                    item(key = "pagination") {
+                        AppPagination(
+                            page = currentPage,
+                            pages = listState.pages,
+                            onPrev = { if (currentPage > 1) page-- },
+                            onNext = { if (currentPage < listState.pages) page++ },
+                        )
+                    }
                 }
             }
         }

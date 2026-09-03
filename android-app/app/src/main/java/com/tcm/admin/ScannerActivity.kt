@@ -51,6 +51,7 @@ import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 private fun scannerBoxRect(width: Float, height: Float): RectF {
     val boxSize = (width * 0.72f).coerceAtMost(height * 0.5f)
@@ -339,9 +340,9 @@ class ScannerActivity : ComponentActivity() {
                 }
                 val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
                 val isOcrActive = ocrEnabled && !delivered.get()
-                var pendingTasks = if (isOcrActive) 2 else 1
+                val pendingTasks = AtomicInteger(if (isOcrActive) 2 else 1)
                 val taskFinished = {
-                    if (--pendingTasks <= 0) {
+                    if (pendingTasks.decrementAndGet() <= 0) {
                         proxy.close()
                     }
                 }
@@ -593,7 +594,7 @@ class ScannerActivity : ComponentActivity() {
                    cy >= scanBox.top && cy <= scanBox.bottom
         }
 
-        private fun cleanDigits(token: String): String {
+        internal fun cleanDigits(token: String): String {
             return token.map {
                 when (it) {
                     'O', 'o' -> '0'
@@ -605,7 +606,7 @@ class ScannerActivity : ComponentActivity() {
             }.filter(Char::isDigit).joinToString("")
         }
 
-        private fun normalizeOcrText(text: String): String {
+        internal fun normalizeOcrText(text: String): String {
             return text.map { char ->
                 when (char) {
                     '\u3000', '\u00A0' -> ' '

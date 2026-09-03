@@ -23,21 +23,28 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -100,7 +107,6 @@ class MainActivity : ComponentActivity() {
 
 internal sealed class ScreenTarget {
     object Login : ScreenTarget()
-    object Dashboard : ScreenTarget()
     object Prescriptions : ScreenTarget()
     object E6Imports : ScreenTarget()
     data class E6ImportDetail(val id: Int) : ScreenTarget()
@@ -197,13 +203,12 @@ private fun TcmAdminApp() {
         mutableStateListOf<ScreenTarget>(if (restoredSession != null) ScreenTarget.Inventory() else ScreenTarget.Login)
     }
     val e6ImportsListState = rememberE6ImportsListState()
-    val dashboardScrollState = rememberScrollState()
-    val prescriptionsScrollState = rememberScrollState()
+    val prescriptionsListState = rememberLazyListState()
     val processingScrollState = rememberScrollState()
-    val packagesScrollState = rememberScrollState()
+    val packagesListState = rememberLazyListState()
     val herbsListState = rememberHerbsListState()
     val profileScrollState = rememberScrollState()
-    val inventoryScrollState = rememberScrollState()
+    val inventoryListState = rememberLazyListState()
     val stocktakingScrollState = rememberScrollState()
     val stocktakingDetailScrollState = rememberScrollState()
     val differencesScrollState = rememberScrollState()
@@ -211,9 +216,6 @@ private fun TcmAdminApp() {
     val currentScreen = backStack.lastOrNull() ?: ScreenTarget.Login
 
     var session by remember { mutableStateOf(restoredSession) }
-    var stats by remember { mutableStateOf<JSONObject?>(null) }
-    var dashboardStores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var dashboardStoreId by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
     var stocktakingDetailRevision by remember { mutableStateOf(0) }
@@ -243,9 +245,6 @@ private fun TcmAdminApp() {
                 ApiClient.clearSession(appContext)
                 clearRetainedListValues()
                 session = null
-                stats = null
-                dashboardStores = emptyList()
-                dashboardStoreId = ""
                 backStack.clear()
                 backStack.add(ScreenTarget.Login)
                 Toast.makeText(appContext, "登录已过期，请重新登录", Toast.LENGTH_SHORT).show()
@@ -348,21 +347,10 @@ private fun TcmAdminApp() {
                 }
 
                 // Main Navigation Tabs
-                is ScreenTarget.Dashboard -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, dashboardScrollState) {
-                    DashboardScreen(
-                        onNavigate = ::navigateTo,
-                        stats = stats,
-                        user = session?.user,
-                        stores = dashboardStores,
-                        selectedStoreId = dashboardStoreId,
-                        onSelectStore = { dashboardStoreId = it },
-                        scrollState = dashboardScrollState,
-                    )
+                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = prescriptionsListState) {
+                    PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, listState = prescriptionsListState)
                 }
-                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, prescriptionsScrollState) {
-                    PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = prescriptionsScrollState)
-                }
-                is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, e6ImportsListState.scrollState) {
+                is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = e6ImportsListState.lazyListState) {
                     E6ImportsScreen(
                         user = session?.user,
                         onNavigate = ::navigateTo,
@@ -393,10 +381,10 @@ private fun TcmAdminApp() {
                         scrollState = processingScrollState,
                     )
                 }
-                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, packagesScrollState) {
-                    PackagesScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = packagesScrollState)
+                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
+                    PackagesScreen(user = session?.user, onNavigate = ::navigateTo, listState = packagesListState)
                 }
-                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, herbsListState.scrollState) {
+                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = herbsListState.lazyListState) {
                     HerbsScreen(user = session?.user, onNavigate = ::navigateTo, listState = herbsListState)
                 }
                 is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
@@ -424,9 +412,6 @@ private fun TcmAdminApp() {
                             ApiClient.clearSession(appContext)
                             clearRetainedListValues()
                             session = null
-                            stats = null
-                            dashboardStores = emptyList()
-                            dashboardStoreId = ""
                             backStack.clear()
                             backStack.add(ScreenTarget.Login)
                         },
@@ -447,12 +432,12 @@ private fun TcmAdminApp() {
                 }
 
                 // Sub-screens & Details (Page navigation instead of dialogs)
-                is ScreenTarget.Inventory -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, inventoryScrollState) {
+                is ScreenTarget.Inventory -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = inventoryListState) {
                     InventoryScreen(
                         user = session?.user,
                         initialQuery = currentScreen.initialQuery,
                         scanRequestId = currentScreen.scanRequestId,
-                        scrollState = inventoryScrollState,
+                        listState = inventoryListState,
                     )
                 }
                 is ScreenTarget.PrescriptionDetail -> DetailShell("处方详情", onBack = { navigateBack() }) {
@@ -555,20 +540,6 @@ private fun TcmAdminApp() {
     LaunchedEffect(session) {
         if (session != null) {
             checkForAppUpdateIfDue()
-            if (session?.user?.optInt("role", -1) == 0) {
-                runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
-                    .onSuccess { values -> dashboardStores = (0 until values.length()).map { values.getJSONObject(it) } }
-            } else {
-                dashboardStores = emptyList()
-                dashboardStoreId = ""
-            }
-        }
-    }
-
-    LaunchedEffect(session, dashboardStoreId) {
-        if (session != null) {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.stats(dashboardStoreId.toIntOrNull()) } }
-                .onSuccess { stats = it }
         }
     }
 }
@@ -688,6 +659,7 @@ private fun MainShell(
     onNavigate: (ScreenTarget) -> Unit,
     showUpdateBadge: Boolean,
     scrollState: ScrollState? = null,
+    lazyListState: LazyListState? = null,
     content: @Composable () -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -744,7 +716,7 @@ private fun MainShell(
                     onSwitchTab(ScreenTarget.Prescriptions)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("E6诊所处方导入", current is ScreenTarget.E6Imports, Icons.Default.Sync) {
+                DrawerItem("E6诊所处方导入", current is ScreenTarget.E6Imports, Icons.Default.CloudDownload) {
                     onSwitchTab(ScreenTarget.E6Imports)
                     scope.launch { drawerState.close() }
                 }
@@ -756,12 +728,12 @@ private fun MainShell(
                     onSwitchTab(ScreenTarget.Packages)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("斗谱管理", current is ScreenTarget.Herbs, Icons.Default.Inventory) {
+                DrawerItem("斗谱管理", current is ScreenTarget.Herbs, Icons.Default.GridView) {
                     onSwitchTab(ScreenTarget.Herbs)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
-                DrawerItem("商品盘点", false, Icons.Default.Tune) {
+                DrawerItem("商品盘点", false, Icons.AutoMirrored.Filled.CompareArrows) {
                     onNavigate(ScreenTarget.Stocktaking)
                     scope.launch { drawerState.close() }
                 }
@@ -769,7 +741,7 @@ private fun MainShell(
                     onNavigate(ScreenTarget.Differences)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("门店调拨", false, Icons.Default.Sync) {
+                DrawerItem("门店调拨", false, Icons.Default.SwapHoriz) {
                     onNavigate(ScreenTarget.Transfers)
                     scope.launch { drawerState.close() }
                 }
@@ -778,7 +750,7 @@ private fun MainShell(
                     onSwitchTab(ScreenTarget.Profile)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", current is ScreenTarget.About, Icons.Default.AccountCircle, showBadge = showUpdateBadge) {
+                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", current is ScreenTarget.About, Icons.Default.SystemUpdate, showBadge = showUpdateBadge) {
                     onNavigate(ScreenTarget.About)
                     scope.launch { drawerState.close() }
                 }
@@ -803,8 +775,9 @@ private fun MainShell(
                     current = current,
                     onSwitchTab = onSwitchTab,
                     onReselect = {
-                        scrollState?.let { state ->
-                            scope.launch { state.animateScrollTo(0) }
+                        scope.launch {
+                            scrollState?.animateScrollTo(0)
+                            lazyListState?.animateScrollToItem(0)
                         }
                     },
                 )
@@ -815,6 +788,7 @@ private fun MainShell(
                 content()
                 ScrollToTopButton(
                     scrollState = scrollState,
+                    lazyListState = lazyListState,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
                 )
             }
@@ -862,6 +836,7 @@ private fun DetailShell(
     title: String,
     onBack: () -> Unit,
     scrollState: ScrollState? = null,
+    lazyListState: LazyListState? = null,
     content: @Composable () -> Unit,
 ) {
     Scaffold(
@@ -888,6 +863,7 @@ private fun DetailShell(
             content()
             ScrollToTopButton(
                 scrollState = scrollState,
+                lazyListState = lazyListState,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
             )
         }
@@ -927,7 +903,7 @@ private fun BottomNav(
 ) {
     val items = listOf(
         ScreenTarget.Inventory() to ("库存查询" to Icons.Default.Inventory),
-        ScreenTarget.Herbs to ("斗谱" to Icons.Default.Inventory),
+        ScreenTarget.Herbs to ("斗谱" to Icons.Default.GridView),
         ScreenTarget.Processing to ("加工" to Icons.Default.Sync),
         ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
         ScreenTarget.Profile to ("我的" to Icons.Default.AccountCircle),
@@ -970,16 +946,28 @@ private fun BottomNav(
 
 @Composable
 private fun ScrollToTopButton(
-    scrollState: ScrollState?,
+    scrollState: ScrollState? = null,
+    lazyListState: LazyListState? = null,
     modifier: Modifier = Modifier,
 ) {
-    if (scrollState == null) return
-    val twoScreens = scrollState.viewportSize * 2
-    if (twoScreens <= 0 || scrollState.value < twoScreens) return
+    val shouldShow = when {
+        lazyListState != null -> lazyListState.firstVisibleItemIndex >= 3
+        scrollState != null -> {
+            val twoScreens = scrollState.viewportSize * 2
+            twoScreens > 0 && scrollState.value >= twoScreens
+        }
+        else -> false
+    }
+    if (!shouldShow) return
 
     val scope = rememberCoroutineScope()
     SmallFloatingActionButton(
-        onClick = { scope.launch { scrollState.animateScrollTo(0) } },
+        onClick = {
+            scope.launch {
+                lazyListState?.animateScrollToItem(0)
+                scrollState?.animateScrollTo(0)
+            }
+        },
         modifier = modifier,
         shape = CircleShape,
         containerColor = Primary,

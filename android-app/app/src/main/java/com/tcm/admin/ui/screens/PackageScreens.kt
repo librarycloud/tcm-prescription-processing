@@ -21,6 +21,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -52,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
@@ -75,18 +80,31 @@ import org.json.JSONObject
 
 @Composable
 private fun FakeQr(value: String) {
-    val bitmap = remember(value) {
-        runCatching {
-            val matrix = MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, 512, 512)
-            Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).also { result ->
-                for (x in 0 until matrix.width) {
-                    for (y in 0 until matrix.height) {
-                        result.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+    val bitmapState = produceState<Bitmap?>(initialValue = null, key1 = value) {
+        if (value.isBlank()) {
+            this.value = null
+            return@produceState
+        }
+        this.value = withContext(Dispatchers.Default) {
+            runCatching {
+                val size = 512
+                val matrix = MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, size, size)
+                val width = matrix.width
+                val height = matrix.height
+                val pixels = IntArray(width * height)
+                for (y in 0 until height) {
+                    val offset = y * width
+                    for (x in 0 until width) {
+                        pixels[offset + x] = if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
                     }
                 }
-            }
-        }.getOrNull()
+                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+                    setPixels(pixels, 0, width, 0, 0, width, height)
+                }
+            }.getOrNull()
+        }
     }
+    val bitmap = bitmapState.value
     if (bitmap != null) {
         Image(bitmap = bitmap.asImageBitmap(), contentDescription = "取货二维码", modifier = Modifier.size(140.dp))
     } else {
@@ -99,7 +117,8 @@ private fun FakeQr(value: String) {
 internal fun PackagesScreen(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit,
-    scrollState: ScrollState,
+    scrollState: ScrollState? = null,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val listOwner = "packages"
     val showStore = user?.optInt("role", -1) == 0
@@ -201,135 +220,147 @@ internal fun PackagesScreen(
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
     ) {
         // Top action bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                SectionHeader("包裹工作台", "管理待领取、自提与跑腿核销")
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { onNavigate(ScreenTarget.PackageVerify("")) },
-                    modifier = Modifier.height(CompactControlHeight),
-                    shape = FieldShape,
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("核销")
+        item(key = "header") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    SectionHeader("包裹工作台", "管理待领取、自提与跑腿核销")
                 }
-                Button(
-                    onClick = { onNavigate(ScreenTarget.PackageForm(null)) },
-                    modifier = Modifier.height(CompactControlHeight),
-                    shape = FieldShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("新建")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { onNavigate(ScreenTarget.PackageVerify("")) },
+                        modifier = Modifier.height(CompactControlHeight),
+                        shape = FieldShape,
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("核销")
+                    }
+                    Button(
+                        onClick = { onNavigate(ScreenTarget.PackageForm(null)) },
+                        modifier = Modifier.height(CompactControlHeight),
+                        shape = FieldShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("新建")
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(14.dp))
 
-        SearchBarField(
-            value = keyword,
-            onValueChange = {
-                keyword = it
-                page = 1
-            },
-            placeholder = "搜索姓名、手机号或取货码",
-            onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
-            onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-        )
+            SearchBarField(
+                value = keyword,
+                onValueChange = {
+                    keyword = it
+                    page = 1
+                },
+                placeholder = "搜索姓名、手机号或取货码",
+                onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
+                onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+            )
 
-        Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(10.dp))
 
-        // Status filter tabs
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SegmentedButton("全部包裹", status == null, onClick = { status = null; page = 1 })
-            SegmentedButton("待领取", status == 0, onClick = { status = 0; page = 1 })
-            SegmentedButton("已领取", status == 1, onClick = { status = 1; page = 1 })
+            // Status filter tabs
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SegmentedButton("全部包裹", status == null, onClick = { status = null; page = 1 })
+                SegmentedButton("待领取", status == 0, onClick = { status = 0; page = 1 })
+                SegmentedButton("已领取", status == 1, onClick = { status = 1; page = 1 })
+            }
         }
 
         if (showStore && stores.size > 1) {
-            Spacer(Modifier.height(8.dp))
-            StoreChipsRow(
-                stores = stores,
-                selectedStoreId = selectedStoreId,
-                onSelectStore = { selectedStoreId = it; page = 1 },
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // Sort switcher
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Default.SwapVert, contentDescription = null, tint = Muted, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = if (sortBy == "createdAt") "按创建时间" else "按领取时间",
-                color = Primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable {
-                    sortBy = if (sortBy == "createdAt") "pickedAt" else "createdAt"
-                },
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        if (error != null) {
-            Text(error!!, color = Danger, fontSize = 13.sp)
-            Spacer(Modifier.height(8.dp))
-        }
-
-        if (loading && items == null) {
-            AppEmptyState("加载包裹列表中...")
-        } else if (items != null && items!!.isEmpty()) {
-            AppEmptyState("暂无匹配包裹")
-        } else {
-            items.orEmpty().forEach { item ->
-                key(item.id) {
-                    PackageSummaryCard(
-                        item = item,
-                        showStore = showStore,
-                        modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                        onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
-                    )
-                }
-            }
-
-            if (pages > 1) {
-                AppPagination(
-                    page = page,
-                    pages = pages,
-                    onPrev = { if (page > 1) page-- },
-                    onNext = { if (page < pages) page++ },
+            item(key = "store_chips") {
+                Spacer(Modifier.height(8.dp))
+                StoreChipsRow(
+                    stores = stores,
+                    selectedStoreId = selectedStoreId,
+                    onSelectStore = { selectedStoreId = it; page = 1 },
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        item(key = "sort_switcher") {
+            Spacer(Modifier.height(10.dp))
+
+            // Sort switcher
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.SwapVert, contentDescription = null, tint = Muted, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = if (sortBy == "createdAt") "按创建时间" else "按领取时间",
+                    color = Primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable {
+                        sortBy = if (sortBy == "createdAt") "pickedAt" else "createdAt"
+                    },
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+
+        if (error != null) {
+            item(key = "error") {
+                Text(error!!, color = Danger, fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        if (loading && items == null) {
+            item(key = "loading") {
+                AppEmptyState("加载包裹列表中...")
+            }
+        } else if (items != null && items!!.isEmpty()) {
+            item(key = "empty") {
+                AppEmptyState("暂无匹配包裹")
+            }
+        } else {
+            items(items.orEmpty(), key = { it.id }) { item ->
+                PackageSummaryCard(
+                    item = item,
+                    showStore = showStore,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
+                    onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
+                )
+            }
+
+            if (pages > 1) {
+                item(key = "pagination") {
+                    AppPagination(
+                        page = page,
+                        pages = pages,
+                        onPrev = { if (page > 1) page-- },
+                        onNext = { if (page < pages) page++ },
+                    )
+                }
+            }
+        }
+
+        item(key = "spacer_bottom") {
+            Spacer(Modifier.height(16.dp))
+        }
     }
     }
 }

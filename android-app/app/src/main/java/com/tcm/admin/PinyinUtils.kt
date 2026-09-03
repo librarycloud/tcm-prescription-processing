@@ -6,17 +6,30 @@ private val hanToLatin by lazy {
     Transliterator.getInstance("Han-Latin; Latin-ASCII")
 }
 
+private val charPinyinCache = java.util.concurrent.ConcurrentHashMap<Char, Char>()
+private val stringPinyinCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
 private fun isHanCharacter(value: Char): Boolean =
     value.code in 0x3400..0x4DBF || value.code in 0x4E00..0x9FFF
 
 private fun pinyinInitial(value: Char): Char? {
     if (value.isLetterOrDigit() && !isHanCharacter(value)) return value.lowercaseChar()
+    charPinyinCache[value]?.let { return it }
     val latin = synchronized(hanToLatin) { hanToLatin.transliterate(value.toString()) }
-    return latin.firstOrNull { it in 'A'..'Z' || it in 'a'..'z' }?.lowercaseChar()
+    val initial = latin.firstOrNull { it in 'A'..'Z' || it in 'a'..'z' }?.lowercaseChar()
+    if (initial != null) {
+        charPinyinCache[value] = initial
+    }
+    return initial
 }
 
-internal fun pinyinInitials(value: String): String = buildString {
-    value.forEach { character -> pinyinInitial(character)?.let(::append) }
+internal fun pinyinInitials(value: String): String {
+    stringPinyinCache[value]?.let { return it }
+    val result = buildString {
+        value.forEach { character -> pinyinInitial(character)?.let(::append) }
+    }
+    stringPinyinCache[value] = result
+    return result
 }
 
 internal fun pinyinInitialMatchRange(value: String, keyword: String): IntRange? {
