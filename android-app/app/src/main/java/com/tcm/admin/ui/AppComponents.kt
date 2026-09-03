@@ -135,41 +135,10 @@ internal fun shouldAutoSearchQuery(value: String): Boolean {
     return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
 }
 
-val LocalActiveInputBounds = compositionLocalOf { mutableStateOf<Rect?>(null) }
-
-@Composable
-internal fun Modifier.trackFocusedBounds(): Modifier {
-    val activeInputBounds = LocalActiveInputBounds.current
-    var isFocused by remember { mutableStateOf(false) }
-    var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    return this
-        .onFocusChanged { state ->
-            isFocused = state.isFocused
-            if (isFocused) {
-                layoutCoordinates?.let { coords ->
-                    if (coords.isAttached) {
-                        activeInputBounds.value = coords.boundsInRoot()
-                    }
-                }
-            } else {
-                activeInputBounds.value = null
-            }
-        }
-        .onGloballyPositioned { coords ->
-            layoutCoordinates = coords
-            if (isFocused && coords.isAttached) {
-                activeInputBounds.value = coords.boundsInRoot()
-            }
-        }
-}
-
 @Composable
 internal fun Modifier.dismissKeyboardOnTap(): Modifier {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val activeInputBounds = LocalActiveInputBounds.current
-    val activeBounds = activeInputBounds.value
-    var hostCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     val nestedScrollConnection = remember(focusManager, keyboardController) {
         object : NestedScrollConnection {
@@ -184,17 +153,12 @@ internal fun Modifier.dismissKeyboardOnTap(): Modifier {
     }
 
     return this
-        .onGloballyPositioned { hostCoordinates = it }
         .nestedScroll(nestedScrollConnection)
-        .pointerInput(activeBounds, hostCoordinates) {
+        .pointerInput(Unit) {
             awaitEachGesture {
-                val down = awaitFirstDown(
-                    requireUnconsumed = false,
-                    pass = PointerEventPass.Initial,
-                )
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                val rootPosition = hostCoordinates?.localToRoot(down.position) ?: down.position
-                if (up != null && activeBounds?.contains(rootPosition) != true) {
+                if (up != null) {
                     keyboardController?.hide()
                     focusManager.clearFocus(force = false)
                 }
@@ -545,7 +509,7 @@ internal fun SearchBarField(
                 keyboardController?.hide()
                 onSearch()
             }),
-            modifier = Modifier.fillMaxWidth().trackFocusedBounds(),
+            modifier = Modifier.fillMaxWidth(),
             decorationBox = { innerTextField ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),

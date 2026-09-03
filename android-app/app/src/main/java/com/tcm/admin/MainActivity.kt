@@ -255,7 +255,11 @@ private fun TcmAdminApp() {
     }
 
     fun navigateTo(target: ScreenTarget) {
-        backStack.add(target)
+        if (target is ScreenTarget.Inventory && backStack.lastOrNull() is ScreenTarget.Inventory) {
+            backStack[backStack.size - 1] = target
+        } else {
+            backStack.add(target)
+        }
     }
 
     fun navigateBack(): Boolean {
@@ -786,7 +790,12 @@ private fun MainShell(
                 AppTopBar(
                     title = "药房助手",
                     onMenu = { scope.launch { drawerState.open() } },
-                    onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                    onScan = {
+                        scannerLauncher.launch(
+                            Intent(context, ScannerActivity::class.java)
+                                .putExtra(ScannerActivity.EXTRA_ENABLE_SKU_OCR, true)
+                        )
+                    },
                 )
             },
             bottomBar = {

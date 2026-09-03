@@ -72,7 +72,7 @@ internal fun InventoryScreen(
     scanRequestId: Long = 0L,
     scrollState: ScrollState,
 ) {
-    val listOwner = "inventory:$initialQuery:$scanRequestId"
+    val listOwner = "inventory"
     val showStore = user?.optInt("role", -1) == 0
     var query by rememberRetainedListValue(listOwner, "query") { initialQuery }
     var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
@@ -97,6 +97,17 @@ internal fun InventoryScreen(
         mutableStateOf(
             prefs.getString("history", "")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
         )
+    }
+
+    LaunchedEffect(initialQuery, scanRequestId) {
+        if (initialQuery.isNotBlank()) {
+            query = initialQuery
+            addSearchHistory(initialQuery)
+            page = 1
+            lastAutoSearchQuery = initialQuery.trim()
+            selectedProduct = null
+            searchRequest++
+        }
     }
 
     fun addSearchHistory(term: String) {
@@ -157,6 +168,7 @@ internal fun InventoryScreen(
             addSearchHistory(value)
             page = 1
             lastAutoSearchQuery = value
+            selectedProduct = null
             searchRequest++
         }
     }

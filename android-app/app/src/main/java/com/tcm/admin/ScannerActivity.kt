@@ -4,17 +4,11 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
-import android.graphics.ImageFormat
 import android.graphics.RectF
-import android.graphics.YuvImage
-import android.media.Image
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
@@ -28,7 +22,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -39,13 +32,10 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 private fun scannerBoxRect(width: Float, height: Float): RectF {
     val boxSize = (width * 0.72f).coerceAtMost(height * 0.5f)
@@ -86,13 +76,14 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
         if (ocrEnabled) {
-            textRecognizer = TextRecognition.getClient(
-                ChineseTextRecognizerOptions.Builder().build(),
-            )
+            textRecognizer = try {
+                TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+            } catch (_: Throwable) {
+                TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+            }
         }
         val root = FrameLayout(this)
         previewView = PreviewView(this).apply {
-            // Keep the preview and OCR ROI on the same centered, filled coordinate system.
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
         root.addView(previewView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -140,14 +131,14 @@ class ScannerActivity : ComponentActivity() {
                     if (frameClosed.compareAndSet(false, true)) proxy.close()
                 }
                 val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
-                // Reserve one completion for barcode scanning and one for OCR whenever OCR
-                // mode is enabled. This keeps the ImageProxy open until both consumers have
-                // finished, including the model-loading/in-flight cases below.
-                val tasksRemaining = AtomicInteger(if (ocrEnabled) 2 else 1)
+                val isOcrActive = ocrEnabled && textRecognizer != null && !delivered.get()
+                val tasksRemaining = AtomicInteger(if (isOcrActive) 2 else 1)
                 fun taskFinished() {
                     if (tasksRemaining.decrementAndGet() == 0) closeFrame()
                 }
-                val barcodeTask = scanner.process(image)
+
+                // 1. Barcode scanner
+                scanner.process(image)
                     .addOnSuccessListener { barcodes ->
                         barcodes.firstOrNull()?.let { barcode ->
                             val value = barcode.rawValue
@@ -158,42 +149,31 @@ class ScannerActivity : ComponentActivity() {
                     }
                     .addOnCompleteListener { taskFinished() }
 
-                // OCR is intentionally restricted to the visible scanner box.
-                if (ocrEnabled) {
+                // 2. High-performance OCR text recognition
+                if (isOcrActive) {
                     val recognizer = textRecognizer
                     if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
-                        val frameBitmap = runCatching { imageProxyToBitmap(proxy) }
-                            .onFailure { Log.w(TAG, "Failed to convert camera frame for OCR", it) }
-                            .getOrNull()
-                        if (frameBitmap == null) {
-                            ocrInFlight.set(false)
-                            taskFinished()
-                        } else {
-                            val roiBitmap = cropToScannerBox(frameBitmap)
-                            recognizer.process(InputImage.fromBitmap(roiBitmap, 0))
-                                .addOnSuccessListener { text ->
-                                    val sku = extractSku(text.text)
-                                    if (BuildConfig.DEBUG) {
-                                        val compactText = text.text.replace(Regex("\\s+"), " ").trim()
-                                        if (compactText != lastLoggedOcrText) {
-                                            Log.d("ScannerOCR", "engine=mlkit; roi=${roiBitmap.width}x${roiBitmap.height}; raw=$compactText; candidate=${sku ?: "none"}")
-                                            lastLoggedOcrText = compactText
-                                        }
-                                    }
-                                    if (sku != null) {
-                                        handleCandidateDetected(sku)
+                        recognizer.process(image)
+                            .addOnSuccessListener { visionText ->
+                                val sku = extractSku(visionText.text)
+                                if (BuildConfig.DEBUG) {
+                                    val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
+                                    if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
+                                        Log.d("ScannerOCR", "raw=$compactText; candidate=${sku ?: "none"}")
+                                        lastLoggedOcrText = compactText
                                     }
                                 }
-                                .addOnFailureListener { error ->
-                                    Log.w(TAG, "ML Kit frame recognition failed", error)
+                                if (sku != null) {
+                                    handleCandidateDetected(sku)
                                 }
-                                .addOnCompleteListener {
-                                    if (roiBitmap !== frameBitmap) roiBitmap.recycle()
-                                    frameBitmap.recycle()
-                                    ocrInFlight.set(false)
-                                    taskFinished()
-                                }
-                        }
+                            }
+                            .addOnFailureListener { error ->
+                                Log.w(TAG, "ML Kit recognition failed", error)
+                            }
+                            .addOnCompleteListener {
+                                ocrInFlight.set(false)
+                                taskFinished()
+                            }
                     } else {
                         taskFinished()
                     }
@@ -209,8 +189,8 @@ class ScannerActivity : ComponentActivity() {
             runOnUiThread { handleCandidateDetected(candidate) }
             return
         }
-        // Keep two-frame confirmation to avoid writing a transient OCR error into the search
-        // box. Chinese product-name extraction is disabled; only labeled SKU digits are used.
+        if (delivered.get()) return
+        // 2 consecutive matching frames confirmation to prevent transient OCR flicker
         val requiredHits = 2
         if (candidate == lastCandidate) {
             candidateHitCount++
@@ -250,97 +230,6 @@ class ScannerActivity : ComponentActivity() {
             setResult(RESULT_OK, Intent().putExtra(SCAN_RESULT, value))
             finish()
         }
-    }
-
-    private fun cropToScannerBox(bitmap: Bitmap): Bitmap {
-        val viewWidth = previewView.width
-        val viewHeight = previewView.height
-        val coordinateWidth = if (viewWidth > 0) viewWidth.toFloat() else bitmap.width.toFloat()
-        val coordinateHeight = if (viewHeight > 0) viewHeight.toFloat() else bitmap.height.toFloat()
-        val frame = scannerBoxRect(coordinateWidth, coordinateHeight)
-        // PreviewView.ScaleType.FILL_CENTER renders the upright image with a centered crop.
-        val scale = max(
-            coordinateWidth / bitmap.width.toFloat(),
-            coordinateHeight / bitmap.height.toFloat(),
-        )
-        val renderedWidth = bitmap.width * scale
-        val renderedHeight = bitmap.height * scale
-        val offsetX = (coordinateWidth - renderedWidth) / 2f
-        val offsetY = (coordinateHeight - renderedHeight) / 2f
-        val left = ((frame.left - offsetX) / scale).roundToInt().coerceIn(0, bitmap.width - 1)
-        val top = ((frame.top - offsetY) / scale).roundToInt().coerceIn(0, bitmap.height - 1)
-        val right = ((frame.right - offsetX) / scale).roundToInt().coerceIn(left + 1, bitmap.width)
-        val bottom = ((frame.bottom - offsetY) / scale).roundToInt().coerceIn(top + 1, bitmap.height)
-        if (left == 0 && top == 0 && right == bitmap.width && bottom == bitmap.height) return bitmap
-        return Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
-    }
-
-    private fun imageProxyToBitmap(proxy: ImageProxy): Bitmap? {
-        val image = proxy.image ?: return null
-        val nv21 = imageToNv21(image)
-        val jpegStream = ByteArrayOutputStream()
-        val compressed = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
-            .compressToJpeg(android.graphics.Rect(0, 0, image.width, image.height), 90, jpegStream)
-        if (!compressed) return null
-        val decoded = BitmapFactory.decodeByteArray(jpegStream.toByteArray(), 0, jpegStream.size()) ?: return null
-        val rotation = proxy.imageInfo.rotationDegrees
-        if (rotation == 0) return decoded
-
-        val rotated = Bitmap.createBitmap(
-            decoded,
-            0,
-            0,
-            decoded.width,
-            decoded.height,
-            Matrix().apply { postRotate(rotation.toFloat()) },
-            true,
-        )
-        if (rotated !== decoded) decoded.recycle()
-        return rotated
-    }
-
-    private fun imageToNv21(image: Image): ByteArray {
-        val width = image.width
-        val height = image.height
-        val chromaWidth = (width + 1) / 2
-        val chromaHeight = (height + 1) / 2
-        val output = ByteArray(width * height + 2 * chromaWidth * chromaHeight)
-        val yPlane = image.planes[0]
-        val yBuffer = yPlane.buffer.duplicate().apply { rewind() }
-        for (row in 0 until height) {
-            val rowStart = row * yPlane.rowStride
-            for (column in 0 until width) {
-                output[row * width + column] = safePlaneByte(
-                    yBuffer,
-                    rowStart + column * yPlane.pixelStride,
-                )
-            }
-        }
-
-        val uPlane = image.planes[1]
-        val vPlane = image.planes[2]
-        val uBuffer = uPlane.buffer.duplicate().apply { rewind() }
-        val vBuffer = vPlane.buffer.duplicate().apply { rewind() }
-        var outputIndex = width * height
-        for (row in 0 until chromaHeight) {
-            val uRowStart = row * uPlane.rowStride
-            val vRowStart = row * vPlane.rowStride
-            for (column in 0 until chromaWidth) {
-                output[outputIndex++] = safePlaneByte(
-                    vBuffer,
-                    vRowStart + column * vPlane.pixelStride,
-                )
-                output[outputIndex++] = safePlaneByte(
-                    uBuffer,
-                    uRowStart + column * uPlane.pixelStride,
-                )
-            }
-        }
-        return output
-    }
-
-    private fun safePlaneByte(buffer: ByteBuffer, index: Int): Byte {
-        return if (index in 0 until buffer.limit()) buffer.get(index) else 0
     }
 
     private class ScannerOverlayView(context: Context, private val ocrEnabled: Boolean) : View(context) {
@@ -410,15 +299,16 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-        // SKU-only mode: accept common OCR variants, but never use a generic number as a
-        // scan result. The label is required immediately before a 9-digit OCR result.
-        private val skuLabelPattern = Regex(
-            """(?i)(?:\bS\s*K\s*U|\b5\s*K\s*U)(?=\s*[:：#]?\s*[0-9OolILsSbB|]|\b)""",
+        private val skuLabelRegex = Regex(
+            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U|货号|商品编码|编码)(?:[^a-zA-Z0-9]|$)"""
         )
-        // Match the complete digit-like run, not just the first nine digits. This prevents an
-        // 11-digit phone number or a longer order/UPC number from being truncated to 9 digits.
-        private val skuDigitCandidatePattern = Regex(
-            """^[\s:：#/,，;；|]*([0-9OolILsSbB|](?:\s*[0-9OolILsSbB|])*)(?![0-9A-Za-z])""",
+        private val candidate9Pattern = Regex("""(?<!\d)[0-9OolILsSbB|]{9}(?!\d)""")
+        private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
+        private val excludeLinePattern = Regex(
+            """(?i)(?:手机|电话|虚拟号|备用|订单|UPC|条码|时间|日期|运单号)"""
+        )
+        private val multilineSkuRegex = Regex(
+            """(?i)(?:S\s*K\s*U|5\s*K\s*U|货号|商品编码|编码)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
         )
 
         private fun cleanDigits(token: String): String {
@@ -436,7 +326,7 @@ class ScannerActivity : ComponentActivity() {
         private fun normalizeOcrText(text: String): String {
             return text.map { char ->
                 when (char) {
-                    '\u3000' -> ' '
+                    '\u3000', '\u00A0' -> ' '
                     in '０'..'９' -> ('0'.code + (char.code - '０'.code)).toChar()
                     in 'Ａ'..'Ｚ' -> ('A'.code + (char.code - 'Ａ'.code)).toChar()
                     in 'ａ'..'ｚ' -> ('a'.code + (char.code - 'ａ'.code)).toChar()
@@ -445,21 +335,54 @@ class ScannerActivity : ComponentActivity() {
             }.joinToString("")
         }
 
-        private fun findNineDigitSku(text: String): String? {
-            val normalized = normalizeOcrText(text)
-            val match = skuDigitCandidatePattern.find(normalized) ?: return null
-            return cleanDigits(match.groupValues[1]).takeIf { it.length == 9 }
-        }
+        fun extractSku(rawText: String?): String? {
+            if (rawText.isNullOrBlank()) return null
+            val normalized = normalizeOcrText(rawText)
+            val lines = normalized.split(Regex("[\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
 
-        fun extractSku(text: String): String? {
-            if (text.isBlank()) return null
-            val normalized = normalizeOcrText(text.replace('\u00A0', ' '))
+            // Strategy 1: Check lines with SKU / 5KU / 货号 / 编码 labels (same line or next 1-2 lines)
+            for (i in lines.indices) {
+                val line = lines[i]
+                if (skuLabelRegex.containsMatchIn(line)) {
+                    for (match in candidate9Pattern.findAll(line)) {
+                        val cleaned = cleanDigits(match.value)
+                        if (cleaned.length == 9) return cleaned
+                    }
+                    for (offset in 1..2) {
+                        val nextLine = lines.getOrNull(i + offset) ?: break
+                        if (excludeLinePattern.containsMatchIn(nextLine)) continue
+                        for (match in candidate9Pattern.findAll(nextLine)) {
+                            val cleaned = cleanDigits(match.value)
+                            if (cleaned.length == 9) return cleaned
+                        }
+                    }
+                }
+            }
 
-            // Only inspect the text immediately after an SKU label (for example:
-            // "SKU 303827503" or OCR boxes returned as "SKU\\n303827503").
-            for (match in skuLabelPattern.findAll(normalized)) {
-                val afterLabel = normalized.substring(match.range.last + 1)
-                findNineDigitSku(afterLabel)?.let { return it }
+            // Strategy 2: Multiline regex with SKU label
+            multilineSkuRegex.find(normalized)?.let { match ->
+                val cleaned = cleanDigits(match.groupValues[1])
+                if (cleaned.length == 9) return cleaned
+            }
+
+            // Strategy 3: Multi-column OCR - if SKU label exists anywhere in the text, match any 9-digit candidate on non-excluded lines
+            val hasSkuLabel = skuLabelRegex.containsMatchIn(normalized)
+            if (hasSkuLabel) {
+                for (line in lines) {
+                    if (excludeLinePattern.containsMatchIn(line)) continue
+                    for (match in candidate9Pattern.findAll(line)) {
+                        val cleaned = cleanDigits(match.value)
+                        if (cleaned.length == 9) return cleaned
+                    }
+                }
+            }
+
+            // Strategy 4: Fallback for standalone 9 pure digits (strictly digits without confusable substitutions) on non-excluded lines
+            for (line in lines) {
+                if (excludeLinePattern.containsMatchIn(line)) continue
+                for (match in standalone9Pattern.findAll(line)) {
+                    return match.value
+                }
             }
 
             return null
