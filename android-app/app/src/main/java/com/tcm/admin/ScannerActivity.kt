@@ -16,6 +16,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import android.util.TypedValue
 import android.view.View
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -290,7 +291,7 @@ class ScannerActivity : ComponentActivity() {
         }
         private val textPaint = Paint().apply {
             color = 0xFFFFFFFF.toInt()
-            textSize = 14f * context.resources.displayMetrics.scaledDensity
+            textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, context.resources.displayMetrics)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
             setShadowLayer(4f, 0f, 2f, 0xAA000000.toInt())
