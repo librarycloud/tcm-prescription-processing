@@ -39,6 +39,8 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -524,12 +526,21 @@ class ScannerActivity : ComponentActivity() {
         providerFuture.addListener({
             val provider = providerFuture.get()
             cameraProvider = provider
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        android.util.Size(1280, 720),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                    )
+                )
+                .build()
+
             val preview = Preview.Builder()
-                .setTargetResolution(android.util.Size(1280, 720))
+                .setResolutionSelector(resolutionSelector)
                 .build()
                 .also { it.surfaceProvider = previewView.surfaceProvider }
             val analysis = ImageAnalysis.Builder()
-                .setTargetResolution(android.util.Size(1280, 720))
+                .setResolutionSelector(resolutionSelector)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
             analysis.setAnalyzer(cameraExecutor) { proxy ->
