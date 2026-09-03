@@ -225,21 +225,24 @@ class ScannerActivity : ComponentActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Debug Log toggle button
-        val debugBtn = TextView(this).apply {
-            text = "🐞"
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0x66000000)
+        var debugBtn: TextView? = null
+        if (BuildConfig.DEBUG) {
+            // Debug Log toggle button
+            debugBtn = TextView(this).apply {
+                text = "🐞"
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0x66000000)
+                }
             }
+            val debugBtnParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+                marginEnd = (12 * density).toInt()
+            }
+            rightButtons.addView(debugBtn, debugBtnParams)
         }
-        val debugBtnParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
-            marginEnd = (12 * density).toInt()
-        }
-        rightButtons.addView(debugBtn, debugBtnParams)
 
         // Torch toggle button
         val torchBtn = TextView(this).apply {
@@ -272,18 +275,19 @@ class ScannerActivity : ComponentActivity() {
 
         root.addView(topBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
-        // Floating Debug Log Panel (at the bottom)
-        val debugLogPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val pad = (12 * density).toInt()
-            setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                cornerRadius = 16 * density
-                setColor(0xEE1E1E1E.toInt())
-                setStroke((1 * density).toInt(), 0x44FFFFFF)
+        if (BuildConfig.DEBUG && debugBtn != null) {
+            // Floating Debug Log Panel (at the bottom)
+            val debugLogPanel = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                val pad = (12 * density).toInt()
+                setPadding(pad, pad, pad, pad)
+                background = GradientDrawable().apply {
+                    cornerRadius = 16 * density
+                    setColor(0xEE1E1E1E.toInt())
+                    setStroke((1 * density).toInt(), 0x44FFFFFF)
+                }
+                visibility = View.GONE
             }
-            visibility = View.GONE
-        }
 
         fun createPillBtn(title: String, bgColor: Int, txtColor: Int, onClick: () -> Unit): TextView = TextView(this).apply {
             text = title
@@ -478,15 +482,16 @@ class ScannerActivity : ComponentActivity() {
         }
         root.addView(debugLogPanel, panelParams)
 
-        debugBtn.setOnClickListener {
-            isDebugLogOpen = !isDebugLogOpen
-            debugLogPanel.visibility = if (isDebugLogOpen) View.VISIBLE else View.GONE
-            debugBtn.background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(if (isDebugLogOpen) 0xCC00C853.toInt() else 0x66000000)
-            }
-            if (isDebugLogOpen) {
-                updateDebugLogUi()
+            debugBtn.setOnClickListener {
+                isDebugLogOpen = !isDebugLogOpen
+                debugLogPanel.visibility = if (isDebugLogOpen) View.VISIBLE else View.GONE
+                debugBtn.background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(if (isDebugLogOpen) 0xCC00C853.toInt() else 0x66000000)
+                }
+                if (isDebugLogOpen) {
+                    updateDebugLogUi()
+                }
             }
         }
 
@@ -600,39 +605,44 @@ class ScannerActivity : ComponentActivity() {
                     if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
                         recognizer.process(image)
                             .addOnSuccessListener { visionText ->
-                                val (candidate, debugLog) = extractSkuWithDebug(visionText, imgScanBox)
-                                latestOcrDebugLog = debugLog
-
-                                val now = System.currentTimeMillis()
-                                val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
-                                val summary = if (candidate != null) "✅ SKU: $candidate" else "未匹配"
-                                val rawText = visionText.text.trim()
-                                if (rawText.isNotBlank() && (candidate != null || now - lastRecordedOcrTime > 300L || rawText != lastLoggedOcrText)) {
-                                    lastRecordedOcrTime = now
-                                    synchronized(ocrLogHistory) {
-                                        if (ocrLogHistory.size >= 25) {
-                                            ocrLogHistory.removeAt(0)
-                                        }
-                                        ocrLogHistory.add(OcrSnapshot(timeStr, candidate, debugLog, summary))
-                                    }
-                                }
-
-                                if (isDebugLogOpen && !isRecognitionPaused && viewingHistoryIndex == -1) {
-                                    runOnUiThread {
-                                        updateDebugLogUi()
-                                    }
-                                }
-
                                 if (BuildConfig.DEBUG) {
+                                    val (candidate, debugLog) = extractSkuWithDebug(visionText, imgScanBox)
+                                    latestOcrDebugLog = debugLog
+
+                                    val now = System.currentTimeMillis()
+                                    val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
+                                    val summary = if (candidate != null) "✅ SKU: $candidate" else "未匹配"
+                                    val rawText = visionText.text.trim()
+                                    if (rawText.isNotBlank() && (candidate != null || now - lastRecordedOcrTime > 300L || rawText != lastLoggedOcrText)) {
+                                        lastRecordedOcrTime = now
+                                        synchronized(ocrLogHistory) {
+                                            if (ocrLogHistory.size >= 25) {
+                                                ocrLogHistory.removeAt(0)
+                                            }
+                                            ocrLogHistory.add(OcrSnapshot(timeStr, candidate, debugLog, summary))
+                                        }
+                                    }
+
+                                    if (isDebugLogOpen && !isRecognitionPaused && viewingHistoryIndex == -1) {
+                                        runOnUiThread {
+                                            updateDebugLogUi()
+                                        }
+                                    }
+
                                     val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
                                     if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
                                         val res = candidate ?: "none"
                                         Log.d("ScannerOCR", "raw=$compactText; candidate=$res")
                                         lastLoggedOcrText = compactText
                                     }
-                                }
-                                if (candidate != null && !isRecognitionPaused) {
-                                    handleCandidateDetected(candidate)
+                                    if (candidate != null && !isRecognitionPaused) {
+                                        handleCandidateDetected(candidate)
+                                    }
+                                } else {
+                                    val candidate = extractSkuFromVisionText(visionText, imgScanBox)
+                                    if (candidate != null) {
+                                        handleCandidateDetected(candidate)
+                                    }
                                 }
                             }
                             .addOnFailureListener { error ->
