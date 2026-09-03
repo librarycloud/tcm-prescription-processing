@@ -862,3 +862,148 @@ internal fun RecentSearchChipsRow(
         }
     }
 }
+
+internal fun stat(stats: JSONObject?, key: String): String = stats?.displayField(key) ?: "-"
+
+@Composable
+internal fun SectionTitle(text: String) {
+    SectionHeader(title = text)
+}
+
+@Composable
+internal fun StatsGrid(
+    items: List<Pair<String, String>>,
+    onClick: (() -> Unit)? = null,
+    onItemClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null,
+    columns: Int? = null,
+) {
+    val gridColumns = columns ?: if (items.size % 2 == 0 && items.size <= 4) 2 else 3
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(gridColumns).forEachIndexed { rowIndex, row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val cellWeight = Modifier.weight(1f)
+                row.forEachIndexed { columnIndex, (label, value) ->
+                    val itemIndex = rowIndex * gridColumns + columnIndex
+                    val isSelected = selectedIndex == itemIndex
+                    val isPositive = value != "0" && value != "-"
+                    val isAlert = label.contains("逾期") || label.contains("等待") || label.contains("超时")
+                    val valueColor = when {
+                        !isPositive -> Ink
+                        isAlert -> Danger
+                        label.contains("完成") || label.contains("已取") -> Success
+                        else -> Primary
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .then(cellWeight)
+                            .height(68.dp)
+                            .then(
+                                when {
+                                    onItemClick != null -> Modifier.clickable { onItemClick(itemIndex) }
+                                    onClick != null -> Modifier.clickable(onClick = onClick)
+                                    else -> Modifier
+                                },
+                            ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        ),
+                        shape = CardShape,
+                        border = BorderStroke(1.dp, if (isSelected) Primary else CardBorderColor),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = value,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = valueColor,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = label,
+                                color = Muted,
+                                fontSize = 10.sp,
+                            )
+                        }
+                    }
+                }
+                repeat(gridColumns - row.size) {
+                    Spacer(cellWeight)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun QuickAction(
+    label: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconColor: Color = Primary,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = CardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, CardBorderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                color = iconColor.copy(alpha = 0.10f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.size(42.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Ink,
+                    fontSize = 15.sp,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    color = Muted,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                )
+            }
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Muted.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}

@@ -302,7 +302,7 @@ internal fun HerbsScreen(
                                         val loc = locations.getJSONObject(locIndex)
                                         val herbs = loc.optJSONArray("herbs") ?: JSONArray()
                                         Surface(
-                                            color = CardBackground,
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
                                             shape = RoundedCornerShape(6.dp),
                                             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                                             modifier = Modifier.weight(1f).clickable {

@@ -448,7 +448,6 @@ internal fun E6ImportsScreen(
                 }
             }
         }
-        }
     }
 
     if (datePickerOpen) {
