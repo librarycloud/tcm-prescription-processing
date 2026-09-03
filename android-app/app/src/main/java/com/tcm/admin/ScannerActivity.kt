@@ -49,6 +49,9 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -74,10 +77,78 @@ class ScannerActivity : ComponentActivity() {
     private var isTorchOn = false
     private var isDebugLogOpen = false
     @Volatile
+    private var isRecognitionPaused = false
+    @Volatile
     private var latestOcrDebugLog: String? = null
     private var debugLogTextView: TextView? = null
+    private var debugHistoryTextView: TextView? = null
+    private var debugPauseBtn: TextView? = null
+    private val ocrLogHistory = java.util.Collections.synchronizedList(mutableListOf<OcrSnapshot>())
+    private var viewingHistoryIndex = -1
+    private var lastRecordedOcrTime = 0L
+
+    private data class OcrSnapshot(
+        val timestamp: String,
+        val candidate: String?,
+        val fullLog: String,
+        val summary: String,
+    )
+
     private val ocrInFlight = AtomicBoolean(false)
     private lateinit var previewView: PreviewView
+    private var overlayView: ScannerOverlayView? = null
+
+    private fun updateDebugLogUi() {
+        val logTv = debugLogTextView ?: return
+        val historyTv = debugHistoryTextView ?: return
+        val pauseBtn = debugPauseBtn ?: return
+
+        overlayView?.postInvalidate()
+
+        if (isRecognitionPaused) {
+            pauseBtn.text = "▶ 继续"
+            pauseBtn.setTextColor(Color.WHITE)
+            (pauseBtn.background as? GradientDrawable)?.setColor(0xCC00C853.toInt())
+        } else {
+            pauseBtn.text = "⏸ 暂停"
+            pauseBtn.setTextColor(0xFFFFD54F.toInt())
+            (pauseBtn.background as? GradientDrawable)?.setColor(0x55FFB300.toInt())
+        }
+
+        synchronized(ocrLogHistory) {
+            val total = ocrLogHistory.size
+            if (total == 0) {
+                if (isRecognitionPaused) {
+                    historyTv.text = "⏸ 识别已暂停 (暂无记录)"
+                } else {
+                    historyTv.text = "● 实时识别中 (等待中...)"
+                }
+                if (!latestOcrDebugLog.isNullOrBlank()) {
+                    logTv.text = latestOcrDebugLog
+                }
+                return
+            }
+
+            if (viewingHistoryIndex in 0 until total) {
+                val s = ocrLogHistory[viewingHistoryIndex]
+                val cur = viewingHistoryIndex + 1
+                historyTv.text = "[$cur/$total] ${s.timestamp} ${s.summary}"
+                logTv.text = "【帧时间】: ${s.timestamp} (历史 $cur/$total)\n${s.fullLog}"
+            } else {
+                if (isRecognitionPaused) {
+                    historyTv.text = "⏸ 已暂停 · 最新 (共 $total 帧)"
+                } else {
+                    historyTv.text = "● 实时 · 最新 (已录 $total 帧)"
+                }
+                val s = ocrLogHistory.lastOrNull()
+                if (s != null) {
+                    logTv.text = "【帧时间】: ${s.timestamp} (最新)\n${s.fullLog}"
+                } else if (!latestOcrDebugLog.isNullOrBlank()) {
+                    logTv.text = latestOcrDebugLog
+                }
+            }
+        }
+    }
 
     @Volatile
     private var lastCandidate: String? = null
@@ -122,6 +193,7 @@ class ScannerActivity : ComponentActivity() {
         root.addView(previewView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         val overlay = ScannerOverlayView(this, ocrEnabled)
+        overlayView = overlay
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         // Top control bar (Back Button + Flashlight / Torch toggle + Debug Log toggle)
@@ -213,43 +285,69 @@ class ScannerActivity : ComponentActivity() {
             visibility = View.GONE
         }
 
+        fun createPillBtn(title: String, bgColor: Int, txtColor: Int, onClick: () -> Unit): TextView = TextView(this).apply {
+            text = title
+            setTextColor(txtColor)
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding((8 * density).toInt(), (4 * density).toInt(), (8 * density).toInt(), (4 * density).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 8 * density
+                setColor(bgColor)
+            }
+            setOnClickListener { onClick() }
+        }
+
+        // Row 1: Header (Title + Pause/Resume + Copy + Close)
         val headerLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val headerTitle = TextView(this).apply {
-            text = "🐞 实时识别日志 (OCR Debug)"
+            text = "🐞 识别日志"
             setTextColor(Color.WHITE)
             textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        val copyBtn = TextView(this).apply {
-            text = "复制日志"
-            setTextColor(Color.WHITE)
-            textSize = 11f
-            setPadding((10 * density).toInt(), (4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt())
-            background = GradientDrawable().apply {
-                cornerRadius = 8 * density
-                setColor(0x33FFFFFF)
+        val pauseBtn = createPillBtn("⏸ 暂停", 0x55FFB300.toInt(), 0xFFFFD54F.toInt()) {
+            isRecognitionPaused = !isRecognitionPaused
+            if (isRecognitionPaused) {
+                viewingHistoryIndex = synchronized(ocrLogHistory) { ocrLogHistory.lastIndex }
+                Toast.makeText(this@ScannerActivity, "识别已暂停，日志已冻结", Toast.LENGTH_SHORT).show()
+            } else {
+                viewingHistoryIndex = -1
+                Toast.makeText(this@ScannerActivity, "已恢复实时识别", Toast.LENGTH_SHORT).show()
             }
-            setOnClickListener {
-                val textToCopy = latestOcrDebugLog
-                if (!textToCopy.isNullOrBlank()) {
-                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    clipboard?.setPrimaryClip(ClipData.newPlainText("OCR Log", textToCopy))
-                    Toast.makeText(this@ScannerActivity, "识别日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+            updateDebugLogUi()
+        }
+        debugPauseBtn = pauseBtn
+
+        val copyBtn = createPillBtn("复制", 0x33FFFFFF, Color.WHITE) {
+            val textToCopy = synchronized(ocrLogHistory) {
+                if (viewingHistoryIndex in ocrLogHistory.indices) {
+                    val s = ocrLogHistory[viewingHistoryIndex]
+                    "[时间: ${s.timestamp}]\n${s.fullLog}"
                 } else {
-                    Toast.makeText(this@ScannerActivity, "暂无识别日志", Toast.LENGTH_SHORT).show()
+                    ocrLogHistory.lastOrNull()?.let { "[时间: ${it.timestamp}]\n${it.fullLog}" } ?: latestOcrDebugLog
                 }
             }
+            if (!textToCopy.isNullOrBlank()) {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                clipboard?.setPrimaryClip(ClipData.newPlainText("OCR Log", textToCopy))
+                Toast.makeText(this@ScannerActivity, "已复制当前识别日志", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@ScannerActivity, "暂无识别日志", Toast.LENGTH_SHORT).show()
+            }
         }
+
         val closeBtn = TextView(this).apply {
             text = "✕"
             setTextColor(Color.WHITE)
             textSize = 14f
             gravity = Gravity.CENTER
-            setPadding((10 * density).toInt(), (4 * density).toInt(), (6 * density).toInt(), (4 * density).toInt())
+            setPadding((10 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
             setOnClickListener {
                 isDebugLogOpen = false
                 debugLogPanel.visibility = View.GONE
@@ -260,10 +358,102 @@ class ScannerActivity : ComponentActivity() {
             }
         }
         headerLayout.addView(headerTitle)
-        headerLayout.addView(copyBtn)
+        val pauseMargin = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            marginEnd = (6 * density).toInt()
+        }
+        headerLayout.addView(pauseBtn, pauseMargin)
+        val copyMargin = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            marginEnd = (4 * density).toInt()
+        }
+        headerLayout.addView(copyBtn, copyMargin)
         headerLayout.addView(closeBtn)
         debugLogPanel.addView(headerLayout)
 
+        // Row 2: History Navigation Toolbar
+        val historyBarLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (6 * density).toInt(), 0, (6 * density).toInt())
+        }
+
+        fun createNavBtn(title: String, onClick: () -> Unit): TextView = TextView(this).apply {
+            text = title
+            setTextColor(0xFFE0E0E0.toInt())
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding((7 * density).toInt(), (3 * density).toInt(), (7 * density).toInt(), (3 * density).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 6 * density
+                setColor(0x22FFFFFF)
+            }
+            setOnClickListener { onClick() }
+        }
+
+        val prevBtn = createNavBtn("◀ 上帧") {
+            isRecognitionPaused = true
+            synchronized(ocrLogHistory) {
+                if (ocrLogHistory.isNotEmpty()) {
+                    if (viewingHistoryIndex == -1) {
+                        viewingHistoryIndex = (ocrLogHistory.lastIndex - 1).coerceAtLeast(0)
+                    } else {
+                        viewingHistoryIndex = (viewingHistoryIndex - 1).coerceAtLeast(0)
+                    }
+                }
+            }
+            updateDebugLogUi()
+        }
+        val historyTv = TextView(this).apply {
+            text = "● 实时识别中"
+            setTextColor(0xFF81D4FA.toInt())
+            textSize = 10f
+            gravity = Gravity.CENTER
+            isSingleLine = true
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        debugHistoryTextView = historyTv
+
+        val nextBtn = createNavBtn("下帧 ▶") {
+            synchronized(ocrLogHistory) {
+                if (ocrLogHistory.isNotEmpty() && viewingHistoryIndex != -1) {
+                    if (viewingHistoryIndex < ocrLogHistory.lastIndex) {
+                        viewingHistoryIndex++
+                    } else {
+                        viewingHistoryIndex = -1
+                    }
+                }
+            }
+            updateDebugLogUi()
+        }
+        val latestBtn = createNavBtn("最新 ⏭") {
+            viewingHistoryIndex = -1
+            updateDebugLogUi()
+        }
+        val clearBtn = createNavBtn("清空 🗑") {
+            synchronized(ocrLogHistory) {
+                ocrLogHistory.clear()
+            }
+            viewingHistoryIndex = -1
+            updateDebugLogUi()
+            Toast.makeText(this@ScannerActivity, "已清空记录", Toast.LENGTH_SHORT).show()
+        }
+
+        historyBarLayout.addView(prevBtn)
+        val hNextMargin = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = (4 * density).toInt()
+        }
+        historyBarLayout.addView(historyTv)
+        historyBarLayout.addView(nextBtn, hNextMargin)
+        val hLatestMargin = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = (4 * density).toInt()
+        }
+        historyBarLayout.addView(latestBtn, hLatestMargin)
+        val hClearMargin = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = (4 * density).toInt()
+        }
+        historyBarLayout.addView(clearBtn, hClearMargin)
+        debugLogPanel.addView(historyBarLayout)
+
+        // Row 3: Log content view
         val scrollView = ScrollView(this).apply {
             isFillViewport = true
         }
@@ -272,7 +462,7 @@ class ScannerActivity : ComponentActivity() {
             setTextColor(0xFF00E676.toInt())
             textSize = 11f
             typeface = Typeface.MONOSPACE
-            setPadding(0, (8 * density).toInt(), 0, 0)
+            setPadding(0, (4 * density).toInt(), 0, 0)
         }
         debugLogTextView = tv
         scrollView.addView(tv, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT))
@@ -280,7 +470,7 @@ class ScannerActivity : ComponentActivity() {
 
         val panelParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
-            (240 * density).toInt()
+            (320 * density).toInt()
         ).apply {
             gravity = Gravity.BOTTOM
             val m = (12 * density).toInt()
@@ -296,10 +486,7 @@ class ScannerActivity : ComponentActivity() {
                 setColor(if (isDebugLogOpen) 0xCC00C853.toInt() else 0x66000000)
             }
             if (isDebugLogOpen) {
-                val current = latestOcrDebugLog
-                if (!current.isNullOrBlank()) {
-                    tv.text = current
-                }
+                updateDebugLogUi()
             }
         }
 
@@ -334,7 +521,7 @@ class ScannerActivity : ComponentActivity() {
             val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
             analysis.setAnalyzer(cameraExecutor) { proxy ->
                 val mediaImage = proxy.image
-                if (mediaImage == null || delivered.get()) {
+                if (mediaImage == null || delivered.get() || isRecognitionPaused) {
                     proxy.close()
                     return@setAnalyzer
                 }
@@ -396,10 +583,12 @@ class ScannerActivity : ComponentActivity() {
                             validBarcodes.firstOrNull()
                         }
 
-                        targetBarcode?.let { barcode ->
-                            val value = barcode.rawValue
-                            if (!value.isNullOrBlank()) {
-                                handleBarcodeDetected(value, barcode.format)
+                        if (!isRecognitionPaused) {
+                            targetBarcode?.let { barcode ->
+                                val value = barcode.rawValue
+                                if (!value.isNullOrBlank()) {
+                                    handleBarcodeDetected(value, barcode.format)
+                                }
                             }
                         }
                     }
@@ -413,10 +602,27 @@ class ScannerActivity : ComponentActivity() {
                             .addOnSuccessListener { visionText ->
                                 val (candidate, debugLog) = extractSkuWithDebug(visionText, imgScanBox)
                                 latestOcrDebugLog = debugLog
-                                if (isDebugLogOpen) {
-                                    val logTv = debugLogTextView
-                                    logTv?.post { logTv.text = debugLog }
+
+                                val now = System.currentTimeMillis()
+                                val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
+                                val summary = if (candidate != null) "✅ SKU: $candidate" else "未匹配"
+                                val rawText = visionText.text.trim()
+                                if (rawText.isNotBlank() && (candidate != null || now - lastRecordedOcrTime > 300L || rawText != lastLoggedOcrText)) {
+                                    lastRecordedOcrTime = now
+                                    synchronized(ocrLogHistory) {
+                                        if (ocrLogHistory.size >= 25) {
+                                            ocrLogHistory.removeAt(0)
+                                        }
+                                        ocrLogHistory.add(OcrSnapshot(timeStr, candidate, debugLog, summary))
+                                    }
                                 }
+
+                                if (isDebugLogOpen && !isRecognitionPaused && viewingHistoryIndex == -1) {
+                                    runOnUiThread {
+                                        updateDebugLogUi()
+                                    }
+                                }
+
                                 if (BuildConfig.DEBUG) {
                                     val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
                                     if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
@@ -425,7 +631,7 @@ class ScannerActivity : ComponentActivity() {
                                         lastLoggedOcrText = compactText
                                     }
                                 }
-                                if (candidate != null) {
+                                if (candidate != null && !isRecognitionPaused) {
                                     handleCandidateDetected(candidate)
                                 }
                             }
@@ -479,6 +685,10 @@ class ScannerActivity : ComponentActivity() {
         textRecognizer?.close()
         cameraExecutor.shutdown()
         debugLogTextView = null
+        debugHistoryTextView = null
+        debugPauseBtn = null
+        overlayView = null
+        ocrLogHistory.clear()
         super.onDestroy()
     }
 
@@ -490,7 +700,7 @@ class ScannerActivity : ComponentActivity() {
         finish()
     }
 
-    private class ScannerOverlayView(context: Context, private val ocrEnabled: Boolean) : View(context) {
+    private inner class ScannerOverlayView(context: Context, private val ocrEnabled: Boolean) : View(context) {
         private val maskPaint = Paint().apply {
             color = 0x88000000.toInt()
             style = Paint.Style.FILL
@@ -538,10 +748,12 @@ class ScannerActivity : ComponentActivity() {
             // Transparent hole inside scanning box
             canvas.drawRect(left, top, right, bottom, transparentPaint)
 
-            // Green frame border
+            // Frame border (Amber when paused, Green when scanning)
+            framePaint.color = if (isRecognitionPaused) 0xFFFFB300.toInt() else 0xFF4CAF50.toInt()
             canvas.drawRect(left, top, right, bottom, framePaint)
 
             // Draw 4 corner highlights
+            cornerPaint.color = if (isRecognitionPaused) 0xFFFFD54F.toInt() else 0xFF00E676.toInt()
             canvas.drawLine(left, top + cornerLength, left, top, cornerPaint)
             canvas.drawLine(left, top, left + cornerLength, top, cornerPaint)
             canvas.drawLine(right - cornerLength, top, right, top, cornerPaint)
@@ -552,7 +764,9 @@ class ScannerActivity : ComponentActivity() {
             canvas.drawLine(right, bottom, right, bottom - cornerLength, cornerPaint)
 
             // Text hint below frame
-            val hint = if (ocrEnabled) {
+            val hint = if (isRecognitionPaused) {
+                "⏸ 识别已暂停 (正在分析日志，点击继续恢复)"
+            } else if (ocrEnabled) {
                 "将条形码、二维码或 SKU 数字对准框内\n(轻触屏幕可对焦)"
             } else {
                 "将条形码或二维码放入框内即可自动扫描"
