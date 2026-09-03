@@ -1,20 +1,30 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
-import 'element-plus/dist/index.css';
+// 样式由 unplugin-vue-components 按需注入，无需全量引入
 import './styles/theme.css';
 import './styles/global.css';
 import App from './App.vue';
 import router from './router';
+// 仅注册项目实际使用的 8 个图标，避免全量注册 250+ 个图标
+import {
+  Tickets,
+  Expand,
+  Fold,
+  ArrowDown,
+  Iphone,
+  Lock,
+  Refresh,
+  Loading
+} from '@element-plus/icons-vue';
 
 const app = createApp(App);
 
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+const usedIcons = { Tickets, Expand, Fold, ArrowDown, Iphone, Lock, Refresh, Loading };
+Object.entries(usedIcons).forEach(([key, component]) => {
   app.component(key, component);
-}
+});
 
 app.use(createPinia());
 app.use(router);
-app.use(ElementPlus);
 app.mount('#app');
+

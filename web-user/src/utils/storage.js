@@ -26,10 +26,13 @@ export function removeStorage(key) {
 }
 
 export function clearAppStorage() {
+  // theme_mode 是用户的界面偏好，登出时应保留，不随会话数据清除
+  const preserveKeys = new Set([`${PREFIX}theme_mode`]);
+
   Object.keys(window.localStorage)
-    .filter((key) => key.startsWith(PREFIX))
+    .filter((key) => key.startsWith(PREFIX) && !preserveKeys.has(key))
     .forEach((key) => window.localStorage.removeItem(key));
   Object.keys(window.sessionStorage)
-    .filter((key) => key.startsWith(PREFIX))
+    .filter((key) => key.startsWith(PREFIX) && !preserveKeys.has(key))
     .forEach((key) => window.sessionStorage.removeItem(key));
 }

@@ -262,4 +262,9 @@ router.beforeEach((to) => {
   return true;
 });
 
+router.afterEach((to) => {
+  const title = to.meta?.title;
+  document.title = title ? `${title} - 中药处方管理系统` : '中药处方管理系统';
+});
+
 export default router;

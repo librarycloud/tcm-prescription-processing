@@ -99,5 +99,10 @@ router.beforeEach((to) => {
   return getUserRedirectTarget(to.fullPath);
 });
 
+router.afterEach((to) => {
+  const title = to.meta?.title;
+  document.title = title ? `${title} - 取药中心` : '取药中心';
+});
+
 export { getUserRedirectTarget };
 export default router;

@@ -9,30 +9,3 @@ export function formatDate(value, fallback = '-') {
   )}:${pad(date.getMinutes())}`;
 }
 
-export function getRecentDays(days = 7) {
-  const result = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  for (let index = days - 1; index >= 0; index -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - index);
-    result.push(date);
-  }
-
-  return result;
-}
-
-export function formatDayLabel(date) {
-  const pad = (num) => String(num).padStart(2, '0');
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-export function isSameDay(dateValue, date) {
-  const target = new Date(dateValue);
-  return (
-    target.getFullYear() === date.getFullYear() &&
-    target.getMonth() === date.getMonth() &&
-    target.getDate() === date.getDate()
-  );
-}

@@ -45,6 +45,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Iphone, Lock } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
+import { getUserRedirectTarget } from '@/router';
 
 const router = useRouter();
 const route = useRoute();
@@ -57,13 +58,6 @@ const form = reactive({
   identifier: '',
   password: ''
 });
-
-function getUserRedirectTarget(redirect) {
-  const target = Array.isArray(redirect) ? redirect[0] : redirect;
-  return typeof target === 'string' && (target.startsWith('/user') || target === '/profile')
-    ? target
-    : '/user/packages';
-}
 
 const rules = {
   identifier: [{ required: true, message: '请输入手机号或用户名', trigger: 'blur' }],
@@ -106,7 +100,7 @@ async function handleLogin() {
   padding: 24px;
   background:
     linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0)),
-    #f5f7fb;
+    var(--app-bg);
 }
 
 .login-panel {

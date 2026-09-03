@@ -29,6 +29,10 @@
 
       <QRCodeCard :content="detail.pickupQrContent || detail.pickupCode" />
     </div>
+
+    <el-empty v-else description="包裹不存在或获取失败">
+      <el-button type="primary" @click="router.replace('/user/packages')">返回包裹列表</el-button>
+    </el-empty>
   </div>
 </template>
 
@@ -81,6 +85,8 @@ async function loadDetail() {
   loading.value = true;
   try {
     detail.value = await getUserPackageDetail(route.params.id);
+  } catch {
+    // detail 保持 null，模板会显示错误提示
   } finally {
     loading.value = false;
   }
