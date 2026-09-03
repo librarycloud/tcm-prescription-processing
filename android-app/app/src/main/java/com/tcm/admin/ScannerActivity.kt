@@ -194,7 +194,8 @@ class ScannerActivity : ComponentActivity() {
                                 if (BuildConfig.DEBUG) {
                                     val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
                                     if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
-                                        Log.d("ScannerOCR", "raw=$compactText; candidate=${sku ?: \"none\"}")
+                                        val res = sku ?: "none"
+                                        Log.d("ScannerOCR", "raw=$compactText; candidate=$res")
                                         lastLoggedOcrText = compactText
                                     }
                                 }
@@ -345,15 +346,15 @@ class ScannerActivity : ComponentActivity() {
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
         private val skuLabelRegex = Regex(
-            """(?i)(?:^|[^a-zA-Z0-9])(?:S\\s*K\\s*U|5\\s*K\\s*U)(?:[^a-zA-Z0-9]|$)"""
+            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0)(?:[^a-zA-Z0-9]|$)"""
         )
-        private val candidate9Pattern = Regex("""(?<!\\d)[0-9OolILsSbB|]{9}(?!\\d)""")
-        private val standalone9Pattern = Regex("""(?<!\\d)[0-9]{9}(?!\\d)""")
+        private val candidate9Pattern = Regex("""(?<!\d)[0-9OolILsSbB|]{9}(?!\d)""")
+        private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
         private val excludeLinePattern = Regex(
             """(?i)(?:手机|电话|虚拟号|备用|订单|UPC|条码|时间|日期|运单号)"""
         )
         private val multilineSkuRegex = Regex(
-            """(?i)(?:S\\s*K\\s*U|5\\s*K\\s*U)[\\s:：#\\-_/|]*([0-9OolILsSbB|]{9})(?!\\d)"""
+            """(?i)(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
         )
 
         private fun isInsideOrIntersects(itemRect: RectF, scanBox: RectF, toleranceRatio: Float = 0.12f): Boolean {
@@ -385,7 +386,7 @@ class ScannerActivity : ComponentActivity() {
         private fun normalizeOcrText(text: String): String {
             return text.map { char ->
                 when (char) {
-                    '\\u3000', '\\u00A0' -> ' '
+                    '\u3000', '\u00A0' -> ' '
                     in '０'..'９' -> ('0'.code + (char.code - '０'.code)).toChar()
                     in 'Ａ'..'Ｚ' -> ('A'.code + (char.code - 'Ａ'.code)).toChar()
                     in 'ａ'..'ｚ' -> ('a'.code + (char.code - 'ａ'.code)).toChar()
