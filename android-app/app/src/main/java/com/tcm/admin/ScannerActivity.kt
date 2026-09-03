@@ -163,17 +163,17 @@ class ScannerActivity : ComponentActivity() {
                         val validBarcodes = barcodes.filter { !it.rawValue.isNullOrBlank() }
                         val inBox = validBarcodes.filter { b ->
                             val box = b.boundingBox
-                            box == null || isInsideOrIntersects(RectF(box), imgScanBox)
+                            box != null && isInsideScanBox(RectF(box), imgScanBox)
                         }
-                        val candidates = if (inBox.isNotEmpty()) inBox else validBarcodes
-                        val targetBarcode = candidates.minByOrNull { b ->
+                        if (inBox.isEmpty()) return@addOnSuccessListener
+                        val targetBarcode = inBox.minByOrNull { b ->
                             val box = b.boundingBox ?: return@minByOrNull Float.MAX_VALUE
                             val cy = box.centerY().toFloat()
                             val cx = box.centerX().toFloat()
                             val dy = cy - imgScanBox.centerY()
                             val dx = cx - imgScanBox.centerX()
                             dx * dx + dy * dy
-                        } ?: candidates.firstOrNull()
+                        } ?: inBox.firstOrNull()
 
                         targetBarcode?.let { barcode ->
                             val value = barcode.rawValue
@@ -357,18 +357,11 @@ class ScannerActivity : ComponentActivity() {
             """(?i)(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
         )
 
-        private fun isInsideOrIntersects(itemRect: RectF, scanBox: RectF, toleranceRatio: Float = 0.12f): Boolean {
-            val marginX = scanBox.width() * toleranceRatio
-            val marginY = scanBox.height() * toleranceRatio
-            val expandedBox = RectF(
-                scanBox.left - marginX,
-                scanBox.top - marginY,
-                scanBox.right + marginX,
-                scanBox.bottom + marginY
-            )
+        private fun isInsideScanBox(itemRect: RectF, scanBox: RectF): Boolean {
             val cx = itemRect.centerX()
             val cy = itemRect.centerY()
-            return expandedBox.contains(cx, cy) || RectF.intersects(expandedBox, itemRect)
+            return cx >= scanBox.left && cx <= scanBox.right &&
+                   cy >= scanBox.top && cy <= scanBox.bottom
         }
 
         private fun cleanDigits(token: String): String {
@@ -412,8 +405,8 @@ class ScannerActivity : ComponentActivity() {
                     if (lineText.isEmpty()) continue
                     val box = line.boundingBox
                     val rect = if (box != null) RectF(box) else null
-                    if (scanBox != null && rect != null) {
-                        if (!isInsideOrIntersects(rect, scanBox)) {
+                    if (scanBox != null) {
+                        if (rect == null || !isInsideScanBox(rect, scanBox)) {
                             continue
                         }
                     }
@@ -430,7 +423,7 @@ class ScannerActivity : ComponentActivity() {
             }
 
             if (lines.isEmpty()) {
-                return extractSku(visionText.text)
+                return null
             }
 
             lines.sortBy { it.top }
