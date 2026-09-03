@@ -43,7 +43,7 @@ android {
 
     defaultConfig {
         applicationId = "com.tcm.admin"
-        minSdk = 31
+        minSdk = 26
         targetSdk = 36
         // Ship only the 64-bit ARM native libraries.
         ndk {
