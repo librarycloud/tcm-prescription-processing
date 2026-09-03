@@ -488,6 +488,11 @@ class ScannerActivity : ComponentActivity() {
                 }
                 if (isDebugLogOpen) {
                     updateDebugLogUi()
+                } else {
+                    // Automatically unpause and clear candidate buffer when closing debug panel
+                    isRecognitionPaused = false
+                    candidateHitWindow.clear()
+                    overlayView?.postInvalidate()
                 }
             }
         }
@@ -595,7 +600,22 @@ class ScannerActivity : ComponentActivity() {
                             targetBarcode?.let { barcode ->
                                 val value = barcode.rawValue
                                 if (!value.isNullOrBlank()) {
-                                    handleBarcodeDetected(value, barcode.format)
+                                    if (BuildConfig.DEBUG && isDebugLogOpen) {
+                                        isRecognitionPaused = true
+                                        viewingHistoryIndex = -1
+                                        triggerVibration()
+                                        val now = System.currentTimeMillis()
+                                        val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
+                                        val barLog = "【条码识别成功】\n格式: ${barcode.format}\n内容: $value\n(当前为调试模式，已自动暂停，未填入搜索框)"
+                                        latestOcrDebugLog = barLog
+                                        synchronized(ocrLogHistory) {
+                                            if (ocrLogHistory.size >= 25) ocrLogHistory.removeAt(0)
+                                            ocrLogHistory.add(OcrSnapshot(timeStr, value, barLog, "✅ 条码: $value"))
+                                        }
+                                        runOnUiThread { updateDebugLogUi() }
+                                    } else {
+                                        handleBarcodeDetected(value, barcode.format)
+                                    }
                                 }
                             }
                         }
@@ -610,7 +630,12 @@ class ScannerActivity : ComponentActivity() {
                             .addOnSuccessListener { visionText ->
                                 if (BuildConfig.DEBUG) {
                                     val (candidate, debugLog) = extractSkuWithDebug(visionText, imgScanBox)
-                                    latestOcrDebugLog = debugLog
+                                    val formattedLog = if (candidate != null && isDebugLogOpen) {
+                                        debugLog.replace("✅ 命中 SKU: $candidate", "✅ 命中 SKU: $candidate (调试模式：已自动停止刷新，未填入搜索框)")
+                                    } else {
+                                        debugLog
+                                    }
+                                    latestOcrDebugLog = formattedLog
 
                                     val now = System.currentTimeMillis()
                                     val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
@@ -622,24 +647,30 @@ class ScannerActivity : ComponentActivity() {
                                             if (ocrLogHistory.size >= 25) {
                                                 ocrLogHistory.removeAt(0)
                                             }
-                                            ocrLogHistory.add(OcrSnapshot(timeStr, candidate, debugLog, summary))
+                                            ocrLogHistory.add(OcrSnapshot(timeStr, candidate, formattedLog, summary))
                                         }
                                     }
 
-                                    if (isDebugLogOpen && !isRecognitionPaused && viewingHistoryIndex == -1) {
+                                    if (isDebugLogOpen) {
+                                        if (candidate != null && !isRecognitionPaused) {
+                                            // debug 查看识别内容时，如果有匹配项，就停止刷新解析，且不填入搜索框
+                                            isRecognitionPaused = true
+                                            viewingHistoryIndex = -1
+                                            triggerVibration()
+                                        }
                                         runOnUiThread {
                                             updateDebugLogUi()
                                         }
-                                    }
-
-                                    val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
-                                    if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
-                                        val res = candidate ?: "none"
-                                        Log.d("ScannerOCR", "raw=$compactText; candidate=$res")
-                                        lastLoggedOcrText = compactText
-                                    }
-                                    if (candidate != null && !isRecognitionPaused) {
-                                        handleCandidateDetected(candidate)
+                                    } else {
+                                        val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
+                                        if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
+                                            val res = candidate ?: "none"
+                                            Log.d("ScannerOCR", "raw=$compactText; candidate=$res")
+                                            lastLoggedOcrText = compactText
+                                        }
+                                        if (candidate != null && !isRecognitionPaused) {
+                                            handleCandidateDetected(candidate)
+                                        }
                                     }
                                 } else {
                                     val candidate = extractSkuFromVisionText(visionText, imgScanBox)
