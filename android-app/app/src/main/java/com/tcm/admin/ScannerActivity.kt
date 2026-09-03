@@ -155,10 +155,11 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun handleCandidateDetected(candidate: String) {
-        // Require two identical reads before returning OCR or one-dimensional barcode values.
+        // Numeric codes return quickly; less reliable Chinese OCR needs one extra confirmation.
+        val requiredHits = if (candidate.all(Char::isDigit)) 2 else 3
         if (candidate == lastCandidate) {
             candidateHitCount++
-            if (candidateHitCount >= 2) {
+            if (candidateHitCount >= requiredHits) {
                 deliverResult(candidate)
             }
         } else {
@@ -258,8 +259,9 @@ class ScannerActivity : ComponentActivity() {
         const val SCAN_RESULT = "scan_result"
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
-        // Also recognize '5KU' (when 'S' is OCR-misrecognized as '5'), 'SK', '货号', '编码'
-        private val skuLabelPattern = Regex("""(?i)(?:\bSKU\b|5KU|\bSK\b|货号|编码)""")
+        // Also recognize common OCR variants such as '5KU' and 'S K U'.
+        private val skuLabelPattern = Regex("""(?i)(?:\bS\s*K\s*U\b|\b5\s*K\s*U\b|\bS\s*K\b|货号|编码)""")
+        private val skuDigitCandidatePattern = Regex("""(?<![0-9A-Za-z])([0-9OolILsSbB|](?:[\s:：,，;；/]*[0-9OolILsSbB|]){8})(?![0-9A-Za-z])""")
         private val excludeLinePattern = Regex("(?:电话|手机|虚拟|备用|订单|下单|时间|配送|原价|付款|编号|口袋|总数|减配送)")
 
         private fun cleanDigits(token: String): String {
@@ -272,6 +274,12 @@ class ScannerActivity : ComponentActivity() {
                     else -> it
                 }
             }.filter(Char::isDigit).joinToString("")
+        }
+
+        private fun findNineDigitSku(text: String): String? {
+            return skuDigitCandidatePattern.findAll(text)
+                .map { cleanDigits(it.groupValues[1]) }
+                .firstOrNull { it.length == 9 }
         }
 
         // Product names are extracted from a Chinese run; OCR may drop the item prefix or brackets.
@@ -329,12 +337,7 @@ class ScannerActivity : ComponentActivity() {
                 val match = skuLabelPattern.find(line)
                 if (match != null) {
                     val afterLabel = line.substring(match.range.last + 1)
-                    val tokens = afterLabel.split(Regex("[\\s:：,，;；|/]+")).filter { it.isNotBlank() }
-                    for (token in tokens) {
-                        if (token.contains("UPC", ignoreCase = true)) break
-                        val d = cleanDigits(token)
-                        if (d.length == 9) return d
-                    }
+                    findNineDigitSku(afterLabel)?.let { return it }
 
                     // Multi-column or wrapped block OCR reading (up to 3 subsequent lines)
                     for (offset in 1..3) {
@@ -345,12 +348,7 @@ class ScannerActivity : ComponentActivity() {
                         if (nextLine.matches(Regex("(?i)^\\s*UPC\\s*$")) || nextLine.contains("UPC", ignoreCase = true)) {
                             continue
                         }
-                        val nextTokens = nextLine.split(Regex("[\\s:：,，;；|/]+")).filter { it.isNotBlank() }
-                        for (token in nextTokens) {
-                            if (token.contains("UPC", ignoreCase = true)) break
-                            val d = cleanDigits(token)
-                            if (d.length == 9) return d
-                        }
+                        findNineDigitSku(nextLine)?.let { return it }
                     }
                 }
             }
@@ -377,17 +375,6 @@ class ScannerActivity : ComponentActivity() {
             // Priority 4: Numbered product item line, even if OCR omitted a brand wrapper.
             for (line in lines) {
                 extractChineseProduct(line)?.let { return it }
-            }
-
-            // Priority 5: Safe fallback across non-excluded lines for standalone 9 digits
-            for (line in lines) {
-                if (excludeLinePattern.containsMatchIn(line)) continue
-                val tokens = line.split(Regex("[\\s:：,，;；|/]+")).filter { it.isNotBlank() }
-                for (token in tokens) {
-                    if (token.contains("UPC", ignoreCase = true)) continue
-                    val d = cleanDigits(token)
-                    if (d.length == 9) return d
-                }
             }
 
             return null
