@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "TCMAdmin"
 include(":app")
+include(":ppocr-sdk")
+project(":ppocr-sdk").projectDir = file("ppocr-sdk")
