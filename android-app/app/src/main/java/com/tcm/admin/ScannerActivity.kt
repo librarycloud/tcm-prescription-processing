@@ -1,14 +1,17 @@
 package com.tcm.admin
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
@@ -17,11 +20,17 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import android.util.TypedValue
+import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -53,6 +62,9 @@ class ScannerActivity : ComponentActivity() {
     private var textRecognizer: TextRecognizer? = null
     @Volatile
     private var cameraProvider: ProcessCameraProvider? = null
+    @Volatile
+    private var currentCamera: Camera? = null
+    private var isTorchOn = false
     private val ocrInFlight = AtomicBoolean(false)
     private lateinit var previewView: PreviewView
 
@@ -72,6 +84,7 @@ class ScannerActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
@@ -82,10 +95,75 @@ class ScannerActivity : ComponentActivity() {
         previewView = PreviewView(this).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
+        previewView.setOnTouchListener { v, event ->
+            if (event.action == MotionEvent.ACTION_UP) {
+                val cam = currentCamera
+                if (cam != null) {
+                    val factory = previewView.meteringPointFactory
+                    val point = factory.createPoint(event.x, event.y)
+                    val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE).build()
+                    cam.cameraControl.startFocusAndMetering(action)
+                }
+                v.performClick()
+            }
+            true
+        }
         root.addView(previewView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         val overlay = ScannerOverlayView(this, ocrEnabled)
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        // Top control bar (Back Button + Flashlight / Torch toggle)
+        val density = resources.displayMetrics.density
+        val topBar = FrameLayout(this).apply {
+            setPadding((16 * density).toInt(), (40 * density).toInt(), (16 * density).toInt(), 0)
+        }
+
+        // Back Button
+        val backBtn = TextView(this).apply {
+            text = "✕"
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x66000000)
+            }
+            setOnClickListener { finish() }
+        }
+        val backParams = FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+            gravity = Gravity.START or Gravity.TOP
+        }
+        topBar.addView(backBtn, backParams)
+
+        // Torch toggle button
+        val torchBtn = TextView(this).apply {
+            text = "🔦"
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x66000000)
+            }
+            setOnClickListener {
+                val cam = currentCamera ?: return@setOnClickListener
+                if (cam.cameraInfo.hasFlashUnit()) {
+                    isTorchOn = !isTorchOn
+                    cam.cameraControl.enableTorch(isTorchOn)
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(if (isTorchOn) 0xCCFFD600.toInt() else 0x66000000)
+                    }
+                }
+            }
+        }
+        val torchParams = FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+            gravity = Gravity.END or Gravity.TOP
+        }
+        topBar.addView(torchBtn, torchParams)
+
+        root.addView(topBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
         setContentView(root)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -221,7 +299,7 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
             provider.unbindAll()
-            provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -331,11 +409,17 @@ class ScannerActivity : ComponentActivity() {
 
             // Text hint below frame
             val hint = if (ocrEnabled) {
-                "将条形码、二维码或 SKU 数字对准框内"
+                "将条形码、二维码或 SKU 数字对准框内\n(轻触屏幕可对焦)"
             } else {
                 "将条形码或二维码放入框内即可自动扫描"
             }
-            canvas.drawText(hint, width / 2f, bottom + 70f, textPaint)
+            if (hint.contains("\n")) {
+                val lines = hint.split("\n")
+                canvas.drawText(lines[0], width / 2f, bottom + 55f * resources.displayMetrics.density / 2.75f, textPaint)
+                canvas.drawText(lines[1], width / 2f, bottom + 95f * resources.displayMetrics.density / 2.75f, textPaint)
+            } else {
+                canvas.drawText(hint, width / 2f, bottom + 70f, textPaint)
+            }
         }
     }
 
@@ -346,24 +430,17 @@ class ScannerActivity : ComponentActivity() {
 
         // SKU Patterns
         private val skuLabelRegex = Regex(
-            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0)(?:[^a-zA-Z0-9]|$)"""
+            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0|S\s*K|K\s*U)(?:[^a-zA-Z0-9]|$)"""
         )
         private val multilineSkuRegex = Regex(
-            """(?i)(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
+            """(?i)(?:S\s*K\s*U|5\s*K\s*U|S\s*K\s*0|S\s*K|K\s*U)[\s:：#\-_/|]*([0-9OolILsSbB|\s\-_]{9,20})"""
         )
         private val candidate9Pattern = Regex("""(?<!\d)[0-9OolILsSbB|]{9}(?!\d)""")
         private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
 
-        // UPC / Barcode Patterns (12~13 digits)
-        private val upcLabelRegex = Regex(
-            """(?i)(?:UPC|条码|条形码|EAN)[\s:：#\-_/|]*([0-9OolILsSbB|]{12,13})(?!\d)"""
-        )
-        private val ean13Pattern = Regex("""(?<!\d)(69[0-9]{11})(?!\d)""")
-        private val standalone12Or13Pattern = Regex("""(?<!\d)[0-9]{12,13}(?!\d)""")
-
-        // Exclusion pattern for lines containing irrelevant numbers (phones, orders, dates, amounts, etc.)
+        // Exclusion pattern for lines containing irrelevant text/numbers (UPC, barcodes, phones, orders, dates, amounts, etc.)
         private val excludeLinePattern = Regex(
-            """(?i)(?:手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水)"""
+            """(?i)(?:UPC|条码|条形码|EAN|手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水|原价|已付款)"""
         )
 
         private fun isInsideScanBox(itemRect: RectF, scanBox: RectF): Boolean {
@@ -397,17 +474,63 @@ class ScannerActivity : ComponentActivity() {
             }.joinToString("")
         }
 
+        private data class RawElement(
+            val text: String,
+            val rect: RectF
+        )
+
+        private data class LogicalRow(
+            val text: String,
+            val top: Float,
+            val centerY: Float,
+            val isExcluded: Boolean
+        )
+
+        private data class CandidateResult(
+            val code: String,
+            val distanceToCenter: Float
+        )
+
+        private fun buildLogicalRows(elements: List<RawElement>): List<LogicalRow> {
+            if (elements.isEmpty()) return emptyList()
+            val sorted = elements.sortedBy { it.rect.centerY() }
+            val clusters = mutableListOf<MutableList<RawElement>>()
+
+            for (elem in sorted) {
+                var matched = false
+                for (cluster in clusters) {
+                    val avgCenterY = cluster.map { it.rect.centerY() }.average().toFloat()
+                    val avgHeight = cluster.map { it.rect.height() }.average().toFloat()
+                    val threshold = maxOf(avgHeight, elem.rect.height()) * 0.75f
+                    if (kotlin.math.abs(elem.rect.centerY() - avgCenterY) <= threshold) {
+                        cluster.add(elem)
+                        matched = true
+                        break
+                    }
+                }
+                if (!matched) {
+                    clusters.add(mutableListOf(elem))
+                }
+            }
+
+            return clusters.map { cluster ->
+                cluster.sortBy { it.rect.left }
+                val joinedText = cluster.joinToString(" ") { it.text }
+                val avgTop = cluster.map { it.rect.top }.minOrNull() ?: 0f
+                val avgCenterY = cluster.map { it.rect.centerY() }.average().toFloat()
+                LogicalRow(
+                    text = joinedText,
+                    top = avgTop,
+                    centerY = avgCenterY,
+                    isExcluded = excludeLinePattern.containsMatchIn(joinedText)
+                )
+            }.sortedBy { it.top }
+        }
+
         fun extractSkuFromVisionText(visionText: Text, scanBox: RectF?): String? {
             if (visionText.textBlocks.isEmpty()) return null
 
-            data class PositionedLine(
-                val text: String,
-                val top: Float,
-                val centerY: Float,
-                val isExcluded: Boolean
-            )
-
-            val lines = mutableListOf<PositionedLine>()
+            val elements = mutableListOf<RawElement>()
             for (block in visionText.textBlocks) {
                 for (line in block.lines) {
                     val lineText = line.text.trim()
@@ -420,59 +543,75 @@ class ScannerActivity : ComponentActivity() {
                         }
                     }
                     val normalized = normalizeOcrText(lineText)
-                    lines.add(
-                        PositionedLine(
-                            text = normalized,
-                            top = rect?.top ?: 0f,
-                            centerY = rect?.centerY() ?: 0f,
-                            isExcluded = excludeLinePattern.containsMatchIn(normalized)
-                        )
-                    )
+                    elements.add(RawElement(normalized, rect ?: RectF()))
                 }
             }
 
-            if (lines.isEmpty()) {
+            if (elements.isEmpty()) {
                 return null
             }
 
-            lines.sortBy { it.top }
-            val boxCenterY = scanBox?.centerY() ?: (lines.map { it.centerY }.average().toFloat())
+            val logicalRows = buildLogicalRows(elements)
+            val boxCenterY = scanBox?.centerY() ?: (logicalRows.map { it.centerY }.average().toFloat())
 
-            data class CandidateResult(
-                val code: String,
-                val distanceToCenter: Float
-            )
             val skuCandidates = mutableListOf<CandidateResult>()
-            val upcCandidates = mutableListOf<CandidateResult>()
 
-            // --- 1. SKU Extraction (Highest Priority) ---
-            // Strategy 1.1: Direct label on same line or next 1-2 lines
-            for (i in lines.indices) {
-                val line = lines[i]
-                if (skuLabelRegex.containsMatchIn(line.text)) {
-                    for (match in candidate9Pattern.findAll(line.text)) {
-                        val cleaned = cleanDigits(match.value)
-                        if (cleaned.length == 9) {
-                            skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(line.centerY - boxCenterY)))
+            // --- 1. SKU Extraction (Strict 9 digits only) ---
+            for (i in logicalRows.indices) {
+                val row = logicalRows[i]
+                if (row.isExcluded) continue
+
+                // Normalize spaces between digits on the row (e.g. "303 827 503" -> "303827503")
+                val collapsed = row.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+
+                // 1.1 Regex match on row text
+                multilineSkuRegex.findAll(collapsed).forEach { match ->
+                    val cleaned = cleanDigits(match.groupValues[1])
+                    if (cleaned.length == 9) {
+                        skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY)))
+                    }
+                }
+
+                // 1.2 If row contains SKU label, check remaining text on the same row or subsequent rows
+                if (skuLabelRegex.containsMatchIn(collapsed)) {
+                    val afterLabel = skuLabelRegex.replace(collapsed, " ")
+                    val cleaned = cleanDigits(afterLabel)
+                    if (cleaned.length == 9) {
+                        skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY)))
+                    }
+                    for (match in candidate9Pattern.findAll(afterLabel)) {
+                        val c = cleanDigits(match.value)
+                        if (c.length == 9) {
+                            skuCandidates.add(CandidateResult(c, kotlin.math.abs(row.centerY - boxCenterY)))
                         }
                     }
+
+                    // Also check next 1-2 rows
                     for (offset in 1..2) {
-                        val nextLine = lines.getOrNull(i + offset) ?: break
-                        if (nextLine.isExcluded) continue
-                        for (match in candidate9Pattern.findAll(nextLine.text)) {
-                            val cleaned = cleanDigits(match.value)
-                            if (cleaned.length == 9) {
-                                skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(nextLine.centerY - boxCenterY)))
+                        val nextRow = logicalRows.getOrNull(i + offset) ?: break
+                        if (nextRow.isExcluded) continue
+                        val nextCollapsed = nextRow.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                        val nextCleaned = cleanDigits(nextCollapsed)
+                        if (nextCleaned.length == 9) {
+                            skuCandidates.add(CandidateResult(nextCleaned, kotlin.math.abs(nextRow.centerY - boxCenterY)))
+                        } else {
+                            for (match in candidate9Pattern.findAll(nextCollapsed)) {
+                                val c = cleanDigits(match.value)
+                                if (c.length == 9) {
+                                    skuCandidates.add(CandidateResult(c, kotlin.math.abs(nextRow.centerY - boxCenterY)))
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Strategy 1.2: Multiline regex with SKU label
-            val combinedText = lines.joinToString("\n") { it.text }
+            // 1.3 Combined text regex
             if (skuCandidates.isEmpty()) {
-                multilineSkuRegex.find(combinedText)?.let { match ->
+                val combinedText = logicalRows.filter { !it.isExcluded }.joinToString("\n") {
+                    it.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                }
+                multilineSkuRegex.findAll(combinedText).forEach { match ->
                     val cleaned = cleanDigits(match.groupValues[1])
                     if (cleaned.length == 9) {
                         skuCandidates.add(CandidateResult(cleaned, 0f))
@@ -480,69 +619,21 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Strategy 1.3: SKU label somewhere in box + candidate 9 on non-excluded lines
-            if (skuCandidates.isEmpty() && skuLabelRegex.containsMatchIn(combinedText)) {
-                for (line in lines) {
-                    if (line.isExcluded) continue
-                    if (upcLabelRegex.containsMatchIn(line.text)) continue
-                    for (match in candidate9Pattern.findAll(line.text)) {
-                        val cleaned = cleanDigits(match.value)
-                        if (cleaned.length == 9) {
-                            skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(line.centerY - boxCenterY)))
-                        }
-                    }
-                }
-            }
-
-            // Strategy 1.4: Standalone 9 pure digits on non-excluded lines without SKU label
+            // 1.4 Standalone 9 pure digits on non-excluded rows (without long digit interference)
             if (skuCandidates.isEmpty()) {
-                for (line in lines) {
-                    if (line.isExcluded) continue
-                    if (upcLabelRegex.containsMatchIn(line.text)) continue
-                    if (Regex("""\d{10,}""").containsMatchIn(line.text)) continue
-                    for (match in standalone9Pattern.findAll(line.text)) {
-                        skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(line.centerY - boxCenterY)))
+                for (row in logicalRows) {
+                    if (row.isExcluded) continue
+                    val collapsed = row.text.replace(Regex("""(?<=\d)\s+(?=\d)"""), "")
+                    if (Regex("""\d{10,}""").containsMatchIn(collapsed)) continue
+                    for (match in standalone9Pattern.findAll(collapsed)) {
+                        skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(row.centerY - boxCenterY)))
                     }
                 }
             }
 
-            // If we found any valid SKU 9-digit candidates, return the one closest to center
             if (skuCandidates.isNotEmpty()) {
                 skuCandidates.sortBy { it.distanceToCenter }
                 return skuCandidates.first().code
-            }
-
-            // --- 2. UPC / Barcode Extraction (12~13 Digits, Fallback after SKU) ---
-            // Strategy 2.1: Line with UPC / 条码 label
-            for (line in lines) {
-                if (line.isExcluded) continue
-                upcLabelRegex.find(line.text)?.let { match ->
-                    val cleaned = cleanDigits(match.groupValues[1])
-                    if (cleaned.length in 12..13) {
-                        upcCandidates.add(CandidateResult(cleaned, kotlin.math.abs(line.centerY - boxCenterY)))
-                    }
-                }
-            }
-
-            // Strategy 2.2: China 69-prefix 13-digit EAN code
-            for (line in lines) {
-                if (line.isExcluded) continue
-                for (match in ean13Pattern.findAll(line.text)) {
-                    upcCandidates.add(CandidateResult(match.value, kotlin.math.abs(line.centerY - boxCenterY)))
-                }
-            }
-
-            // Strategy 2.3: Standalone 12-13 digits on non-excluded lines
-            for (line in lines) {
-                if (line.isExcluded) continue
-                for (match in standalone12Or13Pattern.findAll(line.text)) {
-                    upcCandidates.add(CandidateResult(match.value, kotlin.math.abs(line.centerY - boxCenterY)))
-                }
-            }
-
-            if (upcCandidates.isNotEmpty()) {
-                upcCandidates.sortBy { it.distanceToCenter }
-                return upcCandidates.first().code
             }
 
             return null
@@ -551,22 +642,29 @@ class ScannerActivity : ComponentActivity() {
         fun extractSku(rawText: String?): String? {
             if (rawText.isNullOrBlank()) return null
             val normalized = normalizeOcrText(rawText)
-            val lines = normalized.split(Regex("[\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
+            val lines = normalized.split(Regex("[\\r\\n]+"))
+                .map { it.trim().replace(Regex("""(?<=\d)\s+(?=\d)"""), "") }
+                .filter { it.isNotEmpty() }
 
             // 1. SKU with label
             for (i in lines.indices) {
                 val line = lines[i]
                 if (skuLabelRegex.containsMatchIn(line)) {
+                    val afterLabel = skuLabelRegex.replace(line, " ")
+                    val cleaned = cleanDigits(afterLabel)
+                    if (cleaned.length == 9) return cleaned
                     for (match in candidate9Pattern.findAll(line)) {
-                        val cleaned = cleanDigits(match.value)
-                        if (cleaned.length == 9) return cleaned
+                        val c = cleanDigits(match.value)
+                        if (c.length == 9) return c
                     }
                     for (offset in 1..2) {
                         val nextLine = lines.getOrNull(i + offset) ?: break
                         if (excludeLinePattern.containsMatchIn(nextLine)) continue
+                        val c = cleanDigits(nextLine)
+                        if (c.length == 9) return c
                         for (match in candidate9Pattern.findAll(nextLine)) {
-                            val cleaned = cleanDigits(match.value)
-                            if (cleaned.length == 9) return cleaned
+                            val mc = cleanDigits(match.value)
+                            if (mc.length == 9) return mc
                         }
                     }
                 }
@@ -581,24 +679,8 @@ class ScannerActivity : ComponentActivity() {
             // 3. Standalone 9 digits
             for (line in lines) {
                 if (excludeLinePattern.containsMatchIn(line)) continue
-                if (upcLabelRegex.containsMatchIn(line)) continue
                 if (Regex("""\d{10,}""").containsMatchIn(line)) continue
                 for (match in standalone9Pattern.findAll(line)) {
-                    return match.value
-                }
-            }
-
-            // 4. Fallback UPC 12-13 digits
-            for (line in lines) {
-                if (excludeLinePattern.containsMatchIn(line)) continue
-                upcLabelRegex.find(line)?.let { match ->
-                    val cleaned = cleanDigits(match.groupValues[1])
-                    if (cleaned.length in 12..13) return cleaned
-                }
-                for (match in ean13Pattern.findAll(line)) {
-                    return match.value
-                }
-                for (match in standalone12Or13Pattern.findAll(line)) {
                     return match.value
                 }
             }
