@@ -31,7 +31,6 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -76,11 +75,7 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
         if (ocrEnabled) {
-            textRecognizer = try {
-                TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-            } catch (_: Throwable) {
-                TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-            }
+            textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         }
         val root = FrameLayout(this)
         previewView = PreviewView(this).apply {
@@ -149,7 +144,7 @@ class ScannerActivity : ComponentActivity() {
                     }
                     .addOnCompleteListener { taskFinished() }
 
-                // 2. High-performance OCR text recognition
+                // 2. Offline Latin/Digit OCR text recognition for SKU
                 if (isOcrActive) {
                     val recognizer = textRecognizer
                     if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
@@ -300,7 +295,7 @@ class ScannerActivity : ComponentActivity() {
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
         private val skuLabelRegex = Regex(
-            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U|货号|商品编码|编码)(?:[^a-zA-Z0-9]|$)"""
+            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U)(?:[^a-zA-Z0-9]|$)"""
         )
         private val candidate9Pattern = Regex("""(?<!\d)[0-9OolILsSbB|]{9}(?!\d)""")
         private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
@@ -308,7 +303,7 @@ class ScannerActivity : ComponentActivity() {
             """(?i)(?:手机|电话|虚拟号|备用|订单|UPC|条码|时间|日期|运单号)"""
         )
         private val multilineSkuRegex = Regex(
-            """(?i)(?:S\s*K\s*U|5\s*K\s*U|货号|商品编码|编码)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
+            """(?i)(?:S\s*K\s*U|5\s*K\s*U)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
         )
 
         private fun cleanDigits(token: String): String {
@@ -340,7 +335,7 @@ class ScannerActivity : ComponentActivity() {
             val normalized = normalizeOcrText(rawText)
             val lines = normalized.split(Regex("[\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
 
-            // Strategy 1: Check lines with SKU / 5KU / 货号 / 编码 labels (same line or next 1-2 lines)
+            // Strategy 1: Check lines with SKU / 5KU labels (same line or next 1-2 lines)
             for (i in lines.indices) {
                 val line = lines[i]
                 if (skuLabelRegex.containsMatchIn(line)) {
