@@ -23,9 +23,15 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.graphics.Typeface
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
@@ -65,6 +71,10 @@ class ScannerActivity : ComponentActivity() {
     @Volatile
     private var currentCamera: Camera? = null
     private var isTorchOn = false
+    private var isDebugLogOpen = false
+    @Volatile
+    private var latestOcrDebugLog: String? = null
+    private var debugLogTextView: TextView? = null
     private val ocrInFlight = AtomicBoolean(false)
     private lateinit var previewView: PreviewView
 
@@ -113,7 +123,7 @@ class ScannerActivity : ComponentActivity() {
         val overlay = ScannerOverlayView(this, ocrEnabled)
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Top control bar (Back Button + Flashlight / Torch toggle)
+        // Top control bar (Back Button + Flashlight / Torch toggle + Debug Log toggle)
         val density = resources.displayMetrics.density
         val topBar = FrameLayout(this).apply {
             setPadding((16 * density).toInt(), (40 * density).toInt(), (16 * density).toInt(), 0)
@@ -135,6 +145,28 @@ class ScannerActivity : ComponentActivity() {
             gravity = Gravity.START or Gravity.TOP
         }
         topBar.addView(backBtn, backParams)
+
+        // Right side buttons container (Debug Log + Torch)
+        val rightButtons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        // Debug Log toggle button
+        val debugBtn = TextView(this).apply {
+            text = "🐞"
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x66000000)
+            }
+        }
+        val debugBtnParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+            marginEnd = (12 * density).toInt()
+        }
+        rightButtons.addView(debugBtn, debugBtnParams)
 
         // Torch toggle button
         val torchBtn = TextView(this).apply {
@@ -158,12 +190,117 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
         }
-        val torchParams = FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+        rightButtons.addView(torchBtn, LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()))
+
+        val rightParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.END or Gravity.TOP
         }
-        topBar.addView(torchBtn, torchParams)
+        topBar.addView(rightButtons, rightParams)
 
         root.addView(topBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+
+        // Floating Debug Log Panel (at the bottom)
+        val debugLogPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (12 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                cornerRadius = 16 * density
+                setColor(0xEE1E1E1E.toInt())
+                setStroke((1 * density).toInt(), 0x44FFFFFF)
+            }
+            visibility = View.GONE
+        }
+
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val headerTitle = TextView(this).apply {
+            text = "🐞 实时识别日志 (OCR Debug)"
+            setTextColor(Color.WHITE)
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val copyBtn = TextView(this).apply {
+            text = "复制日志"
+            setTextColor(Color.WHITE)
+            textSize = 11f
+            setPadding((10 * density).toInt(), (4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 8 * density
+                setColor(0x33FFFFFF)
+            }
+            setOnClickListener {
+                val textToCopy = latestOcrDebugLog
+                if (!textToCopy.isNullOrBlank()) {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("OCR Log", textToCopy))
+                    Toast.makeText(this@ScannerActivity, "识别日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@ScannerActivity, "暂无识别日志", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        val closeBtn = TextView(this).apply {
+            text = "✕"
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding((10 * density).toInt(), (4 * density).toInt(), (6 * density).toInt(), (4 * density).toInt())
+            setOnClickListener {
+                isDebugLogOpen = false
+                debugLogPanel.visibility = View.GONE
+                debugBtn.background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0x66000000)
+                }
+            }
+        }
+        headerLayout.addView(headerTitle)
+        headerLayout.addView(copyBtn)
+        headerLayout.addView(closeBtn)
+        debugLogPanel.addView(headerLayout)
+
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+        }
+        val tv = TextView(this).apply {
+            text = "等待相机识别...\n将包含 9 位数字的 SKU 对准绿色方框"
+            setTextColor(0xFF00E676.toInt())
+            textSize = 11f
+            typeface = Typeface.MONOSPACE
+            setPadding(0, (8 * density).toInt(), 0, 0)
+        }
+        debugLogTextView = tv
+        scrollView.addView(tv, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT))
+        debugLogPanel.addView(scrollView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        val panelParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            (240 * density).toInt()
+        ).apply {
+            gravity = Gravity.BOTTOM
+            val m = (12 * density).toInt()
+            setMargins(m, 0, m, (16 * density).toInt())
+        }
+        root.addView(debugLogPanel, panelParams)
+
+        debugBtn.setOnClickListener {
+            isDebugLogOpen = !isDebugLogOpen
+            debugLogPanel.visibility = if (isDebugLogOpen) View.VISIBLE else View.GONE
+            debugBtn.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (isDebugLogOpen) 0xCC00C853.toInt() else 0x66000000)
+            }
+            if (isDebugLogOpen) {
+                val current = latestOcrDebugLog
+                if (!current.isNullOrBlank()) {
+                    tv.text = current
+                }
+            }
+        }
 
         setContentView(root)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -273,7 +410,12 @@ class ScannerActivity : ComponentActivity() {
                     if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
                         recognizer.process(image)
                             .addOnSuccessListener { visionText ->
-                                val candidate = extractSkuFromVisionText(visionText, imgScanBox)
+                                val (candidate, debugLog) = extractSkuWithDebug(visionText, imgScanBox)
+                                latestOcrDebugLog = debugLog
+                                if (isDebugLogOpen) {
+                                    val logTv = debugLogTextView
+                                    logTv?.post { logTv.text = debugLog }
+                                }
                                 if (BuildConfig.DEBUG) {
                                     val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
                                     if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
@@ -335,6 +477,7 @@ class ScannerActivity : ComponentActivity() {
         scanner.close()
         textRecognizer?.close()
         cameraExecutor.shutdown()
+        debugLogTextView = null
         super.onDestroy()
     }
 
@@ -527,8 +670,19 @@ class ScannerActivity : ComponentActivity() {
             }.sortedBy { it.top }
         }
 
+        data class OcrExtractionResult(
+            val sku: String?,
+            val debugText: String
+        )
+
         fun extractSkuFromVisionText(visionText: Text, scanBox: RectF?): String? {
-            if (visionText.textBlocks.isEmpty()) return null
+            return extractSkuWithDebug(visionText, scanBox).sku
+        }
+
+        fun extractSkuWithDebug(visionText: Text, scanBox: RectF?): OcrExtractionResult {
+            if (visionText.textBlocks.isEmpty()) {
+                return OcrExtractionResult(null, "【框内文本】: 暂未检测到文字")
+            }
 
             val elements = mutableListOf<RawElement>()
             for (block in visionText.textBlocks) {
@@ -548,7 +702,7 @@ class ScannerActivity : ComponentActivity() {
             }
 
             if (elements.isEmpty()) {
-                return null
+                return OcrExtractionResult(null, "【框内文本】: 绿框内未包含任何文字\n(请将 SKU 移入绿框)")
             }
 
             val logicalRows = buildLogicalRows(elements)
@@ -631,12 +785,31 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            if (skuCandidates.isNotEmpty()) {
+            val finalSku = if (skuCandidates.isNotEmpty()) {
                 skuCandidates.sortBy { it.distanceToCenter }
-                return skuCandidates.first().code
+                skuCandidates.first().code
+            } else {
+                null
             }
 
-            return null
+            val sb = java.lang.StringBuilder()
+            sb.append("【框内文本】(${elements.size} 项):\n")
+            for (elem in elements) {
+                sb.append("• ").append(elem.text).append("\n")
+            }
+            sb.append("\n【重组逻辑行】(${logicalRows.size} 行):\n")
+            for ((idx, row) in logicalRows.withIndex()) {
+                val status = if (row.isExcluded) " [排除/条码/电话]" else ""
+                sb.append("${idx + 1}: ${row.text}$status\n")
+            }
+            sb.append("\n【提取结果】: ")
+            if (finalSku != null) {
+                sb.append("✅ 命中 SKU: ").append(finalSku)
+            } else {
+                sb.append("❌ 未检测到 9 位 SKU")
+            }
+
+            return OcrExtractionResult(finalSku, sb.toString())
         }
 
         fun extractSku(rawText: String?): String? {
