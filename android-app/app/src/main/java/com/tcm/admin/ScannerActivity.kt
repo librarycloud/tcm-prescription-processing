@@ -157,23 +157,31 @@ class ScannerActivity : ComponentActivity() {
                     scannerBoxRect(imgWidth, imgHeight)
                 }
 
-                // 1. Barcode scanner restricted to scanning frame
+                // 1. Barcode scanner
                 scanner.process(image)
                     .addOnSuccessListener { barcodes ->
                         val validBarcodes = barcodes.filter { !it.rawValue.isNullOrBlank() }
-                        val inBox = validBarcodes.filter { b ->
-                            val box = b.boundingBox
-                            box != null && isInsideScanBox(RectF(box), imgScanBox)
+                        if (validBarcodes.isEmpty()) return@addOnSuccessListener
+
+                        val targetBarcode = if (ocrEnabled) {
+                            // In Inventory & TopBar SKU scan mode: strictly restrict to scanning frame
+                            val inBox = validBarcodes.filter { b ->
+                                val box = b.boundingBox
+                                box != null && isInsideScanBox(RectF(box), imgScanBox)
+                            }
+                            if (inBox.isEmpty()) return@addOnSuccessListener
+                            inBox.minByOrNull { b ->
+                                val box = b.boundingBox ?: return@minByOrNull Float.MAX_VALUE
+                                val cy = box.centerY().toFloat()
+                                val cx = box.centerX().toFloat()
+                                val dy = cy - imgScanBox.centerY()
+                                val dx = cx - imgScanBox.centerX()
+                                dx * dx + dy * dy
+                            } ?: inBox.firstOrNull()
+                        } else {
+                            // General scan mode (packages, processing, stocktaking, etc.): original full-screen fast detection
+                            validBarcodes.firstOrNull()
                         }
-                        if (inBox.isEmpty()) return@addOnSuccessListener
-                        val targetBarcode = inBox.minByOrNull { b ->
-                            val box = b.boundingBox ?: return@minByOrNull Float.MAX_VALUE
-                            val cy = box.centerY().toFloat()
-                            val cx = box.centerX().toFloat()
-                            val dy = cy - imgScanBox.centerY()
-                            val dx = cx - imgScanBox.centerX()
-                            dx * dx + dy * dy
-                        } ?: inBox.firstOrNull()
 
                         targetBarcode?.let { barcode ->
                             val value = barcode.rawValue
