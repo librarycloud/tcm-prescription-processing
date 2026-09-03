@@ -15,6 +15,7 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -51,6 +52,7 @@ class ScannerActivity : ComponentActivity() {
     @Volatile
     private var candidateHitCount: Int = 0
     private val STABLE_HOLD_MS = 150L
+    private var lastLoggedOcrText: String? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -136,6 +138,13 @@ class ScannerActivity : ComponentActivity() {
                         recognizer.process(image)
                             .addOnSuccessListener { text ->
                                 val sku = extractSku(text.text)
+                                if (BuildConfig.DEBUG) {
+                                    val compactText = text.text.replace(Regex("\\s+"), " ").trim()
+                                    if (compactText != lastLoggedOcrText) {
+                                        Log.d("ScannerOCR", "raw=$compactText; candidate=${sku ?: "none"}")
+                                        lastLoggedOcrText = compactText
+                                    }
+                                }
                                 if (sku != null) {
                                     handleCandidateDetected(sku)
                                 }
