@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -164,6 +165,9 @@ internal fun Modifier.trackFocusedBounds(): Modifier {
 internal fun Modifier.dismissKeyboardOnTap(): Modifier {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val activeInputBounds = LocalActiveInputBounds.current
+    val activeBounds = activeInputBounds.value
+    var hostCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     val nestedScrollConnection = remember(focusManager, keyboardController) {
         object : NestedScrollConnection {
@@ -177,7 +181,23 @@ internal fun Modifier.dismissKeyboardOnTap(): Modifier {
         }
     }
 
-    return this.nestedScroll(nestedScrollConnection)
+    return this
+        .onGloballyPositioned { hostCoordinates = it }
+        .nestedScroll(nestedScrollConnection)
+        .pointerInput(activeBounds, hostCoordinates) {
+            awaitEachGesture {
+                val down = awaitFirstDown(
+                    requireUnconsumed = false,
+                    pass = PointerEventPass.Initial,
+                )
+                val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                val rootPosition = hostCoordinates?.localToRoot(down.position) ?: down.position
+                if (up != null && activeBounds?.contains(rootPosition) != true) {
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = false)
+                }
+            }
+        }
 }
 
 // ==================== Color Palette ====================
