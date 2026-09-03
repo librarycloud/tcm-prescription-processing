@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -279,7 +278,7 @@ internal fun E6ImportsScreen(
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-        Column(Modifier.fillMaxSize().imePadding().verticalScroll(listState.scrollState).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(listState.scrollState).padding(16.dp)) {
         SectionHeader("E6诊所处方导入", "核对E6订单，确认后生成处方与加工计划")
         Spacer(Modifier.height(12.dp))
         SearchBarField(
@@ -553,7 +552,7 @@ internal fun E6ImportDetailScreen(
         loading = false
     }
 
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader("订单详情", "核对原始订单、处方和加工计划")
         Spacer(Modifier.height(12.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
@@ -737,7 +736,7 @@ internal fun E6ImportConfirmScreen(
     }
     val canSubmit = !loading && (hasPrescription || doctorId > 0) && processTypeId > 0 && validBatches && (!isDecoction || (bagsPerDose.toIntOrNull()?.let { it > 0 } == true && volumeMl.toIntOrNull()?.let { it > 0 } == true))
 
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader(if (mergeIds.size > 1) "合并订单并生成处方" else "确认导入并生成加工计划", if (mergeIds.size > 1) "已选择 ${mergeIds.size} 个E6订单" else "核对信息后提交，生成处方和加工计划")
         Spacer(Modifier.height(12.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
@@ -901,7 +900,7 @@ private fun RejectE6Dialog(loading: Boolean, onDismiss: () -> Unit, onSubmit: (S
         onDismissRequest = onDismiss,
         title = { Text("驳回E6订单") },
         text = {
-            Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("驳回原因 *") }, minLines = 3, shape = FieldShape)
             }
         },

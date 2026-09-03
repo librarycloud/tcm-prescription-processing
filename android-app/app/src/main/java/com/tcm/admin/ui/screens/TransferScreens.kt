@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -359,7 +358,7 @@ internal fun TransfersScreen(
             onDismissRequest = { createVisible = false },
             title = { Text("新建门店调拨", fontWeight = FontWeight.Bold) },
             text = {
-                Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text("调出门店", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(4.dp))
                     Row(

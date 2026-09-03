@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -159,7 +158,7 @@ internal fun PrescriptionsScreen(user: JSONObject?, onNavigate: (ScreenTarget) -
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(scrollState).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
             if (!readOnly) {
@@ -315,7 +314,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
         runCatching { withContext(Dispatchers.IO) { ApiClient.prescriptionDetail(id) } }
             .onSuccess { detail = it }.onFailure { error = it.message ?: "加载处方详情失败" }
     }
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         if (detail == null && error == null) AppEmptyState("正在加载处方详情...")
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
         detail?.let { p ->
@@ -546,7 +545,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
             }.onFailure { error = it.message ?: "加载处方基础数据失败" }
     }
 
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionHeader(if (isEdit) "编辑处方" else "新建处方")
         Spacer(Modifier.height(14.dp))
         error?.let { Text(it, color = Danger, fontSize = 13.sp); Spacer(Modifier.height(8.dp)) }
