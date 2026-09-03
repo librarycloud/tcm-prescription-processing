@@ -103,17 +103,6 @@ internal fun InventoryScreen(
         )
     }
 
-    LaunchedEffect(initialQuery, scanRequestId) {
-        if (initialQuery.isNotBlank()) {
-            query = initialQuery
-            addSearchHistory(initialQuery)
-            page = 1
-            lastAutoSearchQuery = initialQuery.trim()
-            selectedProduct = null
-            searchRequest++
-        }
-    }
-
     fun addSearchHistory(term: String) {
         val t = term.trim()
         if (t.isBlank()) return
@@ -148,6 +137,17 @@ internal fun InventoryScreen(
         page = 1
         lastAutoSearchQuery = query.trim()
         searchRequest++
+    }
+
+    LaunchedEffect(initialQuery, scanRequestId) {
+        if (initialQuery.isNotBlank()) {
+            query = initialQuery
+            addSearchHistory(initialQuery)
+            page = 1
+            lastAutoSearchQuery = initialQuery.trim()
+            selectedProduct = null
+            searchRequest++
+        }
     }
 
     LaunchedEffect(query) {
