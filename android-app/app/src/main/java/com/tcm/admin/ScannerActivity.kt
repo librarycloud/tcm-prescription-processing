@@ -259,7 +259,7 @@ class ScannerActivity : ComponentActivity() {
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
         // Also recognize '5KU' (when 'S' is OCR-misrecognized as '5'), 'SK', '货号', '编码'
-        private val skuLabelPattern = Regex("(?i)(?:\bSKU\b|5KU|\bSK\b|货号|编码)")
+        private val skuLabelPattern = Regex("""(?i)(?:\bSKU\b|5KU|\bSK\b|货号|编码)""")
         private val excludeLinePattern = Regex("(?:电话|手机|虚拟|备用|订单|下单|时间|配送|原价|付款|编号|口袋|总数|减配送)")
 
         private fun cleanDigits(token: String): String {
@@ -274,16 +274,47 @@ class ScannerActivity : ComponentActivity() {
             }.filter(Char::isDigit).joinToString("")
         }
 
-        // Strictly match receipt item rows starting with numbers (e.g. "1. [云南白药]云南白药酊50ml" or "1、连花清瘟胶囊")
-        // Delimiters for brand exclude round parentheses (which represent unit specs like (50ml/瓶/盒))
-        // Extracts the actual product name AFTER the brand brackets, avoiding non-item brackets like [减配送费]
-        // Pocket marker (e.g. "-----------------1号口袋-----------------", "—1号袋—", "1号口袋", "口袋")
-        // Handles surrounding dashed dividers (----), em-dashes (——), underscores, and digit/Chinese prefixes
+        // Product names are extracted from a Chinese run; OCR may drop the item prefix or brackets.
         private val pocketPattern = Regex("""(?:[-—_~\s]*[0-9一二三四五六七八九十]*\s*号?\s*口?\s*袋[-—_~\s]*)""")
-        // Matches brand bracket delimiters [xx], 【xx】, ［xx］, |xx| and captures product name right after
-        private val brandBracketPattern = Regex("""(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|)\s*([\u4e00-\u9fa5]{2,30})""")
-        // Matches line starting with item numbering / symbols (1. / l. / I. / 1、 / 一、) and captures product name
-        private val numberedProductPattern = Regex("""^(?:[0-9a-zA-Z一二三四五六七八九十]+[.、\s\-_|/]+)\s*(?:[\[\u3010\uFF3B][^\]\u3011\uFF3D]+[\]\u3011\uFF3D]|\|[^|]+\|\s*)?([\u4e00-\u9fa5]{2,30})""")
+        private val itemPrefixPattern = Regex("""^[\s/_\-—~]*(?:[0-9一二三四五六七八九十]+\s*[.、:：/]|[lLiI]\s*[.、:]|[0-9一二三四五六七八九十]+\s+)[\s/_\-—~]*""")
+        private val chineseRunPattern = Regex("""[\u3400-\u9fff]{2,30}""")
+        private val productNoisePattern = Regex(
+            """(?:^[/\\(（]|^\s*(?:规格|数量|单价|金额|合计|应付|找零|收款|条码|商品编码)(?:\b|$)|^\s*\d+(?:\.\d+)?\s*(?:ml|kg|g|mg|mm|cm|pcs|upc)\b)""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        private fun extractChineseProduct(line: String, allowUnmarked: Boolean = false): String? {
+            if (line.isBlank() || excludeLinePattern.containsMatchIn(line)) return null
+            if (productNoisePattern.containsMatchIn(line)) return null
+
+            var candidate = line.trim()
+            val hadItemPrefix = itemPrefixPattern.containsMatchIn(candidate)
+            candidate = candidate.replace(itemPrefixPattern, "")
+            val brandResult = stripBrandWrapper(candidate)
+            val hadBrandWrapper = brandResult.first
+            candidate = brandResult.second.trimStart()
+
+            // Without a prefix, only accept a line that is known to be under a pocket marker.
+            if (!hadItemPrefix && !hadBrandWrapper && !allowUnmarked) return null
+            val match = chineseRunPattern.find(candidate) ?: return null
+            val name = match.value.trim()
+            return name.takeIf { it.length >= 2 }
+        }
+
+        private fun stripBrandWrapper(value: String): Pair<Boolean, String> {
+            if (value.isEmpty()) return false to value
+            val close = when (value.first()) {
+                '[', '\u3010', '\uFF3B' -> setOf(']', '\u3011', '\uFF3D')
+                '|', '\uFF5C' -> setOf('|', '\uFF5C')
+                else -> return false to value
+            }
+            val closeIndex = value.indexOfFirst { it in close }
+            return if (closeIndex > 0) {
+                true to value.substring(closeIndex + 1)
+            } else {
+                false to value
+            }
+        }
 
         fun extractSku(text: String): String? {
             if (text.isBlank()) return null
@@ -324,17 +355,10 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // Priority 2: Extract Chinese product name following brand brackets anywhere (e.g. "1. [云南白药]云南白药酊50ml" or "[云南白药]云南白药酊" -> "云南白药酊")
+            // Priority 2: Extract Chinese product name following a non-round brand wrapper.
             for (line in lines) {
-                if (excludeLinePattern.containsMatchIn(line)) continue
-                if (line.startsWith("/") || line.startsWith("(") || line.startsWith("（")) continue
-                val brandMatch = brandBracketPattern.find(line)
-                if (brandMatch != null) {
-                    val name = brandMatch.groupValues.getOrNull(1)?.trim()
-                    if (!name.isNullOrBlank() && name.length >= 2) {
-                        return name
-                    }
-                }
+                if (!line.contains(Regex("""[\[\u3010\uFF3B|｜]"""))) continue
+                extractChineseProduct(line)?.let { return it }
             }
 
             // Priority 3: Extract Chinese product name under "口袋" section if present
@@ -346,27 +370,13 @@ class ScannerActivity : ComponentActivity() {
                     if (nextLine.contains("sku", ignoreCase = true) || nextLine.contains("upc", ignoreCase = true)) continue
                     if (nextLine.startsWith("/") || nextLine.startsWith("(") || nextLine.startsWith("（")) continue
 
-                    val productMatch = numberedProductPattern.find(nextLine)
-                    if (productMatch != null) {
-                        val name = productMatch.groupValues.getOrNull(1)?.trim()
-                        if (!name.isNullOrBlank() && name.length >= 2) {
-                            return name
-                        }
-                    }
+                    extractChineseProduct(nextLine, allowUnmarked = true)?.let { return it }
                 }
             }
 
-            // Priority 4: Numbered product item line across non-excluded lines (e.g. "1. 连花清瘟胶囊 24粒" -> "连花清瘟胶囊")
+            // Priority 4: Numbered product item line, even if OCR omitted a brand wrapper.
             for (line in lines) {
-                if (excludeLinePattern.containsMatchIn(line)) continue
-                if (line.startsWith("/") || line.startsWith("(") || line.startsWith("（")) continue
-                val productMatch = numberedProductPattern.find(line)
-                if (productMatch != null) {
-                    val name = productMatch.groupValues.getOrNull(1)?.trim()
-                    if (!name.isNullOrBlank() && name.length >= 2) {
-                        return name
-                    }
-                }
+                extractChineseProduct(line)?.let { return it }
             }
 
             // Priority 5: Safe fallback across non-excluded lines for standalone 9 digits
