@@ -105,6 +105,7 @@ androidComponents {
                 "**/libbarhopper_v3.so",
                 "**/libimage_processing_util_jni.so",
                 "**/libsurface_util_jni.so",
+                "**/libmlkit_google_ocr_pipeline.so",
             ),
         )
     }
@@ -117,7 +118,6 @@ androidComponents {
 }
 
 dependencies {
-    implementation(project(":ppocr-sdk"))
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
@@ -131,6 +131,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("com.google.zxing:core:3.5.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -33,26 +33,17 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import com.paddle.ocr.EngineConfig
-import com.paddle.ocr.PaddleOCR
-import com.paddle.ocr.PaddleOCRConfig
-import com.paddle.ocr.util.OpenCVUtils
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.Locale
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -65,12 +56,11 @@ private fun scannerBoxRect(width: Float, height: Float): RectF {
 
 class ScannerActivity : ComponentActivity() {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
-    private val ocrScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val delivered = AtomicBoolean(false)
     private val scanner = BarcodeScanning.getClient()
     private var ocrEnabled = false
     @Volatile
-    private var paddleOcr: PaddleOCR? = null
+    private var textRecognizer: TextRecognizer? = null
     @Volatile
     private var cameraProvider: ProcessCameraProvider? = null
     private val ocrInFlight = AtomicBoolean(false)
@@ -96,7 +86,9 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
         if (ocrEnabled) {
-            loadPaddleOcr()
+            textRecognizer = TextRecognition.getClient(
+                ChineseTextRecognizerOptions.Builder().build(),
+            )
         }
         val root = FrameLayout(this)
         previewView = PreviewView(this).apply {
@@ -113,38 +105,6 @@ class ScannerActivity : ComponentActivity() {
             startCamera()
         } else {
             requestPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    private fun loadPaddleOcr() {
-        ocrScope.launch {
-            try {
-                check(OpenCVUtils.init(this@ScannerActivity)) {
-                    "Failed to initialize OpenCV native library"
-                }
-                val loaded = PaddleOCR.create(
-                    context = this@ScannerActivity,
-                    config = PaddleOCRConfig(
-                        // Match the official PP-OCRv6 small model configuration.
-                        detThresh = 0.2f,
-                        detBoxThresh = 0.45f,
-                        detUnclipRatio = 1.4f,
-                        recScoreThresh = 0.0f,
-                        recBatchSize = 1,
-                    ),
-                    engineConfig = EngineConfig(numThreads = 4),
-                )
-                if (isActive) {
-                    paddleOcr = loaded
-                    Log.i(TAG, "PP-OCRv6 small ready, coldLoad=${loaded.coldLoadTimeMs}ms")
-                } else {
-                    loaded.release()
-                }
-            } catch (t: Throwable) {
-                if (t !is CancellationException) {
-                    Log.e(TAG, "Failed to load PP-OCRv6 small", t)
-                }
-            }
         }
     }
 
@@ -200,8 +160,8 @@ class ScannerActivity : ComponentActivity() {
 
                 // OCR is intentionally restricted to the visible scanner box.
                 if (ocrEnabled) {
-                    val ocr = paddleOcr
-                    if (ocr != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
+                    val recognizer = textRecognizer
+                    if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
                         val frameBitmap = runCatching { imageProxyToBitmap(proxy) }
                             .onFailure { Log.w(TAG, "Failed to convert camera frame for OCR", it) }
                             .getOrNull()
@@ -209,53 +169,30 @@ class ScannerActivity : ComponentActivity() {
                             ocrInFlight.set(false)
                             taskFinished()
                         } else {
-                            ocrScope.launch {
-                                var roiBitmap: Bitmap? = null
-                                try {
-                                    val currentRoi = cropToScannerBox(frameBitmap)
-                                    roiBitmap = currentRoi
-                                    val runResult = ocr.recognize(currentRoi)
-                                    val resultLines = runResult.results.filter { it.text.isNotBlank() }
-                                    val lineText = resultLines.joinToString("\n") { it.text }
-                                    // A recognizer can split "SKU" into separate boxes. The joined
-                                    // pass keeps that case recoverable without scanning outside the ROI.
-                                    val sku = extractSku(lineText)
-                                        ?: extractSku(resultLines.joinToString(" ") { it.text })
+                            val roiBitmap = cropToScannerBox(frameBitmap)
+                            recognizer.process(InputImage.fromBitmap(roiBitmap, 0))
+                                .addOnSuccessListener { text ->
+                                    val sku = extractSku(text.text)
                                     if (BuildConfig.DEBUG) {
-                                        val compactText = lineText.replace(Regex("\\s+"), " ").trim()
-                                        val boxDetails = resultLines.joinToString(" | ") { result ->
-                                            val minX = result.box.points.minOf { it.x }
-                                            val minY = result.box.points.minOf { it.y }
-                                            val maxX = result.box.points.maxOf { it.x }
-                                            val maxY = result.box.points.maxOf { it.y }
-                                            "${result.text}@(${minX.roundToInt()},${minY.roundToInt()},${maxX.roundToInt()},${maxY.roundToInt()})/${String.format(Locale.US, "%.2f", result.confidence)}"
-                                        }
-                                        val logKey = "$compactText|$boxDetails"
-                                        if (logKey != lastLoggedOcrText) {
-                                            Log.d(
-                                                "ScannerOCR",
-                                                "engine=paddle; roi=${currentRoi.width}x${currentRoi.height}; " +
-                                                    "raw=$compactText; boxes=$boxDetails; candidate=${sku ?: "none"}",
-                                            )
-                                            lastLoggedOcrText = logKey
+                                        val compactText = text.text.replace(Regex("\\s+"), " ").trim()
+                                        if (compactText != lastLoggedOcrText) {
+                                            Log.d("ScannerOCR", "engine=mlkit; roi=${roiBitmap.width}x${roiBitmap.height}; raw=$compactText; candidate=${sku ?: "none"}")
+                                            lastLoggedOcrText = compactText
                                         }
                                     }
                                     if (sku != null) {
                                         handleCandidateDetected(sku)
                                     }
-                                } catch (t: Throwable) {
-                                    if (t !is CancellationException) {
-                                        Log.w(TAG, "PP-OCRv6 frame recognition failed", t)
-                                    }
-                                } finally {
-                                    if (roiBitmap != null && roiBitmap !== frameBitmap) {
-                                        roiBitmap.recycle()
-                                    }
+                                }
+                                .addOnFailureListener { error ->
+                                    Log.w(TAG, "ML Kit frame recognition failed", error)
+                                }
+                                .addOnCompleteListener {
+                                    if (roiBitmap !== frameBitmap) roiBitmap.recycle()
                                     frameBitmap.recycle()
                                     ocrInFlight.set(false)
                                     taskFinished()
                                 }
-                            }
                         }
                     } else {
                         taskFinished()
@@ -273,7 +210,7 @@ class ScannerActivity : ComponentActivity() {
             return
         }
         // Keep two-frame confirmation to avoid writing a transient OCR error into the search
-        // box. Chinese OCR is intentionally disabled in this scanner.
+        // box. Chinese product-name extraction is disabled; only labeled SKU digits are used.
         val requiredHits = 2
         if (candidate == lastCandidate) {
             candidateHitCount++
@@ -297,10 +234,8 @@ class ScannerActivity : ComponentActivity() {
     override fun onDestroy() {
         cameraProvider?.unbindAll()
         scanner.close()
-        val ocr = paddleOcr
-        paddleOcr = null
-        ocrScope.cancel()
-        ocr?.release()
+        textRecognizer?.close()
+        textRecognizer = null
         cameraExecutor.shutdown()
         super.onDestroy()
     }

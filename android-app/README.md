@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose 的管理员端原生 Android App，最低支持 Android 12（API 31）。当前版本已接入现有 Fastify 后端的管理员登录和概览统计接口，列表接口也已提供统一客户端封装；部分页面保留演示数据用于离线验证布局。
 
-库存扫描页使用 PaddleOCR 官方 Android SDK 的 PP-OCRv6 small ONNX 模型，并保留 ML Kit 条码扫描。OCR 只处理相机预览框内的图像，业务结果暂时仅接受 `SKU`/`5KU` 标签后面的完整 9 位数字，不再识别中文商品名；连续两帧一致后才回填搜索框。两个模型文件合计约 30 MB，另有 ONNX Runtime/OpenCV 的 arm64 原生库，因此 APK 会额外增加数十 MB。
+库存扫描页使用 ML Kit 中文文字识别和条码扫描。OCR 只处理相机预览框内的图像，业务结果暂时仅接受 `SKU`/`5KU` 标签后面的完整 9 位数字，不再识别中文商品名；连续两帧一致后才回填搜索框。中文 OCR 模型由 Google Play services 按需提供，不再随 APK 打包 PaddleOCR 模型和推理库。
 
 ## 本地构建
 
