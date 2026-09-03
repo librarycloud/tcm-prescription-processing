@@ -29,6 +29,7 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -125,17 +126,56 @@ class ScannerActivity : ComponentActivity() {
                 fun closeFrame() {
                     if (frameClosed.compareAndSet(false, true)) proxy.close()
                 }
-                val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
+                val rotation = proxy.imageInfo.rotationDegrees
+                val image = InputImage.fromMediaImage(mediaImage, rotation)
                 val isOcrActive = ocrEnabled && textRecognizer != null && !delivered.get()
                 val tasksRemaining = AtomicInteger(if (isOcrActive) 2 else 1)
                 fun taskFinished() {
                     if (tasksRemaining.decrementAndGet() == 0) closeFrame()
                 }
 
-                // 1. Barcode scanner
+                val isRotated = (rotation == 90 || rotation == 270)
+                val imgWidth = if (isRotated) proxy.height.toFloat() else proxy.width.toFloat()
+                val imgHeight = if (isRotated) proxy.width.toFloat() else proxy.height.toFloat()
+                val viewWidth = previewView.width.toFloat()
+                val viewHeight = previewView.height.toFloat()
+
+                val imgScanBox = if (viewWidth > 0f && viewHeight > 0f) {
+                    val scale = maxOf(viewWidth / imgWidth, viewHeight / imgHeight)
+                    val scaledWidth = imgWidth * scale
+                    val scaledHeight = imgHeight * scale
+                    val dx = (scaledWidth - viewWidth) / 2f
+                    val dy = (scaledHeight - viewHeight) / 2f
+                    val viewScanBox = scannerBoxRect(viewWidth, viewHeight)
+                    RectF(
+                        (viewScanBox.left + dx) / scale,
+                        (viewScanBox.top + dy) / scale,
+                        (viewScanBox.right + dx) / scale,
+                        (viewScanBox.bottom + dy) / scale
+                    )
+                } else {
+                    scannerBoxRect(imgWidth, imgHeight)
+                }
+
+                // 1. Barcode scanner restricted to scanning frame
                 scanner.process(image)
                     .addOnSuccessListener { barcodes ->
-                        barcodes.firstOrNull()?.let { barcode ->
+                        val validBarcodes = barcodes.filter { !it.rawValue.isNullOrBlank() }
+                        val inBox = validBarcodes.filter { b ->
+                            val box = b.boundingBox
+                            box == null || isInsideOrIntersects(RectF(box), imgScanBox)
+                        }
+                        val candidates = if (inBox.isNotEmpty()) inBox else validBarcodes
+                        val targetBarcode = candidates.minByOrNull { b ->
+                            val box = b.boundingBox ?: return@minByOrNull Float.MAX_VALUE
+                            val cy = box.centerY().toFloat()
+                            val cx = box.centerX().toFloat()
+                            val dy = cy - imgScanBox.centerY()
+                            val dx = cx - imgScanBox.centerX()
+                            dx * dx + dy * dy
+                        } ?: candidates.firstOrNull()
+
+                        targetBarcode?.let { barcode ->
                             val value = barcode.rawValue
                             if (!value.isNullOrBlank()) {
                                 handleBarcodeDetected(value, barcode.format)
@@ -144,17 +184,17 @@ class ScannerActivity : ComponentActivity() {
                     }
                     .addOnCompleteListener { taskFinished() }
 
-                // 2. Offline Latin/Digit OCR text recognition for SKU
+                // 2. Offline Latin/Digit OCR text recognition restricted to scanning frame
                 if (isOcrActive) {
                     val recognizer = textRecognizer
                     if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
                         recognizer.process(image)
                             .addOnSuccessListener { visionText ->
-                                val sku = extractSku(visionText.text)
+                                val sku = extractSkuFromVisionText(visionText, imgScanBox)
                                 if (BuildConfig.DEBUG) {
                                     val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
                                     if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
-                                        Log.d("ScannerOCR", "raw=$compactText; candidate=${sku ?: "none"}")
+                                        Log.d("ScannerOCR", "raw=$compactText; candidate=${sku ?: \"none\"}")
                                         lastLoggedOcrText = compactText
                                     }
                                 }
@@ -241,6 +281,12 @@ class ScannerActivity : ComponentActivity() {
             strokeCap = Paint.Cap.ROUND
             isAntiAlias = true
         }
+        private val aimPaint = Paint().apply {
+            color = 0x4410B981.toInt()
+            strokeWidth = 2.5f
+            style = Paint.Style.STROKE
+            isAntiAlias = true
+        }
         private val textPaint = Paint().apply {
             color = 0xFFFFFFFF.toInt()
             textSize = 38f
@@ -269,6 +315,10 @@ class ScannerActivity : ComponentActivity() {
             // Clear center framing box with rounded corners
             canvas.drawRoundRect(boxRect, 16f, 16f, transparentPaint)
 
+            // Draw center alignment guide
+            val centerY = (top + bottom) / 2f
+            canvas.drawLine(left + 24f, centerY, right - 24f, centerY, aimPaint)
+
             // Draw 4 corner highlights
             canvas.drawLine(left, top + cornerLength, left, top, cornerPaint)
             canvas.drawLine(left, top, left + cornerLength, top, cornerPaint)
@@ -295,16 +345,30 @@ class ScannerActivity : ComponentActivity() {
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
         private val skuLabelRegex = Regex(
-            """(?i)(?:^|[^a-zA-Z0-9])(?:S\s*K\s*U|5\s*K\s*U)(?:[^a-zA-Z0-9]|$)"""
+            """(?i)(?:^|[^a-zA-Z0-9])(?:S\\s*K\\s*U|5\\s*K\\s*U)(?:[^a-zA-Z0-9]|$)"""
         )
-        private val candidate9Pattern = Regex("""(?<!\d)[0-9OolILsSbB|]{9}(?!\d)""")
-        private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
+        private val candidate9Pattern = Regex("""(?<!\\d)[0-9OolILsSbB|]{9}(?!\\d)""")
+        private val standalone9Pattern = Regex("""(?<!\\d)[0-9]{9}(?!\\d)""")
         private val excludeLinePattern = Regex(
             """(?i)(?:手机|电话|虚拟号|备用|订单|UPC|条码|时间|日期|运单号)"""
         )
         private val multilineSkuRegex = Regex(
-            """(?i)(?:S\s*K\s*U|5\s*K\s*U)[\s:：#\-_/|]*([0-9OolILsSbB|]{9})(?!\d)"""
+            """(?i)(?:S\\s*K\\s*U|5\\s*K\\s*U)[\\s:：#\\-_/|]*([0-9OolILsSbB|]{9})(?!\\d)"""
         )
+
+        private fun isInsideOrIntersects(itemRect: RectF, scanBox: RectF, toleranceRatio: Float = 0.12f): Boolean {
+            val marginX = scanBox.width() * toleranceRatio
+            val marginY = scanBox.height() * toleranceRatio
+            val expandedBox = RectF(
+                scanBox.left - marginX,
+                scanBox.top - marginY,
+                scanBox.right + marginX,
+                scanBox.bottom + marginY
+            )
+            val cx = itemRect.centerX()
+            val cy = itemRect.centerY()
+            return expandedBox.contains(cx, cy) || RectF.intersects(expandedBox, itemRect)
+        }
 
         private fun cleanDigits(token: String): String {
             return token.map {
@@ -321,13 +385,128 @@ class ScannerActivity : ComponentActivity() {
         private fun normalizeOcrText(text: String): String {
             return text.map { char ->
                 when (char) {
-                    '\u3000', '\u00A0' -> ' '
+                    '\\u3000', '\\u00A0' -> ' '
                     in '０'..'９' -> ('0'.code + (char.code - '０'.code)).toChar()
                     in 'Ａ'..'Ｚ' -> ('A'.code + (char.code - 'Ａ'.code)).toChar()
                     in 'ａ'..'ｚ' -> ('a'.code + (char.code - 'ａ'.code)).toChar()
                     else -> char
                 }
             }.joinToString("")
+        }
+
+        fun extractSkuFromVisionText(visionText: Text, scanBox: RectF?): String? {
+            if (visionText.textBlocks.isEmpty()) return null
+
+            data class PositionedLine(
+                val text: String,
+                val top: Float,
+                val centerY: Float,
+                val isExcluded: Boolean
+            )
+
+            val lines = mutableListOf<PositionedLine>()
+            for (block in visionText.textBlocks) {
+                for (line in block.lines) {
+                    val lineText = line.text.trim()
+                    if (lineText.isEmpty()) continue
+                    val box = line.boundingBox
+                    val rect = if (box != null) RectF(box) else null
+                    if (scanBox != null && rect != null) {
+                        if (!isInsideOrIntersects(rect, scanBox)) {
+                            continue
+                        }
+                    }
+                    val normalized = normalizeOcrText(lineText)
+                    lines.add(
+                        PositionedLine(
+                            text = normalized,
+                            top = rect?.top ?: 0f,
+                            centerY = rect?.centerY() ?: 0f,
+                            isExcluded = excludeLinePattern.containsMatchIn(normalized)
+                        )
+                    )
+                }
+            }
+
+            if (lines.isEmpty()) {
+                return extractSku(visionText.text)
+            }
+
+            lines.sortBy { it.top }
+            val boxCenterY = scanBox?.centerY() ?: (lines.map { it.centerY }.average().toFloat())
+
+            data class CandidateResult(
+                val sku: String,
+                val distanceToCenter: Float
+            )
+            val candidates = mutableListOf<CandidateResult>()
+
+            // Strategy 1: Lines with SKU / 5KU label (same line or next 1-2 lines)
+            for (i in lines.indices) {
+                val line = lines[i]
+                if (skuLabelRegex.containsMatchIn(line.text)) {
+                    for (match in candidate9Pattern.findAll(line.text)) {
+                        val cleaned = cleanDigits(match.value)
+                        if (cleaned.length == 9) {
+                            candidates.add(CandidateResult(cleaned, kotlin.math.abs(line.centerY - boxCenterY)))
+                        }
+                    }
+                    for (offset in 1..2) {
+                        val nextLine = lines.getOrNull(i + offset) ?: break
+                        if (nextLine.isExcluded) continue
+                        for (match in candidate9Pattern.findAll(nextLine.text)) {
+                            val cleaned = cleanDigits(match.value)
+                            if (cleaned.length == 9) {
+                                candidates.add(CandidateResult(cleaned, kotlin.math.abs(nextLine.centerY - boxCenterY)))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (candidates.isNotEmpty()) {
+                candidates.sortBy { it.distanceToCenter }
+                return candidates.first().sku
+            }
+
+            // Strategy 2: Multiline regex
+            val combinedText = lines.joinToString("\n") { it.text }
+            multilineSkuRegex.find(combinedText)?.let { match ->
+                val cleaned = cleanDigits(match.groupValues[1])
+                if (cleaned.length == 9) return cleaned
+            }
+
+            // Strategy 3: SKU label somewhere in box + candidate 9 on non-excluded lines
+            val hasSkuLabel = skuLabelRegex.containsMatchIn(combinedText)
+            if (hasSkuLabel) {
+                for (line in lines) {
+                    if (line.isExcluded) continue
+                    for (match in candidate9Pattern.findAll(line.text)) {
+                        val cleaned = cleanDigits(match.value)
+                        if (cleaned.length == 9) {
+                            candidates.add(CandidateResult(cleaned, kotlin.math.abs(line.centerY - boxCenterY)))
+                        }
+                    }
+                }
+                if (candidates.isNotEmpty()) {
+                    candidates.sortBy { it.distanceToCenter }
+                    return candidates.first().sku
+                }
+            }
+
+            // Strategy 4: Fallback for standalone 9 pure digits on non-excluded lines in box
+            for (line in lines) {
+                if (line.isExcluded) continue
+                for (match in standalone9Pattern.findAll(line.text)) {
+                    candidates.add(CandidateResult(match.value, kotlin.math.abs(line.centerY - boxCenterY)))
+                }
+            }
+            if (candidates.isNotEmpty()) {
+                candidates.sortBy { it.distanceToCenter }
+                return candidates.first().sku
+            }
+
+            return null
         }
 
         fun extractSku(rawText: String?): String? {
