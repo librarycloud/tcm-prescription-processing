@@ -44,6 +44,24 @@ class ScannerUtilsTest {
         assertEquals("304828503", ScannerActivity.extractSku("5HU: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("5U: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("货号: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("SKU码: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("SKU号: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("SN: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("S/N: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("NO: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("No. 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("编号: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("药品编码: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("条码: 304828503"))
+        assertEquals("304828503", ScannerActivity.extractSku("条形码: 304828503"))
+    }
+
+    @Test
+    fun testExtractSku_handlesStandaloneWithPunctuationAndDashes() {
+        assertEquals("304828503", ScannerActivity.extractSku("304-828-503"))
+        assertEquals("304828503", ScannerActivity.extractSku("*304828503*"))
+        assertEquals("304828503", ScannerActivity.extractSku("304828503(盒)"))
+        assertEquals("304828503", ScannerActivity.extractSku("3048285O3"))
     }
 
     @Test

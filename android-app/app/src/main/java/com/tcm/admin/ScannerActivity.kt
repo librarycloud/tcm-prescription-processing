@@ -64,11 +64,16 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-private fun scannerBoxRect(width: Float, height: Float): RectF {
-    val boxSize = (width * 0.72f).coerceAtMost(height * 0.5f)
-    val left = (width - boxSize) / 2f
-    val top = (height - boxSize) / 2f - (height * 0.05f)
-    return RectF(left, top, left + boxSize, top + boxSize)
+private fun scannerBoxRect(width: Float, height: Float, ocrEnabled: Boolean = false): RectF {
+    val boxWidth = width * 0.88f
+    val boxHeight = if (ocrEnabled) {
+        (boxWidth * 0.60f).coerceAtMost(height * 0.45f)
+    } else {
+        (boxWidth * 0.82f).coerceAtMost(height * 0.5f)
+    }
+    val left = (width - boxWidth) / 2f
+    val top = (height - boxHeight) / 2f - (height * 0.05f)
+    return RectF(left, top, left + boxWidth, top + boxHeight)
 }
 
 class ScannerActivity : ComponentActivity() {
@@ -608,7 +613,7 @@ class ScannerActivity : ComponentActivity() {
                     val scaledHeight = imgHeight * scale
                     val dx = (scaledWidth - viewWidth) / 2f
                     val dy = (scaledHeight - viewHeight) / 2f
-                    val viewScanBox = scannerBoxRect(viewWidth, viewHeight)
+                    val viewScanBox = scannerBoxRect(viewWidth, viewHeight, ocrEnabled)
                     RectF(
                         (viewScanBox.left + dx) / scale,
                         (viewScanBox.top + dy) / scale,
@@ -616,7 +621,7 @@ class ScannerActivity : ComponentActivity() {
                         (viewScanBox.bottom + dy) / scale
                     )
                 } else {
-                    scannerBoxRect(imgWidth, imgHeight)
+                    scannerBoxRect(imgWidth, imgHeight, ocrEnabled)
                 }
 
                 // 1. Barcode scanner
@@ -808,21 +813,10 @@ class ScannerActivity : ComponentActivity() {
         }
         if (delivered.get()) return
 
-        if (isExplicit) {
-            // 带有明确 SKU/编码/货号 标签且通过 9 位严格校验，置信度极高，单帧立即出结果（耗时缩减至 ~100ms 级）
-            deliverResult(candidate)
-            return
-        }
-
-        val now = System.currentTimeMillis()
-        synchronized(candidateHitWindow) {
-            candidateHitWindow.removeAll { now - it.second > 2500L }
-            candidateHitWindow.add(candidate to now)
-            val hits = candidateHitWindow.count { it.first == candidate }
-            if (hits >= 2) {
-                deliverResult(candidate)
-            }
-        }
+        // 无论是显式带标签（SKU:/编号:/货号:）还是框内纯 9 位数字，
+        // 经过严格的 9 位校验、排除规则与加宽取景框范围限定，均支持单帧立即出结果，
+        // 彻底解决手持轻微晃动无法凑齐多帧导致识别率不高的问题（实现 ~100ms 级极速秒出）
+        deliverResult(candidate)
     }
 
     private fun handleBarcodeDetected(value: String, format: Int) {
@@ -894,7 +888,7 @@ class ScannerActivity : ComponentActivity() {
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            val box = scannerBoxRect(width.toFloat(), height.toFloat())
+            val box = scannerBoxRect(width.toFloat(), height.toFloat(), ocrEnabled)
             val left = box.left
             val top = box.top
             val right = box.right
@@ -948,10 +942,11 @@ class ScannerActivity : ComponentActivity() {
         // SKU Patterns
         // SKU prefix pattern supporting:
         // SKU, SHU, SU, 5KU, 5HU, 5U, S0, SK0, SH0, SK, SH, KU, HU,
+        // SKU码, SKU号, SN, S/N, NO, No, NO., No.,
         // with dots/dashes/spaces e.g. S.K.U, S-K-U, S/K/U, S H U, S U,
-        // and Chinese labels: 商品编码, 编码, 货号, 物料号
+        // and Chinese labels: 商品编码, 药品编码, 产品编码, 编码, 货号, 编号, 物料号, 代码, 条码, 条形码
         private const val SKU_PREFIX_RAW =
-            """(?:[S5$][\s.\-_/]*[KHXkhx]?[\s.\-_/]*[U0OVuv]?|[KHXkhx][\s.\-_/]*[U0OVuv]|(?:商品)?编码|货号|物料[号码]?)"""
+            """(?:[S5$][\s.\-_/]*[KHXkhx]?[\s.\-_/]*[U0OVuv]?[\s]*(?:码|号)?|[KHXkhx][\s.\-_/]*[U0OVuv]|S[\s.\-_/]*[Nn]|N[\s.\-_/]*[Oo]\.?|(?:商品|药品|产品|物资|品名)?编码|(?:商品|药品|产品)?代码|货号|编号|物料[号码]?|条形?码(?:号)?)"""
 
         private val skuLabelRegex = Regex(
             """(?i)(?:^|[^a-zA-Z0-9\u4e00-\u9fa5])$SKU_PREFIX_RAW(?::|：|#|\s|$)"""
@@ -964,9 +959,9 @@ class ScannerActivity : ComponentActivity() {
         )
         private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
 
-        // Exclusion pattern for lines containing irrelevant text/numbers (UPC, barcodes, phones, orders, dates, amounts, etc.)
+        // Exclusion pattern for lines containing irrelevant text/numbers (UPC, phones, orders, dates, amounts, etc.)
         private val excludeLinePattern = Regex(
-            """(?i)(?:UPC|条码|条形码|EAN|手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水|原价|已付款)"""
+            """(?i)(?:UPC|EAN|手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水|原价|已付款)"""
         )
 
         private val tokenCharPattern = Regex("""(?<=[0-9A-Za-z|!〇])\s+(?=[0-9A-Za-z|!〇])""")
@@ -1159,14 +1154,30 @@ class ScannerActivity : ComponentActivity() {
                 }
             }
 
-            // 1.4 Standalone 9 pure digits on non-excluded rows (without long digit interference)
+            // 1.4 Standalone 9 digits on non-excluded rows (without long digit interference)
             if (skuCandidates.isEmpty()) {
                 for (row in logicalRows) {
                     if (row.isExcluded) continue
                     val collapsed = row.text.replace(tokenCharPattern, "")
                     if (Regex("""\d{10,}""").containsMatchIn(collapsed)) continue
+
+                    // 1.4.1 Direct standalone 9 pure digits
                     for (match in standalone9Pattern.findAll(collapsed)) {
                         skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = false))
+                    }
+
+                    // 1.4.2 Standalone 9 digits with confusable letters (e.g. 3048285O3, 30482850B)
+                    for (match in candidate9Pattern.findAll(collapsed)) {
+                        val c = cleanDigits(match.value)
+                        if (c.length == 9) {
+                            skuCandidates.add(CandidateResult(c, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = false))
+                        }
+                    }
+
+                    // 1.4.3 Formatted digits with dashes/spaces/parentheses (e.g. 304-828-503, *304828503*, 304828503(盒))
+                    val cleanedAll = cleanDigits(collapsed)
+                    if (cleanedAll.length == 9) {
+                        skuCandidates.add(CandidateResult(cleanedAll, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = false))
                     }
                 }
             }
@@ -1248,6 +1259,12 @@ class ScannerActivity : ComponentActivity() {
                 for (match in standalone9Pattern.findAll(line)) {
                     return match.value
                 }
+                for (match in candidate9Pattern.findAll(line)) {
+                    val c = cleanDigits(match.value)
+                    if (c.length == 9) return c
+                }
+                val cleanedAll = cleanDigits(line)
+                if (cleanedAll.length == 9) return cleanedAll
             }
 
             return null
