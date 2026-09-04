@@ -715,9 +715,9 @@ class ScannerActivity : ComponentActivity() {
                             lifecycleScope.launch(Dispatchers.Default) {
                                 try {
                                     val sharpness = com.paddle.ocr.util.BitmapUtils.calculateSharpness(roiBitmap)
-                                    if (sharpness < 25.0) {
-                                        // 画面处于剧烈晃动或运动拖影状态，跳过识别以避免重影导致字符误分裂与算力浪费
-                                        val blurMsg = "【画面状态】: ⚠️ 正在晃动/模糊 (清晰度: ${sharpness.toInt()})，等待稳焦..."
+                                    if (sharpness < 6.0) {
+                                        // 仅拦截剧烈大甩动导致的极度模糊帧，大幅放宽对轻微晃动/手持微抖的限制
+                                        val blurMsg = "【画面状态】: ⚠️ 正在快速移动 (清晰度: ${sharpness.toInt()})，等待对准..."
                                         latestOcrDebugLog = blurMsg
                                         if (BuildConfig.DEBUG && isDebugLogOpen) {
                                             runOnUiThread { updateDebugLogUi() }
@@ -811,7 +811,7 @@ class ScannerActivity : ComponentActivity() {
 
         val now = System.currentTimeMillis()
         synchronized(candidateHitWindow) {
-            candidateHitWindow.removeAll { now - it.second > 1500L }
+            candidateHitWindow.removeAll { now - it.second > 2500L }
             candidateHitWindow.add(candidate to now)
             val hits = candidateHitWindow.count { it.first == candidate }
             if (hits >= 2) {
