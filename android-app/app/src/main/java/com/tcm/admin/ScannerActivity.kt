@@ -499,7 +499,7 @@ class ScannerActivity : ComponentActivity() {
             isFillViewport = true
         }
         val tv = TextView(this).apply {
-            text = "等待相机识别...\n将包含 8~9 位数字的 SKU 对准绿色方框"
+            text = "等待相机识别...\n将包含 9 位数字的 SKU 对准绿色方框"
             setTextColor(0xFF00E676.toInt())
             textSize = 11f
             typeface = Typeface.MONOSPACE
@@ -943,10 +943,10 @@ class ScannerActivity : ComponentActivity() {
         private val multilineSkuRegex = Regex(
             """(?i)$SKU_PREFIX_RAW[\s:：#\-_/|]*([0-9A-Za-z|!〇\s.\-_]{8,24})"""
         )
-        private val candidateSkuPattern = Regex(
-            """(?<![a-zA-Z0-9])[0-9OolILsSbBrRcCzZgGqQtTDd|!〇]{8,9}(?![a-zA-Z0-9])"""
+        private val candidate9Pattern = Regex(
+            """(?<![a-zA-Z0-9])[0-9OolILsSbBrRcCzZgGqQtTDd|!〇]{9}(?![a-zA-Z0-9])"""
         )
-        private val standaloneSkuPattern = Regex("""(?<!\d)[0-9]{8,9}(?!\d)""")
+        private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
 
         // Exclusion pattern for lines containing irrelevant text/numbers (UPC, barcodes, phones, orders, dates, amounts, etc.)
         private val excludeLinePattern = Regex(
@@ -1078,7 +1078,7 @@ class ScannerActivity : ComponentActivity() {
 
             val skuCandidates = mutableListOf<CandidateResult>()
 
-            // --- 1. SKU Extraction (8-9 digits) ---
+            // --- 1. SKU Extraction (Strict 9 digits only) ---
             for (i in logicalRows.indices) {
                 val row = logicalRows[i]
                 if (row.isExcluded) continue
@@ -1089,7 +1089,7 @@ class ScannerActivity : ComponentActivity() {
                 // 1.1 Regex match on row text
                 multilineSkuRegex.findAll(collapsed).forEach { match ->
                     val cleaned = cleanDigits(match.groupValues[1])
-                    if (cleaned.length in 8..9) {
+                    if (cleaned.length == 9) {
                         skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY)))
                     }
                 }
@@ -1098,12 +1098,12 @@ class ScannerActivity : ComponentActivity() {
                 if (skuLabelRegex.containsMatchIn(collapsed)) {
                     val afterLabel = skuLabelRegex.replace(collapsed, " ")
                     val cleaned = cleanDigits(afterLabel)
-                    if (cleaned.length in 8..9) {
+                    if (cleaned.length == 9) {
                         skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY)))
                     }
-                    for (match in candidateSkuPattern.findAll(afterLabel)) {
+                    for (match in candidate9Pattern.findAll(afterLabel)) {
                         val c = cleanDigits(match.value)
-                        if (c.length in 8..9) {
+                        if (c.length == 9) {
                             skuCandidates.add(CandidateResult(c, kotlin.math.abs(row.centerY - boxCenterY)))
                         }
                     }
@@ -1114,12 +1114,12 @@ class ScannerActivity : ComponentActivity() {
                         if (nextRow.isExcluded) continue
                         val nextCollapsed = nextRow.text.replace(tokenCharPattern, "")
                         val nextCleaned = cleanDigits(nextCollapsed)
-                        if (nextCleaned.length in 8..9) {
+                        if (nextCleaned.length == 9) {
                             skuCandidates.add(CandidateResult(nextCleaned, kotlin.math.abs(nextRow.centerY - boxCenterY)))
                         } else {
-                            for (match in candidateSkuPattern.findAll(nextCollapsed)) {
+                            for (match in candidate9Pattern.findAll(nextCollapsed)) {
                                 val c = cleanDigits(match.value)
-                                if (c.length in 8..9) {
+                                if (c.length == 9) {
                                     skuCandidates.add(CandidateResult(c, kotlin.math.abs(nextRow.centerY - boxCenterY)))
                                 }
                             }
@@ -1135,19 +1135,19 @@ class ScannerActivity : ComponentActivity() {
                 }
                 multilineSkuRegex.findAll(combinedText).forEach { match ->
                     val cleaned = cleanDigits(match.groupValues[1])
-                    if (cleaned.length in 8..9) {
+                    if (cleaned.length == 9) {
                         skuCandidates.add(CandidateResult(cleaned, 0f))
                     }
                 }
             }
 
-            // 1.4 Standalone pure digits on non-excluded rows (without long digit interference)
+            // 1.4 Standalone 9 pure digits on non-excluded rows (without long digit interference)
             if (skuCandidates.isEmpty()) {
                 for (row in logicalRows) {
                     if (row.isExcluded) continue
                     val collapsed = row.text.replace(tokenCharPattern, "")
                     if (Regex("""\d{10,}""").containsMatchIn(collapsed)) continue
-                    for (match in standaloneSkuPattern.findAll(collapsed)) {
+                    for (match in standalone9Pattern.findAll(collapsed)) {
                         skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(row.centerY - boxCenterY)))
                     }
                 }
@@ -1175,7 +1175,7 @@ class ScannerActivity : ComponentActivity() {
             if (finalSku != null) {
                 sb.append("✅ 命中 SKU: ").append(finalSku)
             } else {
-                sb.append("❌ 未检测到 8~9 位 SKU")
+                sb.append("❌ 未检测到 9 位 SKU")
             }
 
             return OcrExtractionResult(finalSku, sb.toString())
@@ -1194,19 +1194,19 @@ class ScannerActivity : ComponentActivity() {
                 if (skuLabelRegex.containsMatchIn(line)) {
                     val afterLabel = skuLabelRegex.replace(line, " ")
                     val cleaned = cleanDigits(afterLabel)
-                    if (cleaned.length in 8..9) return cleaned
-                    for (match in candidateSkuPattern.findAll(line)) {
+                    if (cleaned.length == 9) return cleaned
+                    for (match in candidate9Pattern.findAll(line)) {
                         val c = cleanDigits(match.value)
-                        if (c.length in 8..9) return c
+                        if (c.length == 9) return c
                     }
                     for (offset in 1..2) {
                         val nextLine = lines.getOrNull(i + offset) ?: break
                         if (excludeLinePattern.containsMatchIn(nextLine)) continue
                         val c = cleanDigits(nextLine)
-                        if (c.length in 8..9) return c
-                        for (match in candidateSkuPattern.findAll(nextLine)) {
+                        if (c.length == 9) return c
+                        for (match in candidate9Pattern.findAll(nextLine)) {
                             val mc = cleanDigits(match.value)
-                            if (mc.length in 8..9) return mc
+                            if (mc.length == 9) return mc
                         }
                     }
                 }
@@ -1215,14 +1215,14 @@ class ScannerActivity : ComponentActivity() {
             // 2. Multiline SKU regex
             multilineSkuRegex.find(normalized)?.let { match ->
                 val cleaned = cleanDigits(match.groupValues[1])
-                if (cleaned.length in 8..9) return cleaned
+                if (cleaned.length == 9) return cleaned
             }
 
-            // 3. Standalone digits (8-9 digits)
+            // 3. Standalone 9 digits
             for (line in lines) {
                 if (excludeLinePattern.containsMatchIn(line)) continue
                 if (Regex("""\d{10,}""").containsMatchIn(line)) continue
-                for (match in standaloneSkuPattern.findAll(line)) {
+                for (match in standalone9Pattern.findAll(line)) {
                     return match.value
                 }
             }

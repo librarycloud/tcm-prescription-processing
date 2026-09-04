@@ -47,19 +47,19 @@ class ScannerUtilsTest {
     }
 
     @Test
-    fun testExtractSku_handlesOcrSubstitutionsWithSpaces() {
-        assertEquals("30828503", ScannerActivity.extractSku("SKU: 30A 82R 5C3"))
-        assertEquals("30828503", ScannerActivity.extractSku("SU: 30A 82R 5C3"))
-        assertEquals("30828503", ScannerActivity.extractSku("SHU: 30A 82R 5C3"))
+    fun testExtractSku_rejectsNon9DigitTokens() {
+        // "30A 82R 5C3" has only 8 digits since 'A' is not converted to 4
+        assertEquals(null, ScannerActivity.extractSku("SKU: 30A 82R 5C3"))
+        assertEquals(null, ScannerActivity.extractSku("12345678"))
     }
 
     @Test
-    fun testExtractSku_handles8DigitSkuAndTrailingLetterA() {
-        assertEquals("30000170", ScannerActivity.extractSku("SKU: 30000170 A"))
-        assertEquals("30000170", ScannerActivity.extractSku("SKU: 30000170A"))
-        assertEquals("30000170", ScannerActivity.extractSku("30000170"))
-        assertEquals("30000170", ScannerActivity.extractSku("货号: 30000170"))
-        assertEquals("12345678", ScannerActivity.extractSku("12345678"))
+    fun testExtractSku_handles9DigitSkuAndTrailingLetterA() {
+        // 9 digits followed by trailing letter A (which is filtered out)
+        assertEquals("300001700", ScannerActivity.extractSku("SKU: 300001700 A"))
+        assertEquals("300001700", ScannerActivity.extractSku("SKU: 300001700A"))
+        assertEquals("300001700", ScannerActivity.extractSku("300001700"))
+        assertEquals("300001700", ScannerActivity.extractSku("货号: 300001700"))
         assertEquals("123456789", ScannerActivity.extractSku("123456789"))
     }
 
