@@ -6,16 +6,16 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      version_code:
-        description: "Android versionCode，例如 2"
+      version_name:
+        description: "Android versionName，例如 1.2.58"
         required: true
         type: string
-      version_name:
-        description: "Android versionName，例如 1.1"
-        required: true
+      version_code:
+        description: "可选，内部 versionCode 整数（不填则根据 versionName 自动换算，如 1.2.58 -> 10258）"
+        required: false
         type: string
       release_tag:
-        description: "可选，GitHub Release 标签，例如 v1.1.0；不填则使用 v版本名称"
+        description: "可选，GitHub Release 标签，例如 v1.2.58；不填则使用 v+版本名称"
         required: false
         type: string
       api_base_url:
