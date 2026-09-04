@@ -196,7 +196,7 @@ class ScannerActivity : ComponentActivity() {
                             recScoreThresh = 0.0f,
                             recBatchSize = 1,
                         ),
-                        EngineConfig(numThreads = 2)
+                        EngineConfig(numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4))
                     )
                     paddleOcr = ocr
                     Log.d(TAG, "PP-OCRv6 engine initialized successfully in ${ocr.coldLoadTimeMs}ms")
@@ -689,12 +689,11 @@ class ScannerActivity : ComponentActivity() {
                                 rawBitmap
                             }
 
-                            val padX = imgScanBox.width() * 0.15f
-                            val padY = imgScanBox.height() * 0.15f
-                            val cropLeft = (imgScanBox.left - padX).toInt().coerceIn(0, rotatedBitmap.width - 1)
-                            val cropTop = (imgScanBox.top - padY).toInt().coerceIn(0, rotatedBitmap.height - 1)
-                            val cropRight = (imgScanBox.right + padX).toInt().coerceIn(cropLeft + 1, rotatedBitmap.width)
-                            val cropBottom = (imgScanBox.bottom + padY).toInt().coerceIn(cropTop + 1, rotatedBitmap.height)
+                            // 严格限制在取景框内（无外扩边距，彻底排除药盒外部日期、批号等无关文本干扰，大幅提升单帧处理速度）
+                            val cropLeft = imgScanBox.left.toInt().coerceIn(0, rotatedBitmap.width - 1)
+                            val cropTop = imgScanBox.top.toInt().coerceIn(0, rotatedBitmap.height - 1)
+                            val cropRight = imgScanBox.right.toInt().coerceIn(cropLeft + 1, rotatedBitmap.width)
+                            val cropBottom = imgScanBox.bottom.toInt().coerceIn(cropTop + 1, rotatedBitmap.height)
                             val cropWidth = cropRight - cropLeft
                             val cropHeight = cropBottom - cropTop
 
@@ -726,7 +725,7 @@ class ScannerActivity : ComponentActivity() {
                                     }
 
                                     val ocrRunResult = ocr.recognize(roiBitmap)
-                                    val (candidate, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
+                                    val (candidate, isExplicit, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
 
                                     val formattedLog = if (candidate != null && isDebugLogOpen) {
                                         debugLog.replace("✅ 命中 SKU: $candidate", "✅ 命中 SKU: $candidate (调试模式：已自动停止刷新，未填入搜索框)")
@@ -767,7 +766,7 @@ class ScannerActivity : ComponentActivity() {
                                             Log.d("ScannerOCR", "raw=$rawText; candidate=$res")
                                         }
                                         if (candidate != null && !isRecognitionPaused) {
-                                            handleCandidateDetected(candidate)
+                                            handleCandidateDetected(candidate, isExplicit = isExplicit)
                                         }
                                     }
                                 } catch (t: Throwable) {
@@ -802,12 +801,18 @@ class ScannerActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun handleCandidateDetected(candidate: String) {
+    private fun handleCandidateDetected(candidate: String, isExplicit: Boolean = false) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            runOnUiThread { handleCandidateDetected(candidate) }
+            runOnUiThread { handleCandidateDetected(candidate, isExplicit) }
             return
         }
         if (delivered.get()) return
+
+        if (isExplicit) {
+            // 带有明确 SKU/编码/货号 标签且通过 9 位严格校验，置信度极高，单帧立即出结果（耗时缩减至 ~100ms 级）
+            deliverResult(candidate)
+            return
+        }
 
         val now = System.currentTimeMillis()
         synchronized(candidateHitWindow) {
@@ -1017,7 +1022,8 @@ class ScannerActivity : ComponentActivity() {
 
         private data class CandidateResult(
             val code: String,
-            val distanceToCenter: Float
+            val distanceToCenter: Float,
+            val isExplicit: Boolean = false
         )
 
         private fun buildLogicalRows(elements: List<RawElement>): List<LogicalRow> {
@@ -1058,12 +1064,13 @@ class ScannerActivity : ComponentActivity() {
 
         data class OcrExtractionResult(
             val sku: String?,
+            val isExplicitLabel: Boolean = false,
             val debugText: String
         )
 
         fun extractSkuFromPaddleOcr(ocrRunResult: OCRRunResult, boxHeight: Float): OcrExtractionResult {
             if (ocrRunResult.results.isEmpty()) {
-                return OcrExtractionResult(null, "【框内文本】: 暂未检测到文字")
+                return OcrExtractionResult(null, false, "【框内文本】: 暂未检测到文字")
             }
 
             val elements = mutableListOf<RawElement>()
@@ -1081,7 +1088,7 @@ class ScannerActivity : ComponentActivity() {
             }
 
             if (elements.isEmpty()) {
-                return OcrExtractionResult(null, "【框内文本】: 绿框内未包含任何文字\n(请将 SKU 移入绿框)")
+                return OcrExtractionResult(null, false, "【框内文本】: 绿框内未包含任何文字\n(请将 SKU 移入绿框)")
             }
 
             val logicalRows = buildLogicalRows(elements)
@@ -1101,7 +1108,7 @@ class ScannerActivity : ComponentActivity() {
                 multilineSkuRegex.findAll(collapsed).forEach { match ->
                     val cleaned = cleanDigits(match.groupValues[1])
                     if (cleaned.length == 9) {
-                        skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY)))
+                        skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = true))
                     }
                 }
 
@@ -1110,12 +1117,12 @@ class ScannerActivity : ComponentActivity() {
                     val afterLabel = skuLabelRegex.replace(collapsed, " ")
                     val cleaned = cleanDigits(afterLabel)
                     if (cleaned.length == 9) {
-                        skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY)))
+                        skuCandidates.add(CandidateResult(cleaned, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = true))
                     }
                     for (match in candidate9Pattern.findAll(afterLabel)) {
                         val c = cleanDigits(match.value)
                         if (c.length == 9) {
-                            skuCandidates.add(CandidateResult(c, kotlin.math.abs(row.centerY - boxCenterY)))
+                            skuCandidates.add(CandidateResult(c, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = true))
                         }
                     }
 
@@ -1126,12 +1133,12 @@ class ScannerActivity : ComponentActivity() {
                         val nextCollapsed = nextRow.text.replace(tokenCharPattern, "")
                         val nextCleaned = cleanDigits(nextCollapsed)
                         if (nextCleaned.length == 9) {
-                            skuCandidates.add(CandidateResult(nextCleaned, kotlin.math.abs(nextRow.centerY - boxCenterY)))
+                            skuCandidates.add(CandidateResult(nextCleaned, kotlin.math.abs(nextRow.centerY - boxCenterY), isExplicit = true))
                         } else {
                             for (match in candidate9Pattern.findAll(nextCollapsed)) {
                                 val c = cleanDigits(match.value)
                                 if (c.length == 9) {
-                                    skuCandidates.add(CandidateResult(c, kotlin.math.abs(nextRow.centerY - boxCenterY)))
+                                    skuCandidates.add(CandidateResult(c, kotlin.math.abs(nextRow.centerY - boxCenterY), isExplicit = true))
                                 }
                             }
                         }
@@ -1147,7 +1154,7 @@ class ScannerActivity : ComponentActivity() {
                 multilineSkuRegex.findAll(combinedText).forEach { match ->
                     val cleaned = cleanDigits(match.groupValues[1])
                     if (cleaned.length == 9) {
-                        skuCandidates.add(CandidateResult(cleaned, 0f))
+                        skuCandidates.add(CandidateResult(cleaned, 0f, isExplicit = true))
                     }
                 }
             }
@@ -1159,17 +1166,21 @@ class ScannerActivity : ComponentActivity() {
                     val collapsed = row.text.replace(tokenCharPattern, "")
                     if (Regex("""\d{10,}""").containsMatchIn(collapsed)) continue
                     for (match in standalone9Pattern.findAll(collapsed)) {
-                        skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(row.centerY - boxCenterY)))
+                        skuCandidates.add(CandidateResult(match.value, kotlin.math.abs(row.centerY - boxCenterY), isExplicit = false))
                     }
                 }
             }
 
-            val finalSku = if (skuCandidates.isNotEmpty()) {
-                skuCandidates.sortBy { it.distanceToCenter }
-                skuCandidates.first().code
+            val bestCandidate = if (skuCandidates.isNotEmpty()) {
+                skuCandidates.sortedWith(
+                    compareByDescending<CandidateResult> { it.isExplicit }
+                        .thenBy { it.distanceToCenter }
+                ).first()
             } else {
                 null
             }
+            val finalSku = bestCandidate?.code
+            val isExplicit = bestCandidate?.isExplicit ?: false
 
             val sb = java.lang.StringBuilder()
             sb.append("【PP-OCRv6 耗时】: 检测 ${ocrRunResult.detectionTimeMs}ms, 识别 ${ocrRunResult.recognitionTimeMs}ms (总计 ${ocrRunResult.totalTimeMs}ms)\n")
@@ -1184,12 +1195,13 @@ class ScannerActivity : ComponentActivity() {
             }
             sb.append("\n【提取结果】: ")
             if (finalSku != null) {
-                sb.append("✅ 命中 SKU: ").append(finalSku)
+                val tag = if (isExplicit) " [有前缀: 1帧即出]" else " [无前缀: 2帧防误触]"
+                sb.append("✅ 命中 SKU: ").append(finalSku).append(tag)
             } else {
                 sb.append("❌ 未检测到 9 位 SKU")
             }
 
-            return OcrExtractionResult(finalSku, sb.toString())
+            return OcrExtractionResult(finalSku, isExplicit, sb.toString())
         }
 
         fun extractSku(rawText: String?): String? {
