@@ -27,6 +27,7 @@ object CTCDecoder {
             val baseOffset = b * timeSteps * numClasses
 
             val indices = IntArray(timeSteps)
+            val probs = FloatArray(timeSteps)
             var offset = baseOffset
             for (t in 0 until timeSteps) {
                 var maxIdx = 0
