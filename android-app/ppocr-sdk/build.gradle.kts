@@ -34,7 +34,7 @@ android {
 
 dependencies {
     api("com.microsoft.onnxruntime:onnxruntime-android:1.21.1")
-    api("com.quickbirdstudios:opencv:4.5.3.0")
+    api("org.opencv:opencv:4.14.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.core:core-ktx:1.15.0")
 }
