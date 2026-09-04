@@ -58,4 +58,12 @@ class ScannerUtilsTest {
         assertEquals("100025678", ScannerActivity.extractSku("SKU: 100C25678"))
         assertEquals("303327503", ScannerActivity.extractSku("SKU: 303E27503"))
     }
+
+    @Test
+    fun testFormatLocationCode_omitsLeadingZeros() {
+        assertEquals("D-1-2-3", com.tcm.admin.ui.screens.formatLocationCode("D-01-02-03"))
+        assertEquals("D-1-2-3-1", com.tcm.admin.ui.screens.formatLocationCode("D-01-02-03-01"))
+        assertEquals("G-1-2", com.tcm.admin.ui.screens.formatLocationCode("G-01-02"))
+        assertEquals("D-10-5-12", com.tcm.admin.ui.screens.formatLocationCode("D-10-05-12"))
+    }
 }

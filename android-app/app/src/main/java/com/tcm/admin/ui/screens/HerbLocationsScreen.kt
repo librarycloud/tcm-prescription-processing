@@ -296,7 +296,8 @@ internal fun HerbsScreen(
                             (0 until locations.length()).forEach { lIndex ->
                                 val loc = locations.getJSONObject(lIndex)
                                 val herbs = loc.optJSONArray("herbs") ?: JSONArray()
-                                val code = loc.displayField("code").ifBlank { loc.displayField("locationCode") }
+                                val rawCode = loc.displayField("code").ifBlank { loc.displayField("locationCode") }
+                                val code = formatLocationCode(rawCode)
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -498,7 +499,7 @@ internal fun HerbLocationAssignScreen(
                         Text("当前位置", color = Muted, fontSize = 11.sp)
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            location.displayField("code"),
+                            formatLocationCode(location.displayField("code")),
                             color = Ink,
                             fontSize = 19.sp,
                             fontWeight = FontWeight.Bold,
@@ -576,7 +577,7 @@ internal fun HerbLocationAssignScreen(
 
         AppCard {
             SectionHeader(
-                title = if (existingLocation) "配置货位 ${location.displayField("code")}" else "配置药材",
+                title = if (existingLocation) "配置货位 ${formatLocationCode(location.displayField("code"))}" else "配置药材",
                 subtitle = if (existingLocation) "位置：${positionLabel(location)}" else "先设置位置，再搜索匹配药材",
             )
 
@@ -854,11 +855,18 @@ private fun buildLocationCode(type: String, unitNo: String, layerNo: String, col
     }
 }
 
+internal fun formatLocationCode(code: String): String {
+    if (code.isBlank()) return ""
+    return code.split("-").joinToString("-") { part ->
+        part.toIntOrNull()?.toString() ?: part
+    }
+}
+
 private fun positionLabel(location: JSONObject): String {
     val type = location.displayField("type")
-    val unit = location.displayField("unitNo")
-    val layer = location.displayField("layerNo")
-    val column = location.displayField("columnNo")
+    val unit = location.displayField("unitNo").trimStart('0').ifEmpty { "0" }
+    val layer = location.displayField("layerNo").trimStart('0').ifEmpty { "0" }
+    val column = location.displayField("columnNo").trimStart('0').ifEmpty { "0" }
     return if (type == "D") {
         "斗$unit · ${if (layer == "0") "顶层" else "${layer}行"} · ${column}列"
     } else {
