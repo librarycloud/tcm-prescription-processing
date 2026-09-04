@@ -940,12 +940,11 @@ class ScannerActivity : ComponentActivity() {
         const val EXTRA_ENABLE_SKU_OCR = "enable_sku_ocr"
 
         // SKU Patterns
-        // SKU prefix pattern supporting:
+        // SKU prefix pattern supporting only SKU and its common OCR confusion variants:
         // SKU, SHU, SU, 5KU, 5HU, 5U, S0, SK0, SH0, SK, SH, KU, HU,
-        // with dots/dashes/spaces e.g. S.K.U, S-K-U, S/K/U, S H U, S U,
-        // and Chinese labels: 商品编码, 编码, 货号, 物料号
+        // with dots/dashes/spaces e.g. S.K.U, S-K-U, S/K/U, S H U, S U
         private const val SKU_PREFIX_RAW =
-            """(?:[S5$][\s.\-_/]*[KHXkhx]?[\s.\-_/]*[U0OVuv]?|[KHXkhx][\s.\-_/]*[U0OVuv]|(?:商品)?编码|货号|物料[号码]?)"""
+            """(?:[S5$][\s.\-_/]*[KHXkhx]?[\s.\-_/]*[U0OVuv]?|[KHXkhx][\s.\-_/]*[U0OVuv])"""
 
         private val skuLabelRegex = Regex(
             """(?i)(?:^|[^a-zA-Z0-9\u4e00-\u9fa5])$SKU_PREFIX_RAW(?::|：|#|\s|$)"""
@@ -958,9 +957,9 @@ class ScannerActivity : ComponentActivity() {
         )
         private val standalone9Pattern = Regex("""(?<!\d)[0-9]{9}(?!\d)""")
 
-        // Exclusion pattern for lines containing irrelevant text/numbers (UPC, barcodes, phones, orders, dates, amounts, etc.)
+        // Exclusion pattern for lines containing irrelevant text/numbers (UPC, barcodes, phones, orders, dates, amounts, 货号, 编码, etc.)
         private val excludeLinePattern = Regex(
-            """(?i)(?:UPC|条码|条形码|EAN|手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水|原价|已付款)"""
+            """(?i)(?:UPC|条码|条形码|EAN|手机|电话|虚拟号|备用|订单|时间|日期|运单号|单号|快递|金额|合计|应收|实收|找零|流水|原价|已付款|货号|物料|(?:商品)?编码)"""
         )
 
         private val tokenCharPattern = Regex("""(?<=[0-9A-Za-z|!〇])\s+(?=[0-9A-Za-z|!〇])""")
@@ -1051,7 +1050,7 @@ class ScannerActivity : ComponentActivity() {
                     text = joinedText,
                     top = avgTop,
                     centerY = avgCenterY,
-                    isExcluded = excludeLinePattern.containsMatchIn(joinedText)
+                    isExcluded = excludeLinePattern.containsMatchIn(joinedText) && !skuLabelRegex.containsMatchIn(joinedText)
                 )
             }.sortedBy { it.top }
         }

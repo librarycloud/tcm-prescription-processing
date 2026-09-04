@@ -37,20 +37,22 @@ class ScannerUtilsTest {
 
     @Test
     fun testExtractSku_handlesShuAndSuPrefixes() {
+        assertEquals("304828503", ScannerActivity.extractSku("SKU: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("SHU: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("SU: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("S H U: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("S.K.U. 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("5HU: 304828503"))
         assertEquals("304828503", ScannerActivity.extractSku("5U: 304828503"))
-        assertEquals("304828503", ScannerActivity.extractSku("货号: 304828503"))
-        assertEquals("304828503", ScannerActivity.extractSku("商品编码: 304828503"))
-        assertEquals("304828503", ScannerActivity.extractSku("编码: 304828503"))
     }
 
     @Test
     fun testExtractSku_rejectsUnwantedPrefixesAndDelimiters() {
-        // 条码 / 条形码 必须被排除，带分隔符的数字不应被拼凑成 SKU
+        // 彻底排除 商品编码、编码、货号、物料号、条码、带分隔符数字
+        assertEquals(null, ScannerActivity.extractSku("货号: 304828503"))
+        assertEquals(null, ScannerActivity.extractSku("商品编码: 304828503"))
+        assertEquals(null, ScannerActivity.extractSku("编码: 304828503"))
+        assertEquals(null, ScannerActivity.extractSku("物料号: 304828503"))
         assertEquals(null, ScannerActivity.extractSku("条码: 304828503"))
         assertEquals(null, ScannerActivity.extractSku("条形码: 304828503"))
         assertEquals(null, ScannerActivity.extractSku("304-828-503"))
@@ -69,7 +71,6 @@ class ScannerUtilsTest {
         assertEquals("300001700", ScannerActivity.extractSku("SKU: 300001700 A"))
         assertEquals("300001700", ScannerActivity.extractSku("SKU: 300001700A"))
         assertEquals("300001700", ScannerActivity.extractSku("300001700"))
-        assertEquals("300001700", ScannerActivity.extractSku("货号: 300001700"))
         assertEquals("123456789", ScannerActivity.extractSku("123456789"))
     }
 
