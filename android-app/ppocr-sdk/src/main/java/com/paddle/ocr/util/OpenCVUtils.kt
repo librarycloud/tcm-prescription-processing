@@ -24,10 +24,18 @@ object OpenCVUtils {
     fun init(context: Context): Boolean {
         if (initialized) return true
         try {
+            if (org.opencv.android.OpenCVLoader.initDebug()) {
+                initialized = true
+                return true
+            }
+        } catch (t: Throwable) {
+            Log.w("OpenCVUtils", "OpenCVLoader.initDebug failed, trying System.loadLibrary: ${t.message}")
+        }
+        try {
             System.loadLibrary("opencv_java4")
             initialized = true
-        } catch (e: UnsatisfiedLinkError) {
-            Log.e("OpenCVUtils", "Failed to initialize OpenCV: ${e.message}")
+        } catch (t: Throwable) {
+            Log.e("OpenCVUtils", "Failed to initialize OpenCV: ${t.message}", t)
         }
         return initialized
     }
