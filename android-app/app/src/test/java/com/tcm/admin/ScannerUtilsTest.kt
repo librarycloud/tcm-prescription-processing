@@ -60,6 +60,12 @@ class ScannerUtilsTest {
     }
 
     @Test
+    fun testExtractSku_handlesTripleZeros() {
+        assertEquals("300028503", ScannerActivity.extractSku("SKU: 300028503"))
+        assertEquals("300028503", ScannerActivity.extractSku("300028503"))
+    }
+
+    @Test
     fun testFormatLocationCode_omitsLeadingZeros() {
         assertEquals("D-1-2-3", com.tcm.admin.ui.screens.formatLocationCode("D-01-02-03"))
         assertEquals("D-1-2-3-1", com.tcm.admin.ui.screens.formatLocationCode("D-01-02-03-01"))

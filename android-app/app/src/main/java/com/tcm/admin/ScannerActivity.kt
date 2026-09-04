@@ -42,15 +42,21 @@ import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.Text
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import com.paddle.ocr.EngineConfig
+import com.paddle.ocr.PaddleOCR
+import com.paddle.ocr.PaddleOCRConfig
+import com.paddle.ocr.model.OCRRunResult
+import com.paddle.ocr.util.OpenCVUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,7 +77,7 @@ class ScannerActivity : ComponentActivity() {
     private val scanner = BarcodeScanning.getClient()
     private var ocrEnabled = false
     @Volatile
-    private var textRecognizer: TextRecognizer? = null
+    private var paddleOcr: PaddleOCR? = null
     @Volatile
     private var cameraProvider: ProcessCameraProvider? = null
     @Volatile
@@ -170,7 +176,24 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
         if (ocrEnabled) {
-            textRecognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+            OpenCVUtils.init(this)
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    paddleOcr = PaddleOCR.create(
+                        applicationContext,
+                        PaddleOCRConfig(
+                            detThresh = 0.3f,
+                            detBoxThresh = 0.5f,
+                            recScoreThresh = 0.0f,
+                            recBatchSize = 1,
+                        ),
+                        EngineConfig(numThreads = 2)
+                    )
+                    Log.d(TAG, "PP-OCRv6 engine initialized successfully")
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Failed to initialize PP-OCRv6", t)
+                }
+            }
         }
         val root = FrameLayout(this)
         previewView = PreviewView(this).apply {
@@ -633,70 +656,102 @@ class ScannerActivity : ComponentActivity() {
                     }
                     .addOnCompleteListener { taskFinished() }
 
-                // 2. Offline Chinese + Latin/Digit OCR text recognition restricted to scanning frame
+                // 2. Offline PP-OCRv6 text recognition restricted to scanning frame (ROI cropped)
                 if (isOcrActive) {
-                    val recognizer = textRecognizer
-                    if (recognizer != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
-                        recognizer.process(image)
-                            .addOnSuccessListener { visionText ->
-                                if (BuildConfig.DEBUG) {
-                                    val (candidate, debugLog) = extractSkuWithDebug(visionText, imgScanBox)
-                                    val formattedLog = if (candidate != null && isDebugLogOpen) {
-                                        debugLog.replace("✅ 命中 SKU: $candidate", "✅ 命中 SKU: $candidate (调试模式：已自动停止刷新，未填入搜索框)")
-                                    } else {
-                                        debugLog
-                                    }
-                                    latestOcrDebugLog = formattedLog
+                    val ocr = paddleOcr
+                    if (ocr != null && !delivered.get() && ocrInFlight.compareAndSet(false, true)) {
+                        val roiBitmap = try {
+                            val rawBitmap = proxy.toBitmap()
+                            val rotation = proxy.imageInfo.rotationDegrees
+                            val rotatedBitmap = if (rotation != 0) {
+                                val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+                                val r = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                                rawBitmap.recycle()
+                                r
+                            } else {
+                                rawBitmap
+                            }
 
-                                    val now = System.currentTimeMillis()
-                                    val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
-                                    val summary = if (candidate != null) "✅ SKU: $candidate" else "未匹配"
-                                    val rawText = visionText.text.trim()
-                                    if (rawText.isNotBlank() && (candidate != null || now - lastRecordedOcrTime > 300L || rawText != lastLoggedOcrText)) {
-                                        lastRecordedOcrTime = now
-                                        synchronized(ocrLogHistory) {
-                                            if (ocrLogHistory.size >= 25) {
-                                                ocrLogHistory.removeAt(0)
+                            val cropLeft = imgScanBox.left.toInt().coerceIn(0, rotatedBitmap.width - 1)
+                            val cropTop = imgScanBox.top.toInt().coerceIn(0, rotatedBitmap.height - 1)
+                            val cropWidth = (imgScanBox.width().toInt()).coerceIn(1, rotatedBitmap.width - cropLeft)
+                            val cropHeight = (imgScanBox.height().toInt()).coerceIn(1, rotatedBitmap.height - cropTop)
+
+                            val roi = Bitmap.createBitmap(rotatedBitmap, cropLeft, cropTop, cropWidth, cropHeight)
+                            if (roi != rotatedBitmap) {
+                                rotatedBitmap.recycle()
+                            }
+                            roi
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "Failed to extract ROI bitmap", t)
+                            null
+                        }
+
+                        taskFinished()
+
+                        if (roiBitmap != null) {
+                            lifecycleScope.launch(Dispatchers.Default) {
+                                try {
+                                    val ocrRunResult = ocr.recognize(roiBitmap)
+                                    val (candidate, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
+
+                                    if (BuildConfig.DEBUG) {
+                                        val formattedLog = if (candidate != null && isDebugLogOpen) {
+                                            debugLog.replace("✅ 命中 SKU: $candidate", "✅ 命中 SKU: $candidate (调试模式：已自动停止刷新，未填入搜索框)")
+                                        } else {
+                                            debugLog
+                                        }
+                                        latestOcrDebugLog = formattedLog
+
+                                        val now = System.currentTimeMillis()
+                                        val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
+                                        val summary = if (candidate != null) "✅ SKU: $candidate" else "未匹配"
+                                        val rawText = ocrRunResult.results.joinToString(" ") { it.text }.trim()
+                                        if (rawText.isNotBlank() && (candidate != null || now - lastRecordedOcrTime > 300L || rawText != lastLoggedOcrText)) {
+                                            lastRecordedOcrTime = now
+                                            synchronized(ocrLogHistory) {
+                                                if (ocrLogHistory.size >= 25) {
+                                                    ocrLogHistory.removeAt(0)
+                                                }
+                                                ocrLogHistory.add(OcrSnapshot(timeStr, candidate, formattedLog, summary))
                                             }
-                                            ocrLogHistory.add(OcrSnapshot(timeStr, candidate, formattedLog, summary))
                                         }
-                                    }
 
-                                    if (isDebugLogOpen) {
-                                        if (candidate != null && !isRecognitionPaused) {
-                                            // debug 查看识别内容时，如果有匹配项，就停止刷新解析，且不填入搜索框
-                                            isRecognitionPaused = true
-                                            viewingHistoryIndex = -1
-                                            triggerVibration()
-                                        }
-                                        runOnUiThread {
-                                            updateDebugLogUi()
+                                        if (isDebugLogOpen) {
+                                            if (candidate != null && !isRecognitionPaused) {
+                                                // debug 查看识别内容时，如果有匹配项，就停止刷新解析，且不填入搜索框
+                                                isRecognitionPaused = true
+                                                viewingHistoryIndex = -1
+                                                triggerVibration()
+                                            }
+                                            runOnUiThread {
+                                                updateDebugLogUi()
+                                            }
+                                        } else {
+                                            if (rawText.isNotBlank() && rawText != lastLoggedOcrText) {
+                                                val res = candidate ?: "none"
+                                                Log.d("ScannerOCR", "raw=$rawText; candidate=$res")
+                                                lastLoggedOcrText = rawText
+                                            }
+                                            if (candidate != null && !isRecognitionPaused) {
+                                                handleCandidateDetected(candidate)
+                                            }
                                         }
                                     } else {
-                                        val compactText = visionText.text.replace(Regex("\\s+"), " ").trim()
-                                        if (compactText.isNotBlank() && compactText != lastLoggedOcrText) {
-                                            val res = candidate ?: "none"
-                                            Log.d("ScannerOCR", "raw=$compactText; candidate=$res")
-                                            lastLoggedOcrText = compactText
-                                        }
                                         if (candidate != null && !isRecognitionPaused) {
                                             handleCandidateDetected(candidate)
                                         }
                                     }
-                                } else {
-                                    val candidate = extractSkuFromVisionText(visionText, imgScanBox)
-                                    if (candidate != null) {
-                                        handleCandidateDetected(candidate)
-                                    }
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "PP-OCRv6 recognition failed", t)
+                                } finally {
+                                    roiBitmap.recycle()
+                                    ocrInFlight.set(false)
                                 }
                             }
-                            .addOnFailureListener { error ->
-                                Log.w(TAG, "ML Kit recognition failed", error)
-                            }
-                            .addOnCompleteListener {
-                                ocrInFlight.set(false)
-                                taskFinished()
-                            }
+                        } else {
+                            ocrInFlight.set(false)
+                        }
                     } else {
                         taskFinished()
                     }
@@ -746,7 +801,11 @@ class ScannerActivity : ComponentActivity() {
     override fun onDestroy() {
         cameraProvider?.unbindAll()
         scanner.close()
-        textRecognizer?.close()
+        val ocr = paddleOcr
+        paddleOcr = null
+        lifecycleScope.launch(Dispatchers.IO) {
+            ocr?.release()
+        }
         cameraExecutor.shutdown()
         debugLogTextView = null
         debugHistoryTextView = null
@@ -973,30 +1032,23 @@ class ScannerActivity : ComponentActivity() {
             val debugText: String
         )
 
-        fun extractSkuFromVisionText(visionText: Text, scanBox: RectF?): String? {
-            return extractSkuWithDebug(visionText, scanBox).sku
-        }
-
-        fun extractSkuWithDebug(visionText: Text, scanBox: RectF?): OcrExtractionResult {
-            if (visionText.textBlocks.isEmpty()) {
+        fun extractSkuFromPaddleOcr(ocrRunResult: OCRRunResult, boxHeight: Float): OcrExtractionResult {
+            if (ocrRunResult.results.isEmpty()) {
                 return OcrExtractionResult(null, "【框内文本】: 暂未检测到文字")
             }
 
             val elements = mutableListOf<RawElement>()
-            for (block in visionText.textBlocks) {
-                for (line in block.lines) {
-                    val lineText = line.text.trim()
-                    if (lineText.isEmpty()) continue
-                    val box = line.boundingBox
-                    val rect = if (box != null) RectF(box) else null
-                    if (scanBox != null) {
-                        if (rect == null || !isInsideScanBox(rect, scanBox)) {
-                            continue
-                        }
-                    }
-                    val normalized = normalizeOcrText(lineText)
-                    elements.add(RawElement(normalized, rect ?: RectF()))
-                }
+            for (item in ocrRunResult.results) {
+                val lineText = item.text.trim()
+                if (lineText.isEmpty()) continue
+                val pts = item.box.points
+                val left = pts.minOf { it.x }
+                val top = pts.minOf { it.y }
+                val right = pts.maxOf { it.x }
+                val bottom = pts.maxOf { it.y }
+                val rect = RectF(left, top, right, bottom)
+                val normalized = normalizeOcrText(lineText)
+                elements.add(RawElement(normalized, rect))
             }
 
             if (elements.isEmpty()) {
@@ -1004,7 +1056,7 @@ class ScannerActivity : ComponentActivity() {
             }
 
             val logicalRows = buildLogicalRows(elements)
-            val boxCenterY = scanBox?.centerY() ?: (logicalRows.map { it.centerY }.average().toFloat())
+            val boxCenterY = boxHeight / 2f
 
             val skuCandidates = mutableListOf<CandidateResult>()
 
@@ -1091,6 +1143,7 @@ class ScannerActivity : ComponentActivity() {
             }
 
             val sb = java.lang.StringBuilder()
+            sb.append("【PP-OCRv6 耗时】: 检测 ${ocrRunResult.detectionTimeMs}ms, 识别 ${ocrRunResult.recognitionTimeMs}ms (总计 ${ocrRunResult.totalTimeMs}ms)\n")
             sb.append("【框内文本】(${elements.size} 项):\n")
             for (elem in elements) {
                 sb.append("• ").append(elem.text).append("\n")

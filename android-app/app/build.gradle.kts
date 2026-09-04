@@ -134,7 +134,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation(project(":ppocr-sdk"))
     implementation("com.google.zxing:core:3.5.3")
     implementation("io.coil-kt:coil-compose:2.7.0")
     debugImplementation("androidx.compose.ui:ui-tooling")

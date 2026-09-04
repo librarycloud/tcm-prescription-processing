@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "TCMAdmin"
 include(":app")
+include(":ppocr-sdk")
