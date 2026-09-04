@@ -27,20 +27,22 @@ object CTCDecoder {
             val baseOffset = b * timeSteps * numClasses
 
             val indices = IntArray(timeSteps)
-            val probs = FloatArray(timeSteps)
+            var offset = baseOffset
             for (t in 0 until timeSteps) {
-                val offset = baseOffset + t * numClasses
                 var maxIdx = 0
                 var maxVal = output[offset]
-                for (c in 1 until numClasses) {
+                var c = 1
+                while (c < numClasses) {
                     val v = output[offset + c]
                     if (v > maxVal) {
                         maxVal = v
                         maxIdx = c
                     }
+                    c++
                 }
                 indices[t] = maxIdx
                 probs[t] = maxVal
+                offset += numClasses
             }
 
             val keptProbs = mutableListOf<Float>()

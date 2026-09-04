@@ -200,6 +200,11 @@ class ScannerActivity : ComponentActivity() {
                             detBoxThresh = 0.45f,
                             recScoreThresh = 0.0f,
                             recBatchSize = 1,
+                            minBoxAspectRatio = 1.25f, // 几何预过滤：排除单字方块中文（如“盒”、“片”、“OTC”等）与竖排文字
+                            minBoxWidth = 32f, // 排除无法容纳 9 位数字的极短碎框
+                            minBoxHeight = 8f, // 排除极小噪点文字
+                            sortByCenterDistance = true, // 准心中心优先排序识别！
+                            maxRecBoxes = 6, // 每帧上限识别 6 个中心候选框，彻底杜绝无目标空转卡顿
                         ),
                         EngineConfig(numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4))
                     )
@@ -729,7 +734,9 @@ class ScannerActivity : ComponentActivity() {
                                         return@launch
                                     }
 
-                                    val ocrRunResult = ocr.recognize(roiBitmap)
+                                    val ocrRunResult = ocr.recognize(roiBitmap) { currentResults ->
+                                        extractSkuFromPaddleOcr(currentResults, roiBitmap.height.toFloat()).sku != null
+                                    }
                                     val (candidate, isExplicit, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
 
                                     val formattedLog = if (candidate != null && isDebugLogOpen) {
@@ -1062,12 +1069,34 @@ class ScannerActivity : ComponentActivity() {
         )
 
         fun extractSkuFromPaddleOcr(ocrRunResult: OCRRunResult, boxHeight: Float): OcrExtractionResult {
-            if (ocrRunResult.results.isEmpty()) {
+            return extractSkuFromPaddleOcr(
+                results = ocrRunResult.results,
+                boxHeight = boxHeight,
+                detectionTimeMs = ocrRunResult.detectionTimeMs,
+                recognitionTimeMs = ocrRunResult.recognitionTimeMs,
+                totalTimeMs = ocrRunResult.totalTimeMs,
+                totalDetectedBoxes = ocrRunResult.totalDetectedBoxes,
+                recognizedBoxCount = ocrRunResult.recognizedBoxCount,
+                earlyStopped = ocrRunResult.earlyStopped,
+            )
+        }
+
+        fun extractSkuFromPaddleOcr(
+            results: List<com.paddle.ocr.model.OCRResult>,
+            boxHeight: Float,
+            detectionTimeMs: Long = 0L,
+            recognitionTimeMs: Long = 0L,
+            totalTimeMs: Long = 0L,
+            totalDetectedBoxes: Int = 0,
+            recognizedBoxCount: Int = 0,
+            earlyStopped: Boolean = false,
+        ): OcrExtractionResult {
+            if (results.isEmpty()) {
                 return OcrExtractionResult(null, false, "【框内文本】: 暂未检测到文字")
             }
 
             val elements = mutableListOf<RawElement>()
-            for (item in ocrRunResult.results) {
+            for (item in results) {
                 val lineText = item.text.trim()
                 if (lineText.isEmpty()) continue
                 val pts = item.box.points
@@ -1186,7 +1215,12 @@ class ScannerActivity : ComponentActivity() {
             val isExplicit = bestCandidate?.isExplicit ?: false
 
             val sb = java.lang.StringBuilder()
-            sb.append("【PP-OCRv6 耗时】: 检测 ${ocrRunResult.detectionTimeMs}ms, 识别 ${ocrRunResult.recognitionTimeMs}ms (总计 ${ocrRunResult.totalTimeMs}ms)\n")
+            sb.append("【PP-OCRv6 耗时】: 检测 ${detectionTimeMs}ms, 识别 ${recognitionTimeMs}ms (总计 ${totalTimeMs}ms)\n")
+            if (totalDetectedBoxes > 0) {
+                val skipped = (totalDetectedBoxes - recognizedBoxCount).coerceAtLeast(0)
+                val earlyStopTag = if (earlyStopped) "，命中中心目标立即熔断" else ""
+                sb.append("【识别加速】: 检测 ${totalDetectedBoxes} 框，过滤/跳过 ${skipped} 个无关框${earlyStopTag} (实际仅识别 ${recognizedBoxCount} 框)\n")
+            }
             sb.append("【框内文本】(${elements.size} 项):\n")
             for (elem in elements) {
                 sb.append("• ").append(elem.text).append("\n")
@@ -1198,7 +1232,7 @@ class ScannerActivity : ComponentActivity() {
             }
             sb.append("\n【提取结果】: ")
             if (finalSku != null) {
-                val tag = if (isExplicit) " [有前缀: 1帧即出]" else " [无前缀: 2帧防误触]"
+                val tag = if (isExplicit) " [有前缀: 1帧即出]" else " [纯数字: 1帧即出]"
                 sb.append("✅ 命中 SKU: ").append(finalSku).append(tag)
             } else {
                 sb.append("❌ 未检测到 9 位 SKU")

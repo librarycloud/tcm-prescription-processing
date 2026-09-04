@@ -87,6 +87,22 @@ class ScannerUtilsTest {
     }
 
     @Test
+    fun testExtractSku_rejectsPureChineseAndIrrelevantText() {
+        assertEquals(null, ScannerActivity.extractSku("感冒灵颗粒"))
+        assertEquals(null, ScannerActivity.extractSku("用法用量：开水冲服，一次1包，一日3次"))
+        assertEquals(null, ScannerActivity.extractSku("不良反应：尚不明确"))
+        assertEquals(null, ScannerActivity.extractSku("国药准字Z44021940"))
+        assertEquals(null, ScannerActivity.extractSku("生产日期：20260904"))
+        assertEquals(null, ScannerActivity.extractSku("电话：0755-12345678"))
+    }
+
+    @Test
+    fun testExtractSku_handlesSkuInChineseContext() {
+        assertEquals("304828503", ScannerActivity.extractSku("感冒灵颗粒 SKU: 304828503 处方药"))
+        assertEquals("304828503", ScannerActivity.extractSku("304828503 盒装"))
+    }
+
+    @Test
     fun testFormatLocationCode_omitsLeadingZeros() {
         assertEquals("D-1-2-3", com.tcm.admin.ui.screens.formatLocationCode("D-01-02-03"))
         assertEquals("D-1-2-3-1", com.tcm.admin.ui.screens.formatLocationCode("D-01-02-03-01"))

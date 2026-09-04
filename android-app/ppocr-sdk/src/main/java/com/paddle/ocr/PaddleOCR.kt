@@ -72,18 +72,24 @@ class PaddleOCR private constructor(
         }
     }
 
-    suspend fun recognize(bitmap: Bitmap): OCRRunResult {
+    suspend fun recognize(
+        bitmap: Bitmap,
+        earlyStopPredicate: ((List<com.paddle.ocr.model.OCRResult>) -> Boolean)? = null,
+    ): OCRRunResult {
         if (bitmap.width == 0 || bitmap.height == 0) {
             throw OCRError.InvalidImage()
         }
-        return recognizeResult { engine.run(bitmap) }
+        return recognizeResult { engine.run(bitmap, earlyStopPredicate) }
     }
 
-    suspend fun recognize(imageBytes: ByteArray): OCRRunResult {
+    suspend fun recognize(
+        imageBytes: ByteArray,
+        earlyStopPredicate: ((List<com.paddle.ocr.model.OCRResult>) -> Boolean)? = null,
+    ): OCRRunResult {
         if (imageBytes.isEmpty()) {
             throw OCRError.InvalidImage()
         }
-        return recognizeResult { engine.run(imageBytes) }
+        return recognizeResult { engine.run(imageBytes, earlyStopPredicate) }
     }
 
     private suspend fun recognizeResult(runEngine: () -> OCREngineResult): OCRRunResult {
@@ -106,6 +112,9 @@ class PaddleOCR private constructor(
                 detInputShape = result.detInputShape,
                 recInputShapes = result.recInputShapes,
                 perLineRecMs = result.perLineRecMs,
+                totalDetectedBoxes = result.totalDetectedBoxes,
+                recognizedBoxCount = result.recognizedBoxCount,
+                earlyStopped = result.earlyStopped,
             )
         }
     }

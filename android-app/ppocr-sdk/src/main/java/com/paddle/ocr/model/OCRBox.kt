@@ -22,4 +22,27 @@ data class OCRBox(
     init {
         require(points.size == 4) { "OCRBox must have exactly 4 points, got ${points.size}" }
     }
+
+    val width: Float
+        get() {
+            val w1 = kotlin.math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)
+            val w2 = kotlin.math.hypot(points[2].x - points[3].x, points[2].y - points[3].y)
+            return maxOf(w1, w2)
+        }
+
+    val height: Float
+        get() {
+            val h1 = kotlin.math.hypot(points[3].x - points[0].x, points[3].y - points[0].y)
+            val h2 = kotlin.math.hypot(points[2].x - points[1].x, points[2].y - points[1].y)
+            return maxOf(h1, h2)
+        }
+
+    val centerX: Float
+        get() = (points[0].x + points[1].x + points[2].x + points[3].x) / 4f
+
+    val centerY: Float
+        get() = (points[0].y + points[1].y + points[2].y + points[3].y) / 4f
+
+    val aspectRatio: Float
+        get() = width / height.coerceAtLeast(1e-4f)
 }

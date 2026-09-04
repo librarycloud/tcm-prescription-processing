@@ -28,4 +28,10 @@ data class PaddleOCRConfig(
     val detBoxType: String = "quad",
     val recScoreThresh: Float = 0.0f,
     val recBatchSize: Int = 1,
+    val minBoxAspectRatio: Float = 0.0f,
+    val maxBoxAspectRatio: Float = 0.0f,
+    val minBoxWidth: Float = 0.0f,
+    val minBoxHeight: Float = 0.0f,
+    val sortByCenterDistance: Boolean = false,
+    val maxRecBoxes: Int = 0,
 )

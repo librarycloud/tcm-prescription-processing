@@ -36,4 +36,8 @@ data class OCREngineResult(
     val recInputShapes: List<List<Int>> = emptyList(),
     // Per-line timing (only populated when recBatchSize == 1)
     val perLineRecMs: List<Long> = emptyList(),
+    // Recognition optimization statistics
+    val totalDetectedBoxes: Int = 0,
+    val recognizedBoxCount: Int = 0,
+    val earlyStopped: Boolean = false,
 )

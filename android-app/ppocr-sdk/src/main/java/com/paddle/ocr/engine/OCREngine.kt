@@ -51,29 +51,41 @@ class OCREngine(
         recognitionEngine = RecognitionEngine(ortManager, configured.characterList)
     }
 
-    fun run(bitmap: Bitmap): OCREngineResult {
+    fun run(
+        bitmap: Bitmap,
+        earlyStopPredicate: ((List<OCRResult>) -> Boolean)? = null,
+    ): OCREngineResult {
         val srcMat = BitmapUtils.bitmapToBGRMat(bitmap)
-        return runWithOwnedMat(srcMat)
+        return runWithOwnedMat(srcMat, earlyStopPredicate)
     }
 
-    fun run(imageBytes: ByteArray): OCREngineResult {
+    fun run(
+        imageBytes: ByteArray,
+        earlyStopPredicate: ((List<OCRResult>) -> Boolean)? = null,
+    ): OCREngineResult {
         val srcMat = BitmapUtils.imdecodeBGR(imageBytes)
         if (srcMat.empty()) {
             srcMat.release()
             throw OCRError.InvalidImage()
         }
-        return runWithOwnedMat(srcMat)
+        return runWithOwnedMat(srcMat, earlyStopPredicate)
     }
 
-    private fun runWithOwnedMat(srcMat: org.opencv.core.Mat): OCREngineResult {
+    private fun runWithOwnedMat(
+        srcMat: org.opencv.core.Mat,
+        earlyStopPredicate: ((List<OCRResult>) -> Boolean)? = null,
+    ): OCREngineResult {
         return try {
-            run(srcMat)
+            run(srcMat, earlyStopPredicate)
         } finally {
             srcMat.release()
         }
     }
 
-    private fun run(srcMat: org.opencv.core.Mat): OCREngineResult {
+    private fun run(
+        srcMat: org.opencv.core.Mat,
+        earlyStopPredicate: ((List<OCRResult>) -> Boolean)? = null,
+    ): OCREngineResult {
         val totalStart = System.currentTimeMillis()
         val detResult = detectionEngine.detect(srcMat)
         val boxes = detResult.boxes
@@ -91,11 +103,43 @@ class OCREngine(
                 detPostprocessMs = detResult.postprocessMs,
                 detInputShape = detResult.inputShape,
                 coldLoadTimeMs = ortManager.coldLoadTimeMs,
+                totalDetectedBoxes = 0,
+                recognizedBoxCount = 0,
+                earlyStopped = false,
             )
         }
 
-        // 2. Sort boxes
-        val sortedBoxes = BoxSorter.sortInReadingOrder(boxes)
+        // 2. Filter and sort boxes
+        val sortedBoxes = if (config.sortByCenterDistance) {
+            val imgCenterX = srcMat.cols() / 2f
+            val imgCenterY = srcMat.rows() / 2f
+            val filtered = boxes.filter { box ->
+                if (config.minBoxAspectRatio > 0f && box.aspectRatio < config.minBoxAspectRatio) return@filter false
+                if (config.maxBoxAspectRatio > 0f && box.aspectRatio > config.maxBoxAspectRatio) return@filter false
+                if (config.minBoxWidth > 0f && box.width < config.minBoxWidth) return@filter false
+                if (config.minBoxHeight > 0f && box.height < config.minBoxHeight) return@filter false
+                true
+            }
+            val centerSorted = filtered.sortedBy { box ->
+                val dx = box.centerX - imgCenterX
+                val dy = box.centerY - imgCenterY
+                dx * dx + dy * dy
+            }
+            if (config.maxRecBoxes > 0) centerSorted.take(config.maxRecBoxes) else centerSorted
+        } else {
+            var res = boxes
+            if (config.minBoxAspectRatio > 0f || config.maxBoxAspectRatio > 0f || config.minBoxWidth > 0f || config.minBoxHeight > 0f) {
+                res = res.filter { box ->
+                    if (config.minBoxAspectRatio > 0f && box.aspectRatio < config.minBoxAspectRatio) return@filter false
+                    if (config.maxBoxAspectRatio > 0f && box.aspectRatio > config.maxBoxAspectRatio) return@filter false
+                    if (config.minBoxWidth > 0f && box.width < config.minBoxWidth) return@filter false
+                    if (config.minBoxHeight > 0f && box.height < config.minBoxHeight) return@filter false
+                    true
+                }
+            }
+            val readingSorted = BoxSorter.sortInReadingOrder(res)
+            if (config.maxRecBoxes > 0) readingSorted.take(config.maxRecBoxes) else readingSorted
+        }
 
         // 3. Crop and recognize text regions
         var totalRecPreMs = 0L
@@ -106,6 +150,8 @@ class OCREngine(
         val recInputShapes = mutableListOf<List<Int>>()
         val perLineRecMs = mutableListOf<Long>()
         val batchSize = config.recBatchSize.coerceAtLeast(1)
+        var earlyStopped = false
+        var recognizedBoxCount = 0
 
         var i = 0
         while (i < sortedBoxes.size) {
@@ -148,6 +194,12 @@ class OCREngine(
                             )
                         }
                     }
+                    recognizedBoxCount += batchCrops.size
+
+                    if (earlyStopPredicate != null && earlyStopPredicate(allResults)) {
+                        earlyStopped = true
+                        break
+                    }
                 }
             } finally {
                 batchCrops.forEach { it.release() }
@@ -175,6 +227,9 @@ class OCREngine(
             detInputShape = detResult.inputShape,
             recInputShapes = recInputShapes,
             perLineRecMs = perLineRecMs,
+            totalDetectedBoxes = boxes.size,
+            recognizedBoxCount = recognizedBoxCount,
+            earlyStopped = earlyStopped,
         )
     }
 
