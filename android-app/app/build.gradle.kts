@@ -45,8 +45,9 @@ android {
         applicationId = "com.tcm.admin"
         minSdk = 29
         targetSdk = 36
+        // Ship only the 64-bit ARM native libraries.
         ndk {
-            abiFilters += setOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += "arm64-v8a"
         }
         // The admin client ships Chinese UI with English fallback only.
         resourceConfigurations += setOf("zh", "en")
