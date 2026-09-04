@@ -81,23 +81,23 @@
         </div>
       </template>
 
-      <el-table :data="matrix?.patches || []" stripe border style="width: 100%">
-        <el-table-column label="起始旧版本" width="160">
+      <el-table ref="patchTableRef" :data="matrix?.patches || []" stripe border style="width: 100%">
+        <el-table-column label="起始旧版本" min-width="140" align="center">
           <template #default="{ row }">
             <el-tag type="info">versionCode {{ row.fromVersionCode }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="目标新版本" width="160">
+        <el-table-column label="目标新版本" min-width="140" align="center">
           <template #default="{ row }">
             <el-tag type="success">versionCode {{ row.targetVersionCode }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="补丁包大小" width="140">
+        <el-table-column label="补丁包大小" min-width="120" align="center">
           <template #default="{ row }">
             <strong>{{ formatSize(row.patchSize) }}</strong>
           </template>
         </el-table-column>
-        <el-table-column label="节约流量比例" width="160">
+        <el-table-column label="节约流量比例" min-width="170" align="center">
           <template #default="{ row }">
             <el-tag type="danger" effect="dark" v-if="row.savedPercentage > 0">
               节省 {{ row.savedPercentage }}% ({{ formatSize(row.savedBytes) }})
@@ -105,12 +105,12 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="补丁 SHA-256" min-width="200">
+        <el-table-column label="补丁 SHA-256" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="hash-text">{{ row.patchSha256 }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" min-width="160" align="center">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="copyPatchUrl(row.resolvedPatchUrl || row.patchUrl)">
               复制链接
@@ -190,7 +190,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Download, Refresh } from '@element-plus/icons-vue';
 import { generateAppPatch, getAndroidAppVersion, getAppPatchMatrix, syncAndroidAppVersion } from '@/api/appVersion';
@@ -199,6 +199,7 @@ const loading = ref(false);
 const syncing = ref(false);
 const version = ref(null);
 const matrix = ref(null);
+const patchTableRef = ref(null);
 const generatingPatch = ref('');
 const manualGenerateDialog = ref(false);
 const generatingManual = ref(false);
@@ -235,6 +236,9 @@ async function loadData() {
     ]);
     version.value = vData;
     matrix.value = mData;
+    nextTick(() => {
+      patchTableRef.value?.doLayout();
+    });
   } finally {
     loading.value = false;
   }
@@ -314,4 +318,18 @@ onMounted(loadData);
 .release-notes ul, .release-guide ol { margin: 0; padding-left: 20px; color: var(--app-muted); line-height: 1.9; }
 code { padding: 2px 5px; border-radius: 4px; background: var(--el-fill-color-light); }
 .empty-patches { padding: 16px 0; color: var(--app-muted); text-align: center; }
+
+:deep(.el-table th.gutter),
+:deep(.el-table col.gutter) {
+  display: table-cell !important;
+  width: 0 !important;
+}
+:deep(.el-table__header),
+:deep(.el-table__body) {
+  width: 100% !important;
+}
+:deep(.el-table td.el-table__cell),
+:deep(.el-table th.el-table__cell) {
+  vertical-align: middle;
+}
 </style>
