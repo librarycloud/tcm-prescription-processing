@@ -284,80 +284,86 @@ internal fun HerbsScreen(
                                 )
                             }
                             Text(
-                                text = "${locations.length()} 个货位",
+                                text = "共 ${locations.length()} 个位置",
                                 color = Muted,
                                 fontSize = 12.sp,
                             )
                         }
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(12.dp))
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            (0 until locations.length()).chunked(2).forEach { rowIndices ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            (0 until locations.length()).forEach { lIndex ->
+                                val loc = locations.getJSONObject(lIndex)
+                                val herbs = loc.optJSONArray("herbs") ?: JSONArray()
+                                val code = loc.displayField("code").ifBlank { loc.displayField("locationCode") }
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
+                                        },
+                                    shape = FieldShape,
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(1.dp, CardBorderColor),
                                 ) {
-                                    rowIndices.forEach { locIndex ->
-                                        val loc = locations.getJSONObject(locIndex)
-                                        val herbs = loc.optJSONArray("herbs") ?: JSONArray()
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(6.dp),
-                                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                                            modifier = Modifier.weight(1f).clickable {
-                                                onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
-                                            },
-                                        ) {
-                                            Column(Modifier.padding(8.dp)) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                ) {
-                                                    Surface(
-                                                        color = PrimarySoft,
-                                                        shape = RoundedCornerShape(4.dp),
-                                                    ) {
-                                                        SearchHighlightedText(
-                                                            text = loc.displayField("locationCode"),
-                                                            keyword = keyword,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                                            color = PrimaryDark,
-                                                            fontSize = 10.sp,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                        )
-                                                    }
-                                                }
-                                                Spacer(Modifier.height(3.dp))
-                                                Text(
-                                                    text = locationTypeLabel(loc.displayField("type")),
-                                                    color = Muted,
-                                                    fontSize = 11.sp,
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                SearchHighlightedText(
+                                                    text = code,
+                                                    keyword = keyword,
+                                                    modifier = Modifier.weight(1f),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 13.sp,
+                                                    color = Ink,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
                                                 )
-                                                Spacer(Modifier.height(2.dp))
-                                                if (herbs.length() == 0) {
-                                                    Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
-                                                } else {
-                                                    Text(
-                                                        text = buildAnnotatedString {
-                                                            (0 until herbs.length()).forEach { index ->
-                                                                if (index > 0) append("、")
-                                                                val name = herbs.getJSONObject(index).displayField("name")
-                                                                append(searchHighlightedText(name, keyword, Primary.copy(alpha = 0.28f), PrimaryDark, matchPinyin = true))
-                                                            }
-                                                        },
-                                                        color = RegularText,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.Medium,
+                                                Spacer(Modifier.width(8.dp))
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.surface,
+                                                    shape = RoundedCornerShape(5.dp),
+                                                    border = BorderStroke(1.dp, Primary.copy(alpha = 0.35f)),
+                                                ) {
+                                                    SearchHighlightedText(
+                                                        text = positionLabel(loc),
+                                                        keyword = keyword,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                        color = PrimaryDark,
+                                                        fontSize = 10.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
                                                     )
                                                 }
                                             }
+                                            Spacer(Modifier.height(3.dp))
+                                            Text(
+                                                text = locationTypeLabel(loc.displayField("type")),
+                                                color = Muted,
+                                                fontSize = 11.sp,
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            if (herbs.length() == 0) {
+                                                Text("未配置药材（空置）", color = Muted, fontSize = 12.sp)
+                                            } else {
+                                                Text(
+                                                    text = buildAnnotatedString {
+                                                        (0 until herbs.length()).forEach { index ->
+                                                            if (index > 0) append("、")
+                                                            val name = herbs.getJSONObject(index).displayField("name")
+                                                            append(searchHighlightedText(name, keyword, Primary.copy(alpha = 0.28f), PrimaryDark, matchPinyin = true))
+                                                        }
+                                                    },
+                                                    color = RegularText,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                )
+                                            }
                                         }
-                                    }
-                                    if (rowIndices.size == 1) {
-                                        Spacer(Modifier.weight(1f))
                                     }
                                 }
                             }
