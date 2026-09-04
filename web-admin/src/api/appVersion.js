@@ -9,3 +9,11 @@ export function syncAndroidAppVersion() {
   // 发送空 JSON 对象，避免 Axios 将空请求体标记为 urlencoded 导致后端返回 415。
   return request.post('/app/version/android/sync', {}, { timeout: 180000 });
 }
+
+export function getAppPatchMatrix() {
+  return request.get('/app/version/patches');
+}
+
+export function generateAppPatch(fromVersionCode, targetVersionCode) {
+  return request.post('/app/version/patches/generate', { fromVersionCode, targetVersionCode }, { timeout: 180000 });
+}

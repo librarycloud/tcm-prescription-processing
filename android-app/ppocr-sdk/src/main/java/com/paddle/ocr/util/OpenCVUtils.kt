@@ -41,9 +41,7 @@ object OpenCVUtils {
 
         // 2. 优先尝试 OpenCV 4.9+ 官方推荐的 OpenCVLoader.initLocal()
         try {
-            val initLocalMethod = org.opencv.android.OpenCVLoader::class.java.getMethod("initLocal")
-            val success = initLocalMethod.invoke(null) as? Boolean ?: false
-            if (success) {
+            if (org.opencv.android.OpenCVLoader.initLocal()) {
                 initialized = true
                 lastError = null
                 Log.d("OpenCVUtils", "OpenCV initialized via OpenCVLoader.initLocal()")
@@ -52,12 +50,14 @@ object OpenCVUtils {
                 errors.add("initLocal() returned false")
             }
         } catch (t: Throwable) {
-            Log.d("OpenCVUtils", "OpenCVLoader.initLocal fallback: ${t.message}")
+            Log.d("OpenCVUtils", "OpenCVLoader.initLocal notice: ${t.message}")
         }
 
-        // 3. 尝试标准 OpenCVLoader.initDebug()
+        // 3. 回退尝试旧版 OpenCVLoader.initDebug()
         try {
-            if (org.opencv.android.OpenCVLoader.initDebug()) {
+            @Suppress("DEPRECATION")
+            val ok = org.opencv.android.OpenCVLoader.initDebug()
+            if (ok) {
                 initialized = true
                 lastError = null
                 Log.d("OpenCVUtils", "OpenCV initialized via OpenCVLoader.initDebug()")

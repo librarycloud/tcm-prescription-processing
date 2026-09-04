@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +15,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -39,18 +39,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tcm.admin.util.BsPatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 
 private const val UPDATE_PREFS = "android_update_check"
 private const val LAST_UPDATE_CHECK_AT = "last_update_check_at"
@@ -84,20 +89,28 @@ internal fun AboutScreen(
     var downloadError by remember { mutableStateOf<String?>(null) }
     var downloadVersionName by remember { mutableStateOf("") }
 
+    // Incremental update state
+    var isPatchDownloading by remember { mutableStateOf(false) }
+    var isSynthesizing by remember { mutableStateOf(false) }
+    var synthesizeProgress by remember { mutableStateOf(0) }
+
     suspend fun fetchLatest(): JSONObject? {
         checking = true
         error = null
-        val version = runCatching { withContext(Dispatchers.IO) { ApiClient.androidAppVersion() } }
-            .onSuccess { result ->
-                latest = result
-                onUpdateAvailabilityChanged(result.optInt("versionCode", 0) > BuildConfig.VERSION_CODE)
-                updatePrefs.edit()
-                    .putLong(LAST_UPDATE_CHECK_AT, System.currentTimeMillis())
-                    .putString(CACHED_UPDATE, result.toString())
-                    .apply()
+        val version = runCatching {
+            withContext(Dispatchers.IO) {
+                ApiClient.androidAppVersion(BuildConfig.VERSION_CODE)
             }
-            .onFailure { error = it.message ?: "检查更新失败" }
-            .getOrNull()
+        }.onSuccess { result ->
+            latest = result
+            onUpdateAvailabilityChanged(result.optInt("versionCode", 0) > BuildConfig.VERSION_CODE)
+            updatePrefs.edit()
+                .putLong(LAST_UPDATE_CHECK_AT, System.currentTimeMillis())
+                .putString(CACHED_UPDATE, result.toString())
+                .apply()
+        }.onFailure {
+            error = it.message ?: "检查更新失败"
+        }.getOrNull()
         checking = false
         return version
     }
@@ -109,8 +122,10 @@ internal fun AboutScreen(
         if (shouldCheck) fetchLatest()
     }
 
-    fun startDownload(version: JSONObject) {
-        val rawUrl = version.displayField("apkUrl", "").trim()
+    fun startFullDownload(version: JSONObject) {
+        val rawUrl = version.optString("fallbackApkUrl").ifBlank {
+            version.displayField("apkUrl", "")
+        }.trim()
         if (rawUrl.isBlank()) {
             downloadError = "暂未配置下载地址"
             return
@@ -145,9 +160,129 @@ internal fun AboutScreen(
             downloadVersionName = versionName
             downloadProgress = 0
             downloadedBytes = 0L
-            downloadTotalBytes = version.optLong("size", 0L).coerceAtLeast(0L)
+            downloadTotalBytes = version.optLong("fallbackApkSize", 0L).takeIf { it > 0 }
+                ?: version.optLong("size", 0L).coerceAtLeast(0L)
             downloadId = downloadManager.enqueue(request)
         }.onFailure { downloadError = it.message ?: "无法开始下载" }
+    }
+
+    fun startIncrementalUpdate(version: JSONObject) {
+        val rawPatchUrl = version.displayField("patchUrl", "").trim()
+        if (rawPatchUrl.isBlank()) {
+            startFullDownload(version)
+            return
+        }
+        val patchUrl = if (rawPatchUrl.startsWith("http://") || rawPatchUrl.startsWith("https://")) {
+            rawPatchUrl
+        } else {
+            BuildConfig.API_BASE_URL.trimEnd('/') + "/" + rawPatchUrl.trimStart('/')
+        }
+        val patchSha256 = version.displayField("patchSha256", "").lowercase()
+        val targetApkSha256 = version.displayField("targetApkSha256", "").lowercase()
+        val patchSize = version.optLong("patchSize", 0L).coerceAtLeast(0L)
+        val versionName = version.optString("versionName", "latest")
+        val versionCode = version.optInt("versionCode", 0)
+
+        isPatchDownloading = true
+        isSynthesizing = false
+        synthesizeProgress = 0
+        downloadError = null
+        downloadedUri = null
+        downloadVersionName = versionName
+        downloadProgress = 0
+        downloadedBytes = 0L
+        downloadTotalBytes = patchSize
+
+        scope.launch {
+            try {
+                val patchFile = File(context.cacheDir, "patch_v${BuildConfig.VERSION_CODE}_to_v${versionCode}.tmp")
+                val synthesizedApk = File(context.cacheDir, "synthesized_v${versionCode}_${versionName}.apk")
+
+                // 1. Download patch
+                withContext(Dispatchers.IO) {
+                    val conn = (URL(patchUrl).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 15000
+                        readTimeout = 30000
+                        requestMethod = "GET"
+                        connect()
+                    }
+                    if (conn.responseCode !in 200..299) {
+                        throw IOException("下载增量补丁失败，HTTP ${conn.responseCode}")
+                    }
+                    val totalLen = conn.contentLengthLong.takeIf { it > 0 } ?: patchSize
+                    if (totalLen > 0) downloadTotalBytes = totalLen
+
+                    conn.inputStream.use { input ->
+                        FileOutputStream(patchFile).use { output ->
+                            val buf = ByteArray(8192)
+                            var read: Int
+                            var count = 0L
+                            while (input.read(buf).also { read = it } != -1) {
+                                output.write(buf, 0, read)
+                                count += read
+                                downloadedBytes = count
+                                if (totalLen > 0) {
+                                    downloadProgress = ((count * 100L) / totalLen).toInt().coerceIn(0, 100)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Synthesize
+                isPatchDownloading = false
+                isSynthesizing = true
+                synthesizeProgress = 0
+
+                withContext(Dispatchers.IO) {
+                    if (patchSha256.isNotBlank()) {
+                        val actualPatchSha256 = BsPatch.computeSha256(patchFile).lowercase()
+                        if (actualPatchSha256 != patchSha256) {
+                            throw IOException("增量补丁校验不通过 (SHA256 不匹配)")
+                        }
+                    }
+
+                    val oldApk = File(context.applicationInfo.sourceDir)
+                    if (!oldApk.exists()) {
+                        throw IOException("无法访问当前应用源文件")
+                    }
+
+                    BsPatch.applyPatch(oldApk, synthesizedApk, patchFile) { prog ->
+                        synthesizeProgress = prog
+                    }
+
+                    if (targetApkSha256.isNotBlank()) {
+                        val actualNewSha256 = BsPatch.computeSha256(synthesizedApk).lowercase()
+                        if (actualNewSha256 != targetApkSha256) {
+                            throw IOException("合成新版本 APK 校验不通过 (SHA256 不匹配)")
+                        }
+                    }
+
+                    patchFile.delete()
+                }
+
+                // 3. Success
+                isSynthesizing = false
+                downloadProgress = 100
+                downloadedUri = Uri.fromFile(synthesizedApk)
+
+            } catch (e: Exception) {
+                // Fallback to full download
+                isPatchDownloading = false
+                isSynthesizing = false
+                downloadError = "增量更新未成功（${e.message}），正在自动为您转为全量更新..."
+                startFullDownload(version)
+            }
+        }
+    }
+
+    fun startUpdate(version: JSONObject) {
+        val updateType = version.optString("updateType", "full")
+        if (updateType == "incremental") {
+            startIncrementalUpdate(version)
+        } else {
+            startFullDownload(version)
+        }
     }
 
     LaunchedEffect(downloadId) {
@@ -189,6 +324,8 @@ internal fun AboutScreen(
     val latestCode = latest?.optInt("versionCode", currentCode) ?: currentCode
     val hasUpdate = latestCode > currentCode
     val forceUpdate = latest?.optBoolean("forceUpdate", false) == true
+    val isIncremental = latest?.optString("updateType") == "incremental"
+    val patchSize = latest?.optLong("patchSize", 0L) ?: 0L
 
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = CardShape) {
@@ -216,7 +353,18 @@ internal fun AboutScreen(
                     checking -> Text("正在检查最新版本...", color = Muted, fontSize = 13.sp)
                     error != null -> Text(error!!, color = Danger, fontSize = 13.sp)
                     latest != null && hasUpdate -> {
-                        Text("发现新版本 ${latest!!.displayField("versionName")}", color = Primary, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("发现新版本 ${latest!!.displayField("versionName")}", color = Primary, fontWeight = FontWeight.SemiBold)
+                            if (isIncremental) {
+                                Spacer(Modifier.size(8.dp))
+                                Surface(color = SuccessSoft, shape = RoundedCornerShape(4.dp)) {
+                                    Text("增量更新（省流量）", color = Success, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                }
+                            }
+                        }
+                        if (isIncremental && patchSize > 0) {
+                            Text("补丁大小：${formatDownloadSize(patchSize)}（无需下载完整安装包）", color = Muted, fontSize = 12.sp)
+                        }
                         latest!!.opt("publishedAt")?.let { publishedAt ->
                             serverDateTime(publishedAt, "").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
                         }
@@ -231,10 +379,40 @@ internal fun AboutScreen(
                     latest != null -> Text("已是最新版本", color = Success, fontSize = 13.sp)
                 }
                 Spacer(Modifier.height(12.dp))
-                if (downloadId != null) {
+
+                // Progress handling: Synthesizing -> Patch Downloading -> Full Downloading
+                if (isSynthesizing) {
+                    LinearProgressIndicator(
+                        progress = { synthesizeProgress / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Primary
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text("正在合成新版本安装包... $synthesizeProgress%", color = Muted, fontSize = 12.sp)
+                } else if (isPatchDownloading) {
+                    val progressShape = RoundedCornerShape(50)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(progressShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth((downloadProgress / 100f).coerceIn(0f, 1f))
+                                .background(Primary),
+                        )
+                    }
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        "正在下载增量补丁 $downloadProgress%（${formatDownloadSize(downloadedBytes)} / ${formatDownloadSize(downloadTotalBytes)}）",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                } else if (downloadId != null) {
                     if (downloadTotalBytes > 0L) {
-                        // Use two clipped rectangles instead of the Material rounded indicator.
-                        // Rounded end caps can expose the white track at the join and at the tail.
                         val progressShape = RoundedCornerShape(50)
                         Box(
                             modifier = Modifier
@@ -245,9 +423,9 @@ internal fun AboutScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth((downloadProgress / 100f).coerceIn(0f, 1f))
-                                    .background(Primary),
+                                .fillMaxHeight()
+                                .fillMaxWidth((downloadProgress / 100f).coerceIn(0f, 1f))
+                                .background(Primary),
                             )
                         }
                     } else {
@@ -256,7 +434,7 @@ internal fun AboutScreen(
                     Spacer(Modifier.height(5.dp))
                     Text(
                         if (downloadTotalBytes > 0L) {
-                            "正在下载 $downloadProgress%（${formatDownloadSize(downloadedBytes)} / ${formatDownloadSize(downloadTotalBytes)}）"
+                            "正在下载完整安装包 $downloadProgress%（${formatDownloadSize(downloadedBytes)} / ${formatDownloadSize(downloadTotalBytes)}）"
                         } else {
                             "正在下载 ${formatDownloadSize(downloadedBytes)}"
                         },
@@ -264,18 +442,21 @@ internal fun AboutScreen(
                         fontSize = 12.sp,
                     )
                 } else if (downloadedUri != null) {
-                    Button(onClick = { installDownloaded(context, downloadedUri!!) }, modifier = Modifier.fillMaxWidth(), shape = FieldShape) { Text("安装版本 ${downloadVersionName.ifBlank { "更新" }}") }
+                    Button(onClick = { installDownloaded(context, downloadedUri!!) }, modifier = Modifier.fillMaxWidth(), shape = FieldShape) {
+                        Text("安装版本 ${downloadVersionName.ifBlank { "更新" }}")
+                    }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(onClick = { scope.launch { fetchLatest() } }, enabled = !checking, modifier = Modifier.weight(1f), shape = FieldShape) { Text("检查更新") }
+                        OutlinedButton(onClick = { scope.launch { fetchLatest() } }, enabled = !checking, modifier = Modifier.weight(1f), shape = FieldShape) {
+                            Text("检查更新")
+                        }
                         if (hasUpdate) {
                             Button(
                                 onClick = {
                                     scope.launch {
-                                        // Always use the current release metadata for the download task and notification.
                                         val version = fetchLatest() ?: return@launch
                                         if (version.optInt("versionCode", BuildConfig.VERSION_CODE) > BuildConfig.VERSION_CODE) {
-                                            startDownload(version)
+                                            startUpdate(version)
                                         }
                                     }
                                 },
@@ -283,7 +464,13 @@ internal fun AboutScreen(
                                 modifier = Modifier.weight(1f),
                                 shape = FieldShape,
                             ) {
-                                Text(if (forceUpdate) "立即更新" else "下载更新")
+                                val btnText = when {
+                                    forceUpdate && isIncremental -> "立即增量更新"
+                                    forceUpdate -> "立即更新"
+                                    isIncremental -> "增量更新 (${formatDownloadSize(patchSize)})"
+                                    else -> "下载更新"
+                                }
+                                Text(btnText)
                             }
                         }
                     }
@@ -315,7 +502,7 @@ private fun installDownloaded(context: Context, uri: Uri) {
     }
     val installUri = runCatching {
         if (uri.scheme == "file") {
-            val file = java.io.File(uri.path ?: "")
+            val file = File(uri.path ?: "")
             androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         } else uri
     }.getOrDefault(uri)

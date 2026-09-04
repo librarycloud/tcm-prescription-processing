@@ -146,7 +146,10 @@ object ApiClient {
     fun me(): JSONObject = request("/user/me").getJSONObject("data")
 
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
-    fun androidAppVersion(): JSONObject = request("/app/version/android").getJSONObject("data")
+    fun androidAppVersion(versionCode: Int? = null): JSONObject {
+        val query = versionCode?.let { "?versionCode=$it" } ?: ""
+        return request("/app/version/android$query").getJSONObject("data")
+    }
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
         val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)
         return data.optJSONArray("list") ?: JSONArray()

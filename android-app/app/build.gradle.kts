@@ -93,6 +93,7 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         jniLibs {
+            useLegacyPackaging = true
             pickFirsts += setOf("**/libc++_shared.so")
         }
     }
@@ -140,6 +141,7 @@ dependencies {
     implementation(project(":ppocr-sdk"))
     implementation("com.google.zxing:core:3.5.3")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("org.apache.commons:commons-compress:1.26.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

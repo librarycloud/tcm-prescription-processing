@@ -39,5 +39,6 @@ export const config = {
   redisUrl: process.env.REDIS_URL || '',
   githubRepository: process.env.GITHUB_REPOSITORY || '',
   githubToken: process.env.GITHUB_TOKEN || '',
+  appDownloadBaseUrl: (process.env.APP_DOWNLOAD_BASE_URL || '').trim().replace(/\/+$/, ''),
   nodeEnv
 };

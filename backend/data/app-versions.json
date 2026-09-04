@@ -1,0 +1,24 @@
+{
+  "latest": {
+    "versionCode": 1,
+    "versionName": "1.0",
+    "minVersionCode": 1,
+    "forceUpdate": false,
+    "releaseNotes": [],
+    "publishedAt": "2026-08-27",
+    "apkUrl": "/app/releases/app-release.apk",
+    "sha256": "",
+    "size": 0
+  },
+  "history": [
+    {
+      "versionCode": 1,
+      "versionName": "1.0",
+      "apkUrl": "/app/releases/app-release.apk",
+      "sha256": "",
+      "size": 0,
+      "publishedAt": "2026-08-27"
+    }
+  ],
+  "patches": []
+}
