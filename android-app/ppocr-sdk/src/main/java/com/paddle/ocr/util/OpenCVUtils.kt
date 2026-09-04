@@ -19,24 +19,58 @@ import android.util.Log
 
 object OpenCVUtils {
 
+    @Volatile
     private var initialized = false
+
+    var lastError: String? = null
+        private set
 
     fun init(context: Context): Boolean {
         if (initialized) return true
+
+        val errors = mutableListOf<String>()
+
+        // 1. 尝试显式预加载 libc++_shared.so（ONNX Runtime 和 OpenCV 共同依赖）
+        // 部分 Android 系统在 dlopen libopencv_java4 时若未预加载 c++_shared 会报 library not found
+        try {
+            System.loadLibrary("c++_shared")
+            Log.d("OpenCVUtils", "c++_shared preloaded successfully")
+        } catch (t: Throwable) {
+            Log.d("OpenCVUtils", "c++_shared preload notice: ${t.message}")
+        }
+
+        // 2. 尝试标准 OpenCVLoader.initDebug()
         try {
             if (org.opencv.android.OpenCVLoader.initDebug()) {
                 initialized = true
+                lastError = null
+                Log.d("OpenCVUtils", "OpenCV initialized via OpenCVLoader.initDebug()")
                 return true
+            } else {
+                errors.add("initDebug() returned false")
             }
         } catch (t: Throwable) {
-            Log.w("OpenCVUtils", "OpenCVLoader.initDebug failed, trying System.loadLibrary: ${t.message}")
+            Log.w("OpenCVUtils", "OpenCVLoader.initDebug failed: ${t.message}")
+            errors.add("initDebug: ${t.javaClass.simpleName}(${t.message})")
         }
-        try {
-            System.loadLibrary("opencv_java4")
-            initialized = true
-        } catch (t: Throwable) {
-            Log.e("OpenCVUtils", "Failed to initialize OpenCV: ${t.message}", t)
+
+        // 3. 回退尝试直接加载可能的 so 库名称
+        val candidates = listOf("opencv_java4", "opencv_java", "opencv_java3")
+        for (libName in candidates) {
+            try {
+                System.loadLibrary(libName)
+                initialized = true
+                lastError = null
+                Log.d("OpenCVUtils", "OpenCV initialized via System.loadLibrary($libName)")
+                return true
+            } catch (t: Throwable) {
+                Log.w("OpenCVUtils", "System.loadLibrary($libName) failed: ${t.message}")
+                errors.add("loadLibrary($libName): ${t.javaClass.simpleName}(${t.message})")
+            }
         }
-        return initialized
+
+        lastError = errors.joinToString("; ")
+        Log.e("OpenCVUtils", "Failed to initialize OpenCV: $lastError")
+        return false
     }
 }

@@ -11,7 +11,7 @@ android {
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += setOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
 
@@ -33,8 +33,8 @@ android {
 }
 
 dependencies {
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.21.1")
-    implementation("com.quickbirdstudios:opencv:4.5.3")
+    api("com.microsoft.onnxruntime:onnxruntime-android:1.21.1")
+    api("com.quickbirdstudios:opencv:4.5.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.core:core-ktx:1.15.0")
 }

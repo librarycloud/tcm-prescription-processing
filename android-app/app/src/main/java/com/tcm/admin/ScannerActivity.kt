@@ -181,8 +181,10 @@ class ScannerActivity : ComponentActivity() {
                 try {
                     val cvSuccess = OpenCVUtils.init(applicationContext)
                     if (!cvSuccess) {
-                        Log.e(TAG, "OpenCV native library failed to load")
-                        latestOcrDebugLog = "❌ OpenCV 加载失败: 缺少动态库 (libopencv_java4.so)"
+                        val err = OpenCVUtils.lastError ?: "未知错误"
+                        val abis = Build.SUPPORTED_ABIS.joinToString(", ")
+                        Log.e(TAG, "OpenCV native library failed to load: $err (Device ABIs: $abis)")
+                        latestOcrDebugLog = "❌ OpenCV 加载失败: $err\n(设备 ABI: $abis)"
                         runOnUiThread { updateDebugLogUi() }
                         return@launch
                     }

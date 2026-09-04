@@ -10,6 +10,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="${cleartextTraffic}"
+        android:extractNativeLibs="true"
         android:theme="@style/Theme.TCMAdmin">
         <activity
             android:name=".MainActivity"

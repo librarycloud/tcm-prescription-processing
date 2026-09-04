@@ -45,9 +45,8 @@ android {
         applicationId = "com.tcm.admin"
         minSdk = 29
         targetSdk = 36
-        // Ship only the 64-bit ARM native libraries.
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += setOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
         // The admin client ships Chinese UI with English fallback only.
         resourceConfigurations += setOf("zh", "en")
@@ -92,6 +91,9 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        jniLibs {
+            pickFirsts += setOf("**/libc++_shared.so")
+        }
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
