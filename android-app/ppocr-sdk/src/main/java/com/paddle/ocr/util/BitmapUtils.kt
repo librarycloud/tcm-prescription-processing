@@ -16,9 +16,11 @@ package com.paddle.ocr.util
 
 import android.graphics.Bitmap
 import org.opencv.android.Utils
+import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfByte
+import org.opencv.core.MatOfDouble
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
@@ -50,6 +52,41 @@ object BitmapUtils {
             }
         } finally {
             rgba.release()
+        }
+    }
+
+    /**
+     * 计算图像清晰度（拉普拉斯方差）。
+     * 在缩放后的微缩图上运行，耗时 < 0.5ms。
+     * 用于在相机大幅晃动/运动拖影时过滤无效模糊帧，避免重影导致的字符误判与变长。
+     */
+    fun calculateSharpness(bitmap: Bitmap): Double {
+        val targetW = 160
+        val targetH = (bitmap.height.toFloat() / bitmap.width * targetW).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(bitmap, targetW, targetH, false)
+        val rgba = Mat(scaled.height, scaled.width, CvType.CV_8UC4)
+        val gray = Mat()
+        val laplacian = Mat()
+        val mean = MatOfDouble()
+        val stddev = MatOfDouble()
+        return try {
+            Utils.bitmapToMat(scaled, rgba)
+            Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
+            Imgproc.Laplacian(gray, laplacian, CvType.CV_64F)
+            Core.meanStdDev(laplacian, mean, stddev)
+            val std = stddev.get(0, 0)[0]
+            std * std
+        } catch (e: Throwable) {
+            100.0 // 异常时兜底放行
+        } finally {
+            if (scaled != bitmap) {
+                scaled.recycle()
+            }
+            rgba.release()
+            gray.release()
+            laplacian.release()
+            mean.release()
+            stddev.release()
         }
     }
 

@@ -714,6 +714,17 @@ class ScannerActivity : ComponentActivity() {
                         if (roiBitmap != null) {
                             lifecycleScope.launch(Dispatchers.Default) {
                                 try {
+                                    val sharpness = com.paddle.ocr.util.BitmapUtils.calculateSharpness(roiBitmap)
+                                    if (sharpness < 25.0) {
+                                        // 画面处于剧烈晃动或运动拖影状态，跳过识别以避免重影导致字符误分裂与算力浪费
+                                        val blurMsg = "【画面状态】: ⚠️ 正在晃动/模糊 (清晰度: ${sharpness.toInt()})，等待稳焦..."
+                                        latestOcrDebugLog = blurMsg
+                                        if (BuildConfig.DEBUG && isDebugLogOpen) {
+                                            runOnUiThread { updateDebugLogUi() }
+                                        }
+                                        return@launch
+                                    }
+
                                     val ocrRunResult = ocr.recognize(roiBitmap)
                                     val (candidate, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
 

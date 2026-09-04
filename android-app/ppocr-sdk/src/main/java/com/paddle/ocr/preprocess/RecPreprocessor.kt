@@ -42,16 +42,9 @@ object RecPreprocessor {
             val w = rgb.cols()
             val aspectRatio = if (h > 0) w.toDouble() / h else 1.0
 
-            // 针对狭窄短数字（如 0000、111 等易发生 CTC 吞字合并的区域），自适应适度水平拉伸
-            // 确保每个字符有充足的横向感受野与时序步长，使相邻相同数字间能清晰呈现 CTC BLANK 状态
-            val effectiveRatio = if (aspectRatio < 5.0) {
-                (aspectRatio * 1.25).coerceAtLeast(2.5)
-            } else {
-                aspectRatio
-            }
-            val newW = ceil(FIXED_HEIGHT * effectiveRatio).toInt().coerceAtMost(MAX_IMG_W)
+            val newW = ceil(FIXED_HEIGHT * aspectRatio).toInt().coerceAtMost(MAX_IMG_W)
             val dst = Mat()
-            // 使用 INTER_CUBIC 保持相邻笔画的高频边缘分界，避免双线性插值使 0000/111 的笔画在低分辨率下融合成一体
+            // 严格保持自然宽高比，使用 INTER_CUBIC 保持相邻笔画的高频边缘分界，避免手抖拖影时的字符横向裂解变长
             Imgproc.resize(rgb, dst, Size(newW.toDouble(), FIXED_HEIGHT.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
             rgb.release()
             resizedMats.add(dst)
