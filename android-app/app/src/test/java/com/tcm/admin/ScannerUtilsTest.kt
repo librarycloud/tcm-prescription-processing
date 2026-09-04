@@ -21,11 +21,11 @@ class ScannerUtilsTest {
     }
 
     @Test
-    fun testCleanDigits_replacesAWith4_RWith8_CWith0() {
-        // 'A' -> '4', 'R' -> '8', 'C' -> '0'
+    fun testCleanDigits_doesNotReplaceA_filtersOutLetterA() {
+        // 'A' should NOT be replaced by '4'; 'R' -> '8', 'C' -> '0'
         val confused = "30A82R5C3"
         val cleaned = ScannerActivity.cleanDigits(confused)
-        assertEquals("304828503", cleaned)
+        assertEquals("30828503", cleaned)
     }
 
     @Test
@@ -48,9 +48,19 @@ class ScannerUtilsTest {
 
     @Test
     fun testExtractSku_handlesOcrSubstitutionsWithSpaces() {
-        assertEquals("304828503", ScannerActivity.extractSku("SKU: 30A 82R 5C3"))
-        assertEquals("304828503", ScannerActivity.extractSku("SU: 30A 82R 5C3"))
-        assertEquals("304828503", ScannerActivity.extractSku("SHU: 30A 82R 5C3"))
+        assertEquals("30828503", ScannerActivity.extractSku("SKU: 30A 82R 5C3"))
+        assertEquals("30828503", ScannerActivity.extractSku("SU: 30A 82R 5C3"))
+        assertEquals("30828503", ScannerActivity.extractSku("SHU: 30A 82R 5C3"))
+    }
+
+    @Test
+    fun testExtractSku_handles8DigitSkuAndTrailingLetterA() {
+        assertEquals("30000170", ScannerActivity.extractSku("SKU: 30000170 A"))
+        assertEquals("30000170", ScannerActivity.extractSku("SKU: 30000170A"))
+        assertEquals("30000170", ScannerActivity.extractSku("30000170"))
+        assertEquals("30000170", ScannerActivity.extractSku("货号: 30000170"))
+        assertEquals("12345678", ScannerActivity.extractSku("12345678"))
+        assertEquals("123456789", ScannerActivity.extractSku("123456789"))
     }
 
     @Test

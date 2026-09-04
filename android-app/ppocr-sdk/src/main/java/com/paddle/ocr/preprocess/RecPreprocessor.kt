@@ -28,6 +28,7 @@ data class RecPreprocessResult(
 
 object RecPreprocessor {
     private const val FIXED_HEIGHT = 48
+    private const val MIN_IMG_W = 320 // 严格对齐 PaddleOCR 官方识别模型标准最小宽度
     private const val MAX_IMG_W = 3200
 
     fun preprocessBatch(crops: List<Mat>): RecPreprocessResult {
@@ -40,9 +41,18 @@ object RecPreprocessor {
             val h = rgb.rows()
             val w = rgb.cols()
             val aspectRatio = if (h > 0) w.toDouble() / h else 1.0
-            val newW = ceil(FIXED_HEIGHT * aspectRatio).toInt().coerceAtMost(MAX_IMG_W)
+
+            // 针对狭窄短数字（如 0000、111 等易发生 CTC 吞字合并的区域），自适应适度水平拉伸
+            // 确保每个字符有充足的横向感受野与时序步长，使相邻相同数字间能清晰呈现 CTC BLANK 状态
+            val effectiveRatio = if (aspectRatio < 5.0) {
+                (aspectRatio * 1.25).coerceAtLeast(2.5)
+            } else {
+                aspectRatio
+            }
+            val newW = ceil(FIXED_HEIGHT * effectiveRatio).toInt().coerceAtMost(MAX_IMG_W)
             val dst = Mat()
-            Imgproc.resize(rgb, dst, Size(newW.toDouble(), FIXED_HEIGHT.toDouble()), 0.0, 0.0, Imgproc.INTER_LINEAR)
+            // 使用 INTER_CUBIC 保持相邻笔画的高频边缘分界，避免双线性插值使 0000/111 的笔画在低分辨率下融合成一体
+            Imgproc.resize(rgb, dst, Size(newW.toDouble(), FIXED_HEIGHT.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
             rgb.release()
             resizedMats.add(dst)
         }
@@ -61,7 +71,8 @@ object RecPreprocessor {
         }
         resizedMats.clear()
 
-        val maxW = floatMats.maxOf { it.cols() }
+        // 严格遵循 PaddleOCR 标准：输入宽度不得低于 MIN_IMG_W (320)，保障充足的 CTC 时序帧数
+        val maxW = maxOf(MIN_IMG_W, floatMats.maxOf { it.cols() })
         val n = floatMats.size
 
         // Pad to max width
@@ -70,7 +81,7 @@ object RecPreprocessor {
             if (mat.cols() == maxW) {
                 paddedMats.add(mat)
             } else {
-                val padded = Mat(FIXED_HEIGHT, maxW, CvType.CV_32FC3, org.opencv.core.Scalar(0.0))
+                val padded = Mat(FIXED_HEIGHT, maxW, CvType.CV_32FC3, org.opencv.core.Scalar(0.0, 0.0, 0.0))
                 val roi = padded.submat(0, FIXED_HEIGHT, 0, mat.cols())
                 mat.copyTo(roi)
                 roi.release()
