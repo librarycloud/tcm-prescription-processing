@@ -53,10 +53,10 @@ android {
         resourceConfigurations += setOf("zh", "en")
         versionCode = providers.gradleProperty("VERSION_CODE")
             .map(String::toInt)
-            .orElse(1)
+            .orElse(10258)
             .get()
         versionName = providers.gradleProperty("VERSION_NAME")
-            .orElse("1.0")
+            .orElse("1.2.58")
             .get()
     }
 

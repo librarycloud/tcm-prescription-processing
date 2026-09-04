@@ -383,7 +383,7 @@ internal fun AboutScreen(
                 // Progress handling: Synthesizing -> Patch Downloading -> Full Downloading
                 if (isSynthesizing) {
                     LinearProgressIndicator(
-                        progress = { synthesizeProgress / 100f },
+                        progress = (synthesizeProgress / 100f).coerceIn(0f, 1f),
                         modifier = Modifier.fillMaxWidth(),
                         color = Primary
                     )

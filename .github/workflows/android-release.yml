@@ -104,14 +104,20 @@ jobs:
           test -n "$ANDROID_KEY_PASSWORD"
           version_code="$VERSION_CODE_INPUT"
           version_name="$VERSION_NAME_INPUT"
-          if [ -z "$version_code" ]; then
-            version_code="$(sed -n 's/.*\.orElse(\([0-9][0-9]*\)).*/\1/p' app/build.gradle.kts | tail -n 1 | tr -d '[:space:]')"
-          fi
           if [ -z "$version_name" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [[ "$GITHUB_REF_NAME" == v* ]]; then
             version_name="${GITHUB_REF_NAME#v}"
           fi
           if [ -z "$version_name" ]; then
             version_name="$(sed -n 's/.*\.orElse("\([^"]*\)").*/\1/p' app/build.gradle.kts | tail -n 1)"
+          fi
+          if [ -z "$version_code" ]; then
+            if [[ "$version_name" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              version_code=$(( ${BASH_REMATCH[1]} * 10000 + ${BASH_REMATCH[2]} * 100 + ${BASH_REMATCH[3]} ))
+            elif [[ "$version_name" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+              version_code=$(( ${BASH_REMATCH[1]} * 10000 + ${BASH_REMATCH[2]} * 100 ))
+            else
+              version_code="$(sed -n 's/.*\.orElse(\([0-9][0-9]*\)).*/\1/p' app/build.gradle.kts | tail -n 1 | tr -d '[:space:]')"
+            fi
           fi
           case "$version_code" in
             ''|*[!0-9]*) echo "version_code must be a positive integer"; exit 1 ;;
