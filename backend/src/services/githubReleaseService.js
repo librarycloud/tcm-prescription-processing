@@ -149,6 +149,20 @@ export async function syncLatestAndroidRelease({ repository, token = "", apiUrl 
   const versionedApkPath = path.join(releaseDir, versionedApkName);
   const legacyApkPath = path.join(releaseDir, "app-release.apk");
 
+  // Load current manifest BEFORE downloading to preserve previous APK
+  const manifest = await loadAppVersionsManifest();
+  if (manifest.latest && Number(manifest.latest.versionCode) < versionCode) {
+    const existingOldVersionedApk = path.join(releaseDir, `app-release-v${manifest.latest.versionCode}.apk`);
+    try {
+      await stat(existingOldVersionedApk);
+    } catch {
+      try {
+        await stat(legacyApkPath);
+        await copyFile(legacyApkPath, existingOldVersionedApk);
+      } catch {}
+    }
+  }
+
   try {
     await downloadWithTimeout(apkAsset.browser_download_url, { headers }, tempApk, apkTimeoutMs);
     await rename(tempApk, versionedApkPath);
@@ -157,8 +171,6 @@ export async function syncLatestAndroidRelease({ repository, token = "", apiUrl 
 
     const actualSha256 = await computeFileSha256(versionedApkPath);
     const actualStat = await stat(versionedApkPath);
-
-    const manifest = await loadAppVersionsManifest();
 
     const newVersionConfig = {
       versionCode,
@@ -196,29 +208,61 @@ export async function syncLatestAndroidRelease({ repository, token = "", apiUrl 
       const previousVersions = history.filter((h) => Number(h.versionCode) < versionCode).slice(0, 3);
       for (const prev of previousVersions) {
         const oldApkPath = path.join(releaseDir, `app-release-v${prev.versionCode}.apk`);
+        let hasOldApk = false;
         try {
           await stat(oldApkPath);
-          const patchFileName = `patch-v${prev.versionCode}-to-v${versionCode}.patch`;
-          const patchOutputPath = path.join(patchDir, patchFileName);
-          const { size, sha256 } = await generatePatch(oldApkPath, versionedApkPath, patchOutputPath);
+          hasOldApk = true;
+        } catch {
+          // If local old APK missing, attempt to fetch from GitHub releases history
+          try {
+            const listRes = await fetchWithTimeout(`${base}/repos/${repo}/releases?per_page=10`, { headers }, metadataTimeoutMs);
+            if (listRes.ok) {
+              const allReleases = await listRes.json();
+              for (const rel of allReleases) {
+                const relAssets = new Map((rel.assets || []).map((a) => [a.name, a]));
+                const metaA = relAssets.get("app-version.android.json");
+                const apkA = relAssets.get("app-release.apk");
+                if (metaA && apkA) {
+                  const mRes = await fetchWithTimeout(metaA.browser_download_url, { headers }, metadataTimeoutMs);
+                  if (mRes.ok) {
+                    const mJson = await mRes.json();
+                    if (Number(mJson.versionCode) === Number(prev.versionCode)) {
+                      await downloadWithTimeout(apkA.browser_download_url, { headers }, oldApkPath, apkTimeoutMs);
+                      hasOldApk = true;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          } catch (dlErr) {
+            console.warn(`拉取历史版本 v${prev.versionCode} APK 失败:`, dlErr.message);
+          }
+        }
 
-          // Update patch in manifest
-          manifest.patches = (manifest.patches || []).filter(
-            (p) => !(Number(p.fromVersionCode) === prev.versionCode && Number(p.targetVersionCode) === versionCode)
-          );
-          manifest.patches.push({
-            targetVersionCode: versionCode,
-            fromVersionCode: prev.versionCode,
-            patchFile: patchFileName,
-            patchUrl: `/app/patches/${patchFileName}`,
-            patchSha256: sha256,
-            patchSize: size,
-            createdAt: new Date().toISOString(),
-          });
-          patchesGenerated.push({ fromVersionCode: prev.versionCode, size, patchFileName });
-        } catch (patchErr) {
-          // Log but continue with other patches
-          console.warn(`差分补丁生成失败 (v${prev.versionCode} -> v${versionCode}):`, patchErr.message);
+        if (hasOldApk) {
+          try {
+            const patchFileName = `patch-v${prev.versionCode}-to-v${versionCode}.patch`;
+            const patchOutputPath = path.join(patchDir, patchFileName);
+            const { size, sha256 } = await generatePatch(oldApkPath, versionedApkPath, patchOutputPath);
+
+            // Update patch in manifest
+            manifest.patches = (manifest.patches || []).filter(
+              (p) => !(Number(p.fromVersionCode) === prev.versionCode && Number(p.targetVersionCode) === versionCode)
+            );
+            manifest.patches.push({
+              targetVersionCode: versionCode,
+              fromVersionCode: prev.versionCode,
+              patchFile: patchFileName,
+              patchUrl: `/app/patches/${patchFileName}`,
+              patchSha256: sha256,
+              patchSize: size,
+              createdAt: new Date().toISOString(),
+            });
+            patchesGenerated.push({ fromVersionCode: prev.versionCode, size, patchFileName });
+          } catch (patchErr) {
+            console.warn(`差分补丁生成失败 (v${prev.versionCode} -> v${versionCode}):`, patchErr.message);
+          }
         }
       }
     }
