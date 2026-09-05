@@ -2,122 +2,177 @@
 
 **TCM Prescription Processing & Pickup Management System**
 
-面向连锁中药房的处方创建、分批加工、取药通知与核销管理系统。项目采用前后端分离架构，管理端、普通用户 Web 端和微信小程序共用 Fastify API 与 MariaDB 数据库；每个加工计划预生成唯一取货码，完成加工后自动生成包裹并复用该取货码。
+面向连锁中药房的一体化处方流转、分批加工、智能斗谱、取药通知与核销管理系统。项目采用现代化前后端分离架构，由 Fastify 高性能 API 与 MariaDB 核心数据库提供支撑，统一协同 Web 管理端、普通用户 Web 端、微信小程序、Android 原生药房助手以及 Windows E6 ERP 同步服务，实现中药调剂全链路数字化闭环。
 
-## 文档导航
+---
 
-- 管理员使用教程（管理端 Web、管理员微信小程序、Android 管理员端）：[docs/使用说明.md](docs/使用说明.md)
-- E6 处方同步接口：[docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md)
-- 管理端前端说明：[web-admin/README.md](web-admin/README.md)
-- Android 管理员端说明（当前仍在开发）：[android-app/README.md](android-app/README.md)
+## 目录
 
-建议阅读顺序：先按本文完成环境、数据库和服务启动，再阅读管理员使用教程进行业务操作。普通用户端的独立启动说明见 `web-user/README.md`。
+- [终端生态与技术架构](#终端生态与技术架构)
+- [核心业务流程](#核心业务流程)
+- [系统功能矩阵](#系统功能矩阵)
+- [文档导航](#文档导航)
+- [运行环境要求](#运行环境要求)
+- [快速开始（本地开发）](#快速开始本地开发)
+- [生产部署规范](#生产部署规范)
+- [运维备份与排错](#运维备份与排错)
+- [核心 API 清单](#核心-api-清单)
+- [E6 ERP 对接规范](#e6-erp-对接规范)
+- [角色与权限体系](#角色与权限体系)
 
-## 功能概览
+---
 
-### 处方与加工
+## 终端生态与技术架构
 
-- **处方管理**：创建、编辑、查询处方；按门店管理客户、医生、剂数、金额、来源与备注。
-- **分批加工**：一个处方可拆分为任意数量的 `ProcessingPlan`，每个加工计划独立设置加工方式、日期、优先级和队列顺序。
-- **加工工作台**：按今日、明日、待通知、延期等条件管理待加工任务；支持开始加工、完成加工、延期、接收通知、队列排序与恢复。
-- **标签打印**：加工计划创建时生成 6 位取货码，支持加工单、包装单和取货标签的二维码及版式配置。
-- **领取闭环**：加工完成后自动创建 `Package`，取货时可通过 6 位取货码或二维码核销；全部加工批次领取后，处方自动变为完成状态。
+系统由六大核心工程组成，覆盖 PC 桌面运维、移动端手持作业以及第三方 ERP 自动化同步：
 
-### 包裹、通知与客户服务
+```text
+                                  ┌──────────────────────────────┐
+                                  │      外部 E6 诊所 / 药店库      │
+                                  └──────────────┬───────────────┘
+                                                 │ (只读同步)
+                                                 ▼
+                                  ┌──────────────────────────────┐
+                                  │    E6Sync 同步工具 (Win)      │
+                                  └──────────────┬───────────────┘
+                                                 │ HTTP POST (API Key)
+                                                 ▼
+┌──────────────────┐              ┌──────────────────────────────┐              ┌──────────────────┐
+│ Web 管理端 (PC)  │              │                              │              │ 微信小程序 (双端)  │
+│ Vue 3 + Vite     ├─────────────►│                              │◄─────────────┤ 原生 + TDesign   │
+└──────────────────┘              │                              │              └──────────────────┘
+                                  │   Fastify 后端 API 服务      │
+┌──────────────────┐              │   - Node.js 24 LTS           │              ┌──────────────────┐
+│ Web 用户端 (PC)  ├─────────────►│   - Prisma ORM 7             │◄─────────────┤ Android 药房助手 │
+│ Vue 3 + Vite     │              │   - MariaDB 10.6+ / Redis    │              │ Compose + ML Kit │
+└──────────────────┘              │   - AES-256-GCM / JWT        │              └──────────────────┘
+                                  └───────┬──────────────┬───────┘
+                                          │              │
+                                          ▼              ▼
+                          ┌──────────────────┐  ┌──────────────────┐
+                          │ 多渠道通知矩阵   │  │ 本地文件持久化   │
+                          │ 短信/邮件/群机器 │  │ 处方附件/调配凭证│
+                          └──────────────────┘  └──────────────────┘
+```
 
-- **包裹管理**：包裹检索、详情、二维码、状态、领取时间、核销人和操作审计。
-- **通知发送**：支持配置腾讯云、阿里云、火山引擎短信，以及 SMTP 邮件；可查看发送记录并测试配置。
-- **群机器人通知**：支持按门店或全局配置群机器人、事件模板、测试发送、失败重试和投递日志。
-- **普通用户服务**：用户可通过手机号和密码登录 Web 端或小程序，查看本人待领取/已领取包裹、取货码和个人资料。
+### 模块技术栈清单
 
-### 门店与运营管理
+| 模块 | 目录 | 技术栈 | 适用场景与终端 |
+| --- | --- | --- | --- |
+| **后端服务** | `backend/` | Node.js 24 LTS, Fastify 5, Prisma 7, MariaDB, Redis, JWT, bcrypt, Nodemailer, 阿里云/腾讯云/火山短信 SDK, ExcelJS | 高性能业务 API、数据校验、权限鉴权、异步通知队列、E6 数据接入池 |
+| **管理端 Web** | `web-admin/` | Vue 3, Vite, Pinia, Vue Router, Element Plus, ECharts, Axios, qrcode | 全局及门店管理员：处方管理、加工调度、斗谱配置、盘点调拨、打印模板、系统设置 |
+| **用户端 Web** | `web-user/` | Vue 3, Vite, Pinia, Vue Router, Element Plus, Axios, qrcode | 顾客端独立门户：查验处方进度、待取/已取包裹、查看 6 位取货码与二维码凭证 |
+| **微信小程序** | `wechat-miniprogram/` | 微信原生小程序, TDesign Miniprogram, ES6 | 双端合一：管理员/员工移动工作台（扫码核销、斗谱查药、加工打卡）+ 顾客查件 |
+| **Android 端** | `android-app/` | Kotlin, Jetpack Compose, CameraX, Google ML Kit (离线OCR/条码), ONNX PP-OCR | 门店现场专用手持终端（药房助手）：离线快速扫码、调配拍照留档、工序流转 |
+| **E6 同步工具** | `E6Sync/` | C#, .NET Framework 4.6.2, WinForms, ADO.NET (SqlClient) | Windows Server 运行工具：单向只读提取浪潮 E6 诊所处方及药店商品库存并上传 |
 
-- **多门店与权限**：全局管理员可管理全部数据；门店管理员只能管理所属门店；普通用户只能访问自己手机号关联的包裹。
-- **基础资料**：维护门店、门店管理员、医生和字典项；医生、字典和门店采用软删除，保留历史业务引用。
-- **药材库位**：维护门店药材、库位布局、药材绑定关系，支持 Excel 模板导入、导出和库位调整导入。
-- **商品差异**：维护商品资料、期初差异、库存调整、核销、撤销与 Excel 导入预览。
-- **门店调拨**：登记调出、归还、确认出库/归还、预计归还日期与取消记录。
-- **E6 对接**：通过 API Key 接收外部处方，先生成导入记录，再由管理员确认生成处方和加工计划；支持门店配置、医生映射与异常重校验。
-- **审计与安全**：记录登录日志、操作日志和通知日志；JWT 保存身份与门店范围；短信 Secret、SMTP 密码和机器人密钥采用 AES-256-GCM 加密保存。
-
-## 技术架构
-
-| 模块 | 技术 |
-| --- | --- |
-| 后端 | Node.js 24 LTS、Fastify、Prisma ORM、MariaDB |
-| 管理端 | Vue 3、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts |
-| 用户端 | Vue 3、Vite、Pinia、Vue Router、Axios、Element Plus |
-| 小程序 | 微信原生小程序、TDesign Miniprogram |
-| Android 管理员端 | Kotlin、Jetpack Compose（开发中） |
-| 认证与安全 | JWT、bcrypt、Helmet、请求限流 |
+---
 
 ## 核心业务流程
 
-```text
-创建处方
-  -> 拆分 ProcessingPlan
-  -> 预生成 6 位取货码并可打印加工标签
-  -> 在加工工作台排队、开始加工
-  -> 加工完成，自动创建 Package 并沿用取货码
-  -> READY_PICKUP（待领取）
-  -> 短信/邮件/机器人通知客户或门店
-  -> 使用二维码或取货码核销
-  -> ProcessingPlan = PICKED
-  -> 全部批次领取后 Prescription 自动完成
+系统全生命周期贯穿「处方接入 ➔ 分批计划 ➔ 工序流转 ➔ 包裹生成 ➔ 多渠道通知 ➔ 取货核销 ➔ 自动闭环」：
+
+```mermaid
+flowchart TD
+    A[处方录入 / E6 同步导入] --> B[管理员审核并确认]
+    B --> C[拆分为 1~N 个 ProcessingPlan]
+    C --> D[系统预生成唯一 6 位取货码]
+    D --> E[加工工作台排队调度 / 加急排序]
+    E --> F[调配完成拍照留存凭证]
+    F --> G[工序流转: 浸泡 -> 煎煮 -> 打包]
+    G --> H[完成加工 -> 自动生成 Package]
+    H --> I[Package 沿用 6 位取货码并生成二维码]
+    I --> J[多渠道通知: 短信 / 邮件 / 企微钉钉飞书机器人]
+    J --> K{顾客取货方式}
+    K -->|到店自提| L[核验 6 位取货码 / 扫二维码]
+    K -->|同城跑腿| M[核对跑腿配送信息并核销]
+    K -->|快递物流| N[扫描/补录快递单号完成出库]
+    L --> O[包裹状态变更为 PICKED]
+    M --> O
+    N --> O
+    O --> P{该处方所有批次均已领取?}
+    P -->|是| Q[Prescription 自动完结归档]
+    P -->|否| R[保持进行中，等待其他批次]
 ```
 
-## 项目结构
+---
 
-```text
-backend/              Fastify API、Prisma schema、迁移和种子数据
-web-admin/            管理端 Vue 应用（默认开发端口 5173）
-web-user/             普通用户 Vue 应用（默认开发端口 5174）
-wechat-miniprogram/   微信小程序（管理员和普通用户入口）
-android-app/          Android 管理员端（开发中）
-docs/                 E6 等业务对接文档
-```
+## 系统功能矩阵
 
-面向管理员和门店操作人员的完整使用教程见：[docs/使用说明.md](docs/使用说明.md)。
+### 1. 处方全流程与加工工作台
+- **处方全生命周期**：支持门店录入自建处方或外部处方（登记外方机构/外方医生），支持图片/文档等多附件上传与在线预览；支持按门店、医生、剂数、总额多维检索。
+- **灵活分批计划**：单张处方可自由拆解为多个加工批次（`ProcessingPlan`），各批次独立指定加工方式（水煎、膏方、颗粒等）、取货方式（自提/跑腿/快递）、预计完工时间与优先级。
+- **加工调度与排队看板**：支持今日待办、逾期任务、加急任务与明日任务快速视图；支持看板任务手动拖拽排序与一键恢复默认调度。
+- **工序流水线与设备监控**：细化支持**浸泡 ➔ 煎煮 ➔ 浓缩 ➔ 打包**等工序打卡；支持录入设备机号并监控工作时长；支持设备故障工序一键转移与异常工序作废；支持调配完成照片上传留存合规凭据。
 
-## 运行要求
+### 2. 智能斗谱与库位可视化
+- **多区域库位建模**：支持对门店百子柜（斗架）、大柜、冰箱、仓库等不同存药区域进行参数化建模（抽屉层数、列数、顶层列数可自定义配置）。
+- **药材绑定与格内序号**：支持药材快速绑定到具体斗位并设置格内序（如前/后/左/右）；支持按药材名、拼音简码、编码与物理货位快速检索。
+- **模板化批量迁移**：提供标准 Excel 模板，支持斗谱药材全量导出、批量导入，以及跨货位调迁的一键导入调整。
 
-- Node.js `24.x` 或更高版本（后端在 `package.json` 中要求 `>=24.0.0`）
-- npm `10+`
-- MariaDB `10.6+` 或兼容的 MySQL
-- 生产部署建议使用 Linux、Nginx 和 PM2
-- 小程序生产环境需要配置 HTTPS 合法域名
+### 3. 包裹生命周期与取药核销
+- **取货码终身绑定**：每个加工批次创建时即固定生成唯一的 6 位数字取货码（展示为 `XXX-XXX`），加工完成自动生成包裹并无缝复用该码，彻底避免单据重印与混淆。
+- **全渠道极速核销**：支持扫码枪扫描二维码、手工录入 6 位取货码或移动端摄像头快速扫码；支持自提、同城跑腿和快递配送三种取货方式，快递出库强制核验快递单号。
+- **状态联动自愈**：严格防重复核销；多批次处方在最后一个包裹核销完毕后自动将到处方标记为已完成。
 
-## 快速开始
+### 4. 药店商品盘点与库存管理
+- **药店商品盘点工作流**：支持新建盘点单、商品候选圈选、初盘录入、复盘比对、系统自动标记异常差异；支持两级审核确认与盘点明细（全部/待复盘/需调整）导出。
+- **库存差异台账**：支持商品期初差异登记、手工库存微调、差异核销与撤销审计，支持 Excel 模板导入预检。
+- **跨门店借调管理**：规范门店间药材与物品借调，记录调出门店、调入门店、借调数量、预计归还日期；支持出库确认、部分归还、全量归还、逾期监控与撤销。
 
-以下命令适用于本地开发，首次执行前请先准备 MariaDB 和 Redis，并按“本地开发”章节创建数据库和环境变量。
+### 5. 多通道通知矩阵与标签打印
+- **全通道通知集成**：内置阿里云 SMS、腾讯云 SMS、火山引擎 SMS、SMTP 邮件服务，支持动态参数替换与连通性测试。
+- **Webhook 群机器人**：支持针对各门店或全局配置企业微信、钉钉、飞书群机器人；支持按业务事件（加工完成、逾期提醒、取消异常等）订阅、异步投递与失败重试。
+- **可视化标签设计器**：支持加工单、包装标签、取货标签多模板设计；支持配置纸张尺寸（80×50、60×40 等）、DPI、条码/二维码尺寸与自定义展示字段。
 
-```bash
-# 终端 1：后端 API
-(cd backend && npm install && npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed && npm run dev)
+### 6. E6 ERP 综合对接与数据中台
+- **双模同步架构**：
+  - **诊所处方同步**：接收外部处方入驻待确认池，提供医师映射、操作员映射、冲突检测与异常重校验，由管理员审查后批量一键生成处方。
+  - **药店库存与商品同步**：增量同步商品零售价、分类映射、条码关联与正库存数据。
+- **防重复机制**：采用 `storeCode + externalOrderNo` 联合指纹识别，已生成处方的变更自动拦截并置为冲突状态。
 
-# 终端 2：管理员 Web
-(cd web-admin && npm install && npm run dev)
+---
 
-# 终端 3：普通用户 Web（按需启动）
-(cd web-user && npm install && npm run dev)
-```
+## 文档导航
 
-三条命令应分别在三个终端运行；括号会使每条命令结束后回到项目根目录。
+| 文档名称 | 路径 | 适用群体与说明 |
+| --- | --- | --- |
+| **系统综合使用手册** | [docs/使用说明.md](docs/使用说明.md) | 全体管理员与操作人员必读：SOP 业务全流程、移动端使用与详尽 FAQ |
+| **E6 处方同步对接文档** | [docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md) | 外部实施与开发人员：E6 同步接口规范、鉴权、报文定义与联调指南 |
+| **管理端前端工程文档** | [web-admin/README.md](web-admin/README.md) | 前端开发：Web 管理端环境配置、路由规范与组件说明 |
+| **用户端前端工程文档** | [web-user/README.md](web-user/README.md) | 前端开发：普通用户查件端配置与独立打包说明 |
+| **Android 药房助手说明** | [android-app/README.md](android-app/README.md) | 移动端开发：Kotlin + Compose 构建、扫码引擎、Keystore 签名与 CI/CD |
+| **E6Sync 同步客户端说明** | [E6Sync/README.md](E6Sync/README.md) | Windows 部署人员：WinForms .NET 4.6.2 客户端配置与定时同步规则 |
+| **数据库与迁移规范** | [backend/prisma/README.md](backend/prisma/README.md) | 后端运维：Prisma Migrate 迁移指南与数据库升级维护规范 |
 
-启动后：管理员 Web 默认访问 `http://localhost:5173`，普通用户 Web 默认访问 `http://localhost:5174`，后端健康检查为 `http://localhost:3000/health`。默认种子账号和密码以 `backend/prisma/seed.js` 为准，首次登录后请立即修改密码。
+---
 
-## 本地开发
+## 运行环境要求
 
-### 1. 创建数据库
+- **操作系统**：Linux（Ubuntu 22.04+ / Debian 12+ 推荐）、macOS 或 Windows Server
+- **Node.js**：`>= 24.0.0`（后端强制要求，推荐 Node.js 24 LTS）
+- **包管理器**：`npm >= 10.0.0`
+- **数据库**：MariaDB `10.6+` 或 MySQL `8.0+`（字符集 `utf8mb4`）
+- **内存缓存**：Redis `6.2+` 或 `7.x`（管理有效登录会话与防重并发控制）
+- **Java / Android 环境**（可选，用于 Android 端编译）：JDK 21, Android SDK 36, Gradle 8.10+
+- **.NET 环境**（可选，用于编译 E6Sync）：.NET Framework 4.6.2 Targeting Pack, Visual Studio 2022
+
+---
+
+## 快速开始（本地开发）
+
+### 1. 准备本地基础组件
+
+确认本地 MariaDB 与 Redis 服务已启动。在数据库中创建库及用户：
 
 ```sql
 CREATE DATABASE tcm DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'tcm_user'@'localhost' IDENTIFIED BY 'replace-with-a-strong-password';
+CREATE USER 'tcm_user'@'localhost' IDENTIFIED BY 'tcm_dev_password';
 GRANT ALL PRIVILEGES ON tcm.* TO 'tcm_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-### 2. 启动后端
+### 2. 启动后端 API 服务
 
 ```bash
 cd backend
@@ -125,270 +180,155 @@ npm install
 cp .env.example .env
 ```
 
-编辑 `backend/.env`，至少配置以下值：
+编辑 `backend/.env`，基础开发项配置如下：
 
 ```env
-DATABASE_URL="mysql://tcm_user:replace-with-a-strong-password@127.0.0.1:3306/tcm"
-JWT_SECRET="replace-with-a-long-random-secret"
+DATABASE_URL="mysql://tcm_user:tcm_dev_password@127.0.0.1:3306/tcm"
+JWT_SECRET="dev-jwt-secret-at-least-32-characters-long"
 REDIS_URL="redis://127.0.0.1:6379"
-WX_APPID="wx-your-appid"
-WX_SECRET="your-wechat-secret"
-SETTINGS_ENCRYPTION_KEY="replace-with-a-32-byte-base64-key"
+SETTINGS_ENCRYPTION_KEY="dev_32_byte_base64_encryption_key_here="
 PORT=3000
 HOST="0.0.0.0"
 UPLOAD_DIR="./uploads"
 NODE_ENV="development"
 ```
 
-生成 Prisma Client、初始化数据库和种子数据后启动开发服务：
+> **提示**：可使用 `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` 生成合规的 32 字节 Base64 加密密钥。
+
+执行数据库初始化并启动服务：
 
 ```bash
-npm run prisma:generate
-npm run prisma:migrate
-npm run prisma:seed
-npm run dev
+npm run prisma:generate      # 生成 Prisma Client
+npm run prisma:migrate       # 执行数据表迁移
+npm run prisma:seed          # 写入初始种子账号与测试门店
+npm run dev                  # 启动热重载开发服务器
 ```
 
-健康检查地址：`http://localhost:3000/health`
+访问后端健康检查验证：`http://localhost:3000/health`。
 
-> MariaDB 使用 Prisma 的 `mysql` provider，因此 `DATABASE_URL` 以 `mysql://` 开头。
-> Redis 用于保存有效登录会话；后端启动和已登录接口校验都需要连接 `REDIS_URL`。
-> 微信登录需要填写 `WX_APPID` 和 `WX_SECRET`；短信、邮件和机器人密钥在管理端配置后会加密保存。
+### 3. 启动前端各端
 
-### 3. 启动管理端
+开启新的终端窗口，分别按需启动前端应用：
 
 ```bash
-cd web-admin
-npm install
-cp .env.example .env
-npm run dev
+# 启动管理端 Web (默认端口: 5173)
+cd web-admin && npm install && npm run dev
+
+# 启动用户端 Web (默认端口: 5174)
+cd web-user && npm install && npm run dev
 ```
 
-确认 `web-admin/.env` 至少包含以下开发配置：
+### 4. 微信小程序与 Android 启动
+
+- **微信小程序**：打开微信开发者工具，导入 `wechat-miniprogram` 目录，执行 `npm install` 后点击菜单栏「工具 ➔ 构建 npm」。在 `app.js` 中将 `baseUrl` 配置为局域网 IP（真机预览不可使用 `localhost`）。
+- **Android 药房助手**：使用 Android Studio 打开 `android-app` 目录，或在终端执行 `./gradlew assembleDebug`，产物位于 `app/build/outputs/apk/debug/app-debug.apk`。
+
+### 5. 初始默认账号
+
+| 角色类型 | 登录账号（手机号） | 默认密码 | 登录入口 | 权限范围 |
+| --- | --- | --- | --- | --- |
+| **全局管理员** | `13800000000` | `123456` | Web 管理端 / 小程序管理员入口 / Android 端 | 系统全部功能、所有门店数据与全局系统配置 |
+| **门店管理员** | 见系统内创建 | 创建时指定 | Web 管理端 / 小程序管理员入口 / Android 端 | 仅限所绑定的单家门店全部业务数据 |
+| **门店员工** | 见系统内创建 | 创建时指定 | Web 管理端 / 小程序管理员入口 / Android 端 | 仅限所绑定的单家门店现场加工与核销业务 |
+| **普通用户** | 用户手机号 | 注册或指定 | Web 用户端 / 小程序普通用户入口 | 仅限查询自身绑定的处方与包裹进度 |
+
+> [!WARNING]
+> 首次部署上线后，请立即在个人资料或管理后台修改默认管理员密码，切勿在生产环境使用默认密码。
+
+---
+
+## 生产部署规范
+
+以下以 Linux 服务器（项目路径 `/srv/tcm`，管理端域名 `admin.tcm.example.com`，用户端域名 `tcm.example.com`）为例。
+
+### 1. 安装系统依赖与 PM2
+
+```bash
+sudo apt update && sudo apt install -y curl git nginx mariadb-server redis-server
+# 安装 Node.js 24 LTS
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo npm install -g pm2
+```
+
+### 2. 拉取代码并安全安装依赖
+
+```bash
+git clone https://github.com/librarycloud/tcm-prescription-processing.git /srv/tcm
+cd /srv/tcm/backend && npm ci
+cd /srv/tcm/web-admin && npm ci
+cd /srv/tcm/web-user && npm ci
+```
+
+### 3. 配置生产环境变量与持久化目录
+
+创建独立持久化上传目录并赋予权限：
+
+```bash
+sudo mkdir -p /srv/tcm-data/uploads
+sudo chown -R $(whoami):$(whoami) /srv/tcm-data/uploads
+```
+
+配置 `backend/.env`（生产示例）：
 
 ```env
-VITE_API_BASE_URL=/api
-VITE_PROXY_TARGET=http://localhost:3000
-VITE_DEV_PORT=5173
-```
-
-默认访问地址为 `http://localhost:5173`。
-
-### 4. 启动用户端
-
-```bash
-cd web-user
-npm install
-cp .env.example .env
-npm run dev
-```
-
-确认 `web-user/.env` 至少包含以下开发配置：
-
-```env
-VITE_API_BASE_URL=/api
-VITE_PROXY_TARGET=http://localhost:3000
-VITE_DEV_PORT=5174
-```
-
-默认访问地址为 `http://localhost:5174`。
-
-两个前端开发服务器都会将 `/api` 代理到 `VITE_PROXY_TARGET`（默认 `http://localhost:3000`）。
-
-### 5. 运行小程序
-
-使用微信开发者工具导入 `wechat-miniprogram`，在项目目录安装依赖后执行“工具 -> 构建 npm”。在 `wechat-miniprogram/app.js` 的 `globalData.baseUrl` 配置后端地址：
-
-```bash
-cd wechat-miniprogram
-npm install
-```
-
-开发环境可填写局域网中可被手机访问的后端地址；真机调试时不能填写 `localhost`。正式环境必须使用已备案并加入微信合法域名的 HTTPS 地址。
-
-### 6. 常用命令速查
-
-| 目标 | 命令 | 目录 |
-| --- | --- | --- |
-| 后端开发 | `npm run dev` | `backend/` |
-| 后端测试 | `npm test` | `backend/` |
-| 数据库迁移（开发） | `npm run prisma:migrate` | `backend/` |
-| 数据库迁移（生产） | `npm run prisma:deploy` | `backend/` |
-| 管理端构建/检查 | `npm run build` / `npm run lint` | `web-admin/` |
-| 用户端构建/检查 | `npm run build` / `npm run lint` | `web-user/` |
-| 小程序依赖 | `npm install` | `wechat-miniprogram/` |
-| Android Debug 构建 | `gradle --no-daemon assembleDebug` | `android-app/` |
-
-前端改动提交前建议至少执行对应目录的 `npm run lint` 和 `npm run build`；后端改动执行 `npm test`。
-
-## 生产部署
-
-以下示例以 Ubuntu/Debian、项目目录 `/srv/tcm`、域名 `tcm.example.com` 为例。请替换为实际服务器路径、域名、数据库密码和密钥。
-
-### 1. 安装基础软件
-
-安装 Node.js 24、MariaDB、Nginx 和 PM2。确认版本：
-
-```bash
-node -v
-npm -v
-mariadb --version
-```
-
-全局安装 PM2：
-
-```bash
-npm install -g pm2
-pm2 --version
-```
-
-### 2. 获取代码并安装依赖
-
-```bash
-git clone git@github.com:librarycloud/tcm-prescription-processing.git /srv/tcm
-cd /srv/tcm/backend
-npm ci
-
-cd /srv/tcm/web-admin
-npm ci
-
-cd /srv/tcm/web-user
-npm ci
-```
-
-若服务器没有 lockfile 对应的 npm 环境，可将 `npm ci` 改为 `npm install`；生产环境优先使用 `npm ci`，以保证依赖版本可重复。
-
-### 3. 配置生产环境变量和数据库
-
-创建数据库及受限数据库账号后，创建后端配置：
-
-```bash
-cd /srv/tcm/backend
-cp .env.example .env
-```
-
-`backend/.env` 的生产示例：
-
-```env
-DATABASE_URL="mysql://tcm_user:strong-db-password@127.0.0.1:3306/tcm"
-JWT_SECRET="use-a-long-random-secret-at-least-32-characters"
+DATABASE_URL="mysql://tcm_user:RealStrongPassword@127.0.0.1:3306/tcm"
+JWT_SECRET="Produce-High-Entropy-Random-String-At-Least-32-Chars"
 REDIS_URL="redis://127.0.0.1:6379"
-SETTINGS_ENCRYPTION_KEY="use-a-32-byte-base64-key"
+SETTINGS_ENCRYPTION_KEY="Production-32-Byte-Base64-Key="
 PORT=3000
 HOST="127.0.0.1"
 TRUST_PROXY="127.0.0.1,::1"
-IPDB_PATH=""
 UPLOAD_DIR="/srv/tcm-data/uploads"
 NODE_ENV="production"
 ```
 
-上传目录需要长期保留并允许后端进程读写，建议放在项目目录之外：
-
-```bash
-sudo mkdir -p /srv/tcm-data/uploads
-sudo chown -R "$(id -un)":"$(id -gn)" /srv/tcm-data/uploads
-```
-
-生成高强度随机值的示例：
-
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
-```
-
-执行生产迁移。**新数据库**可直接执行；已有数据库迁移历史需要变更时，请先备份并阅读 [Prisma 迁移说明](backend/prisma/README.md)。
+执行生产数据库迁移：
 
 ```bash
 cd /srv/tcm/backend
 npm run prisma:generate
-npm run prisma:deploy
+npm run prisma:deploy        # 生产环境仅使用 deploy，禁止使用 migrate dev
+npm run storage:migrate-local # 兼容性迁移早期数据库中的存量附件
 ```
 
-从数据库二进制字段切换到本地存储的首次发布，在迁移成功后执行一次兼容搬迁命令。该命令可重复执行，只处理尚未搬迁的附件和加工照片：
+### 4. 构建前端静态资源
 
 ```bash
-npm run storage:migrate-local
-```
-
-首次部署需要演示账号或基础数据时，再执行一次：
-
-```bash
-npm run prisma:seed
-```
-
-> 种子数据可能写入初始业务数据。上线前请确认内容符合实际门店，不要在已有生产数据上盲目重复执行。
-
-### 4. 构建前端静态文件
-
-生产环境的前端请求路径应统一为 `/api`，由 Nginx 转发到后端。分别创建 `.env.production`：
-
-```bash
-cat > /srv/tcm/web-admin/.env.production <<'EOF'
-VITE_API_BASE_URL=/api
-EOF
-
-cat > /srv/tcm/web-user/.env.production <<'EOF'
-VITE_API_BASE_URL=/api
-EOF
-```
-
-构建：
-
-```bash
+# 构建管理端
 cd /srv/tcm/web-admin
+echo "VITE_API_BASE_URL=/api" > .env.production
 npm run build
 
+# 构建用户端
 cd /srv/tcm/web-user
+echo "VITE_API_BASE_URL=/api" > .env.production
 npm run build
 ```
 
-构建产物分别位于 `web-admin/dist` 和 `web-user/dist`。建议将管理端部署到 `admin.tcm.example.com`，用户端部署到 `tcm.example.com`；也可按实际需要使用两个独立域名。
-
-### 5. 使用 PM2 后台运行 Node 后端
-
-在项目根目录执行以下命令。PM2 会运行 `backend/package.json` 中的 `start` 脚本，并管理日志、故障重启和进程状态：
+### 5. 使用 PM2 守护后端进程
 
 ```bash
 cd /srv/tcm
-pm2 start npm --name tcm-backend --cwd /srv/tcm/backend -- start
-pm2 status
-pm2 logs tcm-backend
-```
-
-常用 PM2 运维命令：
-
-```bash
-pm2 restart tcm-backend             # 重启服务
-pm2 reload tcm-backend --update-env # 平滑重载并读取新的环境变量
-pm2 stop tcm-backend                # 停止服务
-pm2 delete tcm-backend              # 删除 PM2 进程记录
-pm2 logs tcm-backend --lines 200    # 查看最近 200 行日志
-pm2 monit                           # 实时查看 CPU 和内存
-```
-
-设置开机自启。先执行下列命令，再按终端输出的 `sudo ...` 命令完成系统服务注册，最后保存当前进程列表：
-
-```bash
-pm2 startup
+pm2 start npm --name "tcm-backend" --cwd /srv/tcm/backend -- start
 pm2 save
+pm2 startup
 ```
 
-验证后端：
+常用运维命令：
 
 ```bash
-curl http://127.0.0.1:3000/health
+pm2 status                           # 查看服务运行状态
+pm2 logs tcm-backend --lines 100     # 查看最近 100 行日志
+pm2 reload tcm-backend --update-env  # 零停机重载并加载新环境变量
 ```
 
-预期返回结构包含：
+### 6. Nginx 生产反向代理配置
 
-```json
-{ "code": 0, "message": "", "data": { "status": "ok" } }
-```
-
-### 6. 配置 Nginx
-
-以下配置将用户端静态文件部署在主域名，管理端部署在 `admin` 子域名，并将两端的 `/api/` 请求转发到本机后端。保存为 `/etc/nginx/sites-available/tcm` 后启用：
+编辑 `/etc/nginx/sites-available/tcm`：
 
 ```nginx
+# 1. 普通用户端门户
 server {
     listen 80;
     server_name tcm.example.com;
@@ -403,6 +343,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 30M;
         proxy_read_timeout 180s;
     }
 
@@ -411,6 +352,7 @@ server {
     }
 }
 
+# 2. 管理端控制台
 server {
     listen 80;
     server_name admin.tcm.example.com;
@@ -425,6 +367,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 30M;
         proxy_read_timeout 180s;
     }
 
@@ -434,175 +377,135 @@ server {
 }
 ```
 
-启用并检查配置：
+启用站点并配置 SSL：
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/tcm /etc/nginx/sites-enabled/tcm
-sudo nginx -t
-sudo systemctl reload nginx
+sudo nginx -t && sudo systemctl reload nginx
+# 推荐使用 certbot 获取免费 Let's Encrypt HTTPS 证书
+sudo certbot --nginx -d tcm.example.com -d admin.tcm.example.com
 ```
 
-生产环境应为两个域名配置 TLS 证书，并将 80 端口跳转到 HTTPS。后端保持监听 `127.0.0.1:3000`，不应直接暴露到公网。
+---
 
-### 7. 更新发布流程
+## 运维备份与排错
 
-每次发布前先备份数据库。完成代码更新后，按以下顺序执行：
+### 1. 定期备份方案
+
+**数据库结构与数据定时备份**：
 
 ```bash
-cd /srv/tcm
-git pull --ff-only
-
-cd backend
-npm ci
-npm run prisma:generate
-npm run prisma:deploy
-pm2 reload tcm-backend --update-env
-
-cd ../web-admin
-npm ci
-npm run build
-
-cd ../web-user
-npm ci
-npm run build
-
-sudo systemctl reload nginx
+mysqldump -u tcm_user -p --single-transaction --routines --triggers tcm > /srv/backup/tcm-$(date +%F).sql
 ```
 
-如果前端构建失败，旧的 `dist` 文件仍会保留；确认新构建成功后再重载 Nginx。
-
-### 发布检查清单
-
-- [ ] 已备份 MariaDB 数据库，并确认上传目录有独立备份。
-- [ ] 已核对生产环境 `.env` 中的数据库、Redis、JWT 和加密密钥，且没有使用示例值。
-- [ ] 已执行 `npm run prisma:deploy`，并确认后端 `/health` 返回正常。
-- [ ] 已完成 `web-admin` 和 `web-user` 构建，检查两个域名可以正常刷新和登录。
-- [ ] 已检查短信、邮件、群机器人和打印模板（如启用）。
-- [ ] 微信小程序已配置生产 API 地址、HTTPS 合法域名，并完成管理员登录验证。
-- [ ] 已通过 PM2 和 Nginx 日志确认无持续报错。
-
-## 备份与排错
-
-### 数据库备份
-
-请在变更迁移、升级版本或批量导入前备份数据库：
+**附件与凭证图片持久化目录备份**：
 
 ```bash
-mysqldump -u tcm_user -p --single-transaction --routines --triggers tcm > tcm-$(date +%F).sql
+tar -czf /srv/backup/tcm-uploads-$(date +%F).tar.gz -C /srv/tcm-data uploads
 ```
 
-恢复前请先在测试环境验证备份文件：
+### 2. 高频故障诊断指南
 
-```bash
-mariadb -u tcm_user -p tcm < tcm-YYYY-MM-DD.sql
-```
+| 现象 | 可能原因 | 排查与修复步骤 |
+| --- | --- | --- |
+| **API 接口返回 502 Bad Gateway** | 后端服务未运行或异常崩溃 | 执行 `pm2 status` 确认进程状态，执行 `pm2 logs tcm-backend` 排查错误栈，核查 MariaDB/Redis 连接是否正常。 |
+| **前端 SPA 页面刷新出现 404** | Nginx 未配置前端路由回退 | 检查 Nginx 配置文件中对应的 `location /` 是否包含 `try_files $uri $uri/ /index.html;`。 |
+| **API 路径返回 404 Not Found** | Nginx 反代缺少结尾斜杠 | 确保 Nginx `proxy_pass http://127.0.0.1:3000/;` 包含结尾斜线，以便正确剥离前端发送的 `/api` 前缀。 |
+| **重启后管理员已配置的通知密钥失效** | `SETTINGS_ENCRYPTION_KEY` 发生了变动 | 敏感配置采用该密钥进行 AES-256-GCM 密文存储，一旦密钥变更将无法解密。确保 `.env` 中的密钥持久固定。 |
+| **登录提示“无权访问”或不断掉线** | Redis 停止运行或内存溢出 | 后端依赖 Redis 校验有效登录凭据。确认 `redis-cli ping` 返回 `PONG`。 |
 
-处方附件和加工照片存放在 `UPLOAD_DIR`，数据库备份不再包含已搬迁的文件，还需要同步备份上传目录：
+---
 
-```bash
-tar -czf tcm-uploads-$(date +%F).tar.gz -C /srv/tcm-data uploads
-```
+## 核心 API 清单
 
-### 常见检查项
+所有业务接口均带有统一状态码格式响应：`{ "code": 0, "message": "", "data": ... }`。
 
-```bash
-pm2 status
-pm2 logs tcm-backend --lines 200
-curl http://127.0.0.1:3000/health
-sudo nginx -t
-sudo systemctl status nginx
-```
+### 1. 认证鉴权 (`/auth`)
+- `POST /auth/login`：管理员/员工用户名密码登录（返回 JWT 与角色）
+- `POST /auth/user-login`：普通用户手机号登录
+- `POST /auth/wechat-login`：微信小程序一键授权/登录
+- `POST /auth/wechat-bind`：绑定微信 OpenID
 
-- API 返回 502：检查 `pm2 status`、后端日志和 `PORT=3000` 是否正常监听。
-- 前端刷新后 404：检查 Nginx 的 `try_files $uri $uri/ /index.html` 是否保留。
-- 接口路径 404：确认前端生产环境 `VITE_API_BASE_URL=/api`，并确认 Nginx 的 `location /api/` 使用了带结尾 `/` 的 `proxy_pass`。
-- 登录或通知配置重启后不可用：检查 `JWT_SECRET`、`REDIS_URL` 和 `SETTINGS_ENCRYPTION_KEY` 是否固定保存；Redis 必须可用，发布时不要更换已有生产密钥。
-- 数据库迁移失败：停止发布，保留错误日志，从备份和 [Prisma 迁移说明](backend/prisma/README.md) 核对当前状态后再处理。
+### 2. 处方管理 (`/admin/prescriptions`)
+- `GET /admin/prescriptions`：处方列表查询（支持门店、状态、顾客、医生、日期筛选）
+- `POST /admin/prescriptions`：新建处方（自建或外方）
+- `GET /admin/prescriptions/:id`：处方详情及附件关联
+- `PUT /admin/prescriptions/:id`：修改未加工处方
+- `DELETE /admin/prescriptions/:id`：删除未排产处方
+- `POST /admin/prescriptions/:id/attachments`：上传处方照片或附件
+- `DELETE /admin/prescriptions/:id/attachments/:attachmentId`：删除指定附件
 
-## 主要接口
+### 3. 加工工作台与工序设备 (`/admin/processing-plans`, `/admin/processing-equipment`)
+- `GET /admin/processing-plans`：加工计划列表与看板
+- `GET /admin/processing-plans/calendar`：加工日历视图
+- `POST /admin/processing-plans` / `POST /admin/processing-plans/batch`：单笔/批量创建加工计划
+- `POST /admin/processing-plans/queue/reorder`：拖拽调整今日加工队列
+- `POST /admin/processing-plans/queue/restore`：恢复系统默认排队顺序
+- `POST /admin/processing-plans/:id/transition`：加工状态流转（开工、完工、取消、恢复）
+- `POST /admin/processing-plans/:id/generate-package`：完工并手动生成待取包裹
+- `POST /admin/processing-plans/:id/dispensing-photo`：调配完成凭证拍照上传
+- `POST /admin/processing-plans/:id/equipment-usages/start`：工序开始（绑定机号与批次）
+- `POST /admin/processing-plans/:id/equipment-usages/finish`：工序完成
+- `POST /admin/processing-plans/:id/equipment-usages/transfer`：设备故障紧急转移
+- `GET /admin/processing-equipment`：加工设备状态监控列表
 
-```text
-GET    /health
+### 4. 包裹流转与核销 (`/admin/packages`)
+- `GET /admin/packages`：包裹列表与待取看板
+- `GET /admin/packages/:id`：包裹详情（二维码、取货码、流转时间轴）
+- `POST /admin/packages/verify`：**取货核销核心接口**（通过 6 位取货码或二维码核验，区分自提/跑腿/快递出库）
+- `POST /admin/packages/:id/notifications`：手动重发取药通知
 
-POST   /auth/login
-POST   /auth/user-login
-POST   /auth/wechat-login
-POST   /auth/wechat-bind
+### 5. 智能斗谱与库位 (`/admin/herb-locations`)
+- `GET /admin/herb-locations`：门店斗谱网格与药材明细
+- `GET /admin/herb-locations/layout`：获取门店百子柜/大柜物理布局参数
+- `PUT /admin/herb-locations/layout`：保存门店物理布局配置
+- `POST /admin/herb-locations/assignments`：药材绑定到货位
+- `POST /admin/herb-locations/import`：Excel 批量导入斗谱数据
+- `GET /admin/herb-locations/export`：导出当前门店斗谱 Excel
+- `POST /admin/herb-locations/import-moves`：导入库位调迁表格
 
-POST   /integrations/e6/v1/prescriptions
+### 6. 盘点、差异与调拨 (`/admin/yd-goods-checks`, `/admin/product-differences`, `/admin/store-transfers`)
+- `GET /admin/yd-goods-checks`：药店商品盘点单列表
+- `POST /admin/yd-goods-checks`：创建新盘点任务
+- `POST /admin/yd-goods-checks/:id/initial`：录入初盘数量
+- `POST /admin/yd-goods-checks/:id/recount`：录入复盘数据并确认差异
+- `GET /admin/product-differences/stats` / `logs`：商品库存差异台账与调整日志
+- `POST /admin/store-transfers`：发起门店间调拨申请
+- `POST /admin/store-transfers/:id/confirm-outbound`：调出门店确认出库
+- `POST /admin/store-transfers/:id/confirm-return`：调入门店确认归还
 
-GET    /admin/stats
-GET    /admin/prescriptions
-POST   /admin/prescriptions
-PUT    /admin/prescriptions/:id
-DELETE /admin/prescriptions/:id
+### 7. E6 ERP 集成 (`/integrations/e6`, `/admin/e6-*`)
+- `POST /integrations/e6/v1/prescriptions`：E6 诊所处方单向同步接收（X-API-Key 鉴权）
+- `GET /admin/e6-imports`：E6 导入处方审核池
+- `POST /admin/e6-imports/:id/confirm`：审核通过并生成正式处方与加工计划
+- `POST /admin/e6-imports/merge`：合并相同顾客的 E6 处方导入单
+- `GET /admin/e6-pharmacy/products`：E6 药店商品与实时正库存列表
 
-GET    /admin/processing-plans
-GET    /admin/processing-plans/calendar
-POST   /admin/processing-plans
-POST   /admin/processing-plans/batch
-POST   /admin/processing-plans/:id/transition
-POST   /admin/processing-plans/:id/generate-package
+---
 
-GET    /admin/packages
-GET    /admin/packages/:id
-POST   /admin/packages
-PUT    /admin/packages/:id
-POST   /admin/packages/verify
+## E6 ERP 对接规范
 
-GET    /admin/doctors
-GET    /admin/dictionaries
-GET    /admin/login-logs
-GET    /admin/operation-logs
-```
+详细报文与联调流程请参阅专属对接指南：[docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md)。
 
-## E6 数据导入
+- **同步机制**：接口遵循轻量、幂等、安全的原则，调用方通过 `X-API-Key` 请求头认证。
+- **状态流转机制**：外部推送进入待审核池（状态：`0=待确认`、`1=待映射`、`2=导入异常`、`3=已生成处方`、`4=已驳回`、`5=已取消`、`6=数据冲突`、`7=处理中`）。
+- **字段规范**：支持订单主表与多行明细（`items`），中药剂数统一换算，重量单位规范归一化为 `g`。
 
-E6 对接人员请参阅：[E6 处方数据同步 API 对接文档](docs/E6处方同步API对接文档.md)。
+---
 
-E6 通过门店管理中生成的 API Key 调用同步接口。同步只创建 E6 导入记录，管理员确认后才会在同一事务中创建处方和加工计划。升级到 bcrypt 密钥存储后，已有 E6 接入需要在门店管理中重新生成一次 API Key。
+## 角色与权限体系
 
-```http
-POST /integrations/e6/v1/prescriptions
-X-API-Key: e6_xxx
-Content-Type: application/json
-```
+系统通过服务端 JWT 与 RBAC 策略执行严密鉴权，角色定义如下：
 
-```json
-{
-  "externalOrderNo": "E6-20260726-000123",
-  "storeCode": "SZ001",
-  "customerName": "张三",
-  "phone": "13800138000",
-  "e6DoctorCode": "D001",
-  "totalPrice": "268.00",
-  "doseCount": 7,
-  "remark": "饭后服用",
-  "sourceCreatedAt": "2026-07-26T10:22:00+08:00"
-}
-```
+| 角色标识 (`role`) | 角色名称 | 核心权限与数据范围 |
+| :---: | :---: | --- |
+| **`0`** | **全局管理员** (SUPER_ADMIN) | 拥有全系统最高权限。可管理所有门店、所有账号、全局基础字典、系统参数、通知渠道密钥、打印模板与全量审计日志。 |
+| **`2`** | **门店管理员** (STORE_ADMIN) | 拥有**所辖单个门店**的完全业务权限。可管理本门店的处方、加工调度、包裹核销、斗谱布局、商品盘点、调拨登记、E6导入审核及门店员工账号。 |
+| **`3`** | **门店员工** (STORE_STAFF) | 现场操作人员。仅具备所辖门店的基础日常作业权限（加工排队开工、工序打卡、调配拍照、包裹打包核销、斗谱查药等），无法修改系统配置或删除核心数据。 |
+| **`1`** | **普通用户** (USER) | 顾客身份。仅能通过用户端 Web 或小程序查看本人手机号关联的处方进度、待取包裹、6 位取货码及自提二维码凭证。 |
 
-E6 导入状态：`0` 待确认、`1` 待映射、`2` 导入异常、`3` 已生成处方、`4` 已驳回、`5` 已取消、`6` 数据冲突、`7` 处理中。
+---
 
-统一成功响应：
+## 开源协议与技术支持
 
-```json
-{ "code": 0, "message": "", "data": {} }
-```
-
-统一错误响应：
-
-```json
-{ "code": -1, "message": "错误信息" }
-```
-
-## 角色说明
-
-```text
-0 = 全局管理员
-1 = 普通用户
-2 = 门店管理员
-3 = 门店员工
-```
-
-角色权限以服务端校验为准。前端菜单隐藏只用于改善使用体验，不能替代接口权限控制。
+本项目仅供授权中药连锁及合作医疗机构使用。如需了解定制化对接或技术支持，请联系项目负责人或提交 Issue。
