@@ -58,7 +58,7 @@ export async function buildApp() {
   fastify.setErrorHandler((error, request, reply) => {
     request.log.error(error);
     if (error instanceof AppError) {
-      return fail(reply, error.message, error.statusCode);
+      return fail(reply, error.message, error.statusCode, error.data);
     }
     if (error.validation) {
       return fail(reply, '请求参数错误', 400);

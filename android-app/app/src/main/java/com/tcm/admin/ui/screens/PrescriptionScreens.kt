@@ -133,6 +133,7 @@ internal fun PrescriptionsScreen(
                 ApiClient.prescriptionsPaged(status, keyword.trim(), selectedStoreId.toIntOrNull(), doctorId, page)
             }
         }.onSuccess { data ->
+            error = null
             val list = data.optJSONArray("list") ?: JSONArray()
             items = (0 until list.length()).map { list.getJSONObject(it) }
             pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
@@ -140,6 +141,7 @@ internal fun PrescriptionsScreen(
             refreshing = false
             loadedQueryKey = queryKey
         }.onFailure {
+            if (it.isCancellation()) return@onFailure
             error = it.message ?: "加载处方失败"
             loading = false
             refreshing = false

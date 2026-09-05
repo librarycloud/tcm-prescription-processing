@@ -125,9 +125,6 @@ private fun e6DateMillis(value: String): Long? = runCatching {
 private fun e6DateFromMillis(value: Long?): String? = value?.let {
     Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
 }
-private fun rethrowCancellation(error: Throwable) {
-    if (error is CancellationException) throw error
-}
 private fun e6DoctorName(item: JSONObject): String? {
     val doctors = listOf(
         item.optJSONObject("prescription")?.optJSONObject("doctor"),

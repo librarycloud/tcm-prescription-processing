@@ -96,6 +96,7 @@ internal fun StocktakingScreen(
                 Pair(values, storeValues)
             }
         }.onSuccess { (values, storeValues) ->
+            error = null
             checks = (0 until (values.optJSONArray("list")?.length() ?: 0)).map { values.getJSONArray("list").getJSONObject(it) }
             pages = values.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
@@ -104,6 +105,7 @@ internal fun StocktakingScreen(
             }
             loadedQueryKey = queryKey
         }.onFailure {
+            if (it.isCancellation()) return@onFailure
             error = it.message ?: "加载盘点单失败"
         }
     }

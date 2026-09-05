@@ -131,11 +131,13 @@ internal fun HerbsScreen(
                 ApiClient.herbLocationMatrix(selectedStoreId?.toIntOrNull(), keyword, type)
             }
         }.onSuccess {
+            error = null
             data = it
             listState.loadedQueryKey = queryKey
             refreshing = false
         }
             .onFailure {
+                if (it.isCancellation()) return@onFailure
                 error = it.message ?: "加载斗谱失败"
                 refreshing = false
             }

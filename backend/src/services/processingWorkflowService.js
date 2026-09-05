@@ -486,6 +486,41 @@ async function findScannedEquipment(tx, plan, rawCode, expectedType) {
   return equipment;
 }
 
+async function getOccupyingPlanInfo(tx, equipmentId) {
+  const currentUsage = await tx.processingEquipmentUsage.findFirst({
+    where: {
+      equipmentId,
+      status: EQUIPMENT_USAGE_STATUS.ACTIVE,
+    },
+    include: {
+      processingPlan: {
+        select: {
+          id: true,
+          planCode: true,
+          batchNo: true,
+          status: true,
+          prescription: { select: { id: true, customerName: true, phone: true } },
+          processType: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+  if (!currentUsage?.processingPlan) return null;
+  const p = currentUsage.processingPlan;
+  return {
+    id: p.id,
+    planCode: p.planCode,
+    batchNo: p.batchNo,
+    status: p.status,
+    customerName: p.prescription?.customerName || '',
+    phone: p.prescription?.phone || '',
+    prescriptionId: p.prescription?.id || null,
+    processTypeName: p.processType?.name || '',
+    stage: currentUsage.stage,
+    portionNo: currentUsage.portionNo,
+  };
+}
+
 export async function startEquipmentUsage(prisma, actor, id, payload = {}) {
   const current = await getWorkflowPlan(prisma, actor, id);
   if (current.status !== PLAN_STATUS.PROCESSING)
@@ -603,8 +638,15 @@ export async function startEquipmentUsage(prisma, actor, id, payload = {}) {
         },
         data: { currentUsageId: usage.id, updatedBy: Number(actor.id) },
       });
-      if (occupied.count !== 1)
-        throw new AppError("设备正在被其他加工计划使用", 409);
+      if (occupied.count !== 1) {
+        const occupyingPlan = await getOccupyingPlanInfo(tx, equipment.id);
+        const nameDesc = occupyingPlan?.customerName ? `（患者：${occupyingPlan.customerName}，计划 #${occupyingPlan.id}）` : '';
+        throw new AppError(
+          `设备正在被其他加工计划使用${nameDesc}`,
+          409,
+          occupyingPlan ? { occupyingPlan, occupyingPlanId: occupyingPlan.id } : null,
+        );
+      }
       await tx.processingPlan.update({
         where: { id: plan.id },
         data: { currentStage: stage, updatedBy: Number(actor.id) },
@@ -709,8 +751,15 @@ export async function startPackagingUsage(
           updatedBy: Number(actor.id),
         },
       });
-      if (occupied.count !== 1)
-        throw new AppError("包装机正在被其他加工计划使用", 409);
+      if (occupied.count !== 1) {
+        const occupyingPlan = await getOccupyingPlanInfo(tx, packagingMachine.id);
+        const nameDesc = occupyingPlan?.customerName ? `（患者：${occupyingPlan.customerName}，计划 #${occupyingPlan.id}）` : '';
+        throw new AppError(
+          `包装机正在被其他加工计划使用${nameDesc}`,
+          409,
+          occupyingPlan ? { occupyingPlan, occupyingPlanId: occupyingPlan.id } : null,
+        );
+      }
       await refreshCurrentStage(
         tx,
         current.id,
@@ -988,8 +1037,15 @@ export async function transferFaultyEquipment(
         },
         data: { currentUsageId: nextUsage.id, updatedBy: Number(actor.id) },
       });
-      if (occupied.count !== 1)
-        throw new AppError("替换设备正在被其他加工计划使用", 409);
+      if (occupied.count !== 1) {
+        const occupyingPlan = await getOccupyingPlanInfo(tx, replacement.id);
+        const nameDesc = occupyingPlan?.customerName ? `（患者：${occupyingPlan.customerName}，计划 #${occupyingPlan.id}）` : '';
+        throw new AppError(
+          `替换设备正在被其他加工计划使用${nameDesc}`,
+          409,
+          occupyingPlan ? { occupyingPlan, occupyingPlanId: occupyingPlan.id } : null,
+        );
+      }
 
       const now = new Date();
       await tx.processingEquipmentUsage.update({

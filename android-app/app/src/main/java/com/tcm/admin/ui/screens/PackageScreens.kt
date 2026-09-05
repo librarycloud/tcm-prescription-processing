@@ -178,6 +178,7 @@ internal fun PackagesScreen(
                 )
             }
         }.onSuccess { root ->
+            error = null
             val list = root.optJSONArray("list")
             pages = root.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             if (list != null) {
@@ -189,6 +190,7 @@ internal fun PackagesScreen(
             refreshing = false
             loadedQueryKey = queryKey
         }.onFailure {
+            if (it.isCancellation()) return@onFailure
             error = it.message ?: "加载包裹列表失败"
             loading = false
             refreshing = false

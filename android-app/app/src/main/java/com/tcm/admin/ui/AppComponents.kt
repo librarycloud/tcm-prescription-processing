@@ -1,5 +1,6 @@
 package com.tcm.admin
 
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -179,10 +180,27 @@ internal val Pink: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val PinkSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
 internal val Brown: Color @Composable get() = MaterialTheme.colorScheme.secondary
 internal val BrownSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
-private val RunnerColor: Color @Composable get() = MaterialTheme.colorScheme.secondary
-private val RunnerSoftColor: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
-private val CourierColor: Color @Composable get() = MaterialTheme.colorScheme.tertiary
-private val CourierSoftColor: Color @Composable get() = MaterialTheme.colorScheme.tertiaryContainer
+private val isAppDarkTheme: Boolean
+    @Composable
+    get() = MaterialTheme.colorScheme.background == Color(0xFF0F172A) ||
+        runCatching {
+            val bg = MaterialTheme.colorScheme.background
+            (0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue) < 0.5f
+        }.getOrDefault(false)
+
+// Non-status attributes for logistics/delivery methods (distinct from workflow status colors: green=completed/picked up, orange=pending, red=cancelled)
+private val RunnerColor: Color
+    @Composable
+    get() = if (isAppDarkTheme) Color(0xFF22D3EE) else Color(0xFF0891B2)
+private val RunnerSoftColor: Color
+    @Composable
+    get() = if (isAppDarkTheme) Color(0xFF164E63) else Color(0xFFECFEFF)
+private val CourierColor: Color
+    @Composable
+    get() = if (isAppDarkTheme) Color(0xFFA78BFA) else Color(0xFF7C3AED)
+private val CourierSoftColor: Color
+    @Composable
+    get() = if (isAppDarkTheme) Color(0xFF2E1065) else Color(0xFFF5F3FF)
 internal val CardBorderColor: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
 internal val CardShape = RoundedCornerShape(12.dp)
 internal val FieldShape = RoundedCornerShape(8.dp)
@@ -865,6 +883,27 @@ internal fun RecentSearchChipsRow(
                 }
             }
         }
+    }
+}
+
+internal fun Throwable?.isCancellation(): Boolean {
+    var cause: Throwable? = this
+    while (cause != null) {
+        if (cause is CancellationException) return true
+        if (cause is java.util.concurrent.CancellationException) return true
+        val msg = cause.message.orEmpty()
+        if (msg.contains("coroutine scope left the composition", ignoreCase = true)) return true
+        if (msg.contains("StandaloneCoroutine was cancelled", ignoreCase = true)) return true
+        if (msg.contains("Job was cancelled", ignoreCase = true)) return true
+        cause = cause.cause
+    }
+    return false
+}
+
+internal fun rethrowCancellation(error: Throwable) {
+    if (error.isCancellation()) {
+        if (error is CancellationException) throw error
+        throw CancellationException(error.message, error)
     }
 }
 

@@ -112,6 +112,7 @@ internal fun TransfersScreen(
                 )
             }
         }.onSuccess { (transferData, storeValues, summary) ->
+            error = null
             val transferValues = transferData.optJSONArray("list") ?: JSONArray()
             transfers = (0 until transferValues.length()).map { transferValues.getJSONObject(it) }
             pages = transferData.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
@@ -121,6 +122,7 @@ internal fun TransfersScreen(
             loading = false
             refreshing = false
         }.onFailure {
+            if (it.isCancellation()) return@onFailure
             error = it.message ?: "加载门店调拨失败"
             loading = false
             refreshing = false
@@ -193,6 +195,7 @@ internal fun TransfersScreen(
                     else -> null
                 },
                 onItemClick = { index ->
+                    error = null
                     when (index) {
                         0 -> { statusFilter = 0; overdueOnly = false }
                         1 -> { statusFilter = 1; overdueOnly = false }

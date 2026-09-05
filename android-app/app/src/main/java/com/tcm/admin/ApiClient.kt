@@ -593,9 +593,21 @@ object ApiClient {
             token = null
             onUnauthorized?.invoke()
         }
-        if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "上传失败"))
+        if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
         invalidateCacheForMutation(path)
         return json
+    }
+
+    open class ApiException(
+        message: String,
+        val code: Int = -1,
+        val data: JSONObject? = null,
+    ) : IllegalStateException(message)
+
+    fun processingEquipmentByScan(keyword: String): JSONObject? {
+        val query = java.net.URLEncoder.encode(keyword.trim(), "UTF-8")
+        val res = runCatching { request("/admin/processing-equipment?keyword=$query&page=1&pageSize=1") }.getOrNull()
+        return res?.optJSONObject("data")?.optJSONArray("list")?.optJSONObject(0)
     }
 
     private fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
@@ -635,7 +647,7 @@ object ApiClient {
             token = null
             onUnauthorized?.invoke()
         }
-        if (json.optInt("code", -1) != 0) throw IllegalStateException(json.optString("message", "请求失败"))
+        if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
         if (normalizedMethod != "GET") invalidateCacheForMutation(path)
         else if (cacheTtl != null) cacheResponse(path, json.toString())
         return json

@@ -212,6 +212,7 @@ internal fun InventoryScreen(
             val array = values.optJSONArray("list") ?: JSONArray()
             val list = (0 until array.length()).map { array.getJSONObject(it) }
             products = list
+            error = null
             pages = values.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
             if (list.size == 1) {
                 selectedProduct = list.first()
@@ -220,6 +221,7 @@ internal fun InventoryScreen(
             refreshing = false
             loadedQueryKey = queryKey
         }.onFailure {
+            if (it.isCancellation()) return@onFailure
             if (requestId != searchRequest || query.isBlank()) return@onFailure
             error = it.message ?: "加载库存失败"
             loading = false

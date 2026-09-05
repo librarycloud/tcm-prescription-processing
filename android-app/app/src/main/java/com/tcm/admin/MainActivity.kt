@@ -226,7 +226,7 @@ private fun TcmAdminApp() {
         appContext.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
     }
     var themeMode by remember(settingsPreferences) {
-        mutableStateOf(settingsPreferences.getString("theme_mode", "light") ?: "light")
+        mutableStateOf(settingsPreferences.getString("theme_mode", "system") ?: "system")
     }
     var hasAppUpdate by remember(updatePreferences) {
         mutableStateOf(
@@ -480,6 +480,7 @@ private fun TcmAdminApp() {
                         onPlanStatusChanged = {
                             invalidateRetainedList("processing")
                         },
+                        onNavigatePlan = { targetPlan -> navigateTo(ScreenTarget.WorkflowOperation(targetPlan, "", "open")) },
                     )
                 }
                 is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
