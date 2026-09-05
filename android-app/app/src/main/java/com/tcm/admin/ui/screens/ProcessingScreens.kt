@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AlertDialog
@@ -51,6 +52,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -1512,6 +1515,11 @@ internal fun WorkflowOperationScreen(
     // Active scanning state (which action triggered scanner: "soaking", "decoction_$portion", "packaging_$usageId", "fault_swap")
     var scanningAction by remember { mutableStateOf<String?>(null) }
 
+    // Completion & Package generation dialog states
+    var showFinishConfirmDialog by remember { mutableStateOf(false) }
+    var createPackageImmediately by remember { mutableStateOf(true) } // 默认推荐：立即生成待取包裹
+    var showGeneratePackageDialog by remember { mutableStateOf(false) }
+
     fun createPhotoUri(): Uri? {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, "tcm_dispensing_${System.currentTimeMillis()}.jpg")
@@ -2486,24 +2494,27 @@ internal fun WorkflowOperationScreen(
             Button(
                 enabled = !busy,
                 onClick = {
-                    busy = true
-                    scope.launch {
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                activePackagings.forEach { ApiClient.finishEquipmentUsage(plan.optInt("id"), it.optInt("id")) }
-                                ApiClient.transitionPlan(plan.optInt("id"), 2)
-                            }
-                        }.onSuccess {
-                            onPlanStatusChanged?.invoke()
-                            reload()
-                        }.onFailure { error = it.message ?: "完成加工失败" }
-                        busy = false
-                    }
+                    createPackageImmediately = true
+                    showFinishConfirmDialog = true
                 },
                 modifier = Modifier.fillMaxWidth().height(46.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Success),
                 shape = FieldShape,
-            ) { Text("加工完成", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+            ) { Text("完成加工", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+        }
+
+        val packageCreated = detail?.optBoolean("packageCreated") == true || detail?.optJSONObject("package") != null || status == 3 || status == 4
+        if (status == 2 && !packageCreated) {
+            Spacer(Modifier.height(14.dp))
+            Button(
+                enabled = !busy,
+                onClick = {
+                    showGeneratePackageDialog = true
+                },
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                shape = FieldShape,
+            ) { Text("生成待取包裹", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         }
 
         Spacer(Modifier.height(20.dp))
@@ -2713,6 +2724,230 @@ internal fun WorkflowOperationScreen(
             },
             dismissButton = {
                 TextButton(onClick = { exceptionDialogType = null; exceptionTargetUsage = null }, enabled = !busy) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    // 包裹生成确认窗（完成加工后弹出）
+    if (showFinishConfirmDialog) {
+        val pickupCode = detail?.displayField("pickupCode", "").orEmpty().ifBlank { plan.displayField("pickupCode", "") }
+        val methodCode = detail?.optInt("pickupMethod", plan.optInt("pickupMethod", 0)) ?: 0
+        val methodLabel = when (methodCode) { 1 -> "跑腿"; 2 -> "快递"; else -> "自提" }
+        AlertDialog(
+            onDismissRequest = { if (!busy) showFinishConfirmDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Inventory2,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("完成加工确认", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+                }
+            },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    // 计划概要信息卡片
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(customerName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                                StatusPill(methodLabel)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                buildString {
+                                    append(processTypeName)
+                                    if (totalDose > 0) append(" · $totalDose 剂")
+                                    if (bagCount > 0) append(" · $bagCount 袋")
+                                    if (volumeMl > 0) append(" · ${volumeMl}ml")
+                                },
+                                color = Muted,
+                                fontSize = 12.sp,
+                            )
+                            if (pickupCode.isNotBlank()) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "取货码：${formatPickupCode(pickupCode)}",
+                                    color = PrimaryDark,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    // 选项勾选栏
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { if (!busy) createPackageImmediately = !createPackageImmediately }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = createPackageImmediately,
+                            onCheckedChange = { if (!busy) createPackageImmediately = it },
+                            colors = CheckboxDefaults.colors(checkedColor = Primary),
+                            enabled = !busy,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("立即生成待取包裹", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
+                    }
+
+                    // 模式动态说明条
+                    Surface(
+                        color = if (createPackageImmediately) PrimarySoft else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(
+                            0.5.dp,
+                            if (createPackageImmediately) Primary.copy(alpha = 0.35f) else CardBorderColor,
+                        ),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            if (createPackageImmediately) {
+                                Text(
+                                    "✔ 系统自动将状态流转至「待领取」。",
+                                    color = PrimaryDark,
+                                    fontSize = 12.sp,
+                                    lineHeight = 17.sp,
+                                )
+                            } else {
+                                Text(
+                                    "ℹ 暂缓生成：状态将变更为「加工完成」。后续可在工作台随时手动点击「生成包裹」。",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                    lineHeight = 17.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        showFinishConfirmDialog = false
+                        busy = true
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    activePackagings.forEach {
+                                        ApiClient.finishEquipmentUsage(plan.optInt("id"), it.optInt("id"))
+                                    }
+                                    ApiClient.transitionPlan(
+                                        plan.optInt("id"),
+                                        2,
+                                        createPackage = createPackageImmediately,
+                                    )
+                                }
+                            }.onSuccess {
+                                onPlanStatusChanged?.invoke()
+                                Toast.makeText(
+                                    context,
+                                    if (createPackageImmediately) "加工已完成，已生成待取包裹" else "加工已完成（已暂缓生成包裹）",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                reload()
+                            }.onFailure {
+                                if (!it.isCancellation()) {
+                                    error = it.message ?: "完成加工失败"
+                                }
+                            }
+                            busy = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                    shape = FieldShape,
+                ) {
+                    Text(if (createPackageImmediately) "完成并生成包裹" else "仅完成加工")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishConfirmDialog = false }, enabled = !busy) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    // 后续在工序详情手动生成包裹弹窗
+    if (showGeneratePackageDialog) {
+        var packageRemark by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { if (!busy) showGeneratePackageDialog = false },
+            title = { Text("生成待取包裹", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("该加工计划已加工完成，确认为顾客生成待取包裹吗？")
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "状态将流转至「待领取」。",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = packageRemark,
+                        onValueChange = { packageRemark = it.take(500) },
+                        label = { Text("包裹备注（可选）") },
+                        placeholder = { Text("可填写代煎、配送或合并取货说明") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = FieldShape,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        val planId = plan.optInt("id")
+                        showGeneratePackageDialog = false
+                        busy = true
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.generatePlanPackage(
+                                        planId,
+                                        JSONObject().put("itemInfo", packageRemark.trim()),
+                                    )
+                                }
+                            }.onSuccess {
+                                onPlanStatusChanged?.invoke()
+                                Toast.makeText(context, "待取包裹生成成功", Toast.LENGTH_SHORT).show()
+                                reload()
+                            }.onFailure {
+                                if (!it.isCancellation()) error = it.message ?: "生成包裹失败"
+                            }
+                            busy = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                    shape = FieldShape,
+                ) {
+                    Text("确认生成")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGeneratePackageDialog = false }, enabled = !busy) {
                     Text("取消")
                 }
             },

@@ -14,6 +14,7 @@ import {
 import { formatDate, formatPickupCode, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
 import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
 
 const PLAN_STATUS = {
   0: { text: '待加工', theme: 'default' },
@@ -121,10 +122,7 @@ Page({
   },
 
   async onPullDownRefresh() {
-    try {
-      const { clearResponseCache } = require('../../../utils/request');
-      clearResponseCache();
-    } catch (e) {}
+    clearResponseCache();
     try {
       await this.reloadAll();
     } finally {
