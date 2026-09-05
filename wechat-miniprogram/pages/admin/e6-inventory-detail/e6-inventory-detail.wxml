@@ -1,0 +1,29 @@
+<view class="page inventory-detail-page">
+  <t-loading wx:if="{{loading}}" text="正在加载商品库存..." />
+
+  <view wx:if="{{product}}" class="product-detail">
+    <view class="section-title">商品信息</view>
+    <view class="app-card">
+      <view class="product-title-row">
+        <view class="product-title">{{product.name}}</view>
+        <text class="product-price">¥{{product.retailPriceText}}</text>
+      </view>
+      <view class="muted">编码：{{product.productCode}}　条码：{{product.barcode || '-'}}</view>
+      <view class="muted">规格：{{product.specification || '-'}}　单位：{{product.unit || '-'}}</view>
+      <view class="muted">生产厂商：{{product.manufacturer || '-'}}</view>
+      <view class="inventory-total">总库存 <text>{{product.totalQuantityText}}</text> {{product.unit || ''}}　共 {{product.batchCount}} 个库存批次</view>
+    </view>
+
+    <view class="section-title">库存批次与货位</view>
+    <view wx:for="{{product.inventories}}" wx:key="id" class="app-card inventory-card">
+      <view wx:if="{{isSuperAdmin}}" class="inventory-row"><text>门店</text><text>{{item.store.name || '-'}}</text></view>
+      <view class="inventory-row"><text>批号</text><text>{{item.batchNo || '-'}}</text></view>
+      <view class="inventory-row location-row"><text>货位</text><text>{{item.locationName || '-'}}</text></view>
+      <view class="inventory-row strong"><text>库存数量</text><text>{{item.quantityText}} {{product.unit || ''}}</text></view>
+      <view class="muted inventory-dates">生产：{{item.productionDateText}}　有效期：{{item.expiryDateText}}　入库：{{item.inboundDateText}}</view>
+    </view>
+    <t-empty wx:if="{{!product.inventories.length}}" description="该商品暂无库存记录" />
+  </view>
+
+  <t-empty wx:elif="{{!loading}}" description="未找到商品库存信息" />
+</view>

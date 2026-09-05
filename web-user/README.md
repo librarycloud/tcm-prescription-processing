@@ -1,62 +1,83 @@
-# 中药处方加工与取药管理系统 - 用户端
+# 用户端 Web (Web User)
 
-基于 Vue 3 + Vite 的普通用户 Web 端，独立于管理后台 `web-admin` 和微信小程序 `wechat-miniprogram`。
+基于 Vue 3 + Vite 的 C 端消费者查件门户项目。该工程独立于管理端 (`web-admin`)，主要供普通顾客通过手机端浏览器或 PC 端查看个人关联的中药处方状态、取药包裹物流与 6 位提货凭证。
+
+---
 
 ## 技术栈
 
-- Vue 3
-- Vite
-- JavaScript
-- Vue Router
-- Pinia
-- Axios
-- Element Plus
-- qrcode
-- ESLint
-- Prettier
+- **框架与构建**：Vue 3, Vite, JavaScript
+- **路由与状态**：Vue Router, Pinia
+- **UI 组件库**：Element Plus (针对移动端 H5 做了布局自适应)
+- **网络与工具**：Axios, qrcode (动态渲染自提二维码)
+- **工程化**：ESLint, Prettier
 
-## 安装
+---
+
+## 功能页面与路由
+
+本终端功能精简，专注于“我的包裹”查询体验：
+
+- **`/login`**：普通用户登录页（使用在门店预留的手机号及短信下发/注册密码登录）。
+- **`/user/packages`**：我的包裹列表（以时间轴或卡片形式展示待领取、配送中及历史已领取的全部批次包裹）。
+- **`/user/packages/:id`**：包裹详情页（展示实时包裹流转状态、物品明细、6 位高亮取货码及用于到店扫码提货的独立二维码）。
+- **`/profile`**：个人资料页（查看系统登记信息，支持自主修改密码）。
+
+---
+
+## 鉴权与安全隔离说明
+
+为确保 C 端用户与药房管理体系严格隔离，本项目执行以下安全策略：
+
+1. **登录隔离**：统一调用独立的顾客专属认证接口 `POST /auth/user-login`。
+2. **拦截管理员**：系统严格拦截拥有后台管理员/员工角色（`role` 0, 2, 3）的账号越权登录此 C 端门户。
+3. **缓存隔离**：用户端本地持久化（LocalStorage/SessionStorage）状态键名均带有特殊前缀（如 `pickup_web_user_`），防止同一台设备上与 `web-admin` 互相覆盖串号。
+4. **越权拦截**：用户端所有的接口调用后端会自动校验请求人必须与数据拥有者严格一致，确保用户只能查看自己手机号关联的处方包裹。
+
+---
+
+## 开发指南
+
+### 1. 依赖安装
 
 ```bash
 cd web-user
 npm install
 ```
 
-## 环境变量
+### 2. 环境变量配置
 
-复制环境变量示例：
+复制示例环境变量文件并按需修改：
 
 ```bash
 cp .env.example .env
 ```
 
-变量说明：
+核心变量说明：
 
-- `VITE_API_BASE_URL`：前端请求基础路径，开发环境默认 `/api`
-- `VITE_PROXY_TARGET`：Vite 开发代理目标，默认 `http://localhost:3000`
-- `VITE_DEV_PORT`：开发服务端口，默认 `5174`
+```env
+# 接口请求路径前缀（通常不修改）
+VITE_API_BASE_URL=/api
 
-## 启动
+# 开发服务器反向代理目标（应指向本地 Fastify 启动端口）
+VITE_PROXY_TARGET=http://127.0.0.1:3000
+
+# 默认开发启动端口（独立于管理端的 5173）
+VITE_DEV_PORT=5174
+```
+
+### 3. 本地启动
 
 ```bash
 npm run dev
 ```
 
-## 打包
+成功后访问 `http://localhost:5174`。
+
+### 4. 生产构建打包
 
 ```bash
 npm run build
 ```
 
-## 功能页面
-
-- `/login`：普通用户手机号 + 密码登录
-- `/user/packages`：我的包裹
-- `/user/packages/:id`：包裹详情和二维码
-- `/profile`：个人资料、手机号和密码修改
-
-## 权限说明
-
-- 用户端登录接口：`POST /auth/user-login`
-- 管理员账号不能登录用户端
-- 用户端登录态使用 `pickup_web_user_` 前缀，与 `web-admin` 隔离
+产物生成至 `dist/` 目录下，用于部署到主域名（如 `https://tcm.example.com`）中供外部顾客访问。

@@ -1,0 +1,15 @@
+.inventory-detail-page { padding-bottom: 48rpx; }
+.section-title { margin: 28rpx 0 14rpx; color: #4e5969; font-size: 28rpx; font-weight: 600; }
+.product-title-row { display: flex; align-items: center; gap: 20rpx; min-width: 0; }
+.product-title { min-width: 0; flex: 1; font-size: 32rpx; font-weight: 700; color: #1f2329; }
+.product-price { flex: 0 0 auto; min-width: 132rpx; color: #0052d9; font-size: 32rpx; font-weight: 700; text-align: right; }
+.product-detail .muted { margin-top: 10rpx; line-height: 1.5; font-size: 26rpx; }
+.inventory-total { margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid #eef0f5; color: #4e5969; font-size: 28rpx; }
+.inventory-total text { color: #0052d9; font-size: 36rpx; font-weight: 700; }
+.inventory-card { margin-bottom: 16rpx; }
+.inventory-row { display: flex; justify-content: space-between; gap: 24rpx; margin-bottom: 12rpx; color: #4e5969; font-size: 28rpx; }
+.inventory-row text:last-child { min-width: 0; color: #1f2329; text-align: right; word-break: break-all; }
+.inventory-row.location-row { font-size: 32rpx; font-weight: 700; color: #1f2329; }
+.inventory-row.location-row text:last-child { color: #0052d9; }
+.inventory-row.strong { font-size: 30rpx; font-weight: 600; }
+.inventory-dates { padding-top: 14rpx; border-top: 1rpx solid #eef0f5; line-height: 1.6; font-size: 24rpx; }

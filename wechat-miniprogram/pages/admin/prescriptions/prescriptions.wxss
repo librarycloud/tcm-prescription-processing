@@ -67,24 +67,17 @@
   font-size: 26rpx;
 }
 
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20rpx;
-  margin-top: 24rpx;
-}
-
-.pager-current {
-  min-width: 120rpx;
-  color: #1d2129;
+.list-footer {
+  padding: 24rpx 0 16rpx;
   text-align: center;
-  font-size: 26rpx;
 }
 
-.pager > t-button {
-  flex: 0 0 auto;
-  width: auto !important;
+.loading-more, .no-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24rpx;
+  color: #86909c;
 }
 
 .card-actions {
@@ -120,5 +113,5 @@
   --td-input-suffix-text-color: #0052d9;
 }
 .page {
-  padding-bottom: 220rpx;
+  padding-bottom: 48rpx;
 }

@@ -18,6 +18,7 @@
     "pages/admin/herb-locations/herb-locations",
     "pages/admin/product-differences/product-differences",
     "pages/admin/e6-inventory/e6-inventory",
+    "pages/admin/e6-inventory-detail/e6-inventory-detail",
     "pages/admin/business/business",
     "pages/admin/yd-goods-checks/yd-goods-checks",
     "pages/admin/profile/profile",
@@ -49,7 +50,8 @@
     "t-picker": "tdesign-miniprogram/picker/picker",
     "t-navbar": "tdesign-miniprogram/navbar/navbar",
     "t-loading": "tdesign-miniprogram/loading/loading",
-    "t-empty": "tdesign-miniprogram/empty/empty"
+    "t-empty": "tdesign-miniprogram/empty/empty",
+    "store-picker": "/components/store-picker/store-picker"
   },
   "style": "v2",
   "componentFramework": "glass-easel",

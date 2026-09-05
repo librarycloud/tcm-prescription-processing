@@ -1,0 +1,34 @@
+<picker
+  wx:if="{{visible}}"
+  mode="selector"
+  range="{{stores}}"
+  range-key="name"
+  value="{{storeIndex}}"
+  disabled="{{disabled}}"
+  bindchange="onPickerChange"
+>
+  <!-- variant: button -->
+  <t-button
+    wx:if="{{variant === 'button'}}"
+    block="{{block}}"
+    size="{{size}}"
+    variant="{{themeVariant}}"
+    t-class="{{buttonClass}}"
+  >
+    {{prefix}}{{storeName}}
+  </t-button>
+
+  <!-- variant: filter -->
+  <view wx:elif="{{variant === 'filter'}}" class="filter-picker">
+    {{prefix}}{{storeName}}
+  </view>
+
+  <!-- variant: row -->
+  <view wx:elif="{{variant === 'row'}}" class="picker-row">
+    <text>{{label}}</text>
+    <text class="picker-value {{!value && !includeAll ? 'placeholder' : ''}}">{{storeName}}</text>
+  </view>
+
+  <!-- custom slot fallback -->
+  <slot wx:else></slot>
+</picker>

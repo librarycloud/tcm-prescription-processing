@@ -5,7 +5,6 @@ import {
   getPrescriptions,
   getStores
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { PICKUP_METHOD_OPTIONS } from '../../../utils/format';
 
@@ -80,7 +79,6 @@ function isValidPhone(phone) {
 
 Page({
   data: {
-    activeTab: 'processing',
     loading: false,
     searching: false,
     isSuperAdmin: false,
@@ -122,8 +120,6 @@ Page({
     },
     plans: [emptyPlan(1)]
   },
-
-  onTabChange: onAdminTabChange,
 
   async onLoad() {
     const user = getUser();

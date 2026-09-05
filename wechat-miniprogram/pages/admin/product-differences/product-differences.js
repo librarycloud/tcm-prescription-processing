@@ -7,7 +7,6 @@ import {
   reverseProductDifference,
   writeOffProductDifference
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 
@@ -81,7 +80,6 @@ function selectedStore(stores, index) {
 
 Page({
   data: {
-    activeTabBar: 'overview',
     activeTab: 'current',
     user: {},
     isSuperAdmin: false,
@@ -120,8 +118,6 @@ Page({
     reverseReason: '',
     saving: false
   },
-
-  onTabChange: onAdminTabChange,
 
   async onPullDownRefresh() {
     clearResponseCache();

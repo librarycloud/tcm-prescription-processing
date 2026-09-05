@@ -7,7 +7,6 @@ import {
   uploadPrescriptionAttachment,
   updatePrescription
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import {
   choosePrescriptionAttachment,
@@ -30,7 +29,6 @@ function isValidPhone(phone) {
 
 Page({
   data: {
-    activeTab: '',
     id: null,
     isEdit: false,
     isSuperAdmin: false,
@@ -66,8 +64,6 @@ Page({
       statusText: '进行中'
     }
   },
-
-  onTabChange: onAdminTabChange,
 
   async onLoad(options) {
     const user = getUser();

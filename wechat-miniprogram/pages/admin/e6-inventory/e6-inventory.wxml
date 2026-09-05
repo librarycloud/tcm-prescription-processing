@@ -5,7 +5,7 @@
   </view>
 
   <view class="search-panel">
-    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange"><view class="filter-picker">门店：{{storeName}}</view></picker>
+    <store-picker variant="filter" prefix="门店：" value="{{storeId}}" bind:change="onStoreChange" />
     <view class="search-row"><t-icon class="search-scan-icon" name="scan" size="44rpx" color="#0052d9" bind:tap="scan" /><t-input class="search-input" borderless suffix="查询商品" value="{{keyword}}" placeholder="名称、编码或条码" bind:change="onKeywordChange" bind:click="search" bind:enter="search" /></view>
   </view>
 
@@ -14,26 +14,6 @@
   <t-empty wx:if="{{searched && !searchLoading && !products.length}}" description="暂无匹配商品" />
 
   <t-loading wx:if="{{searchLoading}}" text="正在加载库存" />
-  <view wx:if="{{selectedProduct}}" class="product-detail">
-    <view class="section-title">商品信息</view>
-    <view class="app-card">
-      <view class="product-title-row"><view class="product-title">{{selectedProduct.name}}</view><text class="product-price">¥{{selectedProduct.retailPriceText}}</text></view>
-      <view class="muted">编码：{{selectedProduct.productCode}}　条码：{{selectedProduct.barcode || '-'}}</view>
-      <view class="muted">规格：{{selectedProduct.specification || '-'}}　单位：{{selectedProduct.unit || '-'}}</view>
-      <view class="muted">生产厂商：{{selectedProduct.manufacturer || '-'}}</view>
-      <view class="inventory-total">总库存 <text>{{selectedProduct.totalQuantityText}}</text> {{selectedProduct.unit || ''}}　共 {{selectedProduct.batchCount}} 个库存批次</view>
-    </view>
-
-    <view class="section-title">库存信息</view>
-    <view wx:for="{{selectedProduct.inventories}}" wx:key="id" class="app-card inventory-card">
-      <view wx:if="{{isSuperAdmin}}" class="inventory-row"><text>门店</text><text>{{item.store.name || '-'}}</text></view>
-      <view class="inventory-row"><text>批号</text><text>{{item.batchNo}}</text></view>
-      <view class="inventory-row location-row"><text>货位</text><text>{{item.locationName || '-'}}</text></view>
-      <view class="inventory-row strong"><text>库存数量</text><text>{{item.quantityText}} {{selectedProduct.unit || ''}}</text></view>
-      <view class="muted inventory-dates">生产：{{item.productionDateText}}　有效期：{{item.expiryDateText}}　入库：{{item.inboundDateText}}</view>
-    </view>
-    <t-empty wx:if="{{!selectedProduct.inventories.length}}" description="该商品暂无库存" />
-  </view>
 
   <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
     <t-tab-bar-item value="overview" icon="home">库存</t-tab-bar-item>

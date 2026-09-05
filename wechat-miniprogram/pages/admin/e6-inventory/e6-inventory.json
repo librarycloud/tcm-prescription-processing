@@ -6,6 +6,7 @@
     "t-input": "tdesign-miniprogram/input/input",
     "t-icon": "tdesign-miniprogram/icon/icon",
     "t-empty": "tdesign-miniprogram/empty/empty",
-    "t-loading": "tdesign-miniprogram/loading/loading"
+    "t-loading": "tdesign-miniprogram/loading/loading",
+    "store-picker": "../../../components/store-picker/store-picker"
   }
 }

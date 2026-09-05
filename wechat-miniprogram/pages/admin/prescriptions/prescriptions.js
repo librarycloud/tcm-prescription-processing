@@ -4,7 +4,6 @@ import {
   getStores
 } from '../../../api/admin';
 import { formatDate, maskPhone } from '../../../utils/format';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 
@@ -16,7 +15,6 @@ const STATUS_META = {
 
 Page({
   data: {
-    activeTab: '',
     loading: false,
     keyword: '',
     status: '',
@@ -27,12 +25,12 @@ Page({
     storeId: '',
     storeName: '全部门店',
     page: 1,
-    pageSize: 10,
+    pageSize: 15,
     pages: 1,
+    loading: false,
+    loadingMore: false,
     list: []
   },
-
-  onTabChange: onAdminTabChange,
 
   async onShow() {
     const user = getUser();
@@ -50,21 +48,22 @@ Page({
 
   async onPullDownRefresh() {
     clearResponseCache();
+    this.setData({ page: 1 });
     try {
-      await this.load();
+      await this.load(1);
     } finally {
       wx.stopPullDownRefresh();
     }
   },
 
-  async load() {
-    this.setData({ loading: true });
+  async load(page = 1) {
+    this.setData({ loading: true, page });
     try {
       const data = await getPrescriptions({
         keyword: this.data.keyword,
         status: this.data.status,
         storeId: this.data.storeId,
-        page: this.data.page,
+        page,
         pageSize: this.data.pageSize
       });
       this.setData({
@@ -118,16 +117,42 @@ Page({
     this.load();
   },
 
-  prevPage() {
-    if (this.data.page <= 1) return;
-    this.setData({ page: this.data.page - 1 });
-    this.load();
-  },
-
-  nextPage() {
-    if (this.data.page >= this.data.pages) return;
-    this.setData({ page: this.data.page + 1 });
-    this.load();
+  async onReachBottom() {
+    if (this.data.loading || this.data.loadingMore || this.data.page >= this.data.pages) return;
+    this.setData({ loadingMore: true });
+    try {
+      const nextPage = this.data.page + 1;
+      const data = await getPrescriptions({
+        keyword: this.data.keyword,
+        status: this.data.status,
+        storeId: this.data.storeId,
+        page: nextPage,
+        pageSize: this.data.pageSize
+      });
+      const newItems = (data.list || []).map((item) => {
+        const status = STATUS_META[Number(item.status)] || STATUS_META[0];
+        return {
+          ...item,
+          phoneMasked: maskPhone(item.phone),
+          statusText: status.text,
+          statusTheme: status.theme,
+          createdAtText: formatDate(item.createdAt),
+          storeName: item.store ? item.store.name : '',
+          doctorName: item.doctor ? item.doctor.name : '-',
+          sourceName: item.source ? item.source.name : '-',
+          plansCount: item.plans ? item.plans.length : 0,
+          canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
+          canDelete: !this.data.isStoreStaff && !(item.plans && item.plans.length)
+        };
+      });
+      this.setData({
+        list: this.data.list.concat(newItems),
+        page: nextPage,
+        pages: data.pagination?.pages || 1
+      });
+    } finally {
+      this.setData({ loadingMore: false });
+    }
   },
 
   goDetail(e) {

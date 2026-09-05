@@ -1,31 +1,91 @@
-# E6Sync
+# E6Sync 浪潮佳软 E6 同步工具实施与运维指南
 
-`E6Sync.exe` 是面向浪潮佳软 E6 的 Windows WinForms 同步工具。它只读诊所处方库和药店商品/库存库，并发送到同步 API；不会写入、修改或删除 E6 数据库内容。
+> [!IMPORTANT]
+> **模块名称**：`E6Sync` (WinForms Windows 桌面服务)  
+> **目标框架**：`.NET Framework 4.6.2` (单文件/无第三方外部依赖)  
+> **适用系统**：Windows Server 2008 R2 SP1+ / Windows 10 / Windows 11 / Windows Server 2012/2016/2019/2022  
+> **核心原则**：**单向只读提取**。工具绝不向 E6 的 SQL Server 数据库执行任何 `INSERT`、`UPDATE`、`DELETE` 或 `ALTER` 操作。
 
-## 编译
+---
 
-1. 在 Visual Studio 2022 安装“`.NET 桌面开发`”工作负载，以及 `.NET Framework 4.6.2 Targeting Pack`。
-2. 打开 `E6Sync.sln`。
-3. 在工具栏选择 `Release` 和 `Any CPU`，执行“生成 -> 生成解决方案”。
-4. 可执行文件输出在 `E6Sync\\bin\\Release\\E6Sync.exe`。
+## 1. 架构定位与数据同步流向
 
-项目不使用 NuGet 包、Node.js、IIS、SQLite 或 WebView。引用全部来自 .NET Framework 4.6.2：`System.Data.SqlClient`、`System.Net.Http` 和 `System.Web.Extensions`。
+`E6Sync.exe` 专用于连接部署在各门店局域网内的浪潮佳软 E6 诊所管理系统及新零售药店管理系统，将处方单据、饮片商品库与实时货位库存，通过标准的 RESTful API 定时增量推送至中药处方加工管理系统后端。
 
-## 编译文件与部署
+```mermaid
+flowchart TD
+    subgraph Local_Store["门店局域网 / Windows Server 宿主机"]
+        direction TB
+        E6Clinic[(E6 诊所 SQL Server<br>新零售收款台/处方明细)]
+        E6Pharm[(E6 药店 SQL Server<br>DC商品/AC货位商品帐)]
+        
+        E6Sync[E6Sync.exe 同步引擎<br>.NET Framework 4.6.2]
+        Config[(config.json 配置文件)]
+        LogFiles[(logs/sync-yyyy-MM-dd.log)]
+        
+        Config --> E6Sync
+        E6Clinic --"ADO.NET SqlClient (只读)"--> E6Sync
+        E6Pharm --"ADO.NET SqlClient (只读)"--> E6Sync
+        E6Sync --> LogFiles
+    end
 
-将以下文件复制到 Windows Server 的同一个目录：
+    subgraph Remote_Cloud["云端 Fastify API 服务"]
+        direction TB
+        CloudAPI["/integrations/e6/v1/prescriptions (处方池)<br>/integrations/e6/v1/products (商品库)<br>/integrations/e6/v1/inventories (实时库存)"]
+        VerifyAuth{"X-API-Key 鉴权 &<br>storeCode 门店隔离"}
+        DB[(MariaDB / Prisma)]
+    end
 
-- `E6Sync.exe`
-- `E6Sync.exe.config`（若生成）
-- `config.json`
+    E6Sync --"HTTPS POST (JSON 单据/增量游标)"--> CloudAPI
+    CloudAPI --> VerifyAuth
+    VerifyAuth --> DB
+```
 
-程序首次启动会自动创建 `logs\\sync-yyyy-MM-dd.log`，日志按天分割。请确保运行帐户对应用目录有创建/写入文件的权限。
+---
 
-目标框架是 `.NET Framework 4.6.2`。部署前请确认 Windows Server 已安装对应运行时。Windows Server 2008 R2 SP1 支持 .NET Framework 4.6.2；原始 Windows Server 2008 的支持和所需补丁取决于具体版本及系统更新状态，应先在目标服务器验证安装条件。
+## 2. 编译与运行环境要求
 
-## 配置
+### 2.1 编译环境
 
-部署目录中的 `config.json` 示例：
+- **IDE**：Visual Studio 2022 (或 MSBuild v17+)
+- **工作负载**：`.NET 桌面开发` (包含 Windows Forms 工具)
+- **目标包**：`.NET Framework 4.6.2 Targeting Pack`
+- **外部依赖**：**0 外部 NuGet 包**。编译仅引用 .NET Framework 内置程序集：
+  - `System.Data.SqlClient` (用于连接 SQL Server)
+  - `System.Net.Http` (用于发送 REST API 请求)
+  - `System.Web.Extensions` (提供快速稳定的 `JavaScriptSerializer` JSON 序列化)
+
+#### 编译步骤：
+1. 双击打开 `E6Sync.sln`。
+2. 顶部工具栏切换编译模式为 **`Release`**，目标平台为 **`Any CPU`**。
+3. 点击菜单栏 **生成 (Build)** ➔ **生成解决方案 (Build Solution)**。
+4. 编译产物位于 `E6Sync\bin\Release\E6Sync.exe`。
+
+### 2.2 生产部署依赖与服务器要求
+
+- **操作系统**：Windows Server 2008 R2 SP1、Windows Server 2012 R2、Windows Server 2016/2019/2022。
+- **运行库**：必须已安装 [.NET Framework 4.6.2 离线安装包](https://dotnet.microsoft.com/download/dotnet-framework/net462)。
+- **网络访问**：
+  - 局域网端口：允许访问本地或内网 SQL Server 实例端口（默认 `1433`）。
+  - 出网端口：允许向云端服务器域名发起 `443 (HTTPS)` 或 `80 (HTTP)` 出站连接。
+- **文件权限**：当前运行 Windows 登录账号必须对 `E6Sync.exe` 所在目录拥有创建文件和修改日志的权限。
+
+---
+
+## 3. 部署目录与配置字典 (`config.json`)
+
+将编译后的可执行文件复制到服务器目标目录（如 `D:\TCM_Sync\`），结构如下：
+
+```text
+D:\TCM_Sync\
+├── E6Sync.exe                  # 核心执行文件
+├── E6Sync.exe.config           # .NET Framework 运行时配置
+├── config.json                 # 核心连接与同步策略配置
+└── logs\                       # 运行日志目录（程序首次运行自动生成）
+    └── sync-2026-09-05.log     # 按自然日自动滚动的结构化文本日志
+```
+
+### 3.1 完整配置文件示例
 
 ```json
 {
@@ -45,46 +105,115 @@
     "password": ""
   },
   "api": {
-    "baseUrl": "https://example.com/api",
-    "apiKey": "e6_实际密钥",
+    "baseUrl": "https://api.tcm.example.com",
+    "apiKey": "e6_live_9f83ac127e654cbb823e9a1",
     "storeCode": "SZ001"
   },
   "sync": {
     "intervalSeconds": 60,
     "autoSyncEnabled": true,
-    "lastSyncTime": "",
-    "pharmacySyncEnabled": false,
-    "pharmacyIntervalSeconds": 60,
-    "lastPharmacySyncTime": "",
-    "lastPharmacyProductModifiedAt": "",
-    "lastPharmacyInventoryCursor": ""
+    "lastSyncTime": "2026-09-05 20:00:00",
+    "pharmacySyncEnabled": true,
+    "pharmacyIntervalSeconds": 120,
+    "lastPharmacySyncTime": "2026-09-05 20:02:00",
+    "lastPharmacyProductModifiedAt": "2026-09-05 18:30:00",
+    "lastPharmacyInventoryCursor": "1849201"
   }
 }
 ```
 
-医生/药师映射由后端配置。E6Sync 会将 E6 的 `处方药师`原始值放入 API 的 `e6DoctorCode` 字段，由后端按其配置进行映射。若 E6 的 `处方药师`为空，请将 `defaultDoctorCode` 设置为服务端“E6医师映射”中已配置的编码（如 `D001`）；程序仅在原始值为空时使用该默认值。旧版 `config.json` 中若仍有 `doctorMappings`，程序会忽略它。
+### 3.2 参数详细释义字典
 
-SQL Server 2008 使用 Windows 身份验证：请将 `windowsAuthentication` 设为 `true`，并保持 `username` 和 `password` 为空。程序会以启动 `E6Sync.exe` 的 Windows 帐户连接 SQL Server；请先为该帐户授予目标数据库的只读权限。所有配置更新都会先写临时文件再替换原文件。不要把 API Key 提交到源代码库；程序日志也不会写入敏感值。
+| 节点 | 属性名 | 类型 | 必填 | 详细说明 |
+|---|---|:---:|:---:|---|
+| **`e6`** (诊所处方库) | `server` | string | 是 | 诊所 SQL Server 实例地址，支持 IP、计算机名或实例名（如 `127.0.0.1\SQLEXPRESS`）。 |
+| | `database` | string | 是 | 诊所数据库名称。 |
+| | `windowsAuthentication` | bool | 是 | 是否使用 Windows 集成身份验证。若为 `true`，以启动进程的 Windows 账户登录，忽略用户名密码。 |
+| | `username` / `password` | string | 否 | 当 `windowsAuthentication` 为 `false` 时的 SQL Server 账号和密码。 |
+| | `defaultDoctorCode` | string | 否 | 处方药师保底编码。当 E6 单据中的 `处方药师` 字段为空时，以此编码上报。 |
+| **`pharmacyE6`** (药店商品库存库) | `server` / `database` | string | 是 | 药店数据库实例与库名（常与诊所位于同一服务器不同库）。 |
+| | `windowsAuthentication` | bool | 是 | 药店库的鉴权方式。推荐设为 `true`。 |
+| **`api`** (云端接入配置) | `baseUrl` | string | 是 | 云端 API 网关基础地址，末尾不要带 `/`。 |
+| | `apiKey` | string | 是 | 云端后台分配给该门店的专属接入密钥。请求时放入 HTTP Header `X-API-Key`。 |
+| | `storeCode` | string | 是 | 门店代码（全大写，如 `SZ001`），必须与 API Key 绑定的门店完全一致。 |
+| **`sync`** (调度与增量游标) | `intervalSeconds` | int | 是 | 诊所处方单据轮询周期（秒），推荐 `30` - `120`。 |
+| | `autoSyncEnabled` | bool | 是 | 是否开启处方后台自动轮询。 |
+| | `lastSyncTime` | string | 自动 | 处方同步最后推进时间点。程序自动更新与持久化。 |
+| | `pharmacySyncEnabled` | bool | 是 | 是否开启药店商品与库存增量同步。 |
+| | `pharmacyIntervalSeconds`| int | 是 | 药店商品/库存轮询周期（秒），推荐 `60` - `300`。 |
+| | `lastPharmacySyncTime` | string | 自动 | 药店全量同步最后执行时间。 |
+| | `lastPharmacyProductModifiedAt` | string | 自动 | 商品字典增量修改时间游标（根据 `DC商品.修改日期` 推进）。 |
+| | `lastPharmacyInventoryCursor` | string | 自动 | 货位库存变更游标（根据 `AC货位商品帐._c_` 递增版本号推进）。 |
 
-## 运行与测试
+> [!TIP]
+> **原子写入机制**：每次同步成功后更新 `config.json` 中的游标，E6Sync 均采用“写入临时文件 ➔ 文件替换”的原子操作，防止服务器突然断电导致配置文件损坏变空。
 
-启动程序后可分别点击“测试 SQL 连接”和“测试药店 SQL”。前者测试 `e6` 诊所库，后者测试 `pharmacyE6` 药店库；两者只打开和关闭 SQL 连接，不执行写操作。诊所和药店分别有自动开关、同步间隔和手动按钮：诊所手动同步按日期上传处方，药店手动全量同步上传 `AC货位商品帐` 的全部正库存并清理服务器中已不存在的批次。药店自动同步分别按 `DC商品`、`DC货位`、`AC货位商品帐` 的 `_c_` 增量上传。商品和库存上传使用总部商品编号 `productCode`，E6 内部 `[ID]` 只用于本地表关联；商品请求上传 `DC商品.零售价`，库存请求不上传金额、`_c_` 和日报日期，另外上传生产日期、有效期至、入库日期和货位名称。
+---
 
-API 文档未定义健康检查或测试接口，因此程序不会构造虚假订单测试 API。选择一段包含已知订单的日期，点击“诊所处方同步”进行实际联调：
+## 4. 数据映射逻辑与业务规则
 
-1. 开始和结束日期均按自然日处理。选择同一天会查询当天 `00:00:00` 至次日 `00:00:00`。
-2. 每张订单单独 POST 到 `/integrations/e6/v1/prescriptions`，请求包含 `X-API-Key`。
-3. 只有 HTTP `200` 且 JSON `code` 为 `0` 计为成功。`duplicate=true` 计为“重复”而不是失败。
-4. GUI 与当天的 `logs\\sync-yyyy-MM-dd.log` 会记录 API 导入状态：待确认、待映射、导入异常、已生成处方、已驳回、已取消、数据冲突或处理中。
+### 4.1 诊所处方同步 (`POST /integrations/e6/v1/prescriptions`)
 
-程序启动后两套自动定时器独立运行。首次 `lastSyncTime` 为空时，诊所不会自动全量查询，需先执行诊所手动同步；首次 `lastPharmacySyncTime` 为空时，药店也需先执行药店手动同步。两套同步分别保存完成时间和增量游标，失败或任务取消时不会推进对应游标；诊所自动同步查询 `lastSyncTime - 2 分钟` 到当前时间，药店自动同步按商品 `修改日期` 和库存 `_c_` 增量查询。
+1. **单据主明细关联**：
+   - 以 `PF新零售收款台_处方明细` 为驱动表，通过明细表的 `PID` 关联主表 `PF新零售收款台.id`。
+   - 单据编号提取：`PF新零售收款台.id` ➔ `externalOrderNo`。
+   - 过滤作废单据：自动筛除 `_proofstate = '作废'` 的无效单据。
+   - 付款状态转换：`_proofstate = '结单'` 标记为 `PAID`，新单等其他流转状态标记为 `UNPAID`。
+2. **单位智能折算引擎**：
+   - 中药处方单剂克数（`items[].quantity`）：读取 `单付数量` 与 `单位`，针对 `10g`、`10克`、`g`、`克` 等重量标识统一换算为标准克（`g`），且**不乘付数**。
+   - 处方总重（`items[].totalQuantity`）：读取 `数量` 乘以单位系数换算为总克数。
+   - 计件类（如 `条`、`个`）：保持数量不变直接透传。
+3. **防漏单回退窗口**：
+   - 自动增量查询采用安全回退策略：每次扫描从 `lastSyncTime - 2 分钟` 至当前时间，有效规避 SQL Server 事务提交延迟造成的漏单。
 
-关闭主窗口会隐藏到系统托盘。程序使用窗口模式运行，不再弹出独立命令提示符；所有运行日志直接显示在窗口并写入按天日志文件。主窗口和托盘菜单可分别暂停或恢复诊所、药店自动同步，设置会保存到 `sync.autoSyncEnabled`、`sync.pharmacySyncEnabled` 及各自间隔字段，下次启动仍然生效。两套同步可以独立运行。
+### 4.2 药店商品与库存同步
 
-## 已知字段边界
+1. **商品信息增量同步**：
+   - 监听 `DC商品` 表中 `修改日期 > @lastModified` 的记录。
+   - 提取总部商品编码 `productCode`（使用统一物料编码）、品名、剂型、规格、批准文号、生产企业、零售价等。
+2. **货位库存增量同步**：
+   - 监听 `AC货位商品帐` 表，利用 SQL Server 行级变更标志 `_c_ > @lastCursor` 高性能提取有变动的批次。
+   - 上传生产批号、有效期至、当前结存数量、入库日期以及所处的物理货位名称。
+3. **全量校准机制**：
+   - 手动点击“药店全量同步”时，系统将扫描全库正库存并提交服务端比对，自动剔除云端已在 E6 中盘亏或出库为零的历史死批次。
 
-当前同步规则：订单日期使用新零售收款台的检测日期，金额统一使用新零售收款台的总额（包含未付款新单）；付款状态由 `_proofstate` 判断（结单=已付款，新单等其他状态=未付款），零售收款记录只用于读取最后一条操作员，作废单会同步为已取消。
+---
 
-同步以 `PF新零售收款台_处方明细` 为主表，再按明细表 `PID` 关联 `PF新零售收款台.id`，取得购药人、购药人电话、处方药师、处方备注及操作员；不读取处方登记。没有处方明细的收费不会被查询或上传，`_proofstate=作废` 的单据也会过滤。同步日期和订单时间使用新零售收款台的检测日期；金额统一使用 `PF新零售收款台.总额`。主表 `id` -> `externalOrderNo`，`_proofstate=结单` 标记为已付款，其他状态标记为未付款。明细表 `PID` 对应订单号，`付数`逐行上传为 `items[].doseCount`（管理端显示为剂数），`ri` 为中药顺序，`商品名称`为中药名；`单付数量`为单剂数量，按 `单付数量 * 单位` 换算后上传到 `items[].quantity`，不乘付数；`数量`按 `数量 * 单位` 换算后上传到 `items[].totalQuantity`。支持 `10g`、`10克`、`g`、`1g`、`1克`、`克`、`条`、`个`：重量单位统一上传为 `g`，`条`和`个`原样上传。时间会按 `yyyy-MM-dd HH:mm:ss` 读取，忽略末尾毫秒。
+## 5. 日常运维、托盘与监控
 
-订单时间和更新时间使用新零售收款台的检测日期；零售收款记录只用于按单据 ID 读取最后一条操作员。付款状态由新零售收款台 `_proofstate` 判断，`结单` 为已付款，其他状态为未付款；`作废` 单上传为已取消。E6 数据中的“购药人”可为空，订单仍可同步后由后台确认时补充；处方备注超过 500 字符时会自动截断。
+### 5.1 界面交互与托盘常驻
+
+- **无黑色 CMD 弹窗**：纯 WinForms 视窗，内置富文本运行日志流。
+- **系统托盘最小化**：点击窗口右上角关闭按钮 `[X]` 不会退出程序，而是自动缩减为右下角任务栏通知区域图标。
+- **托盘右键菜单**：
+  - 显示/隐藏主面板
+  - 暂停 / 恢复 处方自动同步
+  - 暂停 / 恢复 药店库存同步
+  - 安全退出程序
+
+### 5.2 联调与测试步骤
+
+1. **测试 SQL 连通性**：点击“测试 SQL 连接”与“测试药店 SQL”，验证本地 Windows 身份认证和只读授权。
+2. **选择区间手动试跑**：首次接入，选择前一天或今天的日期范围，点击“诊所处方同步”。
+3. **检查响应码**：
+   - 若状态为 `待确认` 或 `已存在(duplicate=true)`，说明网络与 API 鉴权全部打通。
+   - 若状态为 `待映射`，说明当前订单的医生编号在云端未维护，需登录 Web 管理端补充映射关系。
+4. **开启自动调度**：勾选“启用自动同步”，随后最小化到托盘即可。
+
+---
+
+## 6. 常见故障排查 (Troubleshooting)
+
+### Q1: 提示“Cannot open database requested by the login. The login failed.”
+- **原因**：运行 E6Sync 的当前 Windows 登录账户在 SQL Server 中没有分配权限。
+- **解决方案**：打开 SQL Server Management Studio (SSMS)，在 `安全性 ➔ 登录名` 中添加当前 Windows 账号（或 `Everyone`/`Users` 组），在 `用户映射` 中勾选目标数据库的 `db_datareader` (只读) 角色权限。
+
+### Q2: 提示“HTTP 401 Unauthorized”
+- **原因**：`config.json` 中的 `apiKey` 不正确，或者 `storeCode` 与该 API Key 所属的门店不一致。
+- **解决方案**：登录 Web 管理端，进入 **系统设置 ➔ 门店管理**，重新复制该门店专用的 E6 API Key 并核对大写门店编码。
+
+### Q3: 电脑重启后同步中断了怎么办？
+- **解决方案**：
+  1. 将 `E6Sync.exe` 的快捷方式放入 Windows 的启动文件夹（按 `Win + R` 输入 `shell:startup`）。
+  2. 或配置为 Windows 任务计划程序，勾选“不管用户是否登录都要运行”。
+  3. 由于 `config.json` 保存了最后同步的时间戳，程序重新启动后会自动从上一次成功的位置继续向后抓取，绝不会丢失中间产生的订单。

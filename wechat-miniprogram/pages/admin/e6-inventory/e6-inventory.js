@@ -130,14 +130,16 @@ Page({
       const exactMatches = products.filter((item) =>
         String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
       );
-      const selectedProduct = this.data.initialProductId
-        ? products.find((item) => Number(item.id) === this.data.initialProductId) || null
-        : exactMatches.length === 1 ? exactMatches[0] : null;
       this.setData({
-        products: selectedProduct ? [] : products,
-        searched: selectedProduct ? false : true,
-        selectedProduct: selectedProduct ? decorateProduct(selectedProduct) : null
+        products,
+        searched: true,
+        selectedProduct: null
       });
+      if (autoSelect && exactMatches.length === 1) {
+        wx.navigateTo({
+          url: `/pages/admin/e6-inventory-detail/e6-inventory-detail?productCode=${encodeURIComponent(exactMatches[0].productCode)}&productId=${exactMatches[0].id}&storeId=${encodeURIComponent(this.data.storeId || '')}`
+        });
+      }
     } finally {
       if (requestId === searchRequestId) this.setData({ searchLoading: false });
     }
@@ -153,13 +155,22 @@ Page({
       const storeIndex = Math.max(0, stores.findIndex((item) => String(item.id || '') === this.data.initialStoreId));
       this.setData({ stores, storeIndex, storeName: stores[storeIndex]?.name || '全部门店' });
     }
-    if (this.data.initialProductCode && !this.data.selectedProduct) await this.search(true);
+    if (this.data.initialProductCode && !this.data.searched) await this.search(true, true);
   },
 
   onStoreChange(e) {
-    const storeIndex = Number(e.detail.value || 0);
-    const store = this.data.stores[storeIndex] || {};
-    this.setData({ storeIndex, storeId: store.id || '', storeName: store.name || '全部门店', products: [], selectedProduct: null, searched: false });
+    const storeId = e.detail.storeId !== undefined
+      ? e.detail.storeId
+      : (this.data.stores[Number(e.detail.value || 0)]?.id || '');
+    const store = e.detail.store || this.data.stores[Number(e.detail.value || 0)] || {};
+    this.setData({
+      storeIndex: e.detail.storeIndex !== undefined ? e.detail.storeIndex : Number(e.detail.value || 0),
+      storeId: storeId || store.id || '',
+      storeName: store.name || '全部门店',
+      products: [],
+      selectedProduct: null,
+      searched: false
+    });
     if (this.data.keyword.trim()) this.search(true);
   },
 
@@ -172,11 +183,11 @@ Page({
     });
   },
 
-  async selectProduct(e) {
+  selectProduct(e) {
     const product = this.data.products[Number(e.currentTarget.dataset.index)];
     if (!product) return;
     wx.navigateTo({
-      url: `/pages/admin/e6-inventory/e6-inventory?productCode=${encodeURIComponent(product.productCode)}&productId=${product.id}&storeId=${encodeURIComponent(this.data.storeId || '')}`
+      url: `/pages/admin/e6-inventory-detail/e6-inventory-detail?productCode=${encodeURIComponent(product.productCode)}&productId=${product.id}&storeId=${encodeURIComponent(this.data.storeId || '')}`
     });
   }
 });

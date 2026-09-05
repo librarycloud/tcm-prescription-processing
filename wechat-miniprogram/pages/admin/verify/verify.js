@@ -1,6 +1,5 @@
 import { safeScanCode } from '../../../utils/scanner';
 import { getPackageByPickupCode, verifyPackage } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import {
   formatDate,
   formatPickupCode,
@@ -14,7 +13,6 @@ import {
 
 Page({
   data: {
-    activeTab: 'packages',
     pickupCode: '',
     pickupQrContent: '',
     pickupMethodOptions: PICKUP_METHOD_OPTIONS,
@@ -26,8 +24,6 @@ Page({
     lookupLoading: false,
     verifyLoading: false
   },
-
-  onTabChange: onAdminTabChange,
 
   onLoad(options) {
     const qrContent = String(options.pickupQrContent || options.qrContent || '').trim();

@@ -7,7 +7,6 @@ import {
   getStores,
   recountGoodsCheckItem
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 
@@ -92,7 +91,6 @@ Page({
     initialProductId: null,
     initialKeyword: '',
     initialCandidateFilter: '',
-    activeTab: 'overview',
     checksLoading: false,
     checks: [],
     selectedCheck: null,
@@ -124,8 +122,6 @@ Page({
     countForm: { mode: 'initial', itemId: null, product: null, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: false },
     saving: false
   },
-
-  onTabChange: onAdminTabChange,
 
   onUnload() {
     clearTimeout(candidateSearchTimer);

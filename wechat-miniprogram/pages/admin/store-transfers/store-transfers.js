@@ -12,7 +12,6 @@ import {
   updateStoreTransfer,
   updateStoreTransferReturn
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 
@@ -94,7 +93,6 @@ function decorateDetail(detail) {
 Page({
   data: {
     initialTransferId: null,
-    activeTab: 'overview',
     user: {},
     isSuperAdmin: false,
     keyword: '',
@@ -127,8 +125,6 @@ Page({
     returnForm: { returnDate: localDate(), remark: '', items: [] },
     dateValue: localDate(7)
   },
-
-  onTabChange: onAdminTabChange,
 
   async onPullDownRefresh() {
     clearResponseCache();

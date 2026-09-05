@@ -47,17 +47,12 @@
   <t-loading wx:if="{{loading}}" text="加载中" />
   <t-empty wx:elif="{{!list.length}}" description="暂无处方" />
 
-  <view class="pager">
-    <t-button theme="light" size="small" disabled="{{page <= 1}}" bind:tap="prevPage">上一页</t-button>
-    <view class="pager-current"><text>{{page}}</text><text class="muted"> / {{pages}} 页</text></view>
-    <t-button size="small" disabled="{{page >= pages}}" bind:tap="nextPage">下一页</t-button>
+  <view class="list-footer" wx:if="{{list.length}}">
+    <view wx:if="{{loadingMore}}" class="loading-more">
+      <t-loading theme="dots" size="36rpx" text="加载中..." />
+    </view>
+    <view wx:elif="{{page >= pages}}" class="no-more">
+      <text class="muted">已加载全部处方</text>
+    </view>
   </view>
-
-  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
-    <t-tab-bar-item value="overview" icon="home">库存</t-tab-bar-item>
-    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
-    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
-    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
-    <t-tab-bar-item value="business" icon="app">业务</t-tab-bar-item>    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
-  </t-tab-bar>
 </view>

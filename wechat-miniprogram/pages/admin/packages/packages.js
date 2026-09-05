@@ -22,9 +22,10 @@ Page({
     storeId: '',
     storeName: '全部门店',
     page: 1,
-    pageSize: 10,
+    pageSize: 15,
     pages: 1,
     loading: false,
+    loadingMore: false,
     list: []
   },
 
@@ -57,15 +58,16 @@ Page({
 
   async onPullDownRefresh() {
     clearResponseCache();
+    this.setData({ page: 1 });
     try {
-      await this.load();
+      await this.load(1);
     } finally {
       wx.stopPullDownRefresh();
     }
   },
 
-  async load() {
-    this.setData({ loading: true });
+  async load(page = 1) {
+    this.setData({ loading: true, page });
     try {
       const data = await getPackages({
         keyword: this.data.keyword,
@@ -74,7 +76,7 @@ Page({
         sortBy: this.data.sortBy,
         sortOrder: 'desc',
         storeId: this.data.storeId,
-        page: this.data.page,
+        page,
         pageSize: this.data.pageSize
       });
 
@@ -129,26 +131,51 @@ Page({
   },
 
   onStoreChange(e) {
-    const storeIndex = Number(e.detail.value);
+    const storeId = e.detail.storeId !== undefined
+      ? e.detail.storeId
+      : (this.data.stores[Number(e.detail.value)]?.id || '');
     this.setData({
-      storeIndex,
-      storeId: this.data.stores[storeIndex].id,
-      storeName: this.data.stores[storeIndex].name,
+      storeId,
       page: 1
     });
     this.load();
   },
 
-  prevPage() {
-    if (this.data.page <= 1) return;
-    this.setData({ page: this.data.page - 1 });
-    this.load();
-  },
-
-  nextPage() {
-    if (this.data.page >= this.data.pages) return;
-    this.setData({ page: this.data.page + 1 });
-    this.load();
+  async onReachBottom() {
+    if (this.data.loading || this.data.loadingMore || this.data.page >= this.data.pages) return;
+    this.setData({ loadingMore: true });
+    try {
+      const nextPage = this.data.page + 1;
+      const data = await getPackages({
+        keyword: this.data.keyword,
+        status: this.data.status,
+        dateScope: this.data.dateScope,
+        sortBy: this.data.sortBy,
+        sortOrder: 'desc',
+        storeId: this.data.storeId,
+        page: nextPage,
+        pageSize: this.data.pageSize
+      });
+      const newItems = (data.list || []).map((item) => ({
+        ...item,
+        pickupCode: formatPickupCode(item.pickupCode),
+        storeName: item.store ? item.store.name : '',
+        receiverPhoneMasked: maskPhone(item.receiverPhone),
+        createdAtText: formatDate(item.createdAt),
+        pickedAtText: formatDate(item.pickedAt),
+        pickupMethodText: pickupMethodText(item.pickupMethod),
+        statusText: statusText(item.status),
+        statusTheme: statusTheme(item.status),
+        isPending: isPendingStatus(item.status)
+      }));
+      this.setData({
+        list: this.data.list.concat(newItems),
+        page: nextPage,
+        pages: data.pagination?.pages || 1
+      });
+    } finally {
+      this.setData({ loadingMore: false });
+    }
   },
 
   goDetail(e) {

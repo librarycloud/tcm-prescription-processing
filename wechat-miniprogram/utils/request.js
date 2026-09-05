@@ -7,16 +7,54 @@ const BUSINESS_LIST_CACHE_TTL = 10 * 60 * 1000;
 const DETAIL_CACHE_TTL = 5 * 60 * 1000;
 const OPERATION_CACHE_TTL = 30 * 1000;
 const USER_PACKAGE_CACHE_TTL = 30 * 1000;
+const DEFAULT_REQUEST_TIMEOUT = 15000;
+
 const memoryCache = {};
 const inflightRequests = {};
 let cacheToken = null;
 let responseCacheVersion = 0;
+let isHandling401 = false;
 
 function routeOf(url) {
   return String(url || '').split('?')[0];
 }
 
-// Keep operational data short-lived while reusing stable reference data.
+export function getDomain(url) {
+  const route = routeOf(url);
+  if (
+    route === '/admin/doctors' ||
+    route === '/admin/dictionaries' ||
+    route === '/stores' ||
+    route === '/admin/store-transfers/stores' ||
+    route === '/admin/herb-locations/stores' ||
+    route === '/admin/processing-equipment' ||
+    route === '/admin/products/stores' ||
+    route === '/admin/e6-pharmacy/category-mappings' ||
+    route === '/admin/e6-pharmacy/barcode-template'
+  ) {
+    return 'reference';
+  }
+  if (route.startsWith('/admin/prescriptions')) return 'prescriptions';
+  if (route.startsWith('/admin/packages') || route.startsWith('/user/packages')) return 'packages';
+  if (route.startsWith('/admin/processing-plans')) return 'processing';
+  if (route.startsWith('/admin/store-transfers')) return 'transfers';
+  if (route.startsWith('/admin/herb-locations')) return 'herb-locations';
+  if (route.startsWith('/admin/product-differences') || route.startsWith('/admin/e6-pharmacy') || route.startsWith('/admin/products')) return 'inventory';
+  if (route.startsWith('/admin/yd-goods-check')) return 'goods-check';
+  if (route.startsWith('/admin/stats')) return 'stats';
+  return 'other';
+}
+
+const WRITE_INVALIDATION_MAP = {
+  prescriptions: ['prescriptions', 'stats'],
+  packages: ['packages', 'stats'],
+  processing: ['processing', 'packages', 'stats'],
+  transfers: ['transfers', 'inventory', 'stats'],
+  'herb-locations': ['herb-locations'],
+  inventory: ['inventory', 'stats'],
+  'goods-check': ['goods-check', 'inventory', 'stats']
+};
+
 function cacheTtl(url) {
   const route = routeOf(url);
   if (route === '/admin/processing-plans/by-scan' ||
@@ -69,8 +107,9 @@ function hash(value) {
 }
 
 function responseKey(options, token) {
+  const domain = getDomain(options.url);
   const source = `${options.method || 'GET'}|${options.url}|${stableSerialize(options.data || {})}|${token || ''}`;
-  return `${CACHE_PREFIX}${hash(source)}`;
+  return `${CACHE_PREFIX}${domain}:${hash(source)}`;
 }
 
 function cacheKey(options, token) {
@@ -126,16 +165,88 @@ function writeCached(key, data, ttl) {
   }
 }
 
-export function clearResponseCache() {
+/**
+ * Invalidate cached responses for specific domain(s).
+ * When domains is omitted or null, clears business caches but preserves reference data unless includeReference=true.
+ */
+export function invalidateCache(domains = null) {
   responseCacheVersion += 1;
-  Object.keys(memoryCache).forEach((key) => delete memoryCache[key]);
-  Object.keys(inflightRequests).forEach((key) => delete inflightRequests[key]);
+  const domainList = Array.isArray(domains) ? domains : (domains ? [domains] : null);
+
+  const shouldRemove = (key) => {
+    if (!key.startsWith(CACHE_PREFIX)) return false;
+    if (!domainList) return true; // all domains matching
+    const match = key.slice(CACHE_PREFIX.length).split(':')[0];
+    return domainList.includes(match);
+  };
+
+  Object.keys(memoryCache).forEach((key) => {
+    if (shouldRemove(key)) delete memoryCache[key];
+  });
+  Object.keys(inflightRequests).forEach((key) => {
+    if (shouldRemove(key)) delete inflightRequests[key];
+  });
+
   try {
     const keys = wx.getStorageInfoSync().keys || [];
-    keys.filter((key) => key.startsWith(CACHE_PREFIX)).forEach((key) => wx.removeStorageSync(key));
+    keys.filter(shouldRemove).forEach((key) => wx.removeStorageSync(key));
   } catch (error) {
     // Cache cleanup is best effort.
   }
+}
+
+/**
+ * Clear cached responses.
+ * @param {Object} [options]
+ * @param {boolean} [options.includeReference=false] - Whether to also clear stable reference data (stores, doctors, dictionaries).
+ * @param {string} [options.domain=null] - Clear only this domain if specified.
+ */
+export function clearResponseCache(options = {}) {
+  const { includeReference = false, domain = null } = (typeof options === 'object' && options) ? options : {};
+  if (domain) {
+    invalidateCache([domain]);
+    return;
+  }
+
+  if (includeReference) {
+    invalidateCache(null); // clears all
+  } else {
+    // Clear all business domains, keeping 'reference'
+    const nonRefDomains = Object.keys(WRITE_INVALIDATION_MAP).concat(['stats', 'other']);
+    invalidateCache(nonRefDomains);
+  }
+}
+
+/**
+ * Handle write operations by selectively invalidating only the affected domain caches.
+ */
+function handleWriteInvalidation(url) {
+  const domain = getDomain(url);
+  const targets = WRITE_INVALIDATION_MAP[domain] || [domain, 'stats'];
+  invalidateCache(targets);
+}
+
+/**
+ * Mutex lock for concurrent 401 handling.
+ */
+export function handleUnauthorized(message = '登录已过期') {
+  if (isHandling401) return;
+  isHandling401 = true;
+  clearSession();
+  clearResponseCache({ includeReference: true });
+  wx.showToast({ title: message, icon: 'none' });
+  wx.reLaunch({
+    url: '/pages/login/login',
+    complete() {
+      setTimeout(() => {
+        isHandling401 = false;
+      }, 1500);
+    }
+  });
+}
+
+export function reset401Lock() {
+  isHandling401 = false;
 }
 
 export function request(options) {
@@ -160,6 +271,7 @@ export function request(options) {
     wx.request({
       url: `${getBaseUrl()}${options.url}`,
       method,
+      timeout: options.timeout || DEFAULT_REQUEST_TIMEOUT,
       data: options.data || {},
       header: {
         'content-type': 'application/json',
@@ -171,15 +283,15 @@ export function request(options) {
           if (method === 'GET' && ttl && requestCacheVersion === responseCacheVersion) {
             writeCached(key, body.data, ttl);
           }
-          if (method !== 'GET') clearResponseCache();
+          if (method !== 'GET') {
+            handleWriteInvalidation(options.url);
+          }
           resolve(body.data);
           return;
         }
 
         if (res.statusCode === 401) {
-          clearSession();
-          clearResponseCache();
-          wx.reLaunch({ url: '/pages/login/login' });
+          handleUnauthorized(body.message || '登录已过期');
           reject(new Error(body.message || '登录已过期'));
           return;
         }
@@ -207,20 +319,19 @@ export function uploadFile(options) {
       url: `${getBaseUrl()}${options.url}`,
       filePath: options.filePath,
       name: options.name || 'file',
+      timeout: options.timeout || (DEFAULT_REQUEST_TIMEOUT * 2),
       header: token ? { Authorization: `Bearer ${token}` } : {},
       formData: options.formData || {},
       success(res) {
         try {
           const body = JSON.parse(res.data || '{}');
           if (body.code === 0) {
-            clearResponseCache();
+            handleWriteInvalidation(options.url);
             resolve(body.data);
             return;
           }
           if (res.statusCode === 401) {
-            clearSession();
-            clearResponseCache();
-            wx.reLaunch({ url: '/pages/login/login' });
+            handleUnauthorized(body.message || '登录已过期');
             reject(new Error(body.message || '登录已过期'));
             return;
           }

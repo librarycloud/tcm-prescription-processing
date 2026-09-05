@@ -69,10 +69,15 @@
   margin-top: 20rpx;
 }
 
-.pager {
+.list-footer {
+  padding: 24rpx 0 16rpx;
+  text-align: center;
+}
+
+.loading-more, .no-more {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 24rpx;
-  margin: 32rpx 0;
+  font-size: 24rpx;
+  color: #86909c;
 }

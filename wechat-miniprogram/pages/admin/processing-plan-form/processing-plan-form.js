@@ -4,7 +4,7 @@ import {
   getPrescriptions,
   updateProcessingPlan
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { getUser } from '../../../utils/auth';
 import { PICKUP_METHOD_OPTIONS, pickupMethodText } from '../../../utils/format';
 
 const PRIORITY_OPTIONS = [
@@ -34,7 +34,6 @@ function prescriptionLabel(item) {
 
 Page({
   data: {
-    activeTab: 'processing',
     id: null,
     isEdit: false,
     loading: false,
@@ -80,8 +79,6 @@ Page({
       remark: ''
     }
   },
-
-  onTabChange: onAdminTabChange,
 
   async onLoad(options) {
     const editing = options.id

@@ -15,9 +15,7 @@
   </view>
 
   <view class="filters">
-    <picker wx:if="{{isSuperAdmin}}" mode="selector" range="{{stores}}" range-key="name" value="{{storeIndex}}" bindchange="onStoreChange">
-      <t-button size="small" variant="outline">{{storeName}}</t-button>
-    </picker>
+    <store-picker value="{{storeId}}" bind:change="onStoreChange" />
     <view class="status-filter">
       <t-button size="small" theme="{{status === '' ? 'primary' : 'default'}}" bind:tap="setAll">全部</t-button>
       <t-button size="small" theme="{{status === 0 ? 'primary' : 'default'}}" bind:tap="setPending">待取</t-button>
@@ -49,10 +47,13 @@
   <t-loading wx:if="{{loading}}" text="加载中" />
   <t-empty wx:elif="{{!list.length}}" description="暂无包裹" />
 
-  <view class="pager">
-    <t-button theme="light" size="small" disabled="{{page <= 1}}" bind:tap="prevPage">上一页</t-button>
-    <view class="muted">{{page}} / {{pages}}</view>
-    <t-button size="small" disabled="{{page >= pages}}" bind:tap="nextPage">下一页</t-button>
+  <view class="list-footer" wx:if="{{list.length}}">
+    <view wx:if="{{loadingMore}}" class="loading-more">
+      <t-loading theme="dots" size="36rpx" text="加载中..." />
+    </view>
+    <view wx:elif="{{page >= pages}}" class="no-more">
+      <text class="muted">已加载全部包裹</text>
+    </view>
   </view>
 
   <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">

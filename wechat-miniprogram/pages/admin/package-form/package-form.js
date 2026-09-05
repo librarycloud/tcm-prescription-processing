@@ -1,6 +1,5 @@
 import { safeScanCode } from '../../../utils/scanner';
 import { createPackage, getPackageDetail, getStores, matchAdminUsers, updatePackage } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { normalizeExpressTrackingNo, PICKUP_METHOD_OPTIONS, pickupMethodText } from '../../../utils/format';
 import { getUser } from '../../../utils/auth';
 
@@ -14,7 +13,6 @@ function isValidPhone(phone) {
 
 Page({
   data: {
-    activeTab: 'packages',
     id: null,
     isEdit: false,
     loading: false,
@@ -42,8 +40,6 @@ Page({
       expressTrackingNo: ''
     }
   },
-
-  onTabChange: onAdminTabChange,
 
   onLoad(options) {
     const user = getUser();

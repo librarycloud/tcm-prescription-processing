@@ -159,8 +159,8 @@ Page({
     typeIndex: 0,
     type: '',
     keyword: '',
-    locations: [],
     filteredLocations: [],
+    totalLocationsCount: 0,
     herbs: [],
     loading: false,
     saving: false,
@@ -239,23 +239,45 @@ Page({
         label: [herb.code, herb.name, herb.specification].filter(Boolean).join(' · '),
         searchText: herbSearchText(herb)
       }));
-      this.setData({ locations, herbs }, () => this.applyFilter());
+      this._rawLocations = locations;
+      this._rawHerbs = herbs;
+      this.setData({ herbs }, () => this.applyFilter());
     } finally { this.setData({ loading: false }); }
   },
 
   applyFilter() {
     const keyword = this.data.keyword.trim().toLowerCase();
-    const filteredLocations = this.data.locations
+    const all = (this._rawLocations || [])
       .filter((location) => {
         if (this.data.type && location.type !== this.data.type) return false;
         if (!keyword) return true;
         return location.searchText.includes(keyword);
       })
       .map((location) => decorateLocation(location, keyword));
+
+    this._allFilteredLocations = all;
+    const initialBatch = all.slice(0, 30);
     const selectedLocation = this.data.selectedLocation
-      ? decorateLocation(this.data.locations.find((location) => Number(location.id) === Number(this.data.selectedLocation.id)) || this.data.selectedLocation, keyword)
+      ? decorateLocation(
+          (this._rawLocations || []).find((location) => Number(location.id) === Number(this.data.selectedLocation.id)) || this.data.selectedLocation,
+          keyword
+        )
       : null;
-    this.setData({ filteredLocations, selectedLocation });
+    this.setData({
+      filteredLocations: initialBatch,
+      totalLocationsCount: all.length,
+      selectedLocation
+    });
+  },
+
+  onReachBottom() {
+    if (!this._allFilteredLocations) return;
+    const currentLen = this.data.filteredLocations.length;
+    if (currentLen >= this._allFilteredLocations.length) return;
+    const nextChunk = this._allFilteredLocations.slice(currentLen, currentLen + 30);
+    this.setData({
+      filteredLocations: this.data.filteredLocations.concat(nextChunk)
+    });
   },
 
   onKeywordChange(e) { this.setData({ keyword: e.detail.value }, this.applyFilter); },
@@ -269,21 +291,16 @@ Page({
   },
 
   selectLocation(e) {
-    const location = this.data.locations.find((item) => Number(item.id) === Number(e.currentTarget.dataset.id));
+    const id = Number(e.currentTarget.dataset.id);
+    const location = (this._rawLocations || []).find((item) => Number(item.id) === id);
     if (!location) return;
-    wx.navigateTo({
-      url: `/pages/admin/herb-locations/herb-locations?locationId=${location.id}&storeId=${encodeURIComponent(this.data.storeId || '')}`
-    });
+    this.openLocationById(location.id);
   },
   openLocationById(locationId) {
-    const location = this.data.locations.find((item) => Number(item.id) === Number(locationId));
+    const location = (this._rawLocations || []).find((item) => Number(item.id) === Number(locationId));
     if (location) this.setData({ selectedLocation: decorateLocation(location, this.data.keyword), detailVisible: true });
   },
   closeDetail() {
-    if (this.data.initialLocationId) {
-      wx.navigateBack();
-      return;
-    }
     this.setData({ detailVisible: false, selectedLocation: null });
   },
 
@@ -395,7 +412,7 @@ Page({
 
   refreshSelectedLocation() {
     if (!this.data.selectedLocation) return;
-    const selectedLocation = this.data.locations.find((item) => Number(item.id) === Number(this.data.selectedLocation.id));
+    const selectedLocation = (this._rawLocations || []).find((item) => Number(item.id) === Number(this.data.selectedLocation.id));
     this.setData({ selectedLocation: selectedLocation ? decorateLocation(selectedLocation, this.data.keyword) : null });
   },
   closePositionEdit() { this.setData({ positionEditVisible: false }); },

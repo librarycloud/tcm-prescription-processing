@@ -1,79 +1,96 @@
 # 药房助手 Android 管理员端
 
-Kotlin + Jetpack Compose 的管理员端原生 Android App，最低支持 Android 12（API 31）。当前版本已接入现有 Fastify 后端的管理员登录和概览统计接口，列表接口也已提供统一客户端封装；部分页面保留演示数据用于离线验证布局。
+基于 Kotlin + Jetpack Compose 打造的原生 Android 手持工作台。该端专为门店药师、仓库人员和盘点员工设计，将 PC 端的复杂操作精简为适合移动扫码及现场作业的高效链路。最低支持 `Android 12 (API 31)`。
 
-库存扫描页使用 Google ML Kit 标准离线字符识别（Latin/数字）和条码扫描。无需下载中文模型，直接使用内置轻量引擎零拷贝流式解析；业务结果仅提取 `SKU`/`5KU` 标签关联的 9 位数字（自动排除 11 位手机号、13 位 UPC 条码、19 位订单号与价格），连续两帧一致后自动回填搜索框。
+---
 
-## 本地构建
+## 核心特性
 
-需要 JDK 21、Android SDK 36 和 Gradle 8.10。构建 Debug APK：
+- **现代架构**：100% Jetpack Compose 声明式 UI，MVVM 架构，Kotlin Coroutines + Flow。
+- **离线智能视觉**：内置 Google ML Kit 离线引擎，实现毫秒级相机帧零拷贝解析。专供复杂的药房环境：
+  - **连续帧防抖**：连续两帧识别一致后自动提取并回填结果。
+  - **规则引擎剥离**：自动过滤 11 位手机号、13 位 UPC 条码、订单号等无效干扰项，精准抓取 `SKU`/`5KU` 标签前缀关联的 9 位目标数字码。
+  - **无需联网**：不依赖后端 OCR，无隐私泄漏风险，断网也可完成初盘扫描。
+- **业务闭环**：完整接入了 Fastify 后端的概览指标、包裹收发、E6 药材库检索、库存差异台账、药店库存初盘复盘以及跨门店借调。
+
+---
+
+## 本地开发构建
+
+环境依赖：`JDK 21`、`Android SDK 36`、`Gradle 8.10`
+
+### 构建 Debug APK
+
+在项目根目录执行：
 
 ```bash
 gradle --no-daemon assembleDebug
 ```
 
-## 代码结构
+产物路径：`app/build/outputs/apk/debug/app-debug.apk`。
 
-Android 端当前仅面向管理员使用。`MainActivity` 负责登录状态、导航壳和页面路由；业务页面按模块拆分在 `app/src/main/java/com/tcm/admin/ui/screens`，共享的包裹模型与 Compose 组件位于 `ui/AppModels.kt` 和 `ui/AppComponents.kt`。接口访问统一封装在 `ApiClient.kt`，扫码入口保留在独立的 `ScannerActivity`。
+### 后端地址配置与登录
 
-产物位于 `app/build/outputs/apk/debug/app-debug.apk`。
-
-## GitHub Actions
-
-仓库中的 `.github/workflows/android-debug.yml` 会在 `android-app` 发生变更时自动构建并上传 Debug APK，无需配置正式签名证书。
-
-## 后端地址与登录
-
-Debug 包默认请求 `http://10.0.2.2:3000`，这是 Android 模拟器访问宿主机 localhost 的地址。真机调试或 Release 构建时，可通过 Gradle 参数或环境变量指定地址：
+Debug 构建默认请求 `http://10.0.2.2:3000`（即 Android 模拟器访问宿主机的环回地址）。
+真机调试或正式上线时，可动态注入真实接口地址：
 
 ```bash
 gradle assembleRelease -PAPI_BASE_URL=https://api.tcm.example.com
 ```
 
-GitHub Actions 使用仓库 Secret `API_BASE_URL`；手动运行 Debug workflow 时也可以在 `Run workflow` 的 `api_base_url` 输入框中直接填写地址。未配置时 Debug 使用模拟器地址，Release 默认使用 `https://api.tcm.example.com`。登录使用后端 `POST /auth/login`，JWT 会保存在本地以便下次打开应用直接进入工作台，退出登录时清除。
+- **登录流转**：调用后端 `POST /auth/login` 成功后，JWT 会持久化至本地 DataStore/SharedPreferences。
+- **安全策略**：Debug 变体允许明文 HTTP 流量方便本地联调，Release 变体会强制关闭 Cleartext Traffic，要求所有网络请求必须使用 HTTPS。
 
-Debug 允许 HTTP 仅用于本地开发，Release 会强制关闭明文流量，因此正式 API 必须使用 HTTPS。
+---
 
-## Release 签名
+## 自动化流水线 (CI/CD)
 
-正式签名需要在 GitHub Secrets 配置：
+仓库已集成 GitHub Actions，代码变更时可自动完成构建与封包。
 
-- `ANDROID_KEYSTORE_BASE64`：keystore 文件的 Base64 内容
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+### 1. 自动构建 Debug
+工作流文件 `.github/workflows/android-debug.yml` 监听推送，自动生成 Debug APK 并挂载为 GitHub Artifacts，无需任何签名证书即可下载安装测试。
 
-Release workflow 会将 Base64 临时还原为 `android-app/release.keystore`，构建签名 APK 后删除该文件；keystore 不会进入 Git。
+### 2. 自动打包 Release 签名
+若需流水线自动产出可上架/可分发的 Release APK，需在 GitHub 仓库中配置以下 Secrets：
 
-首次生成 keystore（在本地安全目录执行）：
+- `ANDROID_KEYSTORE_BASE64`：你的 keystore 文件的 Base64 字符串
+- `ANDROID_KEYSTORE_PASSWORD`：仓库密码
+- `ANDROID_KEY_ALIAS`：密钥别名
+- `ANDROID_KEY_PASSWORD`：密钥密码
 
-```bash
-keytool -genkeypair -v \
-  -keystore release.keystore \
-  -alias tcm-admin \
-  -keyalg RSA -keysize 2048 -validity 10000
+#### 如何生成与配置 Keystore（首次执行）：
+
+1. 生成密钥对：
+   ```bash
+   keytool -genkeypair -v \
+     -keystore release.keystore \
+     -alias tcm-admin \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. 转换为 Base64 填入 GitHub Secrets：
+   - **Linux / macOS**:
+     ```bash
+     base64 -w 0 release.keystore
+     ```
+   - **Windows PowerShell**:
+     ```powershell
+     [Convert]::ToBase64String([IO.File]::ReadAllBytes('.\release.keystore'))
+     ```
+
+工作流会在云端将 Base64 还原为临时 `.keystore` 文件进行签名，随后立即安全擦除，绝对不会将证书本身提交至代码仓库。
+
+---
+
+## 代码目录结构
+
+```text
+app/src/main/java/com/tcm/admin/
+├── MainActivity.kt        # 根容器，管理登录拦截壳与全局 Compose Navigation 路由
+├── ApiClient.kt           # Ktor / Retrofit 等网络层统一封装
+├── ScannerActivity.kt     # 独立的扫码容器与 ML Kit 硬件分析器层
+└── ui/
+    ├── AppModels.kt       # 领域模型 (包裹、盘点单、药材等 Data Class)
+    ├── AppComponents.kt   # 全局可复用 Compose 原子组件（状态球、扫码输入框）
+    └── screens/           # 页面级 Compose 视图，按功能模块分包
 ```
-
-将文件转为 Base64 后填入 GitHub Secret：
-
-```bash
-base64 -w 0 release.keystore
-```
-
-Windows PowerShell 可使用：
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('.\\release.keystore'))
-```
-
-本地签名构建时，把 keystore 放在 `android-app/release.keystore`，并设置四个环境变量；也可以通过 `-PANDROID_KEYSTORE_PASSWORD`、`-PANDROID_KEY_ALIAS` 和 `-PANDROID_KEY_PASSWORD` 传入。
-
-已封装的真实接口包括：
-
-- `GET /admin/stats`
-- `GET /admin/packages`
-- `GET /admin/e6-pharmacy/products`
-- `GET /admin/product-differences/stats`
-- `GET /admin/product-differences/logs`
-- `GET /admin/yd-goods-check`
-- `GET /admin/store-transfers`
