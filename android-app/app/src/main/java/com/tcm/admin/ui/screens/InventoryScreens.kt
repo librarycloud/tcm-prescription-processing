@@ -38,6 +38,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -357,13 +358,25 @@ internal fun InventoryScreen(
 
         // Loading
         if (loading) {
-            item(key = "loading") {
-                Spacer(Modifier.height(16.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+            if (products == null) {
+                item(key = "loading") {
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+                    }
+                }
+            } else {
+                item(key = "silent_loading") {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = Primary,
+                        trackColor = Primary.copy(alpha = 0.12f),
+                    )
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
@@ -590,10 +603,11 @@ internal fun InventoryScreen(
         }
 
         // When multiple products match and none is selected -> show selection list
-        if (selectedProduct == null && !loading) {
+        if (selectedProduct == null && (!loading || products != null)) {
             if (products != null) {
                 if (products!!.isEmpty()) {
-                    item(key = "empty_matches") {
+                    if (!loading) {
+                        item(key = "empty_matches") {
                         Spacer(Modifier.height(16.dp))
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -631,6 +645,7 @@ internal fun InventoryScreen(
                                 }
                             }
                         }
+                    }
                     }
                 } else {
                     item(key = "matches_header") {

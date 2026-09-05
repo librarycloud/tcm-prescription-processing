@@ -35,7 +35,7 @@ object ApiClient {
     // Those write requests clear the response cache, so reuse it between visits.
     private const val HERB_LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000L
     private const val E6_CACHE_TTL = 5 * 60 * 1000L
-    private const val BUSINESS_LIST_CACHE_TTL = 10 * 60 * 1000L
+    private const val BUSINESS_LIST_CACHE_TTL = 15 * 60 * 1000L
     private const val INVENTORY_CACHE_TTL = 5 * 60 * 1000L
     private const val OPERATION_CACHE_TTL = 30 * 1000L
     private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
@@ -427,7 +427,12 @@ object ApiClient {
 
     private fun invalidateCacheForMutation(path: String) {
         val route = path.substringBefore('?')
+        val isProcessingSubResource = route.contains("/equipment-usages") || route.contains("/photos") || route.endsWith("/dispensing-complete")
         val prefixesToInvalidate = when {
+            isProcessingSubResource -> {
+                val planId = Regex("/admin/processing-plans/(\\d+)").find(route)?.groupValues?.get(1)
+                if (planId != null) listOf("/admin/processing-plans/$planId") else emptyList()
+            }
             route.startsWith("/admin/prescriptions") -> listOf("/admin/prescriptions", "/admin/processing-plans", "/admin/stats")
             route.startsWith("/admin/processing-plans") -> listOf("/admin/processing-plans", "/admin/packages", "/admin/stats")
             route.startsWith("/admin/packages") -> listOf("/admin/packages", "/admin/processing-plans", "/admin/stats")

@@ -106,6 +106,10 @@ internal fun <T> rememberRetainedListValue(
 internal fun invalidateRetainedList(owner: String) {
     synchronized(retainedListValues) {
         retainedListValues["$owner:loadedQueryKey"]?.value = null
+        @Suppress("UNCHECKED_CAST")
+        (retainedListValues["$owner:reload"] as? MutableState<Int>)?.let { reloadState ->
+            reloadState.value = reloadState.value + 1
+        }
     }
 }
 

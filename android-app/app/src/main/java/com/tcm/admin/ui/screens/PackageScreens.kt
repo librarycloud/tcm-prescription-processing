@@ -42,6 +42,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -161,7 +162,6 @@ internal fun PackagesScreen(
     }
 
     LaunchedEffect(status, sortBy, selectedStoreId, reload, page) {
-        kotlinx.coroutines.delay(300)
         val queryKey = listOf(status, sortBy, keyword, selectedStoreId, reload, page).joinToString("|")
         if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
         error = null
@@ -324,6 +324,17 @@ internal fun PackagesScreen(
         if (error != null) {
             item(key = "error") {
                 Text(error!!, color = Danger, fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        if (loading && items != null) {
+            item(key = "revalidating_indicator") {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = Primary,
+                    trackColor = Primary.copy(alpha = 0.12f),
+                )
                 Spacer(Modifier.height(8.dp))
             }
         }

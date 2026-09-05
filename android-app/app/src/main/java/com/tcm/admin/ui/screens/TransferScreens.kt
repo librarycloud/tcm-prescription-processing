@@ -30,6 +30,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -91,16 +92,17 @@ internal fun TransfersScreen(
     var itemSpecification by remember { mutableStateOf("") }
     var itemQuantity by remember { mutableStateOf("1") }
     var itemUnit by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(reload, statusFilter, overdueOnly, selectedStoreId, page) {
-        kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, keyword, statusFilter, overdueOnly, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && transfers != null) return@LaunchedEffect
         error = null
+        loading = true
         runCatching {
             withContext(Dispatchers.IO) {
                 Triple(
@@ -116,11 +118,13 @@ internal fun TransfersScreen(
             stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
             stats = summary
             loadedQueryKey = queryKey
+            loading = false
+            refreshing = false
         }.onFailure {
             error = it.message ?: "加载门店调拨失败"
+            loading = false
             refreshing = false
         }
-        refreshing = false
     }
 
     LaunchedEffect(keyword) {
@@ -247,6 +251,15 @@ internal fun TransfersScreen(
         }
 
         Spacer(Modifier.height(14.dp))
+
+        if (loading && transfers != null) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = Primary,
+                trackColor = Primary.copy(alpha = 0.12f),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
 
         if (transfers == null && error == null) AppEmptyState("加载中...")
         if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)

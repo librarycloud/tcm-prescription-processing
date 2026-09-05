@@ -477,6 +477,9 @@ private fun TcmAdminApp() {
                     WorkflowOperationScreen(
                         plan = currentScreen.plan,
                         onNavigatePrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
+                        onPlanStatusChanged = {
+                            invalidateRetainedList("processing")
+                        },
                     )
                 }
                 is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {

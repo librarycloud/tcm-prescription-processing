@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.provider.MediaStore
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -47,6 +48,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -171,13 +173,9 @@ internal fun ProcessingScreenV2(
     var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
 
-    // A retained list can outlive the screen branch. Refresh whenever this page is entered.
-    LaunchedEffect(Unit) {
-        reload++
-    }
-
     // Dialog states
     var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
+    var quickScanPlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -202,7 +200,6 @@ internal fun ProcessingScreenV2(
     }
 
     LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, page) {
-        kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page).joinToString("|")
         val existingItems = if (mode == "plans") plans else pickupTasks
         if (loadedQueryKey == queryKey && existingItems != null) return@LaunchedEffect
@@ -513,19 +510,35 @@ internal fun ProcessingScreenV2(
             }
         }
 
-        // Loading
-        if (loading) {
+        val currentPlans = plans
+        val currentPickup = pickupTasks
+        val hasExistingPlans = currentPlans != null
+        val hasExistingPickup = currentPickup != null
+        val hasExistingData = if (mode == "plans") hasExistingPlans else hasExistingPickup
+
+        // Silent progress indicator during background refresh
+        if (loading && hasExistingData) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = Primary,
+                trackColor = Primary.copy(alpha = 0.12f),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Initial Loading (only show full spinner when there is no data at all yet)
+        if (loading && !hasExistingData) {
             Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
             }
         }
 
         // Processing Plans List
-        if (mode == "plans" && !loading) {
-            if (plans == null || plans!!.isEmpty()) {
-                AppEmptyState("暂无加工计划")
+        if (mode == "plans" && (!loading || hasExistingPlans)) {
+            if (currentPlans == null || currentPlans.isEmpty()) {
+                if (!loading) AppEmptyState("暂无加工计划")
             } else {
-                plans!!.forEach { plan ->
+                currentPlans.forEach { plan ->
                     key(plan.optInt("id")) {
                     val prescription = plan.optJSONObject("prescription")
                     val processType = plan.optJSONObject("processType")
@@ -657,7 +670,19 @@ internal fun ProcessingScreenV2(
                                 }
                             }
 
-
+                            if (status == 1) { // 加工中：快捷扫码
+                                Button(
+                                    onClick = { quickScanPlan = plan },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("扫码", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
 
                             if (status == 2 && !packageCreated) { // 完成但未生成包裹
                                 Button(
@@ -718,11 +743,11 @@ internal fun ProcessingScreenV2(
         }
 
         // Pickup List
-        if (mode == "pickup" && !loading) {
-            if (pickupTasks == null || pickupTasks!!.isEmpty()) {
-                AppEmptyState(if (pickupStatus == 0) "暂无待领取记录" else "暂无已领取记录")
+        if (mode == "pickup" && (!loading || hasExistingPickup)) {
+            if (currentPickup == null || currentPickup.isEmpty()) {
+                if (!loading) AppEmptyState(if (pickupStatus == 0) "暂无待领取记录" else "暂无已领取记录")
             } else {
-                pickupTasks!!.forEach { item ->
+                currentPickup.forEach { item ->
                     key(item.id) {
                         PackageSummaryCard(
                             item = item,
@@ -801,6 +826,23 @@ internal fun ProcessingScreenV2(
                 TextButton(onClick = { generatePackagePlan = null }) {
                     Text("取消")
                 }
+            },
+        )
+    }
+
+    quickScanPlan?.let { targetPlan ->
+        QuickScanDialog(
+            plan = targetPlan,
+            onDismiss = { quickScanPlan = null },
+            onOpenDetail = {
+                val p = quickScanPlan
+                quickScanPlan = null
+                if (p != null) {
+                    onNavigate(ScreenTarget.WorkflowOperation(p, "", "open"))
+                }
+            },
+            onEquipmentScanned = {
+                // Equipment scanned. Status remains 1, no list refresh needed.
             },
         )
     }
@@ -1319,6 +1361,7 @@ internal fun ProcessingPlanFormDialog(
 internal fun WorkflowOperationScreen(
     plan: JSONObject,
     onNavigatePrescription: ((Int) -> Unit)? = null,
+    onPlanStatusChanged: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1348,10 +1391,18 @@ internal fun WorkflowOperationScreen(
         return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
     }
 
+    val initialPlanStatus = plan.optInt("status")
     fun reload() {
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { ApiClient.processingWorkflow(plan.optInt("id")) } }
-                .onSuccess { workflow = it; error = null }
+                .onSuccess {
+                    workflow = it
+                    error = null
+                    val s = it.optInt("status", -1)
+                    if (s != -1 && s != initialPlanStatus) {
+                        onPlanStatusChanged?.invoke()
+                    }
+                }
                 .onFailure { error = it.message ?: "加载工序失败" }
         }
     }
@@ -1659,7 +1710,10 @@ internal fun WorkflowOperationScreen(
                     busy = true
                     scope.launch {
                         runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 1) } }
-                            .onSuccess { reload() }.onFailure { error = it.message ?: "开始调配失败" }
+                            .onSuccess {
+                                onPlanStatusChanged?.invoke()
+                                reload()
+                            }.onFailure { error = it.message ?: "开始调配失败" }
                         busy = false
                     }
                 },
@@ -2255,7 +2309,10 @@ internal fun WorkflowOperationScreen(
                                 activePackagings.forEach { ApiClient.finishEquipmentUsage(plan.optInt("id"), it.optInt("id")) }
                                 ApiClient.transitionPlan(plan.optInt("id"), 2)
                             }
-                        }.onSuccess { reload() }.onFailure { error = it.message ?: "完成加工失败" }
+                        }.onSuccess {
+                            onPlanStatusChanged?.invoke()
+                            reload()
+                        }.onFailure { error = it.message ?: "完成加工失败" }
                         busy = false
                     }
                 },
@@ -2589,6 +2646,326 @@ internal fun WorkflowOperationDialog(
         confirmButton = {
             Button(onClick = onClose) {
                 Text("完成")
+            }
+        },
+    )
+}
+
+@Composable
+internal fun QuickScanDialog(
+    plan: JSONObject,
+    onDismiss: () -> Unit,
+    onOpenDetail: () -> Unit,
+    onEquipmentScanned: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var workflow by remember { mutableStateOf<JSONObject?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var scanningAction by remember { mutableStateOf<String?>(null) }
+
+    val planId = plan.optInt("id")
+    val prescription = plan.optJSONObject("prescription")
+    val customerName = plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "顾客" }
+    val processType = plan.optJSONObject("processType")
+    val processTypeName = processType?.displayField("name", "") ?: plan.displayField("processTypeName", "代煎")
+    val batchNo = plan.optInt("batchNo", 1)
+
+    fun fetchWorkflow() {
+        scope.launch {
+            loading = true
+            runCatching { withContext(Dispatchers.IO) { ApiClient.processingWorkflow(planId) } }
+                .onSuccess {
+                    workflow = it
+                    error = null
+                    loading = false
+                }
+                .onFailure {
+                    error = it.message ?: "加载工序信息失败"
+                    loading = false
+                }
+        }
+    }
+
+    LaunchedEffect(planId) {
+        fetchWorkflow()
+    }
+
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        val action = scanningAction
+        scanningAction = null
+        if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank() && action != null) {
+            when {
+                action == "soaking" -> {
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val currentUsages = workflow?.optJSONArray("equipmentUsages")?.let { arr ->
+                                    (0 until arr.length()).map { arr.getJSONObject(it) }
+                                }.orEmpty()
+                                val usedPortions = currentUsages.filter { it.optInt("stage") == 3 }.map { it.optInt("portionNo", 1) }
+                                val portionNo = if (usedPortions.isNotEmpty()) (usedPortions.maxOrNull() ?: 0) + 1 else 1
+                                ApiClient.startEquipmentUsage(
+                                    planId,
+                                    JSONObject()
+                                        .put("stage", 3)
+                                        .put("portionNo", portionNo)
+                                        .put("equipmentCode", scanned)
+                                        .put("requestId", "android-${System.currentTimeMillis()}"),
+                                )
+                            }
+                        }.onSuccess {
+                            Toast.makeText(context, "已成功扫码记录浸泡桶", Toast.LENGTH_SHORT).show()
+                            onEquipmentScanned()
+                            fetchWorkflow()
+                        }.onFailure {
+                            error = it.message ?: "扫码浸泡失败"
+                        }
+                        busy = false
+                    }
+                }
+                action.startsWith("decoction_") -> {
+                    val portionNo = action.removePrefix("decoction_").toIntOrNull() ?: 1
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.startEquipmentUsage(
+                                    planId,
+                                    JSONObject()
+                                        .put("stage", 4)
+                                        .put("portionNo", portionNo)
+                                        .put("equipmentCode", scanned)
+                                        .put("requestId", "android-${System.currentTimeMillis()}"),
+                                )
+                            }
+                        }.onSuccess {
+                            Toast.makeText(context, "已成功扫码第 $portionNo 组煎煮", Toast.LENGTH_SHORT).show()
+                            onEquipmentScanned()
+                            fetchWorkflow()
+                        }.onFailure {
+                            error = it.message ?: "扫锅煎煮失败"
+                        }
+                        busy = false
+                    }
+                }
+                action.startsWith("packaging_") -> {
+                    val usageId = action.removePrefix("packaging_").toIntOrNull() ?: 0
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.startPackaging(
+                                    planId,
+                                    usageId,
+                                    JSONObject()
+                                        .put("equipmentCode", scanned)
+                                        .put("requestId", "android-${System.currentTimeMillis()}"),
+                                )
+                            }
+                        }.onSuccess {
+                            Toast.makeText(context, "已成功扫包装机开始打包", Toast.LENGTH_SHORT).show()
+                            onEquipmentScanned()
+                            fetchWorkflow()
+                        }.onFailure {
+                            error = it.message ?: "扫包装机失败"
+                        }
+                        busy = false
+                    }
+                }
+            }
+        }
+    }
+
+    val detail = workflow ?: plan
+    val photos = detail.optJSONArray("photos")
+    val photoCount = photos?.length() ?: 0
+    val currentStage = detail.optInt("currentStage", 1)
+    val usages = detail.optJSONArray("equipmentUsages")?.let { array ->
+        (0 until array.length()).map { array.getJSONObject(it) }
+    }.orEmpty()
+    val activeSoakings = usages.filter { it.optInt("stage") == 3 && it.optInt("status") == 1 }
+    val activeDecoctions = usages.filter { it.optInt("stage") == 4 && it.optInt("status") == 1 }
+    val activePackagings = usages.filter { it.optInt("stage") == 5 && it.optInt("status") == 1 }
+    val isDecoction = detail.optBoolean("isDecoction") || processTypeName.contains("煎")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("快捷扫码", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink)
+                Spacer(Modifier.height(2.dp))
+                Text("$customerName · $processTypeName (批次 #$batchNo)", color = Muted, fontSize = 12.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                if (error != null) {
+                    Surface(
+                        color = DangerSoft,
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(0.5.dp, Danger.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                    ) {
+                        Text(error!!, color = Danger, fontSize = 12.sp, modifier = Modifier.padding(8.dp))
+                    }
+                }
+
+                if (loading) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Primary, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                    }
+                } else if (!isDecoction) {
+                    Text("当前计划为非代煎工艺，无需扫码关联煎煮设备。", color = Muted, fontSize = 13.sp)
+                } else {
+                    // Step 1: 调配照片提示 (if needed)
+                    if (photoCount == 0 && currentStage == 1) {
+                        Surface(
+                            color = WarningSoft,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(0.5.dp, Warning.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                        ) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text("⚠️ 需先上传调配完成照片", color = Warning, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Spacer(Modifier.height(4.dp))
+                                Text("按规范要求，浸泡前需先完成调配审核拍照。", color = Muted, fontSize = 11.sp)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = onOpenDetail,
+                                    modifier = Modifier.fillMaxWidth().height(32.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                ) {
+                                    Text("前往工序详情拍照", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Step 2: 浸泡
+                    Text("工序 1: 浸泡", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        enabled = !busy,
+                        onClick = {
+                            scanningAction = "soaking"
+                            scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        },
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("扫码添加浸泡桶", fontSize = 12.sp)
+                    }
+
+                    // Step 3: 煎煮 (if active soakings ready to decoct)
+                    if (activeSoakings.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("工序 2: 扫锅煎煮", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
+                        Spacer(Modifier.height(4.dp))
+                        activeSoakings.forEach { item ->
+                            val portion = item.optInt("portionNo", 1)
+                            val equip = item.optJSONObject("equipment")?.displayField("name", "浸泡桶") ?: "浸泡桶"
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 $portion 组 · $equip", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Ink)
+                                    Text("等待转煎煮", fontSize = 10.sp, color = Muted)
+                                }
+                                Button(
+                                    enabled = !busy,
+                                    onClick = {
+                                        scanningAction = "decoction_$portion"
+                                        scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                                    },
+                                    modifier = Modifier.height(30.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                ) {
+                                    Text("扫锅煎煮", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Step 4: 包装 (if active decoctions ready to package)
+                    if (activeDecoctions.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("工序 3: 扫包装机", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
+                        Spacer(Modifier.height(4.dp))
+                        activeDecoctions.forEach { item ->
+                            val portion = item.optInt("portionNo", 1)
+                            val equip = item.optJSONObject("equipment")?.displayField("name", "煎药机") ?: "煎药机"
+                            val usageId = item.optInt("id")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("第 $portion 组 · $equip", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Ink)
+                                    Text("等待转打包", fontSize = 10.sp, color = Muted)
+                                }
+                                Button(
+                                    enabled = !busy,
+                                    onClick = {
+                                        scanningAction = "packaging_$usageId"
+                                        scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                                    },
+                                    modifier = Modifier.height(30.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                ) {
+                                    Text("扫包装机", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    if (activePackagings.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            color = SuccessSoft,
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                "当前有 ${activePackagings.size} 组正在打包中，完成后可在详情点击「加工完成」",
+                                color = Success,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onOpenDetail) {
+                Text("完整工序详情", fontSize = 12.sp)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.height(32.dp)) {
+                Text("关闭", fontSize = 12.sp)
             }
         },
     )

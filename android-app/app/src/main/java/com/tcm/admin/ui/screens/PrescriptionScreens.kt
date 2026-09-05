@@ -37,6 +37,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,6 +107,7 @@ internal fun PrescriptionsScreen(
     var filtersLoaded by rememberRetainedListValue(listOwner, "filtersLoaded") { false }
     var deleteTarget by remember { mutableStateOf<JSONObject?>(null) }
     var deleting by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -122,10 +124,10 @@ internal fun PrescriptionsScreen(
             }
     }
     LaunchedEffect(reload, status, doctorId, selectedStoreId, page) {
-        kotlinx.coroutines.delay(300)
         val queryKey = listOf(reload, keyword, status, doctorId, selectedStoreId, page).joinToString("|")
         if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
         error = null
+        loading = true
         runCatching {
             withContext(Dispatchers.IO) {
                 ApiClient.prescriptionsPaged(status, keyword.trim(), selectedStoreId.toIntOrNull(), doctorId, page)
@@ -134,10 +136,12 @@ internal fun PrescriptionsScreen(
             val list = data.optJSONArray("list") ?: JSONArray()
             items = (0 until list.length()).map { list.getJSONObject(it) }
             pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+            loading = false
             refreshing = false
             loadedQueryKey = queryKey
         }.onFailure {
             error = it.message ?: "加载处方失败"
+            loading = false
             refreshing = false
         }
     }
@@ -233,6 +237,17 @@ internal fun PrescriptionsScreen(
             item(key = "error") {
                 Spacer(Modifier.height(14.dp))
                 Text(error!!, color = Danger, fontSize = 13.sp)
+            }
+        }
+
+        if (loading && items != null) {
+            item(key = "revalidating_indicator") {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = Primary,
+                    trackColor = Primary.copy(alpha = 0.12f),
+                )
             }
         }
 
