@@ -88,6 +88,7 @@ internal fun AboutScreen(
     var downloadedUri by remember { mutableStateOf<Uri?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
     var downloadVersionName by remember { mutableStateOf("") }
+    var downloadFileName by remember { mutableStateOf("") }
 
     // Incremental update state
     var isPatchDownloading by remember { mutableStateOf(false) }
@@ -149,6 +150,12 @@ internal fun AboutScreen(
             val separator = if (url.contains('?')) "&" else "?"
             val downloadUrl = "$url${separator}versionCode=$versionCode&cacheKey=${java.net.URLEncoder.encode(cacheKey, "UTF-8")}"
             val fileName = "app-release-v${versionCode}-${versionName}-${cacheKey}.apk"
+            downloadFileName = fileName
+            val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            if (destDir != null) {
+                val destFile = File(destDir, fileName)
+                if (destFile.exists()) destFile.delete()
+            }
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle("药房助手更新 v$versionName")
                 .setDescription("药房助手 v$versionName 下载完成")
@@ -305,7 +312,15 @@ internal fun AboutScreen(
             when (state.status) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     downloadProgress = 100
-                    downloadedUri = state.uri
+                    val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                    val targetFile = if (destDir != null && downloadFileName.isNotBlank()) File(destDir, downloadFileName) else null
+                    downloadedUri = if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
+                        runCatching {
+                            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", targetFile)
+                        }.getOrDefault(state.uri)
+                    } else {
+                        state.uri
+                    }
                     downloadId = null
                     break
                 }
@@ -326,6 +341,8 @@ internal fun AboutScreen(
     val forceUpdate = latest?.optBoolean("forceUpdate", false) == true
     val isIncremental = latest?.optString("updateType") == "incremental"
     val patchSize = latest?.optLong("patchSize", 0L) ?: 0L
+    val fullApkSize = latest?.optLong("fallbackApkSize", 0L).takeIf { (it ?: 0L) > 0L }
+        ?: latest?.optLong("size", 0L) ?: 0L
 
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = CardShape) {
@@ -364,6 +381,8 @@ internal fun AboutScreen(
                         }
                         if (isIncremental && patchSize > 0) {
                             Text("补丁大小：${formatDownloadSize(patchSize)}（无需下载完整安装包）", color = Muted, fontSize = 12.sp)
+                        } else if (fullApkSize > 0) {
+                            Text("安装包大小：${formatDownloadSize(fullApkSize)}", color = Muted, fontSize = 12.sp)
                         }
                         latest!!.opt("publishedAt")?.let { publishedAt ->
                             serverDateTime(publishedAt, "").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
@@ -446,8 +465,16 @@ internal fun AboutScreen(
                         Text("安装版本 ${downloadVersionName.ifBlank { "更新" }}")
                     }
                 } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(onClick = { scope.launch { fetchLatest() } }, enabled = !checking, modifier = Modifier.weight(1f), shape = FieldShape) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { scope.launch { fetchLatest() } },
+                            enabled = !checking,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = FieldShape,
+                        ) {
                             Text("检查更新")
                         }
                         if (hasUpdate) {
@@ -461,16 +488,17 @@ internal fun AboutScreen(
                                     }
                                 },
                                 enabled = !checking,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = FieldShape,
                             ) {
                                 val btnText = when {
                                     forceUpdate && isIncremental -> "立即增量更新"
                                     forceUpdate -> "立即更新"
                                     isIncremental -> "增量更新 (${formatDownloadSize(patchSize)})"
+                                    fullApkSize > 0L -> "下载更新 (${formatDownloadSize(fullApkSize)})"
                                     else -> "下载更新"
                                 }
-                                Text(btnText)
+                                Text(btnText, maxLines = 1)
                             }
                         }
                     }
