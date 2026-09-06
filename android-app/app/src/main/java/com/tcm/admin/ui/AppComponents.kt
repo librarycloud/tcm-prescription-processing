@@ -734,14 +734,17 @@ internal fun InfoRowItem(
             .fillMaxWidth()
             .padding(vertical = verticalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Text(text = label, color = Muted, fontSize = 12.5.sp)
+        Spacer(Modifier.width(12.dp))
         Text(
             text = value,
             color = valueColor,
             fontSize = 12.5.sp,
             fontWeight = if (isBold) FontWeight.SemiBold else FontWeight.Normal,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f, fill = false),
         )
     }
 }

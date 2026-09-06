@@ -332,9 +332,19 @@ internal fun TransfersScreen(
 
                 Spacer(Modifier.height(8.dp))
 
+                val count = items.length()
+                val itemNames = (0 until count)
+                    .mapNotNull { items.optJSONObject(it)?.optString("itemName")?.trim() }
+                    .filter { it.isNotBlank() }
+                val itemsDisplay = when {
+                    itemNames.isEmpty() -> "-"
+                    count > 2 -> "${itemNames.take(2).joinToString("、")} 等${count}项"
+                    else -> itemNames.joinToString("、")
+                }
+
                 InfoRowItem(
                     label = "调拨物品",
-                    value = "${items.length()} 项",
+                    value = itemsDisplay,
                 )
                 InfoRowItem(
                     label = "调拨日期",
