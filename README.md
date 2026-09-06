@@ -124,9 +124,13 @@ flowchart TD
 
 | 文档名称 | 路径 | 适用群体与说明 |
 | --- | --- | --- |
-| **系统综合使用手册** | [docs/使用说明.md](docs/使用说明.md) | 全体管理员与操作人员必读：SOP 业务全流程、移动端使用与详尽 FAQ |
+| **系统综合使用手册** | [docs/使用说明.md](docs/使用说明.md) | 全体管理员与操作人员必读：SOP 业务全流程、移动端使用与业务规范 |
+| **生产部署与运维手册** | [docs/生产部署与运维手册.md](docs/生产部署与运维手册.md) | 运维/实施工程师：Linux 环境配置、Node 24、MariaDB/Redis 调优、Nginx 反代与 PM2 集群 |
+| **常见问题排障手册 (FAQ)** | [docs/常见问题与排障指南(FAQ).md](docs/常见问题与排障指南(FAQ).md) | 药房一线与实施支持：扫码枪/热敏打印机外设排查、E6 连接、短信失败与单据异常处理 |
 | **E6 处方同步对接文档** | [docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md) | 外部实施与开发人员：E6 同步接口规范、鉴权、报文定义与联调指南 |
-| **管理端前端工程文档** | [web-admin/README.md](web-admin/README.md) | 前端开发：Web 管理端环境配置、路由规范与组件说明 |
+| **后端核心服务文档** | [backend/README.md](backend/README.md) | 后端开发：Fastify 5 框架、Prisma MariaDB 适配、Redis 锁、环境变量字典与 RBAC |
+| **微信小程序端文档** | [wechat-miniprogram/README.md](wechat-miniprogram/README.md) | 前端开发：双端合一架构、TDesign 组件、Canvas 2D 凭证与页面清单 |
+| **管理端前端工程文档** | [web-admin/README.md](web-admin/README.md) | 前端开发：Web 管理端环境配置、路由权限守卫与业务组件说明 |
 | **用户端前端工程文档** | [web-user/README.md](web-user/README.md) | 前端开发：普通用户查件端配置与独立打包说明 |
 | **Android 药房助手说明** | [android-app/README.md](android-app/README.md) | 移动端开发：Kotlin + Compose 构建、扫码引擎、Keystore 签名与 CI/CD |
 | **E6Sync 同步客户端说明** | [E6Sync/README.md](E6Sync/README.md) | Windows 部署人员：WinForms .NET 4.6.2 客户端配置与定时同步规则 |
@@ -488,7 +492,7 @@ tar -czf /srv/backup/tcm-uploads-$(date +%F).tar.gz -C /srv/tcm-data uploads
 | :---: | :---: | --- |
 | **`0`** | **全局管理员** (SUPER_ADMIN) | 拥有全系统最高权限。可管理所有门店、所有账号、全局基础字典、系统参数、通知渠道密钥、打印模板与全量审计日志。 |
 | **`2`** | **门店管理员** (STORE_ADMIN) | 拥有**所辖单个门店**的完全业务权限。可管理本门店的处方、加工调度、包裹核销、斗谱布局、商品盘点、调拨登记、E6导入审核及门店员工账号。 |
-| **`3`** | **门店员工** (STORE_STAFF) | 现场操作人员。仅具备所辖门店的基础日常作业权限（加工排队开工、工序打卡、调配拍照、包裹打包核销、斗谱查药等），无法修改系统配置或删除核心数据。 |
+| **`3`** | **门店员工** (STORE_STAFF) | 现场一线作业人员。具备加工排队开工、工序打卡、调配拍照、包裹核销、斗谱查药、商品初盘录入与**跨门店调拨全流程（发起申请/调入确认/出库扫码/入库打卡）**；E6 处方导入与库存差异台账具备**只读查阅**权限（无权审批或登记），无法修改系统核心配置。 |
 | **`1`** | **普通用户** (USER) | 顾客身份。仅能通过用户端 Web 或小程序查看本人手机号关联的处方进度、待取包裹、6 位取货码及自提二维码凭证。 |
 
 ---

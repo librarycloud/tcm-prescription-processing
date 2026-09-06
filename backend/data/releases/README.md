@@ -51,7 +51,10 @@ flowchart LR
    - 使用管理员账号登录 **Web 管理端 (PC)**。
    - 导航至 **系统管理 ➔ Android版本发布**。
    - 点击右上角 **从 GitHub 同步最新版本** 按钮。
-3. 后端服务会自动通过 GitHub API 获取最新的 Release Tag、更新说明与 Release APK 文件，并自动覆盖写入本地 `app-release.apk`，同时刷新版本描述文件。
+3. **后端自动清洗与抓取**：
+   - 后端服务（`githubReleaseService.js`）通过 GitHub API 获取最新 Release Tag 与 Release APK 文件；
+   - **智能提取更新日志**：若 Release Body 包含发布说明则自动清洗；若为空或通过特定工作流发布，系统会自动解析近期的 Git 提交历史，过滤内部杂项并将业务特性（`feat:` / `fix:`）格式化为纯文本换行列表存储在 `releaseNotes` 中，便于手持端 App 优雅排版显示；
+   - 自动覆盖写入本地 `app-release.apk`，原子更新 `data/app-version.android.json`。
 
 ### 方式 B：服务器 CLI 命令行脚本触发 (CI/CD 钩子场景)
 
