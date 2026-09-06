@@ -85,23 +85,97 @@ object ApiClient {
         }
     }
 
-    fun setToken(value: String?) { token = value }
+    private const val SECRET_PREFIX = "b64:"
+
+    fun sanitizeToken(raw: String?): String? {
+        val t = raw?.trim() ?: return null
+        if (t.isBlank()) return null
+        // Header values in OkHttp must be strictly printable ASCII without control characters.
+        // Standard JWT characters [A-Za-z0-9._-] are all in '!'..'~'.
+        if (!t.all { it in '!'..'~' }) return null
+        return t
+    }
+
+    fun setToken(value: String?) { token = sanitizeToken(value) }
 
     private fun encodeSecret(value: String): String =
-        android.util.Base64.encodeToString(value.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-    private fun decodeSecret(value: String): String = runCatching {
-        String(android.util.Base64.decode(value, android.util.Base64.NO_WRAP), Charsets.UTF_8)
-    }.getOrDefault(value)
+        SECRET_PREFIX + android.util.Base64.encodeToString(value.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+
+    private fun decodeToken(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        // 1. Plain JWT token: starts with "eyJ" and contains dots separating header, payload, signature.
+        // NEVER run Base64 decode on a plain JWT, as Android Base64 silently skips dots and corrupts bytes into 0x08.
+        if (trimmed.startsWith("eyJ") && trimmed.contains(".")) {
+            return sanitizeToken(trimmed)
+        }
+
+        // 2. Explicitly prefixed with "b64:"
+        if (trimmed.startsWith(SECRET_PREFIX)) {
+            val content = trimmed.removePrefix(SECRET_PREFIX)
+            val decoded = runCatching {
+                String(android.util.Base64.decode(content, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+            return sanitizeToken(decoded)
+        }
+
+        // 3. Legacy Base64-encoded JWT (encoded from "eyJ...", starts with "ZXlK" and has no dots)
+        if (trimmed.startsWith("ZXlK") && !trimmed.contains(".")) {
+            val decoded = runCatching {
+                String(android.util.Base64.decode(trimmed, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+            return sanitizeToken(decoded)
+        }
+
+        // 4. Fallback: try decoding, if it produces a valid printable ASCII token use it; otherwise test raw
+        val decoded = runCatching {
+            String(android.util.Base64.decode(trimmed, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+        }.getOrNull()
+        return sanitizeToken(decoded) ?: sanitizeToken(trimmed)
+    }
+
+    private fun decodeUser(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        // 1. Plain JSON object or array
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            return trimmed
+        }
+
+        // 2. Explicitly prefixed with "b64:"
+        if (trimmed.startsWith(SECRET_PREFIX)) {
+            val content = trimmed.removePrefix(SECRET_PREFIX)
+            val decoded = runCatching {
+                String(android.util.Base64.decode(content, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+            if (decoded != null && (decoded.trim().startsWith("{") || decoded.trim().startsWith("["))) {
+                return decoded
+            }
+        }
+
+        // 3. Legacy Base64-encoded JSON (starts with eyI for {" or Ww for [)
+        val decoded = runCatching {
+            String(android.util.Base64.decode(trimmed, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+        }.getOrNull()
+        if (decoded != null && (decoded.trim().startsWith("{") || decoded.trim().startsWith("["))) {
+            return decoded
+        }
+
+        return trimmed
+    }
 
     fun saveSession(context: Context, session: AdminSession) {
         cacheContext = context.applicationContext
         clearE6ImportCache(context)
         clearResponseCache(context)
         clearProcessingPhotoCache(context)
-        token = session.token
+        val cleanToken = sanitizeToken(session.token) ?: session.token
+        token = cleanToken
         context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(TOKEN_KEY, encodeSecret(session.token))
+            .putString(TOKEN_KEY, encodeSecret(cleanToken))
             .putString(USER_KEY, encodeSecret(session.user.toString()))
             .apply()
     }
@@ -111,9 +185,20 @@ object ApiClient {
         val preferences = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
         val rawToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
         val rawUser = preferences.getString(USER_KEY, null) ?: return null
-        val savedToken = decodeSecret(rawToken).takeIf { it.isNotBlank() } ?: rawToken
-        val savedUser = decodeSecret(rawUser).takeIf { it.isNotBlank() } ?: rawUser
-        val user = runCatching { JSONObject(savedUser) }.getOrNull() ?: return null
+        val savedToken = decodeToken(rawToken)
+        val savedUser = decodeUser(rawUser)
+        val user = savedUser?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (savedToken == null || user == null) {
+            clearSession(context)
+            return null
+        }
+        // Auto-upgrade legacy storage to prefixed format
+        if (!rawToken.startsWith(SECRET_PREFIX) || !rawUser.startsWith(SECRET_PREFIX)) {
+            preferences.edit()
+                .putString(TOKEN_KEY, encodeSecret(savedToken))
+                .putString(USER_KEY, encodeSecret(user.toString()))
+                .apply()
+        }
         token = savedToken
         return AdminSession(savedToken, user)
     }
@@ -133,12 +218,13 @@ object ApiClient {
     fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
-        return AdminSession(result.getString("token"), result.getJSONObject("user")).also { token = it.token }
+        val receivedToken = sanitizeToken(result.getString("token")) ?: result.getString("token")
+        return AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
     }
 
     fun updateMe(payload: JSONObject): AdminSession {
         val data = request("/user/me", "PUT", payload).getJSONObject("data")
-        val newToken = data.getString("token")
+        val newToken = sanitizeToken(data.getString("token")) ?: data.getString("token")
         val newUser = data.getJSONObject("user")
         return AdminSession(newToken, newUser).also { token = it.token }
     }
@@ -569,6 +655,17 @@ object ApiClient {
         else -> JSONArray()
     }
 
+    private fun applyAuthorizationHeader(builder: Request.Builder) {
+        val currentToken = sanitizeToken(token)
+        if (currentToken != null) {
+            builder.header("Authorization", "Bearer $currentToken")
+        } else if (token != null) {
+            token = null
+            onUnauthorized?.invoke()
+            throw ApiException("登录凭证异常，请重新登录", 401)
+        }
+    }
+
     private fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray): JSONObject {
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
@@ -584,7 +681,7 @@ object ApiClient {
             .post(requestBody)
             .header("Accept", "application/json")
             
-        token?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        applyAuthorizationHeader(requestBuilder)
         
         val response = client.newCall(requestBuilder.build()).execute()
         val responseBodyString = response.body?.string().orEmpty()
@@ -626,7 +723,7 @@ object ApiClient {
             requestBuilder.header("Content-Type", "application/json")
         }
 
-        token?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        applyAuthorizationHeader(requestBuilder)
 
         val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
 
@@ -703,7 +800,7 @@ object ApiClient {
         val requestBuilder = Request.Builder()
             .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
             .header("Accept", "image/*")
-        token?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        applyAuthorizationHeader(requestBuilder)
         val response = client.newCall(requestBuilder.get().build()).execute()
         if (!response.isSuccessful) {
             val message = response.body?.string().orEmpty()
