@@ -80,6 +80,7 @@ function include({ withE6Imports = false } = {}) {
           e6Imports: {
             select: {
               id: true,
+              storeId: true,
               externalOrderNo: true,
               cashierName: true,
               totalPrice: true,
@@ -218,12 +219,41 @@ export async function listPrescriptions(prisma, actor, query) {
   };
 }
 
+async function attachOperatorMappings(prisma, list) {
+  if (!list?.length || !prisma?.e6OperatorMapping?.findMany) return list || [];
+  const pairs = list
+    .filter((item) => item.cashierName && item.storeId)
+    .map((item) => ({ storeId: item.storeId, e6OperatorName: item.cashierName }));
+  if (!pairs.length) {
+    return list.map((item) => ({
+      ...item,
+      operatorMapping: null,
+      operatorName: item.cashierName || null,
+    }));
+  }
+  const mappings = await prisma.e6OperatorMapping.findMany({
+    where: { OR: pairs, status: 1 },
+  });
+  const byKey = new Map(mappings.map((item) => [`${item.storeId}:${item.e6OperatorName}`, item]));
+  return list.map((item) => {
+    const mapping = byKey.get(`${item.storeId}:${item.cashierName}`) || null;
+    return {
+      ...item,
+      operatorMapping: mapping,
+      operatorName: mapping?.operatorName || item.cashierName || null,
+    };
+  });
+}
+
 export async function getPrescription(prisma, actor, idValue) {
   const item = await prescriptionRepository.findFirst(prisma, {
     where: { id: Number(idValue), ...scope(actor) },
     include: include({ withE6Imports: !isStoreStaff(actor) }),
   });
   if (!item) throw new AppError("处方不存在", 404);
+  if (item.e6Imports?.length) {
+    item.e6Imports = await attachOperatorMappings(prisma, item.e6Imports);
+  }
   return withTotals(item);
 }
 

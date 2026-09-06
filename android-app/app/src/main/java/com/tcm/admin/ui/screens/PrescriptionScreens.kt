@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -385,6 +386,26 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
             val totalDose = p.optInt("totalDose", 0)
             val takenDose = p.optInt("takenDose", 0)
             val remainingDose = (totalDose - takenDose).coerceAtLeast(0)
+            val pickupPlans = remember(plans) {
+                val list = mutableListOf<JSONObject>()
+                for (i in 0 until plans.length()) {
+                    val plan = plans.optJSONObject(i) ?: continue
+                    if (!plan.isNull("package") && plan.optJSONObject("package") != null) {
+                        list.add(plan)
+                    }
+                }
+                list
+            }
+            val e6Imports = remember(p) {
+                val list = mutableListOf<JSONObject>()
+                val arr = p.optJSONArray("e6Imports")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        arr.optJSONObject(i)?.let { list.add(it) }
+                    }
+                }
+                list
+            }
 
             // Header Card
             AppCard {
@@ -553,6 +574,194 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                     }
                 }
             }
+
+            // Pickup Records (领取记录)
+            Spacer(Modifier.height(14.dp))
+            AppCard {
+                SectionHeader("领取记录", "共 ${pickupPlans.size} 批")
+                if (pickupPlans.isEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("暂无领取记录", color = Muted, fontSize = 13.sp)
+                }
+                pickupPlans.forEachIndexed { index, plan ->
+                    val processType = plan.optJSONObject("processType")
+                    val pkg = plan.optJSONObject("package")
+                    val isPicked = plan.optInt("status") == 4
+                    val statusText = if (isPicked) "已领取" else "待领取"
+
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = FieldShape,
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "第 ${plan.optInt("batchNo", index + 1)} 批 · ${processType?.displayField("name") ?: "加工"}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Ink,
+                                    fontSize = 14.sp,
+                                )
+                                StatusPill(statusText)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            val rawPickupCode = pkg?.displayField("pickupCode")?.takeIf { it.isNotBlank() && it != "-" }
+                                ?: plan.displayField("pickupCode", "-")
+                            val pickupCode = if (rawPickupCode != "-") formatPickupCode(rawPickupCode) else "-"
+                            val finishDateStr = plan.opt("finishDate")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+                            val finishText = if (finishDateStr != null) serverDateTime(finishDateStr) else "-"
+                            Text(
+                                "剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  取货码：$pickupCode",
+                                color = RegularText,
+                                fontSize = 12.sp,
+                            )
+                            Text(
+                                "完成时间：$finishText",
+                                color = Muted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                            pkg?.let { pItem ->
+                                Spacer(Modifier.height(8.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        packageItem(ApiClient.packageDetail(pItem.optInt("id")))
+                                                    }
+                                                }.onSuccess { onNavigate(ScreenTarget.PackageDetail(it)) }
+                                                    .onFailure { error = it.message ?: "加载包裹失败" }
+                                            }
+                                        },
+                                        shape = FieldShape,
+                                        modifier = Modifier.height(30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    ) { Text("详情", fontSize = 11.5.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // E6 Import Details (E6导入处方明细)
+            if (e6Imports.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                AppCard {
+                    SectionHeader("E6导入处方明细", "共 ${e6Imports.size} 笔")
+                    e6Imports.forEachIndexed { impIndex, imp ->
+                        if (impIndex > 0) {
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "订单号：${imp.displayField("externalOrderNo")}",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Ink,
+                                        fontSize = 13.5.sp,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    val isPaid = imp.optInt("isPaid") == 1
+                                    StatusPill(if (isPaid) "已付款" else "未付款")
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                val operatorName = imp.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty()
+                                    .ifBlank { imp.displayField("operatorName", "").trim() }
+                                    .ifBlank { imp.displayField("cashierName", "-") }
+                                Text(
+                                    "操作员：$operatorName  ·  订单时间：${serverDateTime(imp.opt("sourceCreatedAt"))}",
+                                    color = RegularText,
+                                    fontSize = 12.sp,
+                                )
+                                val price = imp.opt("totalPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+                                    ?.let { runCatching { "¥" + String.format("%.2f", it.toDouble()) }.getOrNull() } ?: "-"
+                                Text(
+                                    "总价：$price",
+                                    color = Danger,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+
+                                val items = remember(imp) {
+                                    val raw = imp.opt("rawPayload")
+                                    val payload = when (raw) {
+                                        is JSONObject -> raw
+                                        is String -> runCatching { JSONObject(raw) }.getOrNull()
+                                        else -> null
+                                    }
+                                    val arr = payload?.optJSONArray("items")
+                                    val itemList = mutableListOf<JSONObject>()
+                                    if (arr != null) {
+                                        for (j in 0 until arr.length()) {
+                                            arr.optJSONObject(j)?.let { itemList.add(it) }
+                                        }
+                                        itemList.sortBy { it.optInt("sequence", 0) }
+                                    }
+                                    itemList
+                                }
+
+                                Spacer(Modifier.height(8.dp))
+                                HorizontalDivider(color = CardBorderColor.copy(alpha = 0.6f), thickness = 0.5.dp)
+                                Spacer(Modifier.height(6.dp))
+
+                                if (items.isEmpty()) {
+                                    Text("暂无处方明细", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                                } else {
+                                    PrescriptionDetailE6ItemRow(
+                                        seq = "顺序",
+                                        name = "商品名称",
+                                        doseCount = "剂数",
+                                        singleQuantity = "单剂量",
+                                        totalQuantity = "总量",
+                                        header = true,
+                                    )
+                                    items.forEachIndexed { itemIdx, row ->
+                                        val unit = row.displayField("unit", "")
+                                        val singleQty = "${quantityText(row.opt("quantity"))}$unit"
+                                        val totalQty = "${quantityText(row.opt("totalQuantity"))}$unit"
+                                        val seq = row.optInt("sequence", itemIdx + 1).toString()
+                                        PrescriptionDetailE6ItemRow(
+                                            seq = seq,
+                                            name = row.displayField("name", "药材"),
+                                            doseCount = quantityText(row.opt("doseCount")),
+                                            singleQuantity = singleQty,
+                                            totalQuantity = totalQty,
+                                            header = false,
+                                        )
+                                    }
+                                }
+
+                                imp.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("备注：$it", color = Muted, fontSize = 11.5.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -570,6 +779,60 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
         confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPlan(plan.optInt("id")) } }.onSuccess { deletePlan = null; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
         dismissButton = { TextButton(onClick = { deletePlan = null }) { Text("取消") } },
     ) }
+}
+
+@Composable
+private fun PrescriptionDetailE6ItemRow(
+    seq: String,
+    name: String,
+    doseCount: String,
+    singleQuantity: String,
+    totalQuantity: String,
+    header: Boolean = false,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            seq,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.Normal,
+            modifier = Modifier.weight(0.45f),
+        )
+        Text(
+            name,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.Normal,
+            modifier = Modifier.weight(1.35f),
+        )
+        Text(
+            doseCount,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(0.5f),
+        )
+        Text(
+            singleQuantity,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.85f),
+        )
+        Text(
+            totalQuantity,
+            color = if (header) Muted else Ink,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.85f),
+        )
+    }
 }
 
 @Composable

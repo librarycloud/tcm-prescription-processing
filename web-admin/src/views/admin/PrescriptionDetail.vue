@@ -301,7 +301,7 @@
       <div v-for="item in e6Imports" :key="item.id" class="e6-import-block">
         <div class="e6-import-summary">
           <span>订单号：{{ item.externalOrderNo || '-' }}</span>
-          <span>操作员：{{ item.cashierName || '-' }}</span>
+          <span>操作员：{{ item.operatorMapping?.operatorName || item.operatorName || item.cashierName || '-' }}</span>
           <span>订单时间：{{ formatDate(item.sourceCreatedAt) }}</span>
           <span>总价：{{ item.totalPrice == null ? '-' : `¥${Number(item.totalPrice).toFixed(2)}` }}</span>
           <el-tag :type="Number(item.isPaid) === 1 ? 'success' : 'warning'" effect="plain">
