@@ -18,13 +18,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -344,7 +349,12 @@ internal fun AboutScreen(
     val fullApkSize = latest?.optLong("fallbackApkSize", 0L).takeIf { (it ?: 0L) > 0L }
         ?: latest?.optLong("size", 0L) ?: 0L
 
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = CardShape) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(color = PrimarySoft, shape = CardShape, modifier = Modifier.size(68.dp)) {
@@ -386,12 +396,6 @@ internal fun AboutScreen(
                         }
                         latest!!.opt("publishedAt")?.let { publishedAt ->
                             serverDateTime(publishedAt, "").takeIf { it.isNotBlank() }?.let { Text("发布时间：$it", color = Muted, fontSize = 12.sp) }
-                        }
-                        val notes = latest!!.optJSONArray("releaseNotes")
-                        if (notes != null && notes.length() > 0) {
-                            Spacer(Modifier.height(6.dp))
-                            Text("更新内容", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            (0 until notes.length()).forEach { Text("• ${displayText(notes.opt(it), "")}", color = Muted, fontSize = 12.sp) }
                         }
                         if (forceUpdate) Text("此版本为必需更新", color = Danger, fontSize = 12.sp)
                     }
@@ -504,6 +508,94 @@ internal fun AboutScreen(
                     }
                 }
                 downloadError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Danger, fontSize = 12.sp) }
+
+                // 更新说明：放置在更新按钮下方
+                val notes = latest?.optJSONArray("releaseNotes")
+                val notesList = remember(notes) {
+                    val list = mutableListOf<String>()
+                    if (notes != null) {
+                        for (i in 0 until notes.length()) {
+                            val item = displayText(notes.opt(i), "").trim()
+                            if (item.isNotBlank()) list.add(item)
+                        }
+                    }
+                    list
+                }
+                val showNotesSection = latest != null && (hasUpdate || notesList.isNotEmpty())
+
+                if (showNotesSection) {
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        thickness = 0.8.dp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Description,
+                            contentDescription = null,
+                            tint = Primary,
+                            modifier = Modifier.size(17.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (hasUpdate) "更新说明" else "版本说明",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    if (notesList.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            notesList.forEach { note ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    Text(
+                                        "• ",
+                                        color = Primary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        text = note,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                    )
+                                }
+                            }
+                        }
+                    } else if (hasUpdate) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        ) {
+                            Text(
+                                text = "本次更新包含功能优化与常规稳定性提升。",
+                                color = Muted,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
     }

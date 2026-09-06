@@ -118,7 +118,7 @@ export async function generatePatchBetweenVersions(fromVersionCode, targetVersio
  * Sync latest release from GitHub and auto-generate diff patches
  */
 export async function syncLatestAndroidRelease({ repository, token = "", apiUrl = "https://api.github.com" }) {
-  const repo = String(repository || "").trim();
+  const repo = String(repository || config.githubRepository || "librarycloud/tcm-prescription-processing").trim();
   if (!repo) throw new Error("GITHUB_REPOSITORY is required");
   const headers = {
     Accept: "application/vnd.github+json",
@@ -172,12 +172,59 @@ export async function syncLatestAndroidRelease({ repository, token = "", apiUrl 
     const actualSha256 = await computeFileSha256(versionedApkPath);
     const actualStat = await stat(versionedApkPath);
 
+    // Extract changelogUrl
+    let changelogUrl = String(metadata.changelogUrl || "").trim();
+    const changelogMatch = String(release.body || "").match(/(https:\/\/github\.com\/[^\s\)\>]+compare[^\s\)\>]+)/i);
+    if (changelogMatch) {
+      changelogUrl = changelogMatch[1];
+    } else if (!changelogUrl && release.html_url) {
+      changelogUrl = release.html_url;
+    }
+
+    // Extract release notes
+    let releaseNotes = Array.isArray(metadata.releaseNotes) && metadata.releaseNotes.length > 0
+      ? metadata.releaseNotes.map(String).filter(Boolean)
+      : [];
+
+    if (releaseNotes.length === 0 && release.body) {
+      const parsedNotes = String(release.body)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /^[-*]\s+/.test(line))
+        .map((line) => line.replace(/^[-*]\s+/, "").replace(/\s+by\s+@[\w-]+(?:\s+in\s+https?:\/\/\S+)?$/i, "").trim())
+        .filter(Boolean);
+      if (parsedNotes.length > 0) {
+        releaseNotes = parsedNotes;
+      }
+    }
+
+    if (releaseNotes.length === 0 && changelogUrl && changelogUrl.includes("/compare/")) {
+      try {
+        const compareRange = changelogUrl.split("/compare/")[1]?.trim();
+        if (compareRange) {
+          const compareRes = await fetchWithTimeout(`${base}/repos/${repo}/compare/${compareRange}`, { headers }, metadataTimeoutMs);
+          if (compareRes.ok) {
+            const compareData = await compareRes.json();
+            if (Array.isArray(compareData.commits)) {
+              releaseNotes = compareData.commits
+                .map((c) => (c.commit?.message || "").split("\n")[0].trim())
+                .filter((msg) => msg && !msg.startsWith("Merge ") && !msg.startsWith("chore(release)"))
+                .slice(0, 15);
+            }
+          }
+        }
+      } catch (compareErr) {
+        console.warn("拉取 GitHub Compare commit 记录失败:", compareErr.message);
+      }
+    }
+
     const newVersionConfig = {
       versionCode,
       versionName,
       minVersionCode: Number.isInteger(Number(metadata.minVersionCode)) ? Number(metadata.minVersionCode) : 1,
       forceUpdate: Boolean(metadata.forceUpdate),
-      releaseNotes: Array.isArray(metadata.releaseNotes) ? metadata.releaseNotes.map(String).filter(Boolean) : [],
+      releaseNotes,
+      changelogUrl,
       publishedAt: String(metadata.publishedAt || release.published_at || "").slice(0, 10),
       apkUrl: `/app/releases/${versionedApkName}`,
       githubUrl: apkAsset.browser_download_url,
@@ -194,6 +241,8 @@ export async function syncLatestAndroidRelease({ repository, token = "", apiUrl 
       sha256: newVersionConfig.sha256,
       size: newVersionConfig.size,
       publishedAt: newVersionConfig.publishedAt,
+      releaseNotes: newVersionConfig.releaseNotes,
+      changelogUrl: newVersionConfig.changelogUrl,
     });
 
     manifest.latest = newVersionConfig;

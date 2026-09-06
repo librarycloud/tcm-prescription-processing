@@ -40,6 +40,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -145,13 +147,23 @@ jobs:
           test -n "$version_name"
           sha256="$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')"
           size="$(stat -c '%s' app/build/outputs/apk/release/app-release.apk)"
+          prev_tag="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+          if [ -n "$prev_tag" ]; then
+            changelog_url="https://github.com/${GITHUB_REPOSITORY}/compare/${prev_tag}...${GITHUB_REF_NAME}"
+            notes_json="$(git log "${prev_tag}..HEAD" --pretty=format:'%s' | grep -v -E '^(Merge|chore\(release\))' | head -n 15 | jq -R . | jq -s .)"
+          else
+            changelog_url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+            notes_json="$(git log -n 10 --pretty=format:'%s' | grep -v -E '^(Merge|chore\(release\))' | jq -R . | jq -s .)"
+          fi
+          test -n "$notes_json" || notes_json="[]"
           cat > app-version.android.json <<EOF
           {
             "versionCode": $version_code,
             "versionName": "$version_name",
             "minVersionCode": 1,
             "forceUpdate": false,
-            "releaseNotes": [],
+            "releaseNotes": $notes_json,
+            "changelogUrl": "$changelog_url",
             "publishedAt": "$(date -u +%F)",
             "apkAsset": "app-release.apk",
             "sha256": "$sha256",

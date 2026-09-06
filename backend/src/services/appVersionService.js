@@ -115,12 +115,16 @@ export async function getAndroidAppVersion({ currentVersionCode } = {}) {
   const minVersionCode = Number.isInteger(Number(latest.minVersionCode)) ? Number(latest.minVersionCode) : 1;
   const forceUpdate = Boolean(latest.forceUpdate) || (clientCode !== null && clientCode < minVersionCode);
 
+  const changelogUrl = String(latest.changelogUrl || "").trim() ||
+    (latest.githubUrl ? String(latest.githubUrl).trim() : "");
+
   const baseResponse = {
     versionCode,
     versionName,
     minVersionCode,
     forceUpdate,
     releaseNotes: Array.isArray(latest.releaseNotes) ? latest.releaseNotes.map((item) => String(item)).filter(Boolean) : [],
+    changelogUrl,
     publishedAt: String(latest.publishedAt || "").trim(),
     downloadBaseUrl: config.appDownloadBaseUrl || "",
     hasUpdate,
