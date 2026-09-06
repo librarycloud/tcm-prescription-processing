@@ -50,6 +50,28 @@ internal fun formatHexColor(color: Color): String {
     return String.format("#%02X%02X%02X", r, g, b)
 }
 
+internal fun colorToHsv(color: Color): Triple<Float, Float, Float> {
+    val hsv = FloatArray(3)
+    val argb = android.graphics.Color.argb(
+        (color.alpha * 255).toInt().coerceIn(0, 255),
+        (color.red * 255).toInt().coerceIn(0, 255),
+        (color.green * 255).toInt().coerceIn(0, 255),
+        (color.blue * 255).toInt().coerceIn(0, 255),
+    )
+    android.graphics.Color.colorToHSV(argb, hsv)
+    return Triple(hsv[0], hsv[1], hsv[2])
+}
+
+internal fun hsvToColor(hue: Float, saturation: Float, value: Float): Color {
+    val hsv = floatArrayOf(
+        hue.coerceIn(0f, 360f),
+        saturation.coerceIn(0f, 1f),
+        value.coerceIn(0f, 1f),
+    )
+    val colorInt = android.graphics.Color.HSVToColor(hsv)
+    return Color(colorInt)
+}
+
 internal fun customThemeAccent(color: Color): ThemeAccent {
     return ThemeAccent(
         key = "custom",
@@ -161,6 +183,43 @@ internal val QuickCustomColors: List<Pair<String, Color>> = listOf(
     "檀褐" to Color(0xFF854D0E),
 )
 
+internal data class TcmHerbalColor(
+    val name: String,
+    val category: String,
+    val hex: String,
+    val color: Color,
+)
+
+internal val TcmHerbalPalette: List<TcmHerbalColor> = listOf(
+    // 草木本草
+    TcmHerbalColor("艾绿", "草木", "#4E785C", Color(0xFF4E785C)),
+    TcmHerbalColor("薄荷", "草木", "#2E8B57", Color(0xFF2E8B57)),
+    TcmHerbalColor("竹青", "草木", "#789262", Color(0xFF789262)),
+    TcmHerbalColor("松柏", "草木", "#2A5A43", Color(0xFF2A5A43)),
+    TcmHerbalColor("青葙", "草木", "#3C7359", Color(0xFF3C7359)),
+
+    // 金石药石
+    TcmHerbalColor("青黛", "金石", "#284852", Color(0xFF284852)),
+    TcmHerbalColor("朱砂", "金石", "#B83B36", Color(0xFFB83B36)),
+    TcmHerbalColor("丹参", "金石", "#983228", Color(0xFF983228)),
+    TcmHerbalColor("代赭", "金石", "#964D36", Color(0xFF964D36)),
+    TcmHerbalColor("雄黄", "金石", "#D96924", Color(0xFFD96924)),
+
+    // 香木根茎
+    TcmHerbalColor("黄芪", "根茎", "#C49A45", Color(0xFFC49A45)),
+    TcmHerbalColor("连翘", "根茎", "#DDA52D", Color(0xFFDDA52D)),
+    TcmHerbalColor("沉香", "根茎", "#5A4B41", Color(0xFF5A4B41)),
+    TcmHerbalColor("陈皮", "根茎", "#B85D1B", Color(0xFFB85D1B)),
+    TcmHerbalColor("甘草", "根茎", "#7B5738", Color(0xFF7B5738)),
+
+    // 花实灵秀
+    TcmHerbalColor("红花", "花实", "#BA2F39", Color(0xFFBA2F39)),
+    TcmHerbalColor("紫草", "花实", "#633C61", Color(0xFF633C61)),
+    TcmHerbalColor("枸杞", "花实", "#B33428", Color(0xFFB33428)),
+    TcmHerbalColor("远志", "花实", "#4A5270", Color(0xFF4A5270)),
+    TcmHerbalColor("桔梗", "花实", "#5A688D", Color(0xFF5A688D)),
+)
+
 internal fun resolveThemeAccent(key: String, customHex: String): ThemeAccent {
     if (key == "custom") {
         val color = tryParseHexColor(customHex) ?: Color(0xFF2563EB)
@@ -168,6 +227,48 @@ internal fun resolveThemeAccent(key: String, customHex: String): ThemeAccent {
     }
     return DefaultThemeAccents.firstOrNull { it.key == key } ?: DefaultThemeAccents.first()
 }
+
+private fun lightBackground(accentColor: Color): Color =
+    blendColor(Color(0xFFF8F8FA), accentColor, 0.035f)
+
+private fun lightSurface(accentColor: Color): Color =
+    blendColor(Color(0xFFFFFFFF), accentColor, 0.015f)
+
+private fun lightSurfaceVariant(accentColor: Color): Color =
+    blendColor(Color(0xFFF1F1F4), accentColor, 0.06f)
+
+private fun lightOutlineVariant(accentColor: Color): Color =
+    blendColor(Color(0xFFE2E2E6), accentColor, 0.08f)
+
+private fun lightOutline(accentColor: Color): Color =
+    blendColor(Color(0xFFCBCBD2), accentColor, 0.10f)
+
+private fun lightOnSurface(accentColor: Color): Color =
+    blendColor(Color(0xFF18181B), accentColor, 0.05f)
+
+private fun lightOnSurfaceVariant(accentColor: Color): Color =
+    blendColor(Color(0xFF52525B), accentColor, 0.08f)
+
+private fun darkBackground(accentColor: Color): Color =
+    blendColor(Color(0xFF101114), accentColor, 0.07f)
+
+private fun darkSurface(accentColor: Color): Color =
+    blendColor(Color(0xFF16171B), accentColor, 0.08f)
+
+private fun darkSurfaceVariant(accentColor: Color): Color =
+    blendColor(Color(0xFF222328), accentColor, 0.12f)
+
+private fun darkOutlineVariant(accentColor: Color): Color =
+    blendColor(Color(0xFF2E2F36), accentColor, 0.10f)
+
+private fun darkOutline(accentColor: Color): Color =
+    blendColor(Color(0xFF4A4B53), accentColor, 0.12f)
+
+private fun darkOnSurface(accentColor: Color): Color =
+    blendColor(Color(0xFFF1F1F4), accentColor, 0.03f)
+
+private fun darkOnSurfaceVariant(accentColor: Color): Color =
+    blendColor(Color(0xFFC7C7CF), accentColor, 0.04f)
 
 internal fun tcmLightColorScheme(accent: ThemeAccent = DefaultThemeAccents.first()): ColorScheme = lightColorScheme(
     primary = accent.primary,
@@ -183,17 +284,17 @@ internal fun tcmLightColorScheme(accent: ThemeAccent = DefaultThemeAccents.first
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFECFDF5),
     onTertiaryContainer = Color(0xFF065F46),
-    background = Color(0xFFF8FAFC),
-    onBackground = Color(0xFF0F172A),
-    surface = Color(0xFFF8FAFC),
+    background = lightBackground(accent.primary),
+    onBackground = lightOnSurface(accent.primary),
+    surface = lightSurface(accent.primary),
     surfaceTint = accent.primary,
-    onSurface = Color(0xFF0F172A),
-    surfaceVariant = Color(0xFFF1F5F9),
-    onSurfaceVariant = Color(0xFF475569),
+    onSurface = lightOnSurface(accent.primary),
+    surfaceVariant = lightSurfaceVariant(accent.primary),
+    onSurfaceVariant = lightOnSurfaceVariant(accent.primary),
     inverseSurface = Color(0xFF1E293B),
     inverseOnSurface = Color(0xFFF1F5F9),
-    outline = Color(0xFFCBD5E1),
-    outlineVariant = Color(0xFFE2E8F0),
+    outline = lightOutline(accent.primary),
+    outlineVariant = lightOutlineVariant(accent.primary),
     scrim = Color(0xFF000000),
     error = Color(0xFFEF4444),
     onError = Color.White,
@@ -214,14 +315,14 @@ internal fun tcmDarkColorScheme(accent: ThemeAccent = DefaultThemeAccents.first(
     onTertiary = Color(0xFF002117),
     tertiaryContainer = Color(0xFF14532D),
     onTertiaryContainer = Color(0xFFB8F5D6),
-    background = Color(0xFF0F172A),
-    onBackground = Color(0xFFE2E8F0),
-    surface = Color(0xFF111827),
-    onSurface = Color(0xFFE5E7EB),
-    surfaceVariant = Color(0xFF1F2937),
-    onSurfaceVariant = Color(0xFFCBD5E1),
-    outline = Color(0xFF475569),
-    outlineVariant = Color(0xFF334155),
+    background = darkBackground(accent.primary),
+    onBackground = darkOnSurface(accent.primary),
+    surface = darkSurface(accent.primary),
+    onSurface = darkOnSurface(accent.primary),
+    surfaceVariant = darkSurfaceVariant(accent.primary),
+    onSurfaceVariant = darkOnSurfaceVariant(accent.primary),
+    outline = darkOutline(accent.primary),
+    outlineVariant = darkOutlineVariant(accent.primary),
     error = Color(0xFFFCA5A5),
     onError = Color(0xFF450A0A),
     errorContainer = Color(0xFF7F1D1D),
@@ -245,10 +346,10 @@ internal fun tcmPureBlackColorScheme(accent: ThemeAccent = DefaultThemeAccents.f
     onBackground = Color(0xFFF1F5F9),
     surface = Color(0xFF000000),
     onSurface = Color(0xFFF1F5F9),
-    surfaceVariant = Color(0xFF18181B),
+    surfaceVariant = blendColor(Color(0xFF161618), accent.primary, 0.06f),
     onSurfaceVariant = Color(0xFFA1A1AA),
-    outline = Color(0xFF52525B),
-    outlineVariant = Color(0xFF27272A),
+    outline = blendColor(Color(0xFF48484E), accent.primary, 0.10f),
+    outlineVariant = blendColor(Color(0xFF242426), accent.primary, 0.08f),
     scrim = Color(0xFF000000),
     error = Color(0xFFFCA5A5),
     onError = Color(0xFF450A0A),

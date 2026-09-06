@@ -182,12 +182,10 @@ internal val Brown: Color @Composable get() = MaterialTheme.colorScheme.secondar
 internal val BrownSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
 private val isAppDarkTheme: Boolean
     @Composable
-    get() = MaterialTheme.colorScheme.background == Color(0xFF0F172A) ||
-        MaterialTheme.colorScheme.background == Color(0xFF000000) ||
-        runCatching {
-            val bg = MaterialTheme.colorScheme.background
-            (0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue) < 0.5f
-        }.getOrDefault(false)
+    get() {
+        val bg = MaterialTheme.colorScheme.background
+        return (0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue) < 0.5f
+    }
 
 // Non-status attributes for logistics/delivery methods (distinct from workflow status colors: green=completed/picked up, orange=pending, red=cancelled)
 private val RunnerColor: Color
@@ -434,17 +432,38 @@ internal fun AppCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(
-        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, CardBorderColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(paddingValues),
-            content = content,
-        )
+    if (onClick != null) {
+        Card(
+            onClick = onClick,
+            modifier = modifier,
+            shape = CardShape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, CardBorderColor),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 1.dp,
+                pressedElevation = 2.5.dp,
+                focusedElevation = 1.5.dp,
+                hoveredElevation = 1.5.dp,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.padding(paddingValues),
+                content = content,
+            )
+        }
+    } else {
+        Card(
+            modifier = modifier,
+            shape = CardShape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, CardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(paddingValues),
+                content = content,
+            )
+        }
     }
 }
 

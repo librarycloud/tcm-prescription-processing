@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
@@ -88,6 +91,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
@@ -912,11 +916,11 @@ private fun BottomNav(
         ScreenTarget.Profile to ("我的" to Icons.Default.AccountCircle),
     )
     Column {
-        HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+        HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
         NavigationBar(
             modifier = Modifier.navigationBarsPadding(),
             containerColor = MaterialTheme.colorScheme.surface,
-            tonalElevation = 0.dp,
+            tonalElevation = 1.dp,
         ) {
             items.forEach { (target, pair) ->
                 val isSelected = when (target) {
@@ -927,13 +931,36 @@ private fun BottomNav(
                     is ScreenTarget.Profile -> current is ScreenTarget.Profile
                     else -> false
                 }
+                val iconScale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.15f else 1.0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+                    label = "navIconScale",
+                )
                 NavigationBarItem(
                     selected = isSelected,
                     onClick = {
                         if (isSelected) onReselect() else onSwitchTab(target)
                     },
-                    icon = { Icon(pair.second, contentDescription = pair.first) },
-                    label = { Text(pair.first, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal) },
+                    icon = {
+                        Icon(
+                            pair.second,
+                            contentDescription = pair.first,
+                            modifier = Modifier.graphicsLayer(
+                                scaleX = iconScale,
+                                scaleY = iconScale,
+                            ),
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = pair.first,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Primary,
                         selectedTextColor = Primary,
