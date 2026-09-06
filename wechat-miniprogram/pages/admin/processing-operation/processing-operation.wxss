@@ -8,6 +8,37 @@
   padding: 24rpx;
 }
 
+.plan-summary {
+  transition: background-color 0.15s ease;
+}
+
+.plan-summary:active {
+  background-color: #f7f8fa;
+}
+
+.summary-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.prescription-link-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2rpx;
+  padding: 4rpx 14rpx;
+  font-size: 22rpx;
+  color: #0052d9;
+  background-color: #f0f5ff;
+  border-radius: 999rpx;
+  font-weight: 500;
+}
+
 .summary-head,
 .step-head,
 .usage-row,

@@ -242,8 +242,8 @@ export default async function adminRoutes(fastify) {
     removeHerbLocationAssignmentController,
   );
   fastify.get("/products/stores", productStoresController);
-  fastify.get("/e6/imports", listE6ImportsController);
-  fastify.get("/e6/imports/:id", e6ImportDetailController);
+  fastify.get("/e6/imports", storeStaffRoute, listE6ImportsController);
+  fastify.get("/e6/imports/:id", storeStaffRoute, e6ImportDetailController);
   fastify.post("/e6/imports/:id/confirm", confirmE6ImportController);
   fastify.post("/e6/imports/merge", mergeE6ImportsController);
   fastify.post("/e6/imports/:id/reject", rejectE6ImportController);
@@ -282,41 +282,45 @@ export default async function adminRoutes(fastify) {
   fastify.get("/products/import-template", productImportTemplateController);
   fastify.post("/products/import-preview", previewProductImportController);
   fastify.post("/products/import", importProductsController);
-  fastify.get("/products", listProductsController);
+  fastify.get("/products", storeStaffRoute, listProductsController);
   fastify.post("/products", createProductController);
   fastify.put("/products/:id", updateProductController);
-  fastify.get("/product-differences/stats", productDiffStatsController);
-  fastify.get("/product-differences/logs", listProductDiffLogsController);
+  fastify.get("/product-differences/stats", storeStaffRoute, productDiffStatsController);
+  fastify.get("/product-differences/logs", storeStaffRoute, listProductDiffLogsController);
   fastify.post("/product-differences/register", registerProductDiffController);
   fastify.post("/product-differences/write-off", writeOffProductDiffController);
   fastify.post(
     "/product-differences/logs/:id/reverse",
     reverseProductDiffController,
   );
-  fastify.get("/store-transfers", listTransferController);
-  fastify.get("/store-transfers/stats", transferStatsController);
-  fastify.get("/store-transfers/stores", transferStoresController);
-  fastify.get("/store-transfers/:id", transferDetailController);
-  fastify.post("/store-transfers", createTransferController);
-  fastify.put("/store-transfers/:id", updateTransferController);
+  fastify.get("/store-transfers", storeStaffRoute, listTransferController);
+  fastify.get("/store-transfers/stats", storeStaffRoute, transferStatsController);
+  fastify.get("/store-transfers/stores", storeStaffRoute, transferStoresController);
+  fastify.get("/store-transfers/:id", storeStaffRoute, transferDetailController);
+  fastify.post("/store-transfers", storeStaffRoute, createTransferController);
+  fastify.put("/store-transfers/:id", storeStaffRoute, updateTransferController);
   fastify.put(
     "/store-transfers/:id/expected-return-date",
+    storeStaffRoute,
     updateExpectedReturnDateController,
   );
-  fastify.post("/store-transfers/:id/returns", addTransferReturnsController);
+  fastify.post("/store-transfers/:id/returns", storeStaffRoute, addTransferReturnsController);
   fastify.put(
     "/store-transfers/:id/returns/:returnId",
+    storeStaffRoute,
     updateTransferReturnController,
   );
   fastify.post(
     "/store-transfers/:id/confirm-outbound",
+    storeStaffRoute,
     confirmTransferOutboundController,
   );
   fastify.post(
     "/store-transfers/:id/returns/:returnId/confirm",
+    storeStaffRoute,
     confirmTransferReturnController,
   );
-  fastify.post("/store-transfers/:id/cancel", cancelTransferController);
+  fastify.post("/store-transfers/:id/cancel", storeStaffRoute, cancelTransferController);
   fastify.get("/packages", storeStaffRoute, listController);
   fastify.get("/packages/by-code/:pickupCode", storeStaffRoute, pickupCodeDetailController);
   fastify.get("/packages/:id/notifications", packageNotificationsController);

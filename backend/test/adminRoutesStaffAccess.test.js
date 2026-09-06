@@ -25,7 +25,7 @@ test('admin route registration only admits staff to explicitly marked routes', a
   });
 
   const denied = await app.inject({
-    method: 'GET', url: '/admin/store-transfers', headers: { authorization: `Bearer ${token}` }
+    method: 'POST', url: '/admin/product-differences/register', headers: { authorization: `Bearer ${token}` }
   });
   assert.equal(denied.statusCode, 403);
   assert.match(denied.json().message, /门店员工无权/);
@@ -38,6 +38,9 @@ test('admin route registration only admits staff to explicitly marked routes', a
   for (const url of [
     '/admin/prescriptions',
     '/admin/e6-pharmacy/products',
+    '/admin/e6/imports',
+    '/admin/product-differences/stats',
+    '/admin/store-transfers',
     '/admin/yd-goods-check',
     '/admin/yd-goods-check/1',
     '/admin/yd-goods-check/1/items',

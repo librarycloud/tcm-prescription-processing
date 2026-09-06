@@ -382,6 +382,8 @@ Page({
     });
   },
 
+  noop() {},
+
   showPlanDetail(e) {
     const plan = this.findPlan(e.currentTarget.dataset.id);
     if (!plan) return;

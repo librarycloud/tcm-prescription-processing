@@ -90,6 +90,11 @@
 
 .task-card {
   border-left: 6rpx solid #0052d9;
+  transition: background-color 0.15s ease;
+}
+
+.task-card:active {
+  background-color: #f7f8fa;
 }
 
 .pickup-card {

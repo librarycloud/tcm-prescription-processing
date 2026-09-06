@@ -360,6 +360,7 @@ private fun TcmAdminApp() {
                 is ScreenTarget.E6ImportDetail -> DetailShell("E6订单详情", onBack = { navigateBack() }) {
                     E6ImportDetailScreen(
                         id = currentScreen.id,
+                        user = session?.user,
                         onConfirm = { item -> navigateTo(ScreenTarget.E6ImportConfirm(item)) },
                         onPrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
                     )
@@ -529,7 +530,7 @@ private fun TcmAdminApp() {
                     )
                 }
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
-                    DifferencesScreen(scrollState = differencesScrollState)
+                    DifferencesScreen(user = session?.user, scrollState = differencesScrollState)
                 }
                 is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, scrollState = transfersScrollState) {
                     TransfersScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = transfersScrollState)

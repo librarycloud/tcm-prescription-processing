@@ -32,7 +32,7 @@
   </picker>
 
   <block wx:if="{{mode === 'plans'}}">
-    <view class="app-card task-card" wx:for="{{list}}" wx:key="id">
+    <view class="app-card task-card" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bind:tap="openOperation">
       <view class="status-row">
         <view class="task-main">
           <view class="task-title">{{item.customerName}} · {{item.processTypeName}}</view>
@@ -53,7 +53,7 @@
         <view wx:if="{{item.finishDate}}">完成时间：{{item.finishDateText}}</view>
         <view wx:if="{{item.processRemark || item.remark}}">备注：{{item.processRemark || item.remark}}</view>
       </view>
-      <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}" catch:tap="noop">
         <view class="task-actions {{item.fewActions ? 'few' : 'many'}} {{item.singleAction ? 'one' : ''}}">
           <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" size="small" variant="outline" data-id="{{item.id}}" bind:tap="showPlanDetail">详情</t-button>
           <t-button custom-class="action-button" custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;" style="width:auto;display:inline-flex;" size="small" variant="outline" data-id="{{item.prescriptionId}}" bind:tap="goPrescriptionDetail">处方</t-button>

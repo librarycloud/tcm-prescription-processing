@@ -44,7 +44,11 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 @Composable
-internal fun DifferencesScreen(scrollState: ScrollState) {
+internal fun DifferencesScreen(
+    user: JSONObject? = null,
+    scrollState: ScrollState,
+) {
+    val isStoreStaff = user?.optInt("role", -1) == 3
     val listOwner = "differences"
     var tab by rememberRetainedListValue(listOwner, "tab") { "current" }
     var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
@@ -119,12 +123,14 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
             Column(Modifier.weight(1f)) {
                 SectionHeader("库存差异", "管理未入库/未销库的实货差异")
             }
-            Button(
-                onClick = { registerVisible = true },
-                modifier = Modifier.height(CompactControlHeight),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Text("登记差异")
+            if (!isStoreStaff) {
+                Button(
+                    onClick = { registerVisible = true },
+                    modifier = Modifier.height(CompactControlHeight),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text("登记差异")
+                }
             }
         }
 
@@ -179,27 +185,37 @@ internal fun DifferencesScreen(scrollState: ScrollState) {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Text("先到货：+${quantityText(preReceipt)} $unit", color = Success, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                    TextButton(
-                                        onClick = { writeOff = Pair(product, "WRITE_OFF_RECEIPT"); writeOffQuantity = quantityText(preReceipt, "0") },
-                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                    ) {
-                                        Text("入库销账", fontSize = 11.sp)
+                                    if (!isStoreStaff) {
+                                        TextButton(
+                                            onClick = { writeOff = Pair(product, "WRITE_OFF_RECEIPT"); writeOffQuantity = quantityText(preReceipt, "0") },
+                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                        ) {
+                                            Text("入库销账", fontSize = 11.sp)
+                                        }
                                     }
                                 }
                             }
                         }
                         if (preShipment > 0) {
-                            Row(
+                            Surface(
+                                color = DangerSoft,
+                                shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                TextButton(
-                                    onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
-                                    Text("销库销账", fontSize = 11.sp)
+                                    Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    if (!isStoreStaff) {
+                                        TextButton(
+                                            onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
+                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                        ) {
+                                            Text("销库销账", fontSize = 11.sp)
+                                        }
+                                    }
                                 }
                             }
                         }

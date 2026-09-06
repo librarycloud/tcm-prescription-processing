@@ -407,11 +407,13 @@ internal fun E6ImportsScreen(
                     Text("共 ${listState.total} 条记录 · 第 $currentPage / ${listState.pages} 页", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(7.dp))
                 }
+                val isStoreStaff = user?.optInt("role", -1) == 3
                 items(currentItems, key = { it.optInt("id") }) { item ->
                     E6ImportCard(
                         item = item,
                         selected = selectedIds.contains(item.optInt("id")),
-                        selectable = e6CanReview(item),
+                        selectable = !isStoreStaff && e6CanReview(item),
+                        canManage = !isStoreStaff,
                         onSelect = { checked -> selectedIds = if (checked) selectedIds + item.optInt("id") else selectedIds - item.optInt("id") },
                         onDetail = { onNavigate(ScreenTarget.E6ImportDetail(item.optInt("id"))) },
                         onConfirm = { onNavigate(ScreenTarget.E6ImportConfirm(item)) },
@@ -420,7 +422,7 @@ internal fun E6ImportsScreen(
                     )
                     Spacer(Modifier.height(9.dp))
                 }
-                if (selectedIds.size >= 2) {
+                if (!isStoreStaff && selectedIds.size >= 2) {
                     val mergeItems = currentItems.filter { selectedIds.contains(it.optInt("id")) && e6CanReview(it) }
                     item(key = "merge_button") {
                         Button(
@@ -485,7 +487,17 @@ internal fun E6ImportsScreen(
 }
 
 @Composable
-private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolean, onSelect: (Boolean) -> Unit, onDetail: () -> Unit, onConfirm: () -> Unit, onRevalidate: () -> Unit, onReject: () -> Unit) {
+private fun E6ImportCard(
+    item: JSONObject,
+    selected: Boolean,
+    selectable: Boolean,
+    canManage: Boolean = true,
+    onSelect: (Boolean) -> Unit,
+    onDetail: () -> Unit,
+    onConfirm: () -> Unit,
+    onRevalidate: () -> Unit,
+    onReject: () -> Unit,
+) {
     val isPaid = item.optInt("isPaid", 0) == 1
     val paidText = if (isPaid) "已付款" else "未付款"
     val orderNo = item.displayField("externalOrderNo", "-")
@@ -493,7 +505,9 @@ private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolea
 
     AppCard(onClick = onDetail) {
         Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Checkbox(checked = selected, enabled = selectable, onCheckedChange = onSelect)
+            if (canManage) {
+                androidx.compose.material3.Checkbox(checked = selected, enabled = selectable, onCheckedChange = onSelect)
+            }
             Column(Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -539,14 +553,16 @@ private fun E6ImportCard(item: JSONObject, selected: Boolean, selectable: Boolea
                 }
             }
         }
-        Spacer(Modifier.height(5.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            if (e6CanReview(item)) {
-                TextButton(onClick = onRevalidate) { Icon(Icons.Default.Sync, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("重校验") }
-                TextButton(onClick = onReject) { Icon(Icons.Default.Close, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("驳回", color = Danger) }
-            }
-            if (e6CanConfirm(item)) {
-                Button(onClick = onConfirm, shape = FieldShape, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)) { Icon(Icons.Default.CheckCircle, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("确认导入") }
+        if (canManage) {
+            Spacer(Modifier.height(5.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                if (e6CanReview(item)) {
+                    TextButton(onClick = onRevalidate) { Icon(Icons.Default.Sync, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("重校验") }
+                    TextButton(onClick = onReject) { Icon(Icons.Default.Close, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("驳回", color = Danger) }
+                }
+                if (e6CanConfirm(item)) {
+                    Button(onClick = onConfirm, shape = FieldShape, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)) { Icon(Icons.Default.CheckCircle, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("确认导入") }
+                }
             }
         }
     }
@@ -575,6 +591,7 @@ private fun e6DraftBatches(totalDose: Int, count: Int): List<E6BatchDraft> {
 @Composable
 internal fun E6ImportDetailScreen(
     id: Int,
+    user: JSONObject? = null,
     onConfirm: (JSONObject) -> Unit,
     onPrescription: (Int) -> Unit,
 ) {
@@ -664,7 +681,8 @@ internal fun E6ImportDetailScreen(
                         }
                     }
                 }
-                if (e6CanConfirm(value)) {
+                val isStoreStaff = user?.optInt("role", -1) == 3
+                if (!isStoreStaff && e6CanConfirm(value)) {
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = { onConfirm(value) }, modifier = Modifier.fillMaxWidth().height(46.dp), shape = FieldShape, colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
                         Text(if (value.isNull("prescriptionId")) "确认导入并生成加工计划" else "重新生成加工计划", fontWeight = FontWeight.SemiBold)

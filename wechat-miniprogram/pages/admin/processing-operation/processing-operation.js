@@ -234,6 +234,17 @@ Page({
     }
   },
 
+  goPrescriptionDetail() {
+    const prescriptionId = this.data.detail?.prescriptionId || this.data.detail?.prescription?.id;
+    if (!prescriptionId) {
+      wx.showToast({ title: '未找到关联处方', icon: 'none' });
+      return;
+    }
+    wx.navigateTo({
+      url: `/pages/admin/prescription-detail/prescription-detail?id=${prescriptionId}`
+    });
+  },
+
   async startPlan() {
     await transitionProcessingPlan(this.data.id, 1);
     wx.showToast({ title: '已开始调配', icon: 'success' });

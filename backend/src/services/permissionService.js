@@ -67,7 +67,7 @@ function actorStoreId(actor) {
 }
 
 export function transferScope(actor, requestedStoreId) {
-  assertManager(actor);
+  assertStoreMember(actor);
   if (isSuperAdmin(actor)) {
     if (
       requestedStoreId === undefined ||
@@ -85,7 +85,7 @@ export function transferScope(actor, requestedStoreId) {
 }
 
 export async function resolveTransferStoreIds(prisma, actor, payload) {
-  assertManager(actor);
+  assertStoreMember(actor);
   const fromStoreId = Number(payload.fromStoreId);
   const toStoreId = isSuperAdmin(actor)
     ? Number(payload.toStoreId)
@@ -107,7 +107,7 @@ export async function resolveTransferStoreIds(prisma, actor, payload) {
 }
 
 export function assertCanManageTransfer(actor, transfer) {
-  assertManager(actor);
+  assertStoreMember(actor);
   if (isSuperAdmin(actor)) return;
   const managerStoreId = actorStoreId(actor);
   const managerStore =
@@ -119,7 +119,7 @@ export function assertCanManageTransfer(actor, transfer) {
 }
 
 export function assertCanConfirmTransferOutbound(actor, transfer) {
-  assertManager(actor);
+  assertStoreMember(actor);
   if (
     !isSuperAdmin(actor) &&
     Number(transfer.fromStoreId) !== actorStoreId(actor)
@@ -128,7 +128,7 @@ export function assertCanConfirmTransferOutbound(actor, transfer) {
 }
 
 export function assertCanSubmitTransferReturn(actor, transfer) {
-  assertManager(actor);
+  assertStoreMember(actor);
   if (
     !isSuperAdmin(actor) &&
     Number(transfer.toStoreId) !== actorStoreId(actor)
@@ -137,7 +137,7 @@ export function assertCanSubmitTransferReturn(actor, transfer) {
 }
 
 export function assertCanConfirmTransferReturn(actor, transfer) {
-  assertManager(actor);
+  assertStoreMember(actor);
   if (
     !isSuperAdmin(actor) &&
     Number(transfer.fromStoreId) !== actorStoreId(actor)

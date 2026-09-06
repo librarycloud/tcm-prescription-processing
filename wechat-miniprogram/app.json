@@ -51,6 +51,7 @@
     "t-navbar": "tdesign-miniprogram/navbar/navbar",
     "t-loading": "tdesign-miniprogram/loading/loading",
     "t-empty": "tdesign-miniprogram/empty/empty",
+    "t-icon": "tdesign-miniprogram/icon/icon",
     "store-picker": "/components/store-picker/store-picker"
   },
   "style": "v2",

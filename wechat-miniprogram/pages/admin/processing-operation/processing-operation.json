@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "加工工序"
+  "navigationBarTitleText": "加工工序",
+  "usingComponents": {
+    "t-icon": "tdesign-miniprogram/icon/icon"
+  }
 }

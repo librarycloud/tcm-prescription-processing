@@ -2,10 +2,16 @@
   <t-loading wx:if="{{loading && !detail}}" text="加载中" />
 
   <block wx:if="{{detail}}">
-    <view class="app-card plan-summary">
+    <view class="app-card plan-summary" bind:tap="goPrescriptionDetail">
       <view class="summary-head">
-        <view>
-          <view class="customer">{{detail.prescription.customerName}}</view>
+        <view class="summary-left">
+          <view class="customer-row">
+            <view class="customer">{{detail.prescription.customerName}}</view>
+            <view class="prescription-link-badge">
+              <text>处方详情</text>
+              <t-icon name="chevron-right" size="28rpx" color="#0052d9" />
+            </view>
+          </view>
           <view class="muted">{{detail.planCode}} · 第 {{detail.batchNo}} 批</view>
         </view>
         <t-tag theme="primary">{{stageName}}</t-tag>
