@@ -17,3 +17,7 @@ export function getAppPatchMatrix() {
 export function generateAppPatch(fromVersionCode, targetVersionCode) {
   return request.post('/app/version/patches/generate', { fromVersionCode, targetVersionCode }, { timeout: 180000 });
 }
+
+export function generateAllAppPatches(targetVersionCode) {
+  return request.post('/app/version/patches/generate-all', { targetVersionCode }, { timeout: 300000 });
+}

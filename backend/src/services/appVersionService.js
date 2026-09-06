@@ -1,15 +1,17 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
 import { checkBsdiffAvailable } from "./patchService.js";
+import { generatePatchBetweenVersions } from "./githubReleaseService.js";
 
 const dataDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../data");
 const legacyVersionFile = path.join(dataDir, "app-version.android.json");
 const manifestFile = path.join(dataDir, "app-versions.json");
+const releaseDir = path.join(dataDir, "releases");
 
 /**
- * Resolve download URL with optional external high-bandwidth base URL
+ * Resolve download URL with optional external high bandwidth base URL
  */
 export function resolveDownloadUrl(relativeUrl) {
   if (!relativeUrl) return "";
@@ -58,24 +60,25 @@ export async function loadAppVersionsManifest() {
 
   const initialManifest = {
     latest: {
-      versionCode: Number(legacy.versionCode) || 1,
+      versionCode: Number(legacy.versionCode || 1),
       versionName: String(legacy.versionName || "1.0"),
-      minVersionCode: Number(legacy.minVersionCode) || 1,
+      minVersionCode: Number(legacy.minVersionCode || 1),
       forceUpdate: Boolean(legacy.forceUpdate),
       releaseNotes: Array.isArray(legacy.releaseNotes) ? legacy.releaseNotes : [],
-      publishedAt: String(legacy.publishedAt || ""),
+      publishedAt: String(legacy.publishedAt || new Date().toISOString().slice(0, 10)),
       apkUrl: String(legacy.apkUrl || "/app/releases/app-release.apk"),
-      sha256: String(legacy.sha256 || "").toLowerCase(),
+      sha256: String(legacy.sha256 || ""),
       size: Number(legacy.size || 0),
+      changelogUrl: String(legacy.changelogUrl || legacy.githubUrl || ""),
     },
     history: [
       {
-        versionCode: Number(legacy.versionCode) || 1,
+        versionCode: Number(legacy.versionCode || 1),
         versionName: String(legacy.versionName || "1.0"),
         apkUrl: String(legacy.apkUrl || "/app/releases/app-release.apk"),
-        sha256: String(legacy.sha256 || "").toLowerCase(),
+        sha256: String(legacy.sha256 || ""),
         size: Number(legacy.size || 0),
-        publishedAt: String(legacy.publishedAt || ""),
+        publishedAt: String(legacy.publishedAt || new Date().toISOString().slice(0, 10)),
       },
     ],
     patches: [],
@@ -86,13 +89,27 @@ export async function loadAppVersionsManifest() {
 }
 
 /**
- * Save manifest to disk and sync legacy version file for compatibility
+ * Save app versions manifest and write-through sync legacy file
  */
 export async function saveAppVersionsManifest(manifest) {
   await mkdir(dataDir, { recursive: true });
-  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
+
+  // Sync latest into legacy file for backwards compatibility
   if (manifest.latest) {
-    await writeFile(legacyVersionFile, `${JSON.stringify(manifest.latest, null, 2)}\n`, "utf8");
+    const legacyData = {
+      versionCode: manifest.latest.versionCode,
+      versionName: manifest.latest.versionName,
+      minVersionCode: manifest.latest.minVersionCode,
+      forceUpdate: manifest.latest.forceUpdate,
+      releaseNotes: manifest.latest.releaseNotes,
+      publishedAt: manifest.latest.publishedAt,
+      apkUrl: manifest.latest.apkUrl,
+      sha256: manifest.latest.sha256,
+      size: manifest.latest.size,
+      changelogUrl: manifest.latest.changelogUrl,
+    };
+    await writeFile(legacyVersionFile, JSON.stringify(legacyData, null, 2), "utf8");
   }
 }
 
@@ -130,11 +147,41 @@ export async function getAndroidAppVersion({ currentVersionCode } = {}) {
     hasUpdate,
   };
 
-  // If client provided a versionCode and there is an update, see if an incremental patch exists
+  // If client provided a versionCode and there is an update, see if an incremental patch exists or can be generated on-demand
   if (clientCode !== null && hasUpdate) {
-    const patch = (manifest.patches || []).find(
+    let patch = (manifest.patches || []).find(
       (p) => Number(p.fromVersionCode) === clientCode && Number(p.targetVersionCode) === versionCode
     );
+
+    // On-demand dynamic generation: if no pre-generated patch exists, check if local APKs exist and generate now
+    if (!patch) {
+      try {
+        const oldApkPath = path.join(releaseDir, `app-release-v${clientCode}.apk`);
+        const newApkPath = path.join(releaseDir, `app-release-v${versionCode}.apk`);
+        const [oldStat, newStat, bsdiffOk] = await Promise.all([
+          stat(oldApkPath).catch(() => null),
+          stat(newApkPath).catch(() => null),
+          checkBsdiffAvailable().catch(() => false),
+        ]);
+
+        if (oldStat?.isFile() && newStat?.isFile() && bsdiffOk) {
+          // Timeout after 6 seconds to prevent blocking client update check
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("On-demand patch generation timed out")), 6000)
+          );
+          const genResult = await Promise.race([
+            generatePatchBetweenVersions(clientCode, versionCode),
+            timeoutPromise,
+          ]);
+
+          if (genResult?.patchRecord) {
+            patch = genResult.patchRecord;
+          }
+        }
+      } catch (dynamicErr) {
+        console.warn(`[AppVersion] 动态生成增量补丁失败或超时 (v${clientCode} -> v${versionCode}):`, dynamicErr.message);
+      }
+    }
 
     if (patch) {
       return {
@@ -166,12 +213,81 @@ export async function getAndroidAppVersion({ currentVersionCode } = {}) {
 export async function getAppPatchesMatrix() {
   const manifest = await loadAppVersionsManifest();
   const bsdiffAvailable = await checkBsdiffAvailable();
-  const latestSize = Number(manifest.latest.size || 0);
+  const latestCode = Number(manifest.latest?.versionCode || 0);
 
-  const patchesWithStats = (manifest.patches || []).map((p) => {
+  const historyList = Array.isArray(manifest.history)
+    ? manifest.history.map((h) => {
+        if (Number(h.versionCode) === latestCode && manifest.latest) {
+          return { ...manifest.latest, ...h, size: Number(h.size || manifest.latest.size || 0) };
+        }
+        return { ...h };
+      })
+    : [];
+  if (manifest.latest && !historyList.some((h) => Number(h.versionCode) === latestCode)) {
+    historyList.unshift({ ...manifest.latest });
+  }
+
+  // Sort descending by versionCode
+  historyList.sort((a, b) => Number(b.versionCode) - Number(a.versionCode));
+
+  const allPatches = Array.isArray(manifest.patches) ? manifest.patches : [];
+
+  // Group by target version
+  const versionGroups = historyList.map((ver) => {
+    const vCode = Number(ver.versionCode);
+    const isLatest = vCode === latestCode;
+    const vSize = Number(ver.size || (isLatest ? manifest.latest?.size : 0) || 0);
+
+    // Incoming patches upgrading to this version
+    const incomingPatches = allPatches
+      .filter((p) => Number(p.targetVersionCode) === vCode)
+      .map((p) => {
+        const patchSize = Number(p.patchSize || 0);
+        const savedBytes = vSize > 0 ? Math.max(0, vSize - patchSize) : 0;
+        const savedPercentage = vSize > 0 ? ((savedBytes / vSize) * 100).toFixed(1) : "0.0";
+        const fromVer = historyList.find((h) => Number(h.versionCode) === Number(p.fromVersionCode));
+        return {
+          ...p,
+          fromVersionName: fromVer?.versionName || `v${p.fromVersionCode}`,
+          resolvedPatchUrl: resolveDownloadUrl(p.patchUrl),
+          patchSize,
+          savedBytes,
+          savedPercentage: Number(savedPercentage),
+        };
+      })
+      .sort((a, b) => Number(b.fromVersionCode) - Number(a.fromVersionCode));
+
+    const eligibleOlderVersions = historyList.filter((h) => Number(h.versionCode) < vCode);
+    const coveredFromCodes = new Set(incomingPatches.map((p) => Number(p.fromVersionCode)));
+    const missingOlderVersions = eligibleOlderVersions.filter((h) => !coveredFromCodes.has(Number(h.versionCode)));
+
+    return {
+      versionCode: vCode,
+      versionName: ver.versionName || `v${vCode}`,
+      isLatest,
+      size: vSize,
+      apkUrl: resolveDownloadUrl(ver.apkUrl),
+      sha256: ver.sha256 || "",
+      publishedAt: ver.publishedAt || "",
+      releaseNotes: ver.releaseNotes || [],
+      patches: incomingPatches,
+      eligibleCount: eligibleOlderVersions.length,
+      coveredCount: incomingPatches.length,
+      missingCount: missingOlderVersions.length,
+      missingVersions: missingOlderVersions.map((h) => ({
+        versionCode: Number(h.versionCode),
+        versionName: h.versionName || `v${h.versionCode}`,
+      })),
+    };
+  });
+
+  // Flat patches list for backwards compatibility
+  const patchesWithStats = allPatches.map((p) => {
+    const targetVer = historyList.find((h) => Number(h.versionCode) === Number(p.targetVersionCode));
+    const targetSize = targetVer ? Number(targetVer.size || 0) : Number(manifest.latest?.size || 0);
     const patchSize = Number(p.patchSize || 0);
-    const savedBytes = latestSize > 0 ? Math.max(0, latestSize - patchSize) : 0;
-    const savedPercentage = latestSize > 0 ? ((savedBytes / latestSize) * 100).toFixed(1) : "0.0";
+    const savedBytes = targetSize > 0 ? Math.max(0, targetSize - patchSize) : 0;
+    const savedPercentage = targetSize > 0 ? ((savedBytes / targetSize) * 100).toFixed(1) : "0.0";
     return {
       ...p,
       resolvedPatchUrl: resolveDownloadUrl(p.patchUrl),
@@ -183,8 +299,9 @@ export async function getAppPatchesMatrix() {
 
   return {
     latest: manifest.latest,
-    history: manifest.history || [],
+    history: historyList,
     patches: patchesWithStats,
+    versionGroups,
     bsdiffAvailable,
     appDownloadBaseUrl: config.appDownloadBaseUrl || "",
   };

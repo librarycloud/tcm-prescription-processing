@@ -3,7 +3,11 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAndroidAppVersion, getAppPatchesMatrix } from "../services/appVersionService.js";
-import { generatePatchBetweenVersions, syncLatestAndroidRelease } from "../services/githubReleaseService.js";
+import {
+  generateAllMissingPatchesForVersion,
+  generatePatchBetweenVersions,
+  syncLatestAndroidRelease,
+} from "../services/githubReleaseService.js";
 import { config } from "../config.js";
 import { ok } from "../utils/response.js";
 
@@ -36,6 +40,15 @@ export async function generatePatchController(request, reply) {
   }
   const result = await generatePatchBetweenVersions(fromVersionCode, targetVersionCode);
   return ok(reply, result, "差分补丁已生成");
+}
+
+export async function generateAllPatchesController(request, reply) {
+  const { targetVersionCode } = request.body || {};
+  if (!targetVersionCode) {
+    return reply.code(400).send({ code: 400, message: "targetVersionCode 必填" });
+  }
+  const result = await generateAllMissingPatchesForVersion(targetVersionCode);
+  return ok(reply, result, `已生成 ${result.generatedCount} 个增量补丁`);
 }
 
 export async function androidReleaseController(request, reply) {

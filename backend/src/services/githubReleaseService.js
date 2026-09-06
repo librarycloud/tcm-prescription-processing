@@ -51,66 +51,190 @@ async function downloadWithTimeout(url, options, destination, timeoutMs) {
   }
 }
 
+const inFlightPatches = new Map();
+
 /**
- * Manually generate a patch between two local versioned APKs
+ * Manually or on-demand generate a patch between two local versioned APKs
  */
 export async function generatePatchBetweenVersions(fromVersionCode, targetVersionCode) {
-  const manifest = await loadAppVersionsManifest();
   const fromCode = Number(fromVersionCode);
   const targetCode = Number(targetVersionCode);
+  const taskKey = `${fromCode}->${targetCode}`;
 
-  const fromEntry = manifest.history?.find((h) => Number(h.versionCode) === fromCode);
-  const targetEntry = manifest.history?.find((h) => Number(h.versionCode) === targetCode) ||
+  if (inFlightPatches.has(taskKey)) {
+    return await inFlightPatches.get(taskKey);
+  }
+
+  const taskPromise = (async () => {
+    const manifest = await loadAppVersionsManifest();
+    const fromEntry = manifest.history?.find((h) => Number(h.versionCode) === fromCode);
+    const targetEntry = manifest.history?.find((h) => Number(h.versionCode) === targetCode) ||
+      (Number(manifest.latest?.versionCode) === targetCode ? manifest.latest : null);
+
+    if (!fromEntry || !targetEntry) {
+      throw new Error(`未找到指定版本号对应的历史记录 (from: ${fromCode}, target: ${targetCode})`);
+    }
+
+    const oldApk = path.join(releaseDir, `app-release-v${fromCode}.apk`);
+    const newApk = path.join(releaseDir, `app-release-v${targetCode}.apk`);
+
+    try {
+      await stat(oldApk);
+    } catch {
+      throw new Error(`旧版本 APK 文件未在服务器找到: app-release-v${fromCode}.apk`);
+    }
+    try {
+      await stat(newApk);
+    } catch {
+      throw new Error(`目标版本 APK 文件未在服务器找到: app-release-v${targetCode}.apk`);
+    }
+
+    await mkdir(patchDir, { recursive: true });
+    const patchFileName = `patch-v${fromCode}-to-v${targetCode}.patch`;
+    const patchFilePath = path.join(patchDir, patchFileName);
+
+    const { size, sha256 } = await generatePatch(oldApk, newApk, patchFilePath);
+
+    // Reload current manifest to avoid overwrite race conditions
+    const currentManifest = await loadAppVersionsManifest();
+    const patches = (currentManifest.patches || []).filter(
+      (p) => !(Number(p.fromVersionCode) === fromCode && Number(p.targetVersionCode) === targetCode)
+    );
+
+    const patchRecord = {
+      targetVersionCode: targetCode,
+      fromVersionCode: fromCode,
+      patchFile: patchFileName,
+      patchUrl: `/app/patches/${patchFileName}`,
+      patchSha256: sha256,
+      patchSize: size,
+      createdAt: new Date().toISOString(),
+    };
+
+    patches.push(patchRecord);
+    currentManifest.patches = patches;
+    await saveAppVersionsManifest(currentManifest);
+
+    return {
+      fromVersionCode: fromCode,
+      targetVersionCode: targetCode,
+      patchFileName,
+      patchSize: size,
+      patchSha256: sha256,
+      patchRecord,
+    };
+  })();
+
+  inFlightPatches.set(taskKey, taskPromise);
+  try {
+    return await taskPromise;
+  } finally {
+    inFlightPatches.delete(taskKey);
+  }
+}
+
+/**
+ * Automatically generate all missing patches for a target version from all available older versions
+ */
+export async function generateAllMissingPatchesForVersion(targetVersionCode) {
+  const manifest = await loadAppVersionsManifest();
+  const targetCode = Number(targetVersionCode);
+  const history = Array.isArray(manifest.history) ? manifest.history : [];
+
+  const targetEntry = history.find((h) => Number(h.versionCode) === targetCode) ||
     (Number(manifest.latest?.versionCode) === targetCode ? manifest.latest : null);
 
-  if (!fromEntry || !targetEntry) {
-    throw new Error(`未找到指定版本号对应的历史记录 (from: ${fromCode}, target: ${targetCode})`);
+  if (!targetEntry) {
+    throw new Error(`未找到目标版本 (versionCode: ${targetCode})`);
   }
 
-  const oldApk = path.join(releaseDir, `app-release-v${fromCode}.apk`);
   const newApk = path.join(releaseDir, `app-release-v${targetCode}.apk`);
-
-  try {
-    await stat(oldApk);
-  } catch {
-    throw new Error(`旧版本 APK 文件未在服务器找到: app-release-v${fromCode}.apk`);
-  }
   try {
     await stat(newApk);
   } catch {
-    throw new Error(`目标版本 APK 文件未在服务器找到: app-release-v${targetCode}.apk`);
+    throw new Error(`目标版本 APK 文件在服务器不存在: app-release-v${targetCode}.apk`);
   }
 
-  await mkdir(patchDir, { recursive: true });
-  const patchFileName = `patch-v${fromCode}-to-v${targetCode}.patch`;
-  const patchFilePath = path.join(patchDir, patchFileName);
+  const eligibleOlder = history.filter((h) => Number(h.versionCode) < targetCode);
+  if (eligibleOlder.length === 0) {
+    return { targetVersionCode: targetCode, generatedCount: 0, message: "没有更早的历史版本需要生成补丁" };
+  }
 
-  const { size, sha256 } = await generatePatch(oldApk, newApk, patchFilePath);
-
-  // Update manifest patches
-  const patches = (manifest.patches || []).filter(
-    (p) => !(Number(p.fromVersionCode) === fromCode && Number(p.targetVersionCode) === targetCode)
+  const existingPatches = manifest.patches || [];
+  const coveredFromCodes = new Set(
+    existingPatches
+      .filter((p) => Number(p.targetVersionCode) === targetCode)
+      .map((p) => Number(p.fromVersionCode))
   );
 
-  patches.push({
-    targetVersionCode: targetCode,
-    fromVersionCode: fromCode,
-    patchFile: patchFileName,
-    patchUrl: `/app/patches/${patchFileName}`,
-    patchSha256: sha256,
-    patchSize: size,
-    createdAt: new Date().toISOString(),
-  });
+  const missingVersions = eligibleOlder.filter((h) => !coveredFromCodes.has(Number(h.versionCode)));
+  if (missingVersions.length === 0) {
+    return { targetVersionCode: targetCode, generatedCount: 0, message: "该版本的所有历史差分包已存在，无需重复生成" };
+  }
 
-  manifest.patches = patches;
-  await saveAppVersionsManifest(manifest);
+  const repo = String(config.githubRepository || "librarycloud/tcm-prescription-processing").trim();
+  const headers = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "tcm-android-release-sync",
+  };
+  if (config.githubToken) headers.Authorization = `Bearer ${config.githubToken}`;
+
+  const generated = [];
+  const errors = [];
+
+  for (const prev of missingVersions) {
+    const oldCode = Number(prev.versionCode);
+    const oldApkPath = path.join(releaseDir, `app-release-v${oldCode}.apk`);
+    let hasOldApk = false;
+
+    try {
+      await stat(oldApkPath);
+      hasOldApk = true;
+    } catch {
+      // Try to fetch from GitHub releases history
+      try {
+        const listRes = await fetchWithTimeout(`${config.githubApiUrl || "https://api.github.com"}/repos/${repo}/releases?per_page=30`, { headers }, metadataTimeoutMs);
+        if (listRes.ok) {
+          const allReleases = await listRes.json();
+          for (const rel of allReleases) {
+            const relAssets = new Map((rel.assets || []).map((a) => [a.name, a]));
+            const metaA = relAssets.get("app-version.android.json");
+            const apkA = relAssets.get("app-release.apk");
+            if (metaA && apkA) {
+              const mRes = await fetchWithTimeout(metaA.browser_download_url, { headers }, metadataTimeoutMs);
+              if (mRes.ok) {
+                const mJson = await mRes.json();
+                if (Number(mJson.versionCode) === oldCode) {
+                  await downloadWithTimeout(apkA.browser_download_url, { headers }, oldApkPath, apkTimeoutMs);
+                  hasOldApk = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (dlErr) {
+        console.warn(`拉取历史版本 v${oldCode} APK 失败:`, dlErr.message);
+      }
+    }
+
+    if (hasOldApk) {
+      try {
+        const res = await generatePatchBetweenVersions(oldCode, targetCode);
+        generated.push(res);
+      } catch (genErr) {
+        errors.push({ fromVersionCode: oldCode, error: genErr.message });
+      }
+    } else {
+      errors.push({ fromVersionCode: oldCode, error: `服务器本地与 GitHub 均未找到旧版本 APK (v${oldCode})` });
+    }
+  }
 
   return {
-    fromVersionCode: fromCode,
     targetVersionCode: targetCode,
-    patchFileName,
-    patchSize: size,
-    patchSha256: sha256,
+    generatedCount: generated.length,
+    generated,
+    errors,
   };
 }
 

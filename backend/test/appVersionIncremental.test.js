@@ -79,7 +79,7 @@ test('appVersionService: loads manifest and respects currentVersionCode', async 
     assert.equal(latestResult.hasUpdate, false);
   });
 
-  await t.test('getAppPatchesMatrix computes savings percentage correctly', async () => {
+  await t.test('getAppPatchesMatrix computes savings percentage and versionGroups correctly', async () => {
     const matrix = await getAppPatchesMatrix();
     assert.equal(matrix.latest.versionCode, 10);
     assert.equal(matrix.patches.length, 1);
@@ -88,6 +88,64 @@ test('appVersionService: loads manifest and respects currentVersionCode', async 
     assert.equal(patch.targetVersionCode, 10);
     assert.equal(patch.savedBytes, 50000000 - 2500000);
     assert.equal(patch.savedPercentage, 95);
+
+    // Verify versionGroups structure
+    assert.ok(Array.isArray(matrix.versionGroups));
+    assert.equal(matrix.versionGroups.length, 2);
+    const v10Group = matrix.versionGroups.find((g) => g.versionCode === 10);
+    assert.ok(v10Group);
+    assert.equal(v10Group.isLatest, true);
+    assert.equal(v10Group.eligibleCount, 1);
+    assert.equal(v10Group.coveredCount, 1);
+    assert.equal(v10Group.missingCount, 0);
+    assert.equal(v10Group.patches.length, 1);
+    assert.equal(v10Group.patches[0].fromVersionCode, 9);
+  });
+
+  await t.test('on-demand patch generation generates and caches patch when local APKs exist', async () => {
+    const bsdiffAvailable = await checkBsdiffAvailable();
+    if (!bsdiffAvailable) return;
+
+    const releaseDir = path.join(testDir, 'releases');
+    const patchDir = path.join(testDir, 'patches');
+    await mkdir(releaseDir, { recursive: true });
+    await mkdir(patchDir, { recursive: true });
+
+    const apkV8 = path.join(releaseDir, 'app-release-v8.apk');
+    const apkV10 = path.join(releaseDir, 'app-release-v10.apk');
+
+    // Create dummy base APK and modified APK
+    await writeFile(apkV8, 'base-apk-version-8-content-sample-data-123456');
+    await writeFile(apkV10, 'target-apk-version-10-content-sample-data-123456-with-updates');
+
+    // Add v8 to history in manifest
+    const currentManifest = await loadAppVersionsManifest();
+    currentManifest.history.push({ versionCode: 8, versionName: '1.8.0' });
+    await saveAppVersionsManifest(currentManifest);
+
+    try {
+      // First request: triggers dynamic on-demand generation
+      const dynamicResult = await getAndroidAppVersion({ currentVersionCode: 8 });
+      assert.equal(dynamicResult.hasUpdate, true);
+      assert.equal(dynamicResult.updateType, 'incremental');
+      assert.ok(dynamicResult.patchUrl.includes('patch-v8-to-v10.patch'));
+
+      // Check that manifest now has the cached patch
+      const updatedManifest = await loadAppVersionsManifest();
+      const cachedPatch = updatedManifest.patches.find(
+        (p) => p.fromVersionCode === 8 && p.targetVersionCode === 10
+      );
+      assert.ok(cachedPatch);
+
+      // Second request: instant cache hit
+      const cachedResult = await getAndroidAppVersion({ currentVersionCode: 8 });
+      assert.equal(cachedResult.updateType, 'incremental');
+      assert.equal(cachedResult.patchSha256, cachedPatch.patchSha256);
+    } finally {
+      await rm(apkV8, { force: true });
+      await rm(apkV10, { force: true });
+      await rm(path.join(patchDir, 'patch-v8-to-v10.patch'), { force: true });
+    }
   });
 
   // Restore initial manifest

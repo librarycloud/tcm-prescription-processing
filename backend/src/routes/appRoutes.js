@@ -3,6 +3,7 @@ import {
   androidReleaseController,
   androidVersionController,
   appPatchesController,
+  generateAllPatchesController,
   generatePatchController,
   syncAndroidVersionController,
 } from "../controllers/appVersionController.js";
@@ -18,4 +19,5 @@ export default async function appRoutes(fastify) {
   fastify.post("/version/android/sync", { preHandler: [verifyToken, verifySuperAdmin] }, syncAndroidVersionController);
   fastify.get("/version/patches", { preHandler: [verifyToken, verifySuperAdmin] }, appPatchesController);
   fastify.post("/version/patches/generate", { preHandler: [verifyToken, verifySuperAdmin] }, generatePatchController);
+  fastify.post("/version/patches/generate-all", { preHandler: [verifyToken, verifySuperAdmin] }, generateAllPatchesController);
 }
