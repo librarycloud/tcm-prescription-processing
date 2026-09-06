@@ -183,6 +183,7 @@ internal val BrownSoft: Color @Composable get() = MaterialTheme.colorScheme.seco
 private val isAppDarkTheme: Boolean
     @Composable
     get() = MaterialTheme.colorScheme.background == Color(0xFF0F172A) ||
+        MaterialTheme.colorScheme.background == Color(0xFF000000) ||
         runCatching {
             val bg = MaterialTheme.colorScheme.background
             (0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue) < 0.5f

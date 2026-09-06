@@ -2,12 +2,18 @@ package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +46,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -151,10 +158,17 @@ internal fun ProfileScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SettingsScreen(
     selectedTheme: String,
     onThemeSelected: (String) -> Unit,
+    pureBlackMode: Boolean,
+    onPureBlackModeChanged: (Boolean) -> Unit,
+    themeAccentKey: String,
+    customColorHex: String,
+    onThemeAccentSelected: (String) -> Unit,
+    onCustomColorChanged: (String) -> Unit,
 ) {
     val options = listOf(
         "system" to "跟随系统",
@@ -198,6 +212,252 @@ internal fun SettingsScreen(
                 }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPureBlackModeChanged(!pureBlackMode) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "纯黑模式",
+                        color = Ink,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (selectedTheme == "light") {
+                            "暗色主题下背景呈现纯黑（当前为亮色，切换暗色后生效）"
+                        } else {
+                            "深色模式下使用纯黑背景（AMOLED 屏幕更省电）"
+                        },
+                        color = Muted,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                    )
+                }
+                Switch(
+                    checked = pureBlackMode,
+                    onCheckedChange = onPureBlackModeChanged,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Text("主题配色", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(8.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("预设风格", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Spacer(Modifier.height(12.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DefaultThemeAccents.forEach { preset ->
+                        val isSelected = themeAccentKey == preset.key
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onThemeAccentSelected(preset.key) }
+                                .padding(4.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(preset.primary)
+                                    .border(
+                                        width = if (isSelected) 2.5.dp else 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant,
+                                        shape = CircleShape,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = if (isLightColor(preset.primary)) Color.Black else Color.White,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = preset.name,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) Primary else Ink,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        var hexInput by remember(customColorHex) { mutableStateOf(customColorHex) }
+        val parsedColor = remember(hexInput) { tryParseHexColor(hexInput) }
+        val isCustomActive = themeAccentKey == "custom"
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(
+                1.dp,
+                if (isCustomActive) Primary else MaterialTheme.colorScheme.outlineVariant,
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("自定义色彩", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                    Spacer(Modifier.weight(1f))
+                    if (isCustomActive) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = PrimarySoft,
+                        ) {
+                            Text(
+                                "已生效",
+                                color = Primary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text("点选推荐色彩，或输入任意 16 进制颜色代码", fontSize = 12.sp, color = Muted)
+
+                Spacer(Modifier.height(14.dp))
+                Text("推荐色彩", fontSize = 12.sp, color = Muted, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QuickCustomColors.forEach { (_, color) ->
+                        val formatted = formatHexColor(color)
+                        val isCurrent = isCustomActive && customColorHex.equals(formatted, ignoreCase = true)
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    width = if (isCurrent) 2.5.dp else 1.dp,
+                                    color = if (isCurrent) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant,
+                                    shape = CircleShape,
+                                )
+                                .clickable {
+                                    hexInput = formatted
+                                    onCustomColorChanged(formatted)
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isCurrent) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = if (isLightColor(color)) Color.Black else Color.White,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(14.dp))
+
+                Text("自定义色值（HEX）", fontSize = 12.sp, color = Muted, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(parsedColor ?: Color.LightGray.copy(alpha = 0.3f))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (parsedColor == null) {
+                            Text("?", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(Modifier.width(10.dp))
+
+                    OutlinedTextField(
+                        value = hexInput,
+                        onValueChange = { input ->
+                            hexInput = input
+                            val parsed = tryParseHexColor(input)
+                            if (parsed != null && (input.length == 7 || input.length == 6)) {
+                                val fmt = if (input.startsWith("#")) input else "#$input"
+                                onCustomColorChanged(fmt)
+                            }
+                        },
+                        placeholder = { Text("#059669") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+
+                    Spacer(Modifier.width(10.dp))
+
+                    Button(
+                        onClick = {
+                            val parsed = tryParseHexColor(hexInput)
+                            if (parsed != null) {
+                                val fmt = if (hexInput.startsWith("#")) hexInput else "#$hexInput"
+                                onCustomColorChanged(fmt)
+                            }
+                        },
+                        enabled = parsedColor != null,
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text("应用")
+                    }
+                }
+                if (hexInput.isNotBlank() && parsedColor == null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("请输入有效的颜色代码，如 #059669 或 059669", color = Danger, fontSize = 11.sp)
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

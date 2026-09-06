@@ -77,6 +77,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -86,8 +87,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -134,66 +138,7 @@ internal sealed class ScreenTarget {
     data class TransferDetail(val id: Int) : ScreenTarget()
 }
 
-/** Stable Material 3 roles for the pharmacy workspace. */
-private fun tcmLightColorScheme() = lightColorScheme(
-    // Modern Medical / Tech Blue palette
-    primary = Color(0xFF2563EB),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFEFF6FF),
-    onPrimaryContainer = Color(0xFF1E40AF),
-    inversePrimary = Color(0xFF93C5FD),
-    secondary = Color(0xFFF59E0B),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFFEF3C7),
-    onSecondaryContainer = Color(0xFF78350F),
-    tertiary = Color(0xFF10B981),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFECFDF5),
-    onTertiaryContainer = Color(0xFF065F46),
-    background = Color(0xFFF8FAFC),
-    onBackground = Color(0xFF0F172A),
-    surface = Color(0xFFF8FAFC),
-    surfaceTint = Color(0xFF2563EB),
-    onSurface = Color(0xFF0F172A),
-    surfaceVariant = Color(0xFFF1F5F9),
-    onSurfaceVariant = Color(0xFF475569),
-    inverseSurface = Color(0xFF1E293B),
-    inverseOnSurface = Color(0xFFF1F5F9),
-    outline = Color(0xFFCBD5E1),
-    outlineVariant = Color(0xFFE2E8F0),
-    scrim = Color(0xFF000000),
-    error = Color(0xFFEF4444),
-    onError = Color.White,
-    errorContainer = Color(0xFFFEE2E2),
-    onErrorContainer = Color(0xFF7F1D1D),
-)
 
-private fun tcmDarkColorScheme() = darkColorScheme(
-    primary = Color(0xFF93C5FD),
-    onPrimary = Color(0xFF0B1B33),
-    primaryContainer = Color(0xFF1E3A5F),
-    onPrimaryContainer = Color(0xFFD6E8FF),
-    secondary = Color(0xFFFBBF24),
-    onSecondary = Color(0xFF2A1A00),
-    secondaryContainer = Color(0xFF5C4300),
-    onSecondaryContainer = Color(0xFFFFE8A3),
-    tertiary = Color(0xFF6EE7B7),
-    onTertiary = Color(0xFF002117),
-    tertiaryContainer = Color(0xFF14532D),
-    onTertiaryContainer = Color(0xFFB8F5D6),
-    background = Color(0xFF0F172A),
-    onBackground = Color(0xFFE2E8F0),
-    surface = Color(0xFF111827),
-    onSurface = Color(0xFFE5E7EB),
-    surfaceVariant = Color(0xFF1F2937),
-    onSurfaceVariant = Color(0xFFCBD5E1),
-    outline = Color(0xFF475569),
-    outlineVariant = Color(0xFF334155),
-    error = Color(0xFFFCA5A5),
-    onError = Color(0xFF450A0A),
-    errorContainer = Color(0xFF7F1D1D),
-    onErrorContainer = Color(0xFFFEE2E2),
-)
 
 @Composable
 private fun TcmAdminApp() {
@@ -227,6 +172,15 @@ private fun TcmAdminApp() {
     }
     var themeMode by remember(settingsPreferences) {
         mutableStateOf(settingsPreferences.getString("theme_mode", "system") ?: "system")
+    }
+    var pureBlackMode by remember(settingsPreferences) {
+        mutableStateOf(settingsPreferences.getBoolean("pure_black_mode", false))
+    }
+    var themeAccentKey by remember(settingsPreferences) {
+        mutableStateOf(settingsPreferences.getString("theme_accent_key", "blue") ?: "blue")
+    }
+    var customColorHex by remember(settingsPreferences) {
+        mutableStateOf(settingsPreferences.getString("theme_custom_color", "#2563EB") ?: "#2563EB")
     }
     var hasAppUpdate by remember(updatePreferences) {
         mutableStateOf(
@@ -310,10 +264,35 @@ private fun TcmAdminApp() {
         }
     }
 
-    val colorScheme = when (themeMode) {
-        "dark" -> tcmDarkColorScheme()
-        "light" -> tcmLightColorScheme()
-        else -> if (isSystemInDarkTheme()) tcmDarkColorScheme() else tcmLightColorScheme()
+    val currentAccent = remember(themeAccentKey, customColorHex) {
+        resolveThemeAccent(themeAccentKey, customColorHex)
+    }
+
+    val isSystemDark = isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemDark
+    }
+
+    val colorScheme = when {
+        isDark && pureBlackMode -> tcmPureBlackColorScheme(currentAccent)
+        isDark -> tcmDarkColorScheme(currentAccent)
+        else -> tcmLightColorScheme(currentAccent)
+    }
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? android.app.Activity)?.window
+            if (window != null) {
+                window.statusBarColor = colorScheme.surface.toArgb()
+                window.navigationBarColor = colorScheme.surface.toArgb()
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !isDark
+                insetsController.isAppearanceLightNavigationBars = !isDark
+            }
+        }
     }
 
     MaterialTheme(
@@ -428,6 +407,25 @@ private fun TcmAdminApp() {
                         onThemeSelected = { mode ->
                             themeMode = mode
                             settingsPreferences.edit().putString("theme_mode", mode).apply()
+                        },
+                        pureBlackMode = pureBlackMode,
+                        onPureBlackModeChanged = { enabled ->
+                            pureBlackMode = enabled
+                            settingsPreferences.edit().putBoolean("pure_black_mode", enabled).apply()
+                        },
+                        themeAccentKey = themeAccentKey,
+                        customColorHex = customColorHex,
+                        onThemeAccentSelected = { key ->
+                            themeAccentKey = key
+                            settingsPreferences.edit().putString("theme_accent_key", key).apply()
+                        },
+                        onCustomColorChanged = { hex ->
+                            customColorHex = hex
+                            themeAccentKey = "custom"
+                            settingsPreferences.edit()
+                                .putString("theme_custom_color", hex)
+                                .putString("theme_accent_key", "custom")
+                                .apply()
                         },
                     )
                 }

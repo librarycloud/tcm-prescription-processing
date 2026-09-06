@@ -1473,14 +1473,14 @@ internal fun OccupyingPlanCard(
                 Text(
                     text = "👉 点击直达该计划工序详情",
                     fontSize = 11.sp,
-                    color = Color(0xFF2563EB),
+                    color = Primary,
                     fontWeight = FontWeight.Medium,
                 )
             }
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "查看占用计划",
-                tint = Color(0xFF2563EB),
+                tint = Primary,
                 modifier = Modifier.size(18.dp),
             )
         }
