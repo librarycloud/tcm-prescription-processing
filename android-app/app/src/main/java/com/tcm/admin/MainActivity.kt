@@ -78,6 +78,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -94,11 +95,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -185,6 +188,9 @@ private fun TcmAdminApp() {
     }
     var customColorHex by remember(settingsPreferences) {
         mutableStateOf(settingsPreferences.getString("theme_custom_color", "#2563EB") ?: "#2563EB")
+    }
+    var textScale by remember(settingsPreferences) {
+        mutableStateOf(settingsPreferences.getFloat("text_scale", 1.0f))
     }
     var hasAppUpdate by remember(updatePreferences) {
         mutableStateOf(
@@ -299,14 +305,23 @@ private fun TcmAdminApp() {
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        shapes = Shapes(
-            small = RoundedCornerShape(6.dp),
-            medium = FieldShape,
-            large = CardShape,
-        ),
-    ) {
+    val currentDensity = LocalDensity.current
+    val customDensity = remember(currentDensity, textScale) {
+        Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * textScale,
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides customDensity) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            shapes = Shapes(
+                small = RoundedCornerShape(6.dp),
+                medium = FieldShape,
+                large = CardShape,
+            ),
+        ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
             when (currentScreen) {
                 is ScreenTarget.Login -> LoginScreen(loginLoading, loginError) { identifier, password ->
@@ -431,6 +446,11 @@ private fun TcmAdminApp() {
                                 .putString("theme_accent_key", "custom")
                                 .apply()
                         },
+                        textScale = textScale,
+                        onTextScaleChanged = { scale ->
+                            textScale = scale
+                            settingsPreferences.edit().putFloat("text_scale", scale).apply()
+                        },
                     )
                 }
 
@@ -543,6 +563,7 @@ private fun TcmAdminApp() {
             }
         }
     }
+}
 
     LaunchedEffect(session) {
         if (session != null) {

@@ -877,6 +877,175 @@ private fun ColorPickerDialog(
     )
 }
 
+@Composable
+private fun TextScalingCard(
+    textScale: Float,
+    onTextScaleChanged: (Float) -> Unit,
+) {
+    val scalePresets = listOf(
+        0.88f to "较小",
+        1.00f to "标准",
+        1.12f to "中等",
+        1.25f to "较大",
+        1.38f to "超大",
+    )
+
+    val currentIndex = scalePresets.indexOfFirst { kotlin.math.abs(it.first - textScale) < 0.03f }
+        .let { if (it >= 0) it else 1 }
+
+    val currentLabel = scalePresets.getOrNull(currentIndex)?.second ?: "标准"
+    val percentText = "${(textScale * 100).toInt()}%"
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = CardShape,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "字体大小与缩放",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Ink,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (kotlin.math.abs(textScale - 1.0f) >= 0.03f) {
+                        Text(
+                            text = "恢复默认",
+                            fontSize = 12.sp,
+                            color = Primary,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { onTextScaleChanged(1.00f) }
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = PrimarySoft,
+                    ) {
+                        Text(
+                            text = "$currentLabel ($percentText)",
+                            color = Primary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "拖动刻度调节应用全局文字大小，即时生效并自动记忆",
+                fontSize = 12.sp,
+                color = Muted,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Simulated Quote / Prescription Preview Box
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        text = "「补中益气汤」黄芪 15g，党参 10g，白术 10g，柴胡 6g",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Ink,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "处方排版与调剂界面文字将根据所选字号等比例渲染",
+                        fontSize = 11.sp,
+                        color = Muted,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // Slider with A - A icons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "A",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Muted,
+                )
+
+                Slider(
+                    value = currentIndex.toFloat(),
+                    onValueChange = { floatVal ->
+                        val idx = kotlin.math.round(floatVal).toInt().coerceIn(0, scalePresets.lastIndex)
+                        if (idx != currentIndex) {
+                            onTextScaleChanged(scalePresets[idx].first)
+                        }
+                    },
+                    valueRange = 0f..4f,
+                    steps = 3,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Primary,
+                        activeTrackColor = Primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp),
+                )
+
+                Text(
+                    text = "A",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink,
+                )
+            }
+
+            // Clickable text labels under ticks
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                scalePresets.forEachIndexed { index, (presetScale, label) ->
+                    val isChosen = index == currentIndex
+                    Text(
+                        text = label,
+                        fontSize = 11.sp,
+                        fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isChosen) Primary else Muted,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onTextScaleChanged(presetScale) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SettingsScreen(
@@ -888,6 +1057,8 @@ internal fun SettingsScreen(
     customColorHex: String,
     onThemeAccentSelected: (String) -> Unit,
     onCustomColorChanged: (String) -> Unit,
+    textScale: Float = 1.0f,
+    onTextScaleChanged: (Float) -> Unit = {},
 ) {
     var showColorPicker by remember { mutableStateOf(false) }
 
@@ -919,6 +1090,14 @@ internal fun SettingsScreen(
             selectedTheme = selectedTheme,
             pureBlackMode = pureBlackMode,
             onThemeSelected = onThemeSelected,
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // 3. Text Scaling
+        TextScalingCard(
+            textScale = textScale,
+            onTextScaleChanged = onTextScaleChanged,
         )
 
         Spacer(Modifier.height(12.dp))
