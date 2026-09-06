@@ -10,6 +10,8 @@ import {
   statusText,
   statusTheme
 } from '../../../utils/format';
+import { copyToClipboard } from '../../../utils/wechat';
+
 
 Page({
   data: {
@@ -42,6 +44,14 @@ Page({
       packageInfo: normalizePickupCode(this.data.packageInfo?.pickupCode) === normalizePickupCode(pickupCode) ? this.data.packageInfo : null
     });
   },
+
+  onCopy(e) {
+    const text = e.currentTarget.dataset.text;
+    const name = e.currentTarget.dataset.name || '内容';
+    if (!text) return;
+    copyToClipboard(text, name);
+  },
+
 
   scan() {
     safeScanCode({

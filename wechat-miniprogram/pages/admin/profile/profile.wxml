@@ -2,61 +2,54 @@
   <view class="app-card profile-card">
     <view class="avatar">{{avatarText}}</view>
     <view class="profile-main">
-      <view class="profile-name">{{user.nickname || user.phone || '未设置昵称'}}</view>
-      <view class="muted">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}</view>
+      <view class="profile-name-row">
+        <text class="profile-name">{{user.nickname || user.phone || '未设置昵称'}}</text>
+        <t-tag size="small" theme="{{user.role === 0 ? 'primary' : (user.role === 2 ? 'warning' : (user.role === 3 ? 'success' : 'default'))}}" variant="light">
+          {{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}
+        </t-tag>
+      </view>
+      <view class="profile-sub muted" wx:if="{{user.store && user.store.name}}">
+        <t-icon name="shop" size="28rpx" color="#86909c" />
+        <text>{{user.store.name}}</text>
+      </view>
+      <view class="profile-sub muted" wx:elif="{{user.phone}}">
+        <text>{{user.phone}}</text>
+      </view>
     </view>
   </view>
 
   <view class="app-card profile-info" wx:if="{{!editing}}">
     <view class="info-row">
-      <view class="info-label">
-        <view class="info-label-text">
-          <text>手</text>
-          <text>机</text>
-          <text>号</text>
-        </view>
-        <text class="info-label-colon">：</text>
-      </view>
-      <view class="info-value">{{user.phone || '-'}}</view>
-    </view>
-    <view class="info-row"><view class="info-label"><view class="info-label-text"><text>用</text><text>户</text><text>名</text></view><text class="info-label-colon">：</text></view><view class="info-value">{{user.username || '未设置'}}</view></view>
-    <view class="info-row">
-      <view class="info-label">
-        <view class="info-label-text">
-          <text>昵</text>
-          <text>称</text>
-        </view>
-        <text class="info-label-colon">：</text>
-      </view>
-      <view class="info-value">{{user.nickname || '未设置'}}</view>
+      <view class="info-label">手机号</view>
+      <view class="info-value selectable" user-select="true">{{user.phone || '-'}}</view>
     </view>
     <view class="info-row">
-      <view class="info-label">
-        <view class="info-label-text">
-          <text>账</text>
-          <text>号</text>
-          <text>角</text>
-          <text>色</text>
-        </view>
-        <text class="info-label-colon">：</text>
-      </view>
+      <view class="info-label">用户名</view>
+      <view class="info-value selectable" user-select="true">{{user.username || '未设置'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">昵称</view>
+      <view class="info-value selectable" user-select="true">{{user.nickname || '未设置'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">账号角色</view>
       <view class="info-value">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}</view>
     </view>
     <view class="info-row" wx:if="{{user.role === 2 || user.role === 3}}">
-      <view class="info-label">
-        <view class="info-label-text"><text>所</text><text>属</text><text>门</text><text>店</text></view>
-        <text class="info-label-colon">：</text>
-      </view>
+      <view class="info-label">所属门店</view>
       <view class="info-value">{{user.store.name || '-'}}</view>
     </view>
     <view class="info-row">
-      <view class="info-label">
-        <view class="info-label-text"><text>微</text><text>信</text><text>绑</text><text>定</text></view>
-        <text class="info-label-colon">：</text>
-      </view>
+      <view class="info-label">微信绑定</view>
       <view class="info-value wechat-value" hover-class="wechat-value-active" bind:tap="openWechatBinding">
-        <text class="wechat-status {{user.openidBound ? 'bound' : ''}}">{{user.openidBound ? '已绑定-' : '未绑定-'}}</text>
-        <text class="wechat-action-text">{{wechatBindingLoading ? '，处理中...' : (user.openidBound ? '点击修改' : '点击绑定')}}</text>
+        <view class="wechat-pill {{user.openidBound ? 'pill-bound' : 'pill-unbound'}}">
+          <t-icon name="{{user.openidBound ? 'check-circle-filled' : 'info-circle-filled'}}" size="28rpx" />
+          <text>{{user.openidBound ? '已绑定' : '未绑定'}}</text>
+        </view>
+        <view class="wechat-action-btn">
+          <text>{{wechatBindingLoading ? '处理中...' : (user.openidBound ? '修改绑定' : '去绑定')}}</text>
+          <t-icon name="chevron-right" size="26rpx" />
+        </view>
       </view>
     </view>
     <view wx:if="{{wechatBindingVisible}}" class="wechat-binding-panel">
@@ -80,36 +73,19 @@
 
   <view class="app-card" wx:else>
     <view class="form-row">
-      <view class="form-label">
-        <view class="form-label-text">
-          <text>手</text>
-          <text>机</text>
-          <text>号</text>
-        </view>
-        <text class="form-label-colon">：</text>
-      </view>
+      <view class="form-label">手机号</view>
       <input class="form-control" value="{{form.phone}}" type="number" placeholder="请输入手机号" data-field="phone" bindinput="onChange" />
     </view>
-    <view class="form-row"><view class="form-label"><view class="form-label-text"><text>用</text><text>户</text><text>名</text></view><text class="form-label-colon">：</text></view><input class="form-control" value="{{form.username}}" maxlength="64" placeholder="可选，英文和数字，不能是纯数字" data-field="username" bindinput="onChange" /></view>
     <view class="form-row">
-      <view class="form-label">
-        <view class="form-label-text">
-          <text>昵</text>
-          <text>称</text>
-        </view>
-        <text class="form-label-colon">：</text>
-      </view>
+      <view class="form-label">用户名</view>
+      <input class="form-control" value="{{form.username}}" maxlength="64" placeholder="可选，英文和数字，不能是纯数字" data-field="username" bindinput="onChange" />
+    </view>
+    <view class="form-row">
+      <view class="form-label">昵称</view>
       <input class="form-control" value="{{form.nickname}}" placeholder="请输入昵称" data-field="nickname" bindinput="onChange" />
     </view>
     <view class="form-row">
-      <view class="form-label">
-        <view class="form-label-text">
-          <text>新</text>
-          <text>密</text>
-          <text>码</text>
-        </view>
-        <text class="form-label-colon">：</text>
-      </view>
+      <view class="form-label">新密码</view>
       <view class="form-control-wrap">
         <input class="form-control password-control" value="{{form.password}}" password="{{!passwordVisible}}" placeholder="不修改请留空" data-field="password" bindinput="onChange" />
         <view class="password-eye" aria-label="显示或隐藏密码" bindtap="togglePasswordVisible">
@@ -118,15 +94,7 @@
       </view>
     </view>
     <view class="form-row">
-      <view class="form-label">
-        <view class="form-label-text">
-          <text>确</text>
-          <text>认</text>
-          <text>密</text>
-          <text>码</text>
-        </view>
-        <text class="form-label-colon">：</text>
-      </view>
+      <view class="form-label">确认密码</view>
       <view class="form-control-wrap">
         <input class="form-control password-control" value="{{form.confirmPassword}}" password="{{!passwordVisible}}" placeholder="再次输入新密码" data-field="confirmPassword" bindinput="onChange" />
         <view class="password-eye" aria-label="显示或隐藏密码" bindtap="togglePasswordVisible">

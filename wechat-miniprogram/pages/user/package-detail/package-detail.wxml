@@ -1,7 +1,13 @@
 <view class="page" wx:if="{{detail}}">
   <view class="app-card">
     <view class="status-row">
-      <view class="code">{{detail.pickupCode}}</view>
+      <view class="code-wrap">
+        <text class="code selectable" user-select="true">{{detail.pickupCode}}</text>
+        <view class="copy-badge" hover-class="copy-badge-active" data-text="{{detail.pickupCode}}" data-name="取货码" bind:tap="onCopy">
+          <t-icon name="copy" size="26rpx" />
+          <text>复制</text>
+        </view>
+      </view>
       <t-tag theme="{{detail.statusTheme}}">{{detail.statusText}}</t-tag>
     </view>
     <qr-code text="{{detail.pickupQrContent}}" />

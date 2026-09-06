@@ -2,7 +2,13 @@
   <view class="app-card detail-head">
     <view class="status-row">
       <view>
-        <view class="code">{{detail.prescriptionNo}}</view>
+        <view class="code-wrap">
+          <text class="code selectable" user-select="true">{{detail.prescriptionNo}}</text>
+          <view class="copy-badge" hover-class="copy-badge-active" data-text="{{detail.prescriptionNo}}" data-name="处方号" bind:tap="onCopy">
+            <t-icon name="copy" size="26rpx" />
+            <text>复制</text>
+          </view>
+        </view>
         <view class="muted">{{detail.customerName}} {{detail.phone || '-'}}</view>
       </view>
       <t-tag theme="{{detail.statusTheme}}">{{detail.statusText}}</t-tag>
@@ -75,4 +81,71 @@
   </view>
 
   <t-empty wx:if="{{!plans.length}}" description="暂无加工批次" />
+
+  <view class="section-title">
+    <text>领取记录</text>
+  </view>
+
+  <view class="app-card plan-card" wx:for="{{pickupRecords}}" wx:key="id">
+    <view class="status-row">
+      <view class="plan-title">第 {{item.batchNo}} 批 · {{item.processTypeName}}</view>
+      <t-tag theme="{{item.statusTheme}}">{{item.statusText}}</t-tag>
+    </view>
+    <view class="plan-meta">
+      <view>剂数：{{item.totalDose}} 剂</view>
+      <view>取货码：<text class="selectable" user-select="true">{{item.pickupCode}}</text></view>
+      <view>完成时间：{{item.finishDateText}}</view>
+    </view>
+    <view class="plan-actions">
+      <t-button
+        custom-class="batch-action-button"
+        custom-style="width:auto;min-width:0;padding-left:16rpx;padding-right:16rpx;"
+        style="width:auto;display:inline-flex;"
+        size="small"
+        theme="primary"
+        variant="outline"
+        data-id="{{item.packageId}}"
+        catch:tap="goPackage"
+      >详情</t-button>
+    </view>
+  </view>
+  <t-empty wx:if="{{!pickupRecords.length}}" description="暂无领取记录" />
+
+  <block wx:if="{{e6Imports.length}}">
+    <view class="section-title">
+      <text>E6导入处方明细</text>
+    </view>
+
+    <view class="app-card e6-import-card" wx:for="{{e6Imports}}" wx:key="id">
+      <view class="e6-summary-grid">
+        <view class="e6-summary-item"><text class="muted">订单号：</text><text class="selectable" user-select="true">{{item.externalOrderNo}}</text></view>
+        <view class="e6-summary-item"><text class="muted">操作员：</text><text>{{item.operatorName}}</text></view>
+        <view class="e6-summary-item"><text class="muted">订单时间：</text><text>{{item.sourceCreatedAtText}}</text></view>
+        <view class="e6-summary-item"><text class="muted">总价：</text><text class="e6-price">{{item.totalPriceText}}</text></view>
+        <view class="e6-summary-status">
+          <t-tag theme="{{item.paidTheme}}">{{item.paidText}}</t-tag>
+        </view>
+      </view>
+
+      <view class="e6-table">
+        <view class="e6-table-header">
+          <view class="e6-th th-seq">顺序</view>
+          <view class="e6-th th-name">商品名称</view>
+          <view class="e6-th th-dose">剂数</view>
+          <view class="e6-th th-qty">单剂量</view>
+          <view class="e6-th th-total">总量</view>
+        </view>
+        <view class="e6-table-row" wx:for="{{item.items}}" wx:for-item="row" wx:key="sequence">
+          <view class="e6-td td-seq">{{row.sequence || (index + 1)}}</view>
+          <view class="e6-td td-name">{{row.name || '-'}}</view>
+          <view class="e6-td td-dose">{{row.doseCount != null ? row.doseCount : '-'}}</view>
+          <view class="e6-td td-qty">{{row.quantity != null ? row.quantity : '-'}}{{row.unit || ''}}</view>
+          <view class="e6-td td-total strong">{{row.totalQuantity != null ? row.totalQuantity : '-'}}{{row.unit || ''}}</view>
+        </view>
+        <view class="e6-empty-items" wx:if="{{!item.items.length}}">暂无处方明细</view>
+      </view>
+
+      <view wx:if="{{item.remark}}" class="e6-remark">备注：{{item.remark}}</view>
+    </view>
+  </block>
 </view>

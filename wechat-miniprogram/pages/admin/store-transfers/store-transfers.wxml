@@ -12,7 +12,15 @@
   </view>
 
   <view class="app-card transfer-card" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bind:tap="openDetail">
-    <view class="status-row"><view class="transfer-title">{{item.transferNo}}</view><t-tag theme="{{item.statusTheme}}">{{item.statusLabel}}</t-tag></view>
+    <view class="status-row">
+      <view class="transfer-title-wrap">
+        <text class="transfer-title selectable" user-select="true">{{item.transferNo}}</text>
+        <view class="copy-icon-btn" catch:tap="onCopyTransferNo" data-no="{{item.transferNo}}">
+          <t-icon name="copy" size="28rpx" color="#0052d9" />
+        </view>
+      </view>
+      <t-tag theme="{{item.statusTheme}}">{{item.statusLabel}}</t-tag>
+    </view>
     <view class="muted">{{item.fromStore.name}} → {{item.toStore.name}}</view>
     <view class="transfer-meta">{{item.itemSummary}}<text wx:if="{{item.itemCount > 2}}"> 等{{item.itemCount}}项</text></view>
     <view class="muted">调拨：{{item.transferDateText}}　预计归还：{{item.expectedReturnDateText}}</view>
@@ -40,7 +48,7 @@
 
   <view wx:if="{{detailVisible}}" class="overlay" catch:tap="closeDetail"><view class="modal-card detail-modal" catch:tap="noop">
     <view class="modal-title">调拨详情 <text class="close" bind:tap="closeDetail">×</text></view>
-    <block wx:if="{{detail}}"><view class="status-row"><text>{{detail.fromStore.name}} → {{detail.toStore.name}}</text><t-tag theme="{{detail.statusTheme}}">{{detail.statusLabel}}</t-tag></view><view class="detail-lines"><view>调拨单号：{{detail.transferNo}}</view><view>调拨日期：{{detail.transferDateText}}</view><view>预计归还：{{detail.expectedReturnDateText}}</view><view>创建人：{{detail.creatorName}}</view></view>
+    <block wx:if="{{detail}}"><view class="status-row"><text>{{detail.fromStore.name}} → {{detail.toStore.name}}</text><t-tag theme="{{detail.statusTheme}}">{{detail.statusLabel}}</t-tag></view><view class="detail-lines"><view class="detail-line-copyable"><text>调拨单号：</text><text class="copyable-text selectable" user-select="true">{{detail.transferNo}}</text><view class="copy-badge-sm" hover-class="copy-badge-active" catch:tap="onCopyTransferNo" data-no="{{detail.transferNo}}"><t-icon name="copy" size="20rpx" /><text>复制</text></view></view><view>调拨日期：{{detail.transferDateText}}</view><view>预计归还：{{detail.expectedReturnDateText}}</view><view>创建人：{{detail.creatorName}}</view></view>
       <view class="sub-title">调拨明细</view><view wx:for="{{detail.items}}" wx:key="id" class="detail-item"><view>{{item.itemName}} {{item.specification}}</view><view class="muted">借调 {{item.quantityText}}{{item.unit}} · 剩余 {{item.remainingQuantityText}}{{item.unit}}</view></view>
       <view class="sub-title">归还记录</view><view wx:for="{{detail.returnRecords}}" wx:key="id" class="detail-item"><view>{{item.itemName}} {{item.quantityText}}</view><view class="muted">{{item.statusText}} · {{item.returnDateText}}</view><view class="record-actions"><t-button wx:if="{{item.canConfirm && detail.permissions.canSubmitReturn}}" size="small" variant="outline" data-index="{{index}}" bind:tap="openReturnEdit">修改</t-button><t-button wx:if="{{item.canConfirm && detail.permissions.canConfirmReturn}}" size="small" theme="primary" data-index="{{index}}" bind:tap="confirmReturn">确认收货</t-button></view></view>
       <view class="modal-actions action-wrap"><t-button wx:if="{{detail.permissions.canUpdate}}" size="small" variant="outline" bind:tap="openEdit">修改调拨</t-button><t-button wx:if="{{detail.permissions.canConfirmOutbound}}" size="small" theme="primary" bind:tap="confirmOutbound">确认调出</t-button><t-button wx:if="{{detail.permissions.canSubmitReturn}}" size="small" variant="outline" bind:tap="openReturn">发起归还</t-button><t-button wx:if="{{detail.permissions.canUpdateExpectedReturnDate}}" size="small" variant="outline" bind:tap="openDateEditor">改预计日期</t-button><t-button wx:if="{{detail.permissions.canCancel}}" size="small" theme="danger" variant="outline" bind:tap="cancelTransfer">取消调拨</t-button></view>

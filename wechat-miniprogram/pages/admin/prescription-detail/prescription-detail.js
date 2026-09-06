@@ -11,6 +11,8 @@ import {
   choosePrescriptionAttachment,
   formatAttachmentSize
 } from '../../../utils/prescription-attachment';
+import { copyToClipboard } from '../../../utils/wechat';
+
 
 const PRESCRIPTION_STATUS = {
   0: { text: '进行中', theme: 'primary' },
@@ -27,11 +29,28 @@ const PLAN_STATUS = {
   5: { text: '已取消', theme: 'default' }
 };
 
+function parseE6ImportItems(item) {
+  let payload = item?.rawPayload;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = null;
+    }
+  }
+  const items = payload?.items;
+  return Array.isArray(items)
+    ? [...items].sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
+    : [];
+}
+
 Page({
   data: {
     id: null,
     detail: null,
     plans: [],
+    pickupRecords: [],
+    e6Imports: [],
     isStoreStaff: false,
     attachmentDeleting: false,
     attachmentPreparing: false,
@@ -47,10 +66,63 @@ Page({
     if (this.data.id) this.load();
   },
 
+  onCopy(e) {
+    const text = e.currentTarget.dataset.text;
+    const name = e.currentTarget.dataset.name || '内容';
+    if (!text) return;
+    copyToClipboard(text, name);
+  },
+
+
   async load() {
     const item = await getPrescriptionDetail(this.data.id);
     const prescriptionStatus =
       PRESCRIPTION_STATUS[Number(item.status)] || PRESCRIPTION_STATUS[0];
+    const rawPlans = item.plans || [];
+    const pickupRecords = rawPlans
+      .filter((plan) => plan.package)
+      .map((plan) => {
+        const isPicked = Number(plan.status) === 4;
+        return {
+          id: plan.id,
+          batchNo: plan.batchNo,
+          processTypeName: plan.processType ? plan.processType.name : '-',
+          totalDose: plan.totalDose,
+          packageId: plan.package.id,
+          pickupCode: formatPickupCode(plan.package.pickupCode || plan.pickupCode),
+          isPicked,
+          statusText: isPicked ? '已领取' : '待领取',
+          statusTheme: isPicked ? 'success' : 'warning',
+          finishDateText: formatDate(plan.finishDate) || '-'
+        };
+      });
+
+    const e6Imports = (item.e6Imports || []).map((imp) => {
+      const items = parseE6ImportItems(imp);
+      const isPaid = Number(imp.isPaid) === 1;
+      const operatorName =
+        imp.operatorName ||
+        imp.operatorMapping?.operatorName ||
+        imp.cashierName ||
+        '-';
+      return {
+        id: imp.id,
+        externalOrderNo: imp.externalOrderNo || '-',
+        cashierName: imp.cashierName || '-',
+        operatorName,
+        sourceCreatedAtText: formatDate(imp.sourceCreatedAt) || '-',
+        totalPriceText:
+          imp.totalPrice == null || imp.totalPrice === ''
+            ? '-'
+            : `¥${Number(imp.totalPrice).toFixed(2)}`,
+        isPaid,
+        paidText: isPaid ? '已付款' : '未付款',
+        paidTheme: isPaid ? 'success' : 'warning',
+        remark: imp.remark || '',
+        items
+      };
+    });
+
     this.setData({
       detail: {
         ...item,
@@ -72,7 +144,7 @@ Page({
         canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
         canAddPlan: !this.data.isStoreStaff && Number(item.status) === 0
       },
-      plans: (item.plans || []).map((plan) => {
+      plans: rawPlans.map((plan) => {
         const status = PLAN_STATUS[plan.status] || {
           text: plan.status,
           theme: 'default'
@@ -95,7 +167,9 @@ Page({
           canEdit: !this.data.isStoreStaff && [0, 1].includes(Number(plan.status)),
           canDelete: !this.data.isStoreStaff && Number(plan.status) === 0
         };
-      })
+      }),
+      pickupRecords,
+      e6Imports
     });
   },
 

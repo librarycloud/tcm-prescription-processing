@@ -5,35 +5,82 @@
   </view>
 
   <view class="business-grid">
-    <view class="app-card business-item" data-url="/pages/admin/prescriptions/prescriptions" hover-class="business-item-active" bind:tap="openPage">
-      <t-icon name="file" size="48rpx" color="#0052d9" />
-      <view class="business-item-title">处方管理</view>
-      <view class="muted">查看和维护处方</view>
+    <view class="business-card business-card-prescriptions" data-url="/pages/admin/prescriptions/prescriptions" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-blue">
+          <t-icon name="file" size="44rpx" color="#0052d9" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">处方管理</view>
+        <view class="business-desc">查看和维护处方</view>
+      </view>
     </view>
-    <view wx:if="{{userRole !== 3}}" class="app-card business-item" data-url="/pages/admin/store-transfers/store-transfers" hover-class="business-item-active" bind:tap="openPage">
-      <t-icon name="swap" size="48rpx" color="#0052d9" />
-      <view class="business-item-title">门店调拨</view>
-      <view class="muted">管理门店间调拨</view>
+
+    <view wx:if="{{userRole !== 3}}" class="business-card business-card-transfers" data-url="/pages/admin/store-transfers/store-transfers" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-purple">
+          <t-icon name="swap" size="44rpx" color="#7b1fa2" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">门店调拨</view>
+        <view class="business-desc">管理门店间借调</view>
+      </view>
     </view>
-    <view wx:if="{{userRole !== 3}}" class="app-card business-item" data-url="/pages/admin/product-differences/product-differences" hover-class="business-item-active" bind:tap="openPage">
-      <t-icon name="error-circle" size="48rpx" color="#0052d9" />
-      <view class="business-item-title">库存差异</view>
-      <view class="muted">处理库存差异记录</view>
+
+    <view wx:if="{{userRole !== 3}}" class="business-card business-card-differences" data-url="/pages/admin/product-differences/product-differences" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-orange">
+          <t-icon name="error-circle" size="44rpx" color="#ed6a0c" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">库存差异</view>
+        <view class="business-desc">处理库存差异记录</view>
+      </view>
     </view>
-    <view class="app-card business-item" data-url="/pages/admin/yd-goods-checks/yd-goods-checks" hover-class="business-item-active" bind:tap="openPage">
-      <t-icon name="fact-check" size="48rpx" color="#0052d9" />
-      <view class="business-item-title">商品盘点</view>
-      <view class="muted">盘点药店商品库存</view>
+
+    <view class="business-card business-card-checks" data-url="/pages/admin/yd-goods-checks/yd-goods-checks" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-green">
+          <t-icon name="fact-check" size="44rpx" color="#00a870" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">商品盘点</view>
+        <view class="business-desc">盘点药店商品库存</view>
+      </view>
     </view>
-    <view class="app-card business-item" data-url="/pages/admin/herb-locations/herb-locations" hover-class="business-item-active" bind:tap="openPage">
-      <t-icon name="view-module" size="48rpx" color="#0052d9" />
-      <view class="business-item-title">斗谱配置</view>
-      <view class="muted">配置药材和货位</view>
+
+    <view class="business-card business-card-locations" data-url="/pages/admin/herb-locations/herb-locations" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-cyan">
+          <t-icon name="view-module" size="44rpx" color="#00838f" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">斗谱配置</view>
+        <view class="business-desc">配置药材与货位</view>
+      </view>
     </view>
-    <view class="app-card business-item" data-url="/pages/admin/e6-inventory/e6-inventory" hover-class="business-item-active" bind:tap="openPage">
-      <t-icon name="search" size="48rpx" color="#0052d9" />
-      <view class="business-item-title">库存查询</view>
-      <view class="muted">查询药店库存批次</view>
+
+    <view class="business-card business-card-inventory" data-url="/pages/admin/e6-inventory/e6-inventory" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-indigo">
+          <t-icon name="search" size="44rpx" color="#2a3b8f" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">库存查询</view>
+        <view class="business-desc">查询药店库存批次</view>
+      </view>
     </view>
   </view>
 

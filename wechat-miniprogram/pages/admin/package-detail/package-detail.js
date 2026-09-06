@@ -1,5 +1,6 @@
 import { getPackageDetail } from '../../../api/admin';
 import { formatDate, formatPickupCode, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
+import { copyToClipboard } from '../../../utils/wechat';
 
 function isPendingStatus(status) {
   return Number(status) === 0;
@@ -34,6 +35,13 @@ Page({
     });
   },
 
+  onCopy(e) {
+    const text = e.currentTarget.dataset.text;
+    const name = e.currentTarget.dataset.name || '内容';
+    if (!text) return;
+    copyToClipboard(text, name);
+  },
+
   verify() {
     wx.navigateTo({
       url: `/pages/admin/verify/verify?pickupCode=${encodeURIComponent(this.data.detail.pickupCode)}&pickupQrContent=${encodeURIComponent(this.data.detail.pickupQrContent || '')}`
@@ -46,3 +54,4 @@ Page({
     });
   }
 });
+

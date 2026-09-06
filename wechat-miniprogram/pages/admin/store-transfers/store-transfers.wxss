@@ -1,4 +1,4 @@
-.transfer-page { padding-bottom: 220rpx; }
+.transfer-page { padding-bottom: 48rpx; }
 .page-actions { display: flex; justify-content: flex-end; margin-bottom: 20rpx; }
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12rpx; margin-bottom: 20rpx; }
 .stat-item { padding: 20rpx 8rpx; border: 1rpx solid #e5e6eb; border-radius: 8rpx; background: #fff; text-align: center; }
@@ -10,7 +10,8 @@
 .filters { display: flex; gap: 12rpx; margin-bottom: 20rpx; }
 .filter-picker, .picker-row { min-height: 76rpx; padding: 18rpx 20rpx; box-sizing: border-box; border: 1rpx solid #e5e6eb; border-radius: 8rpx; background: #fff; }
 .filter-picker { color: #4e5969; }
-.transfer-card { margin-bottom: 16rpx; }
+.transfer-card { margin-bottom: 16rpx; transition: background-color 0.15s ease; }
+.transfer-card:active { background-color: #f7f8fa; }
 .transfer-title { color: #0052d9; font-size: 30rpx; font-weight: 700; }
 .transfer-meta { margin: 14rpx 0 8rpx; color: #1f2329; }
 .tag-line { display: flex; gap: 10rpx; margin-top: 12rpx; }
@@ -31,3 +32,7 @@
 .record-actions { display: flex; gap: 12rpx; }
 .return-row { margin: 12rpx 0; padding: 16rpx; border-radius: 8rpx; background: #f7f8fa; }
 .action-wrap { flex-wrap: wrap; justify-content: center; }
+.transfer-title-wrap { display: flex; align-items: center; gap: 8rpx; }
+.detail-line-copyable { display: flex; align-items: center; gap: 6rpx; }
+.copyable-text { color: #1f2329; font-weight: 600; }
+

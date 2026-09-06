@@ -4,3 +4,15 @@
   gap: 16rpx;
   margin-top: 32rpx;
 }
+
+.copyable-cell-note {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8rpx;
+}
+
+.cell-note-text {
+  color: #1f2329;
+}
+

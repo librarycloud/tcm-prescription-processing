@@ -14,6 +14,8 @@ import {
 } from '../../../api/admin';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
+import { copyToClipboard } from '../../../utils/wechat';
+
 
 const TRANSFER_STATUS = Object.freeze({
   BORROWING: 0,
@@ -254,6 +256,13 @@ Page({
     });
   },
 
+  onCopyTransferNo(e) {
+    const no = e.currentTarget.dataset.no;
+    if (!no) return;
+    copyToClipboard(no, '调拨单号');
+  },
+
+
   openEdit() {
     const detail = this.data.detail;
     if (!detail?.permissions?.canUpdate) return;
@@ -344,9 +353,9 @@ Page({
   },
 
   async openDetail(e) {
-    wx.navigateTo({
-      url: `/pages/admin/store-transfers/store-transfers?transferId=${e.currentTarget.dataset.id}`
-    });
+    const id = e.currentTarget.dataset.id;
+    if (!id) return;
+    this.loadTransferDetail(id);
   },
 
   async loadTransferDetail(id) {
@@ -356,11 +365,7 @@ Page({
   },
 
   closeDetail() {
-    if (this.data.initialTransferId) {
-      wx.navigateBack();
-      return;
-    }
-    this.setData({ detailVisible: false, detail: null });
+    this.setData({ detailVisible: false, detail: null, initialTransferId: null });
   },
 
   async confirmOutbound() {

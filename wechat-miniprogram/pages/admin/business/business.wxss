@@ -1,8 +1,108 @@
-.business-page { padding-bottom: 180rpx; }
-.page-heading { margin-bottom: 28rpx; }
-.page-title { font-size: 36rpx; font-weight: 700; }
-.business-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rpx; }
-.business-item { display: flex; min-height: 190rpx; margin-bottom: 0; flex-direction: column; align-items: center; justify-content: center; padding: 24rpx 16rpx; text-align: center; }
-.business-item-title { margin-top: 14rpx; color: #1f2329; font-size: 30rpx; font-weight: 600; }
-.business-item .muted { margin-top: 8rpx; font-size: 23rpx; }
-.business-item-active { background: #f2f7ff; }
+.business-page {
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+}
+
+.page-heading {
+  margin-bottom: 28rpx;
+}
+
+.page-title {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: #1f2329;
+}
+
+.page-heading .muted {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+}
+
+.business-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20rpx;
+}
+
+.business-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 220rpx;
+  padding: 28rpx 24rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  border: 1rpx solid #eef0f5;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.business-card-active {
+  transform: scale(0.97);
+  opacity: 0.9;
+  background: #f8faff;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 20rpx;
+}
+
+.icon-box-blue {
+  background: linear-gradient(135deg, #e8f3ff 0%, #f0f7ff 100%);
+}
+
+.icon-box-purple {
+  background: linear-gradient(135deg, #f5e8ff 0%, #fbf2ff 100%);
+}
+
+.icon-box-orange {
+  background: linear-gradient(135deg, #fff1e6 0%, #fff8f2 100%);
+}
+
+.icon-box-green {
+  background: linear-gradient(135deg, #e6f8ea 0%, #f2fcf4 100%);
+}
+
+.icon-box-cyan {
+  background: linear-gradient(135deg, #e0f7fa 0%, #eefbfd 100%);
+}
+
+.icon-box-indigo {
+  background: linear-gradient(135deg, #eceffd 0%, #f4f6fe 100%);
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.business-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1f2329;
+  line-height: 1.3;
+}
+
+.business-desc {
+  margin-top: 8rpx;
+  color: #86909c;
+  font-size: 24rpx;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+

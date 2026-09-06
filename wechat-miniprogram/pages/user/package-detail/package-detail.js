@@ -1,5 +1,6 @@
 import { getMyPackageDetail } from '../../../api/user';
 import { formatDate, formatPickupCode, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
+import { copyToClipboard } from '../../../utils/wechat';
 
 function isPickedStatus(status) {
   return Number(status) === 1;
@@ -31,5 +32,13 @@ Page({
         isPicked: isPickedStatus(item.status)
       }
     });
+  },
+
+  onCopy(e) {
+    const text = e.currentTarget.dataset.text;
+    const name = e.currentTarget.dataset.name || '内容';
+    if (!text) return;
+    copyToClipboard(text, name);
   }
 });
+

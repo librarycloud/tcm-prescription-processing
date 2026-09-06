@@ -1,7 +1,13 @@
 <view class="page" wx:if="{{detail}}">
   <view class="app-card">
     <view class="status-row">
-      <view class="code">{{detail.pickupCode}}</view>
+      <view class="code-wrap">
+        <text class="code selectable" user-select="true">{{detail.pickupCode}}</text>
+        <view class="copy-badge" hover-class="copy-badge-active" data-text="{{detail.pickupCode}}" data-name="取货码" bind:tap="onCopy">
+          <t-icon name="copy" size="26rpx" />
+          <text>复制</text>
+        </view>
+      </view>
       <t-tag theme="{{detail.statusTheme}}">{{detail.statusText}}</t-tag>
     </view>
     <qr-code text="{{detail.pickupQrContent}}" />
@@ -14,7 +20,16 @@
     <t-cell title="手机号" note="{{detail.receiverPhone || '-'}}" />
     <t-cell title="取货方式" note="{{detail.pickupMethodText}}" />
     <t-cell wx:if="{{detail.pickupMethod === 1 || detail.pickupMethod === 2}}" title="地址" note="{{detail.expressAddress || '-'}}" />
-    <t-cell wx:if="{{detail.pickupMethod === 2}}" title="快递单号" note="{{detail.expressTrackingNo || '-'}}" />
+    <t-cell wx:if="{{detail.pickupMethod === 2}}" title="快递单号">
+      <view slot="note" class="copyable-cell-note">
+        <text class="cell-note-text selectable" user-select="true">{{detail.expressTrackingNo || '-'}}</text>
+        <view wx:if="{{detail.expressTrackingNo}}" class="copy-badge-sm" hover-class="copy-badge-active" data-text="{{detail.expressTrackingNo}}" data-name="快递单号" bind:tap="onCopy">
+          <t-icon name="copy" size="22rpx" />
+          <text>复制</text>
+        </view>
+      </view>
+    </t-cell>
+
     <t-cell title="录入时间" note="{{detail.createdAtText}}" />
     <t-cell title="取货时间" note="{{detail.pickedAtText}}" />
     <t-cell title="录入管理员" note="{{detail.creator.nickname || detail.creator.phone}}" />

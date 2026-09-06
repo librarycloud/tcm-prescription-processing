@@ -10,7 +10,13 @@
   <view class="app-card" wx:if="{{packageInfo}}">
     <view class="status-row verify-header">
       <view>
-        <view class="code">{{packageInfo.pickupCode}}</view>
+        <view class="code-wrap">
+          <text class="code selectable" user-select="true">{{packageInfo.pickupCode}}</text>
+          <view class="copy-badge" hover-class="copy-badge-active" data-text="{{packageInfo.pickupCode}}" data-name="取货码" bind:tap="onCopy">
+            <t-icon name="copy" size="26rpx" />
+            <text>复制</text>
+          </view>
+        </view>
         <view class="muted">{{packageInfo.itemName}}</view>
       </view>
       <t-tag theme="{{packageInfo.statusTheme}}">{{packageInfo.statusText}}</t-tag>
