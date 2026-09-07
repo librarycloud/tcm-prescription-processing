@@ -1260,7 +1260,7 @@ export function drawQrcode2d(canvas, options = {}) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const info = (wx.getWindowInfo && wx.getWindowInfo()) || (wx.getSystemInfoSync && wx.getSystemInfoSync()) || {};
+  const info = (wx.getWindowInfo && wx.getWindowInfo()) || {};
   const dpr = info.pixelRatio || 2;
   const width = Number(options.width || 256);
   const height = Number(options.height || 256);

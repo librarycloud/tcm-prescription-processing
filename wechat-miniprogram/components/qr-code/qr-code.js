@@ -75,7 +75,7 @@ Component({
       // 1. Primary Engine: Synchronous OffscreenCanvas (fast, 100% in-memory, eliminates native canvas lag)
       if (typeof wx !== 'undefined' && typeof wx.createOffscreenCanvas === 'function') {
         try {
-          const info = (wx.getWindowInfo && wx.getWindowInfo()) || (wx.getSystemInfoSync && wx.getSystemInfoSync()) || {};
+          const info = (wx.getWindowInfo && wx.getWindowInfo()) || {};
           const dpr = Math.max(1, Math.min(info.pixelRatio || 2, 3));
           const offscreen = wx.createOffscreenCanvas({ type: '2d', width: DRAW_SIZE * dpr, height: DRAW_SIZE * dpr });
           drawQrcode2d(offscreen, {
