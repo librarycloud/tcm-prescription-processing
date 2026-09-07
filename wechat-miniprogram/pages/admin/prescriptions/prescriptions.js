@@ -13,6 +13,23 @@ const STATUS_META = {
   2: { text: '已取消', theme: 'default' }
 };
 
+function decoratePrescription(item, isStoreStaff) {
+  const status = STATUS_META[Number(item.status)] || STATUS_META[0];
+  return {
+    ...item,
+    phoneMasked: maskPhone(item.phone),
+    statusText: status.text,
+    statusTheme: status.theme,
+    createdAtText: formatDate(item.createdAt),
+    storeName: item.store ? item.store.name : '',
+    doctorName: item.doctor ? item.doctor.name : '-',
+    sourceName: item.source ? item.source.name : '-',
+    plansCount: item.plans ? item.plans.length : 0,
+    canEdit: !isStoreStaff && Number(item.status) !== 1,
+    canDelete: !isStoreStaff && !(item.plans && item.plans.length)
+  };
+}
+
 Page({
   data: {
     loading: false,
@@ -67,22 +84,7 @@ Page({
         pageSize: this.data.pageSize
       });
       this.setData({
-        list: (data.list || []).map((item) => {
-          const status = STATUS_META[Number(item.status)] || STATUS_META[0];
-          return {
-            ...item,
-            phoneMasked: maskPhone(item.phone),
-            statusText: status.text,
-            statusTheme: status.theme,
-            createdAtText: formatDate(item.createdAt),
-            storeName: item.store ? item.store.name : '',
-            doctorName: item.doctor ? item.doctor.name : '-',
-            sourceName: item.source ? item.source.name : '-',
-            plansCount: item.plans ? item.plans.length : 0,
-            canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
-            canDelete: !this.data.isStoreStaff && !(item.plans && item.plans.length)
-          };
-        }),
+        list: (data.list || []).map((item) => decoratePrescription(item, this.data.isStoreStaff)),
         pages: data.pagination?.pages || 1
       });
     } finally {
@@ -129,22 +131,7 @@ Page({
         page: nextPage,
         pageSize: this.data.pageSize
       });
-      const newItems = (data.list || []).map((item) => {
-        const status = STATUS_META[Number(item.status)] || STATUS_META[0];
-        return {
-          ...item,
-          phoneMasked: maskPhone(item.phone),
-          statusText: status.text,
-          statusTheme: status.theme,
-          createdAtText: formatDate(item.createdAt),
-          storeName: item.store ? item.store.name : '',
-          doctorName: item.doctor ? item.doctor.name : '-',
-          sourceName: item.source ? item.source.name : '-',
-          plansCount: item.plans ? item.plans.length : 0,
-          canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
-          canDelete: !this.data.isStoreStaff && !(item.plans && item.plans.length)
-        };
-      });
+      const newItems = (data.list || []).map((item) => decoratePrescription(item, this.data.isStoreStaff));
       this.setData({
         list: this.data.list.concat(newItems),
         page: nextPage,

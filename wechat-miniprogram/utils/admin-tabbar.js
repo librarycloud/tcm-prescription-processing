@@ -3,9 +3,10 @@ const ADMIN_TAB_URLS = {
   herbs: '/pages/admin/herb-locations/herb-locations',
   processing: '/pages/admin/processing-workbench/processing-workbench',
   packages: '/pages/admin/packages/packages',
-  business: '/pages/admin/business/business',
-  profile: '/pages/admin/profile/profile'
+  business: '/pages/admin/business/business'
 };
+
+const TABS = ['overview', 'herbs', 'processing', 'packages', 'business'];
 
 export function onAdminTabChange(e) {
   const detail = e.detail || {};

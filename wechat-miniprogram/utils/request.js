@@ -159,7 +159,7 @@ function writeCached(key, data, ttl) {
   memoryCache[key] = cached;
   try {
     wx.setStorageSync(key, cached);
-    pruneExpiredCache();
+    setTimeout(() => pruneExpiredCache(), 50); // 异步执行，防止阻塞
   } catch (error) {
     delete memoryCache[key];
   }

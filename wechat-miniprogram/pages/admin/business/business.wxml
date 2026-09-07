@@ -81,6 +81,17 @@
         <view class="business-title">库存查询</view>
         <view class="business-desc">查询药店库存批次</view>
       </view>
+    <view class="business-card business-card-profile" data-url="/pages/admin/profile/profile" hover-class="business-card-active" bind:tap="openPage">
+      <view class="card-header">
+        <view class="icon-box icon-box-teal">
+          <t-icon name="user" size="44rpx" color="#00897b" />
+        </view>
+        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
+      </view>
+      <view class="card-body">
+        <view class="business-title">个人中心</view>
+        <view class="business-desc">账号与微信绑定</view>
+      </view>
     </view>
   </view>
 
@@ -90,6 +101,5 @@
     <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
     <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
     <t-tab-bar-item value="business" icon="app">业务</t-tab-bar-item>
-    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
   </t-tab-bar>
 </view>

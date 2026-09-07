@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 16rpx;
   margin-top: 32rpx;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .copyable-cell-note {

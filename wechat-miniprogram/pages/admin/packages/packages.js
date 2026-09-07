@@ -8,6 +8,21 @@ function isPendingStatus(status) {
   return Number(status) === 0;
 }
 
+function decoratePackage(item) {
+  return {
+    ...item,
+    pickupCode: formatPickupCode(item.pickupCode),
+    storeName: item.store ? item.store.name : '',
+    receiverPhoneMasked: maskPhone(item.receiverPhone),
+    createdAtText: formatDate(item.createdAt),
+    pickedAtText: formatDate(item.pickedAt),
+    pickupMethodText: pickupMethodText(item.pickupMethod),
+    statusText: statusText(item.status),
+    statusTheme: statusTheme(item.status),
+    isPending: isPendingStatus(item.status)
+  };
+}
+
 Page({
   data: {
     activeTab: 'packages',
@@ -81,18 +96,7 @@ Page({
       });
 
       this.setData({
-        list: (data.list || []).map((item) => ({
-          ...item,
-          pickupCode: formatPickupCode(item.pickupCode),
-          storeName: item.store ? item.store.name : '',
-          receiverPhoneMasked: maskPhone(item.receiverPhone),
-          createdAtText: formatDate(item.createdAt),
-          pickedAtText: formatDate(item.pickedAt),
-          pickupMethodText: pickupMethodText(item.pickupMethod),
-          statusText: statusText(item.status),
-          statusTheme: statusTheme(item.status),
-          isPending: isPendingStatus(item.status)
-        })),
+        list: (data.list || []).map(decoratePackage),
         pages: data.pagination?.pages || 1
       });
     } finally {
@@ -156,18 +160,7 @@ Page({
         page: nextPage,
         pageSize: this.data.pageSize
       });
-      const newItems = (data.list || []).map((item) => ({
-        ...item,
-        pickupCode: formatPickupCode(item.pickupCode),
-        storeName: item.store ? item.store.name : '',
-        receiverPhoneMasked: maskPhone(item.receiverPhone),
-        createdAtText: formatDate(item.createdAt),
-        pickedAtText: formatDate(item.pickedAt),
-        pickupMethodText: pickupMethodText(item.pickupMethod),
-        statusText: statusText(item.status),
-        statusTheme: statusTheme(item.status),
-        isPending: isPendingStatus(item.status)
-      }));
+      const newItems = (data.list || []).map(decoratePackage);
       this.setData({
         list: this.data.list.concat(newItems),
         page: nextPage,

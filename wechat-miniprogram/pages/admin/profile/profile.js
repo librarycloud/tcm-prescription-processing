@@ -1,13 +1,11 @@
 import { getProfile, updateProfile } from '../../../api/user';
 import { bindWechat, rebindWechat } from '../../../api/auth';
 import { clearSession, getToken, getUser, setSession } from '../../../utils/auth';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
 import { getAppInfo } from '../../../utils/app-info';
 import { getWechatLoginCode } from '../../../utils/wechat';
 
 Page({
   data: {
-    activeTab: 'profile',
     loading: false,
     saving: false,
     editing: false,
@@ -26,8 +24,6 @@ Page({
       confirmPassword: ''
     }
   },
-
-  onTabChange: onAdminTabChange,
 
   onShow() {
     const user = getUser() || {};

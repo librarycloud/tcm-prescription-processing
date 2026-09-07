@@ -84,6 +84,10 @@
   background: linear-gradient(135deg, #eceffd 0%, #f4f6fe 100%);
 }
 
+.icon-box-teal {
+  background: linear-gradient(135deg, #e0f2f1 0%, #eef7f6 100%);
+}
+
 .card-body {
   display: flex;
   flex-direction: column;

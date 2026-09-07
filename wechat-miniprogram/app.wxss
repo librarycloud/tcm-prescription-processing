@@ -155,3 +155,11 @@ page {
   gap: 16rpx;
 }
 
+.page-no-tabbar {
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom)) !important;
+}
+
+.safe-bottom-padding {
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+}
+
