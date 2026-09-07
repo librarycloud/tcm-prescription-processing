@@ -64,30 +64,137 @@
           </el-breadcrumb>
         </div>
 
-        <el-dropdown trigger="click" @command="handleCommand">
-          <div class="user-entry">
-            <el-avatar :size="32" :src="avatar" />
-            <div class="user-meta">
-              <span class="user-name">{{ displayName }}</span>
-              <span class="user-role">{{ roleLabel }}</span>
+        <div class="header-right">
+          <el-tooltip content="小程序码与 Android App 下载" placement="bottom">
+            <el-button text class="client-entry-btn" @click="openClientDisplayModal">
+              <el-icon><Cellphone /></el-icon>
+              <span v-if="!isMobile" class="client-btn-text">客户端</span>
+            </el-button>
+          </el-tooltip>
+
+          <el-dropdown trigger="click" @command="handleCommand">
+            <div class="user-entry">
+              <el-avatar :size="32" :src="avatar" />
+              <div class="user-meta">
+                <span class="user-name">{{ displayName }}</span>
+                <span class="user-role">{{ roleLabel }}</span>
+              </div>
+              <el-icon><ArrowDown /></el-icon>
             </div>
-            <el-icon><ArrowDown /></el-icon>
-          </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item disabled>{{ userStore.user?.phone || '-' }}</el-dropdown-item>
-              <el-dropdown-item command="profile">个人资料</el-dropdown-item>
-              <el-dropdown-item command="toggleTheme">{{ themeStore.isDark ? "切换亮色" : "切换暗色" }}</el-dropdown-item>
-              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item disabled>{{ userStore.user?.phone || '-' }}</el-dropdown-item>
+                <el-dropdown-item command="profile">个人资料</el-dropdown-item>
+                <el-dropdown-item command="toggleTheme">{{ themeStore.isDark ? "切换亮色" : "切换暗色" }}</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </header>
 
       <main class="content">
         <router-view />
       </main>
     </div>
+
+    <!-- 客户端下载与小程序弹窗 -->
+    <el-dialog
+      v-model="clientDisplayVisible"
+      title="移动端接入与下载"
+      width="700px"
+      append-to-body
+      destroy-on-close
+      class="client-modal"
+    >
+      <div v-loading="clientInfoLoading" class="client-modal-body">
+        <el-alert
+          v-if="clientInfo?.announcement"
+          :title="clientInfo.announcement"
+          type="info"
+          show-icon
+          :closable="false"
+          class="modal-announcement"
+        />
+
+        <div class="client-columns">
+          <!-- 微信小程序卡片 -->
+          <div class="client-col">
+            <div class="col-header">
+              <span class="col-title">{{ clientInfo?.wechat?.appName || '微信小程序' }}</span>
+              <el-tag size="small" type="success">小程序</el-tag>
+            </div>
+            <div class="qr-container">
+              <el-image
+                v-if="clientInfo?.wechat?.qrcodeUrl"
+                :src="clientInfo.wechat.qrcodeUrl"
+                class="modal-qr-img"
+                fit="contain"
+                :preview-src-list="[clientInfo.wechat.qrcodeUrl]"
+              />
+              <el-empty
+                v-else
+                description="暂未上传小程序码"
+                :image-size="80"
+              />
+            </div>
+            <p class="qr-hint">微信扫一扫即可快速使用</p>
+            <p v-if="clientInfo?.wechat?.appId" class="qr-subhint">AppID: {{ clientInfo.wechat.appId }}</p>
+          </div>
+
+          <!-- 分割线 -->
+          <div class="col-divider" />
+
+          <!-- Android APK 卡片 -->
+          <div class="client-col">
+            <div class="col-header">
+              <span class="col-title">{{ clientInfo?.android?.displayName || 'Android 客户端' }}</span>
+              <el-tag v-if="clientInfo?.android?.versionName" size="small" type="primary">
+                v{{ clientInfo.android.versionName }}
+              </el-tag>
+            </div>
+            <div class="qr-container">
+              <img
+                v-if="androidQrDataUrl"
+                :src="androidQrDataUrl"
+                class="modal-qr-img"
+                alt="APK下载二维码"
+              />
+              <el-empty
+                v-else-if="!clientInfo?.android?.downloadUrl"
+                description="暂无下载链接"
+                :image-size="80"
+              />
+              <div v-else class="qr-loading">生成二维码中...</div>
+            </div>
+            <p class="qr-hint">手机扫码或点击下方按钮下载</p>
+
+            <div class="apk-actions">
+              <el-button
+                v-if="clientInfo?.android?.downloadUrl"
+                type="primary"
+                :icon="Download"
+                @click="downloadApk(clientInfo.android.downloadUrl)"
+              >
+                直接下载 APK
+              </el-button>
+            </div>
+
+            <div v-if="clientInfo?.android?.size" class="apk-meta">
+              <span>大小：{{ formatApkSize(clientInfo.android.size) }}</span>
+              <span v-if="clientInfo.android.publishedAt">发布日期：{{ clientInfo.android.publishedAt }}</span>
+            </div>
+
+            <div v-if="clientInfo?.android?.releaseNotes?.length" class="modal-notes-box">
+              <div class="notes-caption">最新版本更新说明：</div>
+              <ul class="notes-items">
+                <li v-for="(item, i) in clientInfo.android.releaseNotes" :key="i">{{ item }}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -100,6 +207,7 @@ import {
   Bell,
   Box,
   Calendar,
+  Cellphone,
   CircleCheck,
   Collection,
   DataAnalysis,
@@ -124,10 +232,12 @@ import {
   User,
   UserFilled
 } from '@element-plus/icons-vue';
+import QRCode from 'qrcode';
 import avatar from '@/assets/avatar.svg';
 import { useThemeStore } from "@/stores/theme";
 import { useUserStore } from '@/stores/user';
 import { logout as logoutApi } from '@/api/login';
+import { getClientDisplayInfo } from '@/api/clientDisplay';
 import { roleText } from '@/utils/permission';
 
 const route = useRoute();
@@ -142,6 +252,7 @@ const menuIcons = {
   Bell,
   Box,
   Calendar,
+  Cellphone,
   CircleCheck,
   Collection,
   DataAnalysis,
@@ -214,7 +325,8 @@ const systemMenuItems = computed(() => {
     'email-settings',
     'robot-notifications',
     'processing-equipment',
-    'print-templates'
+    'print-templates',
+    'client-display'
   ];
   return menuItems.value
     .filter((item) => item.meta.group === 'system')
@@ -273,6 +385,43 @@ async function handleCommand(command) {
       router.replace('/login');
     }
   }
+}
+
+const clientDisplayVisible = ref(false);
+const clientInfoLoading = ref(false);
+const clientInfo = ref(null);
+const androidQrDataUrl = ref('');
+
+async function openClientDisplayModal() {
+  clientDisplayVisible.value = true;
+  clientInfoLoading.value = true;
+  try {
+    const res = await getClientDisplayInfo();
+    clientInfo.value = res;
+    if (res?.android?.downloadUrl) {
+      androidQrDataUrl.value = await QRCode.toDataURL(res.android.downloadUrl, {
+        width: 160,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+    } else {
+      androidQrDataUrl.value = '';
+    }
+  } catch (err) {
+    console.error('Failed to load client display info', err);
+  } finally {
+    clientInfoLoading.value = false;
+  }
+}
+
+function downloadApk(url) {
+  if (!url) return;
+  window.open(url, '_blank');
+}
+
+function formatApkSize(bytes) {
+  if (!bytes) return '';
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 onMounted(() => {
@@ -403,6 +552,152 @@ onBeforeUnmount(() => {
 .user-role {
   color: var(--app-muted);
   font-size: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.client-entry-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--el-text-color-regular);
+}
+
+.client-entry-btn:hover {
+  color: var(--el-color-primary);
+  background-color: var(--el-fill-color-light);
+}
+
+.client-btn-text {
+  font-size: 13px;
+}
+
+.client-modal-body {
+  padding: 8px 0;
+}
+
+.modal-announcement {
+  margin-bottom: 20px;
+}
+
+.client-columns {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+}
+
+.client-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 20px 16px;
+}
+
+.col-divider {
+  width: 1px;
+  background: var(--el-border-color-light);
+}
+
+.col-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.col-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.qr-container {
+  width: 170px;
+  height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+  margin-bottom: 12px;
+}
+
+.modal-qr-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.qr-loading {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.qr-hint {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  margin: 0 0 4px;
+}
+
+.qr-subhint {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin: 0;
+}
+
+.apk-actions {
+  margin-top: 10px;
+}
+
+.apk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 8px;
+}
+
+.modal-notes-box {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  max-height: 130px;
+  overflow-y: auto;
+}
+
+.notes-caption {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--el-text-color-primary);
+}
+
+.notes-items {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  line-height: 1.5;
 }
 
 .content {

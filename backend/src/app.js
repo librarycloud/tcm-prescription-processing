@@ -15,6 +15,10 @@ import userRoutes from './routes/userRoutes.js';
 import storeRoutes from './routes/storeRoutes.js';
 import e6IntegrationRoutes from './routes/e6IntegrationRoutes.js';
 import appRoutes from './routes/appRoutes.js';
+import {
+  getClientDisplayInfoController,
+  serveWechatQrcodeController
+} from './controllers/clientDisplayController.js';
 import { initializeIpLookup } from './utils/ipLookup.js';
 import { startRobotDeliveryWorker } from './services/robotNotificationService.js';
 
@@ -47,6 +51,8 @@ export async function buildApp() {
   );
 
   fastify.get('/health', async (_request, reply) => ok(reply, { status: 'ok' }));
+  fastify.get('/client-display/info', getClientDisplayInfoController);
+  fastify.get('/client-display/qrcode', serveWechatQrcodeController);
   await fastify.register(authRoutes, { prefix: '/auth' });
   await fastify.register(adminRoutes, { prefix: '/admin' });
   await fastify.register(userRoutes, { prefix: '/user' });

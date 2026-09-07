@@ -17,15 +17,23 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -543,77 +551,18 @@ internal fun AboutScreen(
                 val showNotesSection = latest != null && (hasUpdate || notesList.isNotEmpty())
 
                 if (showNotesSection) {
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(16.dp))
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                         thickness = 0.8.dp,
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Default.Description,
-                            contentDescription = null,
-                            tint = Primary,
-                            modifier = Modifier.size(17.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (hasUpdate) "更新说明" else "版本说明",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    if (notesList.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            notesList.forEach { note ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.Top,
-                                ) {
-                                    Text(
-                                        "• ",
-                                        color = Primary,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    Text(
-                                        text = note,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp,
-                                    )
-                                }
-                            }
-                        }
-                    } else if (hasUpdate) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        ) {
-                            Text(
-                                text = "本次更新包含功能优化与常规稳定性提升。",
-                                color = Muted,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            )
-                        }
-                    }
+                    ReleaseNotesSection(
+                        notesList = notesList,
+                        targetVersion = latest?.optString("versionName", "") ?: "",
+                        hasUpdate = hasUpdate,
+                    )
                 }
             }
         }
@@ -650,4 +599,364 @@ private fun installDownloaded(context: Context, uri: Uri) {
         setDataAndType(installUri, "application/vnd.android.package-archive")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     })
+}
+
+private enum class ReleaseTagType {
+    NEW, OPTIMIZE, FIX, GENERAL
+}
+
+private data class ReleaseEntry(
+    val tag: String?,
+    val tagType: ReleaseTagType,
+    val content: String,
+)
+
+private data class VersionReleaseSection(
+    val version: String,
+    val isLatest: Boolean,
+    val entries: List<ReleaseEntry>,
+)
+
+private fun parseReleaseNotesToSections(rawList: List<String>, targetVersion: String): List<VersionReleaseSection> {
+    val sections = mutableListOf<VersionReleaseSection>()
+    var currentVersion = ""
+    var currentEntries = mutableListOf<ReleaseEntry>()
+
+    val allLines = rawList.flatMap { item ->
+        item.lines().map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    val versionHeaderRegex = Regex("""^[【\[#\s]*(?:v|V|版本)?\s*(\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)?)[】\]:\s]*$""")
+
+    for (line in allLines) {
+        val versionMatch = versionHeaderRegex.find(line)
+        val isHeader = versionMatch != null ||
+                (line.startsWith("【") && (line.contains("v", ignoreCase = true) || line.contains("."))) ||
+                (line.startsWith("[") && (line.contains("v", ignoreCase = true) || line.contains(".")))
+
+        if (isHeader) {
+            if (currentVersion.isNotBlank() || currentEntries.isNotEmpty()) {
+                val vName = currentVersion.ifBlank { "v${targetVersion.ifBlank { "最新" }}" }
+                sections.add(
+                    VersionReleaseSection(
+                        version = vName,
+                        isLatest = sections.isEmpty(),
+                        entries = currentEntries.toList(),
+                    )
+                )
+                currentEntries = mutableListOf()
+            }
+            currentVersion = if (versionMatch != null) {
+                "v" + versionMatch.groupValues[1].removePrefix("v").removePrefix("V")
+            } else {
+                val clean = line.replace(Regex("""[【】\[\]#]"""), "").trim()
+                if (!clean.startsWith("v", ignoreCase = true) && clean.firstOrNull()?.isDigit() == true) {
+                    "v$clean"
+                } else {
+                    clean
+                }
+            }
+        } else {
+            val cleaned = line.replace(Regex("""^[·•\-\*●◆▪▫\s\d\.]+"""), "").trim()
+            if (cleaned.isNotBlank()) {
+                val (tag, tagType, content) = parseEntryTag(cleaned)
+                currentEntries.add(ReleaseEntry(tag, tagType, content))
+            }
+        }
+    }
+
+    if (currentVersion.isNotBlank() || currentEntries.isNotEmpty()) {
+        val vName = currentVersion.ifBlank { "v${targetVersion.ifBlank { "最新" }}" }
+        sections.add(
+            VersionReleaseSection(
+                version = vName,
+                isLatest = sections.isEmpty(),
+                entries = currentEntries.toList(),
+            )
+        )
+    }
+
+    if (sections.isEmpty() && allLines.isNotEmpty()) {
+        val entries = allLines.map { line ->
+            val cleaned = line.replace(Regex("""^[·•\-\*●◆▪▫\s\d\.]+"""), "").trim()
+            val (tag, tagType, content) = parseEntryTag(cleaned)
+            ReleaseEntry(tag, tagType, content)
+        }
+        sections.add(
+            VersionReleaseSection(
+                version = if (targetVersion.isNotBlank()) "v$targetVersion" else "v${BuildConfig.VERSION_NAME}",
+                isLatest = true,
+                entries = entries,
+            )
+        )
+    }
+
+    return sections
+}
+
+private fun parseEntryTag(text: String): Triple<String?, ReleaseTagType, String> {
+    val trimmed = text.trim()
+    val knownTags = listOf(
+        Pair("优化", ReleaseTagType.OPTIMIZE),
+        Pair("新增", ReleaseTagType.NEW),
+        Pair("修复", ReleaseTagType.FIX),
+        Pair("改进", ReleaseTagType.OPTIMIZE),
+        Pair("重构", ReleaseTagType.OPTIMIZE),
+        Pair("补充", ReleaseTagType.GENERAL),
+        Pair("支持", ReleaseTagType.NEW),
+        Pair("升级", ReleaseTagType.NEW),
+        Pair("提升", ReleaseTagType.OPTIMIZE),
+    )
+
+    for ((tagName, tagType) in knownTags) {
+        if (trimmed.startsWith("【$tagName】") || trimmed.startsWith("[$tagName]")) {
+            val content = trimmed.substringAfter("】").substringAfter("]").trimStart('：', ':', ' ')
+            return Triple(tagName, tagType, content.ifBlank { trimmed })
+        }
+        if (trimmed.startsWith(tagName)) {
+            val after = trimmed.removePrefix(tagName).trimStart('：', ':', ' ')
+            if (after.isNotBlank()) {
+                return Triple(tagName, tagType, after)
+            }
+        }
+    }
+    return Triple(null, ReleaseTagType.GENERAL, trimmed)
+}
+
+@Composable
+private fun ReleaseNotesSection(
+    notesList: List<String>,
+    targetVersion: String,
+    hasUpdate: Boolean,
+) {
+    val sections = remember(notesList, targetVersion) {
+        parseReleaseNotesToSections(notesList, targetVersion)
+    }
+    var showHistory by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Primary,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = if (hasUpdate) "更新内容" else "版本动态",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = Ink,
+            )
+            Spacer(Modifier.weight(1f))
+            if (sections.size > 1) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Text(
+                        text = "共 ${sections.size} 个版本",
+                        fontSize = 11.sp,
+                        color = Muted,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        if (sections.isNotEmpty()) {
+            val latestSection = sections.first()
+            val historySections = sections.drop(1)
+
+            // 1. Latest Version Featured Card
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+                border = BorderStroke(1.dp, Primary.copy(alpha = 0.28f)),
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = PrimarySoft,
+                        ) {
+                            Text(
+                                text = latestSection.version,
+                                color = Primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (hasUpdate) "本次更新" else "当前最新",
+                            color = Success,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        latestSection.entries.forEach { entry ->
+                            ReleaseEntryRow(entry)
+                        }
+                    }
+                }
+            }
+
+            // 2. Historical Versions Expandable Timeline
+            if (historySections.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showHistory = !showHistory },
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = null,
+                            tint = Muted,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (showHistory) "收起历史更新日志" else "查看历史更新日志（${historySections.size} 个版本）",
+                            fontSize = 12.5.sp,
+                            color = Muted,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Icon(
+                            if (showHistory) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = Muted,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+
+                if (showHistory) {
+                    Spacer(Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        historySections.forEachIndexed { index, histSection ->
+                            Column {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                ) {
+                                    Text(
+                                        text = histSection.version,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Ink,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Column(
+                                    modifier = Modifier.padding(start = 2.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    histSection.entries.forEach { entry ->
+                                        ReleaseEntryRow(entry)
+                                    }
+                                }
+                            }
+                            if (index < historySections.size - 1) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                    modifier = Modifier.padding(top = 10.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (hasUpdate) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            ) {
+                Text(
+                    text = "本次更新包含功能优化与常规稳定性提升。",
+                    color = Muted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReleaseEntryRow(entry: ReleaseEntry) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        if (entry.tag != null) {
+            val (tagBg, tagText) = when (entry.tagType) {
+                ReleaseTagType.NEW -> Pair(Color(0xFF10B981).copy(alpha = 0.15f), Color(0xFF059669))
+                ReleaseTagType.OPTIMIZE -> Pair(Color(0xFFF59E0B).copy(alpha = 0.15f), Color(0xFFD97706))
+                ReleaseTagType.FIX -> Pair(Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
+                ReleaseTagType.GENERAL -> Pair(PrimarySoft, Primary)
+            }
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = tagBg,
+                modifier = Modifier.padding(top = 1.5.dp),
+            ) {
+                Text(
+                    text = entry.tag,
+                    color = tagText,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+        } else {
+            Box(
+                modifier = Modifier
+                    .padding(top = 7.dp, end = 8.dp)
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(Primary),
+            )
+        }
+        Text(
+            text = entry.content,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }

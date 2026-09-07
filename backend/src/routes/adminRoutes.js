@@ -202,6 +202,12 @@ import {
   updateGoodsCheckLocationController,
   updateGoodsCheckController,
 } from "../controllers/ydGoodsCheckController.js";
+import {
+  getClientDisplaySettingsController,
+  updateClientDisplaySettingsController,
+  uploadWechatQrcodeController,
+  getClientDisplayInfoController,
+} from "../controllers/clientDisplayController.js";
 
 export default async function adminRoutes(fastify) {
   const storeStaffRoute = { config: { storeStaff: true } };
@@ -559,4 +565,20 @@ export default async function adminRoutes(fastify) {
   fastify.get("/robot-notifications/logs", listRobotLogsController);
   fastify.get("/robot-notifications/logs/:id", robotLogDetailController);
   fastify.post("/robot-notifications/logs/:id/retry", retryRobotLogController);
+  fastify.get(
+    "/client-display",
+    { preHandler: verifySuperAdmin },
+    getClientDisplaySettingsController,
+  );
+  fastify.put(
+    "/client-display",
+    { preHandler: verifySuperAdmin },
+    updateClientDisplaySettingsController,
+  );
+  fastify.post(
+    "/client-display/qrcode",
+    { preHandler: verifySuperAdmin },
+    uploadWechatQrcodeController,
+  );
+  fastify.get("/client-display/info", storeStaffRoute, getClientDisplayInfoController);
 }

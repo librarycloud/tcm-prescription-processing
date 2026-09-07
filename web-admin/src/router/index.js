@@ -178,6 +178,12 @@ const routes = [
         meta: { title: '打印设置', icon: 'Printer', group: 'system', allowedRoles: [0, 2] }
       },
       {
+        path: 'client-display',
+        name: 'ClientDisplay',
+        component: () => import('@/views/admin/ClientDisplay.vue'),
+        meta: { title: '客户端展示', icon: 'Cellphone', group: 'system', allowedRoles: [0] }
+      },
+      {
         path: 'stores',
         name: 'Stores',
         component: () => import('@/views/admin/Stores.vue'),
