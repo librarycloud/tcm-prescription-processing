@@ -229,25 +229,25 @@ internal fun resolveThemeAccent(key: String, customHex: String): ThemeAccent {
 }
 
 private fun lightBackground(accentColor: Color): Color =
-    blendColor(Color(0xFFF8F8FA), accentColor, 0.035f)
+    blendColor(Color(0xFFF8FAFC), accentColor, 0.02f)
 
 private fun lightSurface(accentColor: Color): Color =
-    blendColor(Color(0xFFFFFFFF), accentColor, 0.015f)
+    blendColor(Color(0xFFFFFFFF), accentColor, 0.008f)
 
 private fun lightSurfaceVariant(accentColor: Color): Color =
-    blendColor(Color(0xFFF1F1F4), accentColor, 0.06f)
+    blendColor(Color(0xFFF5F7FA), accentColor, 0.025f)
 
 private fun lightOutlineVariant(accentColor: Color): Color =
-    blendColor(Color(0xFFE2E2E6), accentColor, 0.08f)
+    blendColor(Color(0xFFE2E8F0), accentColor, 0.035f)
 
 private fun lightOutline(accentColor: Color): Color =
-    blendColor(Color(0xFFCBCBD2), accentColor, 0.10f)
+    blendColor(Color(0xFFCBD5E1), accentColor, 0.05f)
 
 private fun lightOnSurface(accentColor: Color): Color =
-    blendColor(Color(0xFF18181B), accentColor, 0.05f)
+    blendColor(Color(0xFF0F172A), accentColor, 0.03f)
 
 private fun lightOnSurfaceVariant(accentColor: Color): Color =
-    blendColor(Color(0xFF52525B), accentColor, 0.08f)
+    blendColor(Color(0xFF475569), accentColor, 0.05f)
 
 private fun darkBackground(accentColor: Color): Color =
     blendColor(Color(0xFF101114), accentColor, 0.07f)
