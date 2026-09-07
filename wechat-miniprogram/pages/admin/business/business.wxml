@@ -81,6 +81,8 @@
         <view class="business-title">库存查询</view>
         <view class="business-desc">查询药店库存批次</view>
       </view>
+    </view>
+
     <view class="business-card business-card-profile" data-url="/pages/admin/profile/profile" hover-class="business-card-active" bind:tap="openPage">
       <view class="card-header">
         <view class="icon-box icon-box-teal">
