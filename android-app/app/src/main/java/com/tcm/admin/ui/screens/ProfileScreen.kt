@@ -62,8 +62,14 @@ import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
+import android.widget.Toast
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.ui.platform.LocalContext
+import com.tcm.admin.util.CacheManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -1046,9 +1052,244 @@ private fun TextScalingCard(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SettingsScreen(
+    onOpenThemeAppearance: () -> Unit,
+    onOpenAbout: () -> Unit,
+    hasAppUpdate: Boolean,
+    selectedTheme: String,
+    themeAccentKey: String,
+    textScale: Float,
+) {
+    val context = LocalContext.current
+    var cacheSizeBytes by remember { mutableStateOf(-1L) }
+    var isClearingCache by remember { mutableStateOf(false) }
+    var clearSuccessMessage by remember { mutableStateOf<String?>(null) }
+    val cacheScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            cacheSizeBytes = CacheManager.calculateCacheSizeBytes(context)
+        }
+    }
+
+    val themeLabel = when (selectedTheme) {
+        "light" -> "浅色模式"
+        "dark" -> "深色模式"
+        else -> "跟随系统"
+    }
+    val accentLabel = DefaultThemeAccents.find { it.key == themeAccentKey }?.name ?: "自定义色彩"
+    val scaleLabel = when (textScale) {
+        0.88f -> "较小"
+        1.12f -> "中等"
+        1.25f -> "较大"
+        1.38f -> "超大"
+        else -> "标准"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        Text("界面与风格", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(10.dp))
+
+        // 1. Theme & Appearance Entry Card
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenThemeAppearance),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = PrimarySoft,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = Primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("主题与外观", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "$themeLabel · $accentLabel · 字号 $scaleLabel",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = "进入主题与外观设置", tint = Muted)
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Text("存储与缓存", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(10.dp))
+
+        // 2. Storage & Cache Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.CleaningServices,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("应用缓存", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = if (cacheSizeBytes < 0L) "计算中..." else CacheManager.formatSize(cacheSizeBytes),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (cacheSizeBytes > 10L * 1024 * 1024) Danger else Primary,
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "包含历史版本更新安装包、就诊加工照片缓存及网络数据缓存。清理缓存不会影响账号登录与业务数据。",
+                    fontSize = 12.sp,
+                    color = Muted,
+                    lineHeight = 17.sp,
+                )
+
+                if (clearSuccessMessage != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = clearSuccessMessage!!,
+                        color = Success,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = {
+                        if (isClearingCache) return@Button
+                        isClearingCache = true
+                        clearSuccessMessage = null
+                        cacheScope.launch {
+                            val freed = withContext(Dispatchers.IO) {
+                                CacheManager.clearAllCache(context)
+                            }
+                            val remaining = withContext(Dispatchers.IO) {
+                                CacheManager.calculateCacheSizeBytes(context)
+                            }
+                            cacheSizeBytes = remaining
+                            isClearingCache = false
+                            clearSuccessMessage = "清理完成，已释放 ${CacheManager.formatSize(freed)} 空间"
+                            Toast.makeText(context, "缓存已成功清理", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    enabled = !isClearingCache && cacheSizeBytes != 0L,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (cacheSizeBytes == 0L) MaterialTheme.colorScheme.surfaceVariant else PrimarySoft,
+                        contentColor = if (cacheSizeBytes == 0L) Muted else Primary,
+                    ),
+                ) {
+                    if (isClearingCache) {
+                        CircularProgressIndicator(
+                            color = Primary,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("正在清理缓存...", fontSize = 13.sp)
+                    } else if (cacheSizeBytes == 0L) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("已是最佳状态 (0 B)", fontSize = 13.sp)
+                    } else {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("一键清理缓存", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Text("系统与关于", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(10.dp))
+
+        // 3. About & Version Check Entry
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenAbout),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = PrimarySoft,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = Primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("关于与检查更新", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
+                    Spacer(Modifier.height(2.dp))
+                    Text("当前版本 v${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 12.sp)
+                }
+                if (hasAppUpdate) {
+                    Surface(
+                        modifier = Modifier.size(8.dp),
+                        shape = CircleShape,
+                        color = Color(0xFFE5484D),
+                    ) {}
+                    Spacer(Modifier.width(8.dp))
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = "进入版本更新", tint = Muted)
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ThemeAppearanceScreen(
     selectedTheme: String,
     onThemeSelected: (String) -> Unit,
     pureBlackMode: Boolean,

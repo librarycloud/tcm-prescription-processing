@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -175,8 +176,9 @@ internal fun DifferencesScreen(
                     ) {
                         if (preReceipt > 0) {
                             Surface(
-                                color = SuccessSoft,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, CardBorderColor),
                                 modifier = Modifier.weight(1f),
                             ) {
                                 Row(
@@ -198,8 +200,9 @@ internal fun DifferencesScreen(
                         }
                         if (preShipment > 0) {
                             Surface(
-                                color = DangerSoft,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, CardBorderColor),
                                 modifier = Modifier.weight(1f),
                             ) {
                                 Row(

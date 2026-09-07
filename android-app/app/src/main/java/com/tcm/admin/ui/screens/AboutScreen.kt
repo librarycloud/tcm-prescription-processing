@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tcm.admin.util.BsPatch
+import com.tcm.admin.util.CacheManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -159,18 +160,20 @@ internal fun AboutScreen(
                 .take(16)
             val separator = if (url.contains('?')) "&" else "?"
             val downloadUrl = "$url${separator}versionCode=$versionCode&cacheKey=${java.net.URLEncoder.encode(cacheKey, "UTF-8")}"
-            val fileName = "app-release-v${versionCode}-${versionName}-${cacheKey}.apk"
+            val fileName = "update_pending.apk"
             downloadFileName = fileName
             val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             if (destDir != null) {
-                val destFile = File(destDir, fileName)
-                if (destFile.exists()) destFile.delete()
+                destDir.listFiles()?.forEach { file ->
+                    if (file.name.endsWith(".apk", ignoreCase = true) || file.name.endsWith(".tmp", ignoreCase = true)) {
+                        file.delete()
+                    }
+                }
             }
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle("药房助手更新 v$versionName")
                 .setDescription("药房助手 v$versionName 下载完成")
                 .setMimeType("application/vnd.android.package-archive")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
             downloadedUri = null
             downloadError = null
@@ -214,8 +217,12 @@ internal fun AboutScreen(
 
         scope.launch {
             try {
-                val patchFile = File(context.cacheDir, "patch_v${BuildConfig.VERSION_CODE}_to_v${versionCode}.tmp")
-                val synthesizedApk = File(context.cacheDir, "synthesized_v${versionCode}_${versionName}.apk")
+                val patchFile = File(context.cacheDir, "update_patch.tmp")
+                val synthesizedApk = File(context.cacheDir, "update_pending.apk")
+                runCatching {
+                    if (patchFile.exists()) patchFile.delete()
+                    if (synthesizedApk.exists()) synthesizedApk.delete()
+                }
 
                 // 1. Download patch
                 withContext(Dispatchers.IO) {
@@ -286,6 +293,10 @@ internal fun AboutScreen(
                 downloadedUri = Uri.fromFile(synthesizedApk)
 
             } catch (e: Exception) {
+                runCatching {
+                    File(context.cacheDir, "update_patch.tmp").delete()
+                    File(context.cacheDir, "update_pending.apk").delete()
+                }
                 // Fallback to full download
                 isPatchDownloading = false
                 isSynthesizing = false
@@ -296,6 +307,7 @@ internal fun AboutScreen(
     }
 
     fun startUpdate(version: JSONObject) {
+        CacheManager.cleanObsoleteApksAndPatches(context)
         val updateType = version.optString("updateType", "full")
         if (updateType == "incremental") {
             startIncrementalUpdate(version)

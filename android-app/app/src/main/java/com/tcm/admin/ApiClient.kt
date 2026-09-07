@@ -333,12 +333,16 @@ object ApiClient {
     fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
     fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
     fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
-        val directory = File(context.applicationContext.filesDir, "processing-photos")
+        val cacheDir = File(context.applicationContext.cacheDir, "processing-photos")
+        val legacyDir = File(context.applicationContext.filesDir, "processing-photos")
         if (planId != null && photoId != null) {
-            File(directory, "$planId-$photoId").delete()
+            File(cacheDir, "$planId-$photoId").delete()
+            File(legacyDir, "$planId-$photoId").delete()
         } else {
-            directory.listFiles()?.forEach { it.delete() }
-            directory.delete()
+            cacheDir.listFiles()?.forEach { it.delete() }
+            cacheDir.delete()
+            legacyDir.listFiles()?.forEach { it.delete() }
+            legacyDir.delete()
         }
     }
     fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {

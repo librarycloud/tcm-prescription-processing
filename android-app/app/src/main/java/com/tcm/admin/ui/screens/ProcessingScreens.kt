@@ -107,7 +107,11 @@ private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
 private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
 
 private fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap {
-    val cacheFile = java.io.File(context.filesDir, "processing-photos/$planId-$photoId")
+    val cacheFile = java.io.File(context.cacheDir, "processing-photos/$planId-$photoId")
+    val legacyFile = java.io.File(context.filesDir, "processing-photos/$planId-$photoId")
+    if (legacyFile.exists()) {
+        legacyFile.delete()
+    }
     val cacheAge = System.currentTimeMillis() - cacheFile.lastModified()
     if (cacheFile.isFile && cacheAge in 0..PROCESSING_PHOTO_CACHE_TTL_MILLIS) {
         BitmapFactory.decodeFile(cacheFile.absolutePath)?.let { return it }

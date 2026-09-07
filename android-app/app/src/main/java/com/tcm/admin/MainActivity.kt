@@ -105,6 +105,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tcm.admin.util.CacheManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -137,6 +138,7 @@ internal sealed class ScreenTarget {
     object Profile : ScreenTarget()
     object ProfileDetail : ScreenTarget()
     object Settings : ScreenTarget()
+    object ThemeAppearance : ScreenTarget()
     object About : ScreenTarget()
     data class Inventory(val initialQuery: String = "", val scanRequestId: Long = 0L) : ScreenTarget()
     object Stocktaking : ScreenTarget()
@@ -427,6 +429,16 @@ private fun TcmAdminApp() {
                 }
                 is ScreenTarget.Settings -> DetailShell("设置", onBack = { navigateBack() }) {
                     SettingsScreen(
+                        onOpenThemeAppearance = { navigateTo(ScreenTarget.ThemeAppearance) },
+                        onOpenAbout = { navigateTo(ScreenTarget.About) },
+                        hasAppUpdate = hasAppUpdate,
+                        selectedTheme = themeMode,
+                        themeAccentKey = themeAccentKey,
+                        textScale = textScale,
+                    )
+                }
+                is ScreenTarget.ThemeAppearance -> DetailShell("主题与外观", onBack = { navigateBack() }) {
+                    ThemeAppearanceScreen(
                         selectedTheme = themeMode,
                         onThemeSelected = { mode ->
                             themeMode = mode
@@ -569,6 +581,12 @@ private fun TcmAdminApp() {
         }
     }
 }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            CacheManager.cleanObsoleteApksAndPatches(appContext)
+        }
+    }
 
     LaunchedEffect(session) {
         if (session != null) {
