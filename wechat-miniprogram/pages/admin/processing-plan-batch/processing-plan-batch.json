@@ -1,3 +1,8 @@
 {
-  "navigationBarTitleText": "批量新建加工计划"
+  "navigationBarTitleText": "批量新建加工计划",
+  "usingComponents": {
+    "t-input": "tdesign-miniprogram/input/input",
+    "t-textarea": "tdesign-miniprogram/textarea/textarea",
+    "t-button": "tdesign-miniprogram/button/button"
+  }
 }

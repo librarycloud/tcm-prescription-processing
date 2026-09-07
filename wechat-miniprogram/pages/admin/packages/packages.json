@@ -2,10 +2,13 @@
   "navigationBarTitleText": "包裹列表",
   "enablePullDownRefresh": true,
   "usingComponents": {
-    "t-button": "tdesign-miniprogram/button/button",    "t-cell": "tdesign-miniprogram/cell/cell",
+    "t-button": "tdesign-miniprogram/button/button",
     "t-input": "tdesign-miniprogram/input/input",
+    "store-picker": "../../../components/store-picker/store-picker",
     "t-tag": "tdesign-miniprogram/tag/tag",
+    "t-loading": "tdesign-miniprogram/loading/loading",
     "t-empty": "tdesign-miniprogram/empty/empty",
-    "store-picker": "../../../components/store-picker/store-picker"
+    "t-tab-bar": "tdesign-miniprogram/tab-bar/tab-bar",
+    "t-tab-bar-item": "tdesign-miniprogram/tab-bar-item/tab-bar-item"
   }
 }
