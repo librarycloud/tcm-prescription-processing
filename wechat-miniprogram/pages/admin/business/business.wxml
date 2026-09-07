@@ -57,32 +57,6 @@
       </view>
     </view>
 
-    <view class="business-card business-card-locations" data-url="/pages/admin/herb-locations/herb-locations" hover-class="business-card-active" bind:tap="openPage">
-      <view class="card-header">
-        <view class="icon-box icon-box-cyan">
-          <t-icon name="view-module" size="44rpx" color="#00838f" />
-        </view>
-        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
-      </view>
-      <view class="card-body">
-        <view class="business-title">斗谱配置</view>
-        <view class="business-desc">配置药材与货位</view>
-      </view>
-    </view>
-
-    <view class="business-card business-card-inventory" data-url="/pages/admin/e6-inventory/e6-inventory" hover-class="business-card-active" bind:tap="openPage">
-      <view class="card-header">
-        <view class="icon-box icon-box-indigo">
-          <t-icon name="search" size="44rpx" color="#2a3b8f" />
-        </view>
-        <t-icon name="chevron-right" size="32rpx" color="#c9cdd4" />
-      </view>
-      <view class="card-body">
-        <view class="business-title">库存查询</view>
-        <view class="business-desc">查询药店库存批次</view>
-      </view>
-    </view>
-
     <view class="business-card business-card-profile" data-url="/pages/admin/profile/profile" hover-class="business-card-active" bind:tap="openPage">
       <view class="card-header">
         <view class="icon-box icon-box-teal">

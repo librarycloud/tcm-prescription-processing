@@ -6,8 +6,26 @@
   padding: 24rpx 0;
 }
 
-.qr-canvas {
+.qr-image {
+  display: block;
   background: #ffffff;
+  border-radius: 8rpx;
+}
+
+.qr-placeholder {
+  background: #f7f8fa;
+  border-radius: 8rpx;
+}
+
+.qr-canvas-hidden {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: 320px;
+  height: 320px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
 }
 
 .qr-tip {
@@ -56,9 +74,11 @@
   border-radius: 12rpx;
 }
 
-.qr-big-canvas {
+.qr-big-image {
+  display: block;
   background: #ffffff;
 }
+
 
 .qr-dialog-desc {
   margin-top: 24rpx;
