@@ -101,19 +101,35 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
       - name: Build signed release APK
         env:
-          API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL || secrets.API_BASE_URL }}
-          UPDATE_BASE_URL: ${{ inputs.update_base_url || vars.UPDATE_BASE_URL || secrets.UPDATE_BASE_URL || '' }}
-          UPDATE_APP_ID: ${{ inputs.update_app_id || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || '' }}
+          INPUT_API_BASE_URL: ${{ inputs.api_base_url }}
+          VARS_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          SECRET_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          INPUT_UPDATE_BASE_URL: ${{ inputs.update_base_url }}
+          VARS_UPDATE_BASE_URL: ${{ vars.UPDATE_BASE_URL }}
+          SECRET_UPDATE_BASE_URL: ${{ secrets.UPDATE_BASE_URL }}
+          INPUT_UPDATE_APP_ID: ${{ inputs.update_app_id }}
+          VARS_UPDATE_APP_ID: ${{ vars.UPDATE_APP_ID }}
+          SECRET_UPDATE_APP_ID: ${{ secrets.UPDATE_APP_ID }}
           VERSION_CODE_INPUT: ${{ inputs.version_code }}
           VERSION_NAME_INPUT: ${{ inputs.version_name }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          test -n "$API_BASE_URL"
-          test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
-          test -n "$ANDROID_KEY_PASSWORD"
+          API_BASE_URL="$(echo "${INPUT_API_BASE_URL:-${VARS_API_BASE_URL:-$SECRET_API_BASE_URL}}" | xargs)"
+          UPDATE_BASE_URL="$(echo "${INPUT_UPDATE_BASE_URL:-${VARS_UPDATE_BASE_URL:-$SECRET_UPDATE_BASE_URL}}" | xargs)"
+          UPDATE_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_UPDATE_APP_ID:-$SECRET_UPDATE_APP_ID}}" | xargs)"
+
+          if [ -z "$API_BASE_URL" ]; then
+            echo "::error::API_BASE_URL 未配置！请在 workflow_dispatch 输入框填写，或者在仓库 Settings -> Secrets and variables -> Actions 中设置 Secret 或 Variable：API_BASE_URL（注意必须是 Repository Secret/Variable，不能是 Environment Secret）"
+            exit 1
+          fi
+
+          if [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::缺少签名密钥配置（ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD）！"
+            exit 1
+          fi
+
           version_code="$VERSION_CODE_INPUT"
           version_name="$VERSION_NAME_INPUT"
           if [ -z "$version_name" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [[ "$GITHUB_REF_NAME" == v* ]]; then
@@ -201,10 +217,17 @@ jobs:
       - name: Notify App Release Hub
         if: success()
         env:
-          RELEASE_HUB_URL: ${{ inputs.update_base_url || vars.RELEASE_HUB_URL || secrets.RELEASE_HUB_URL || vars.UPDATE_BASE_URL || secrets.UPDATE_BASE_URL }}
-          RELEASE_HUB_APP_ID: ${{ inputs.update_app_id || vars.RELEASE_HUB_APP_ID || secrets.RELEASE_HUB_APP_ID || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || '' }}
+          INPUT_UPDATE_BASE_URL: ${{ inputs.update_base_url }}
+          VARS_RELEASE_HUB_URL: ${{ vars.RELEASE_HUB_URL || vars.UPDATE_BASE_URL }}
+          SECRET_RELEASE_HUB_URL: ${{ secrets.RELEASE_HUB_URL || secrets.UPDATE_BASE_URL }}
+          INPUT_UPDATE_APP_ID: ${{ inputs.update_app_id }}
+          VARS_RELEASE_HUB_APP_ID: ${{ vars.RELEASE_HUB_APP_ID || vars.UPDATE_APP_ID }}
+          SECRET_RELEASE_HUB_APP_ID: ${{ secrets.RELEASE_HUB_APP_ID || secrets.UPDATE_APP_ID }}
           RELEASE_HUB_API_KEY: ${{ secrets.RELEASE_HUB_API_KEY }}
         run: |
+          RELEASE_HUB_URL="$(echo "${INPUT_UPDATE_BASE_URL:-${VARS_RELEASE_HUB_URL:-$SECRET_RELEASE_HUB_URL}}" | xargs)"
+          RELEASE_HUB_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_RELEASE_HUB_APP_ID:-$SECRET_RELEASE_HUB_APP_ID}}" | xargs)"
+
           if [ -n "$RELEASE_HUB_URL" ] && [ -n "$RELEASE_HUB_APP_ID" ] && [ -n "$RELEASE_HUB_API_KEY" ]; then
             echo "Notifying App Release Hub at $RELEASE_HUB_URL for app $RELEASE_HUB_APP_ID..."
             curl -s -S -X POST "${RELEASE_HUB_URL%/}/admin/apps/${RELEASE_HUB_APP_ID}/sync" \
@@ -212,7 +235,7 @@ jobs:
               -H "Content-Type: application/json" \
               --max-time 30 || echo "::warning::Failed to notify App Release Hub, but release was published."
           else
-            echo "RELEASE_HUB_URL or RELEASE_HUB_API_KEY not configured, skipping automatic sync notification."
+            echo "RELEASE_HUB_URL, RELEASE_HUB_APP_ID or RELEASE_HUB_API_KEY not configured, skipping automatic sync notification."
           fi
       - name: Remove signing keystore
         if: always()
