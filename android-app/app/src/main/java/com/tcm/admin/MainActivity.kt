@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -296,8 +297,12 @@ private fun TcmAdminApp() {
         SideEffect {
             val window = (view.context as? android.app.Activity)?.window
             if (window != null) {
-                window.statusBarColor = colorScheme.surface.toArgb()
-                window.navigationBarColor = colorScheme.surface.toArgb()
+                if (Build.VERSION.SDK_INT < 35) {
+                    @Suppress("DEPRECATION")
+                    window.statusBarColor = colorScheme.surface.toArgb()
+                    @Suppress("DEPRECATION")
+                    window.navigationBarColor = colorScheme.surface.toArgb()
+                }
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark

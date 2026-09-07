@@ -223,19 +223,51 @@ jobs:
           INPUT_UPDATE_APP_ID: ${{ inputs.update_app_id }}
           VARS_RELEASE_HUB_APP_ID: ${{ vars.RELEASE_HUB_APP_ID || vars.UPDATE_APP_ID }}
           SECRET_RELEASE_HUB_APP_ID: ${{ secrets.RELEASE_HUB_APP_ID || secrets.UPDATE_APP_ID }}
-          RELEASE_HUB_API_KEY: ${{ secrets.RELEASE_HUB_API_KEY }}
+          VARS_HUB_API_KEY: ${{ vars.RELEASE_HUB_API_KEY }}
+          SECRET_HUB_API_KEY: ${{ secrets.RELEASE_HUB_API_KEY }}
         run: |
           RELEASE_HUB_URL="$(echo "${INPUT_UPDATE_BASE_URL:-${VARS_RELEASE_HUB_URL:-$SECRET_RELEASE_HUB_URL}}" | xargs)"
           RELEASE_HUB_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_RELEASE_HUB_APP_ID:-$SECRET_RELEASE_HUB_APP_ID}}" | xargs)"
+          RELEASE_HUB_API_KEY="$(echo "${VARS_HUB_API_KEY:-$SECRET_HUB_API_KEY}" | xargs)"
 
-          if [ -n "$RELEASE_HUB_URL" ] && [ -n "$RELEASE_HUB_APP_ID" ] && [ -n "$RELEASE_HUB_API_KEY" ]; then
-            echo "Notifying App Release Hub at $RELEASE_HUB_URL for app $RELEASE_HUB_APP_ID..."
-            curl -s -S -X POST "${RELEASE_HUB_URL%/}/admin/apps/${RELEASE_HUB_APP_ID}/sync" \
-              -H "X-API-Key: ${RELEASE_HUB_API_KEY}" \
-              -H "Content-Type: application/json" \
-              --max-time 30 || echo "::warning::Failed to notify App Release Hub, but release was published."
+          echo "=== App Release Hub 自动同步检查 ==="
+          echo "Hub URL:    ${RELEASE_HUB_URL:-<未配置>}"
+          echo "App ID:     ${RELEASE_HUB_APP_ID:-<未配置>}"
+          if [ -n "$RELEASE_HUB_API_KEY" ]; then
+            echo "API Key:    已配置 (${#RELEASE_HUB_API_KEY} 字符)"
           else
-            echo "RELEASE_HUB_URL, RELEASE_HUB_APP_ID or RELEASE_HUB_API_KEY not configured, skipping automatic sync notification."
+            echo "API Key:    <未配置>"
+          fi
+
+          MISSING=""
+          [ -z "$RELEASE_HUB_URL" ] && MISSING="$MISSING RELEASE_HUB_URL/UPDATE_BASE_URL"
+          [ -z "$RELEASE_HUB_APP_ID" ] && MISSING="$MISSING RELEASE_HUB_APP_ID/UPDATE_APP_ID"
+          [ -z "$RELEASE_HUB_API_KEY" ] && MISSING="$MISSING RELEASE_HUB_API_KEY"
+
+          if [ -n "$MISSING" ]; then
+            echo "::warning::缺少以下配置，跳过自动通知 Release Hub 同步:$MISSING。请在仓库的 Settings -> Secrets and variables -> Actions 中进行设置。"
+            exit 0
+          fi
+
+          SYNC_ENDPOINT="${RELEASE_HUB_URL%/}/admin/apps/${RELEASE_HUB_APP_ID}/sync"
+          echo "正在请求: POST $SYNC_ENDPOINT ..."
+
+          RESPONSE_FILE="$(mktemp)"
+          HTTP_CODE=$(curl -s -S -o "$RESPONSE_FILE" -w "%{http_code}" \
+            -X POST "$SYNC_ENDPOINT" \
+            -H "X-API-Key: ${RELEASE_HUB_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --max-time 180 || echo "CURL_ERROR")
+
+          RESPONSE_BODY=$(cat "$RESPONSE_FILE" 2>/dev/null || echo "")
+          rm -f "$RESPONSE_FILE"
+
+          echo "Hub 响应 (HTTP $HTTP_CODE): $RESPONSE_BODY"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ 成功通知 App Release Hub 同步最新 Release！"
+          else
+            echo "::warning::App Release Hub 同步失败 (HTTP $HTTP_CODE): $RESPONSE_BODY"
           fi
       - name: Remove signing keystore
         if: always()
