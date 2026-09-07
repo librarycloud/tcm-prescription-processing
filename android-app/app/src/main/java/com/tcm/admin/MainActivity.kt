@@ -21,10 +21,15 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyListState
@@ -50,8 +55,13 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -375,6 +385,10 @@ private fun TcmAdminApp() {
                         initial = currentScreen.initial,
                         mergeIds = currentScreen.mergeIds,
                         onDone = {
+                            e6ImportsListState.loaded = false
+                            e6ImportsListState.items = null
+                            invalidateRetainedList("prescriptions")
+                            invalidateRetainedList("processing")
                             navigateBack()
                             if (backStack.lastOrNull() is ScreenTarget.E6ImportDetail) navigateBack()
                         },
@@ -430,8 +444,6 @@ private fun TcmAdminApp() {
                 is ScreenTarget.Settings -> DetailShell("设置", onBack = { navigateBack() }) {
                     SettingsScreen(
                         onOpenThemeAppearance = { navigateTo(ScreenTarget.ThemeAppearance) },
-                        onOpenAbout = { navigateTo(ScreenTarget.About) },
-                        hasAppUpdate = hasAppUpdate,
                         selectedTheme = themeMode,
                         themeAccentKey = themeAccentKey,
                         textScale = textScale,
@@ -717,13 +729,68 @@ private fun MainShell(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val drawerWidth = 280.dp
+    var scannedEquipmentInfo by remember { mutableStateOf<JSONObject?>(null) }
+    var scanResolving by remember { mutableStateOf(false) }
+
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
-            if (value.startsWith("TCM:PICKUP:1:")) {
-                onNavigate(ScreenTarget.PackageVerify(value))
-            } else {
-                onNavigate(ScreenTarget.Inventory(value, System.nanoTime()))
+            scope.launch {
+                scanResolving = true
+                try {
+                    when {
+                        // 1. 取货码核销 (TCM:PICKUP:1:...)
+                        value.startsWith("TCM:PICKUP:1:") -> {
+                            onNavigate(ScreenTarget.PackageVerify(value))
+                        }
+                        // 2. 加工计划二维码 (TCM:PLAN:1:...)
+                        value.startsWith("TCM:PLAN:1:") -> {
+                            val plan = withContext(Dispatchers.IO) { ApiClient.processingPlanByScan(value) }
+                            if (plan != null) {
+                                onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open"))
+                                Toast.makeText(context, "已打开加工计划：${plan.optString("planCode", value)}", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "未找到对应加工计划", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        // 3. 设备二维码 (TCM:EQUIPMENT:1:...)
+                        value.startsWith("TCM:EQUIPMENT:1:") -> {
+                            val equip = withContext(Dispatchers.IO) { ApiClient.processingEquipmentByScan(value) }
+                            if (equip != null) {
+                                val currentUsage = equip.optJSONObject("currentUsage")
+                                val occupyingPlan = currentUsage?.optJSONObject("processingPlan")
+                                val planCode = occupyingPlan?.optString("planCode").orEmpty()
+                                val planId = occupyingPlan?.optInt("id", 0) ?: 0
+                                if (planCode.isNotBlank() || planId > 0) {
+                                    val fullPlan = withContext(Dispatchers.IO) {
+                                        if (planCode.isNotBlank()) ApiClient.processingPlanByScan(planCode)
+                                        else ApiClient.processingWorkflow(planId)
+                                    } ?: occupyingPlan
+                                    if (fullPlan != null) {
+                                        onNavigate(ScreenTarget.WorkflowOperation(fullPlan, "", "open"))
+                                        Toast.makeText(context, "已定位到设备【${equip.optString("name")}】当前加工计划", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        onSwitchTab(ScreenTarget.Processing)
+                                        scannedEquipmentInfo = equip
+                                    }
+                                } else {
+                                    onSwitchTab(ScreenTarget.Processing)
+                                    scannedEquipmentInfo = equip
+                                }
+                            } else {
+                                Toast.makeText(context, "未找到对应设备信息", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        // 4. 其余所有扫码（商品条形码、SKU、药材条码等） -> 默认进入商品库存查询
+                        else -> {
+                            onNavigate(ScreenTarget.Inventory(value, System.nanoTime()))
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "扫码识别失败", Toast.LENGTH_SHORT).show()
+                } finally {
+                    scanResolving = false
+                }
             }
         }
     }
@@ -846,6 +913,72 @@ private fun MainShell(
         }
     }
 
+    if (scanResolving) {
+        Dialog(onDismissRequest = { /* keep open while resolving */ }) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Primary, strokeWidth = 3.dp)
+                    Text("正在识别条码...", fontSize = 15.sp, color = Ink)
+                }
+            }
+        }
+    }
+
+    scannedEquipmentInfo?.let { equip ->
+        val equipName = equip.optString("name", "设备")
+        val equipType = equip.optString("typeName", "")
+        val equipNo = equip.optString("equipmentNo", "")
+        val statusInt = equip.optInt("status", 1)
+        val currentUsage = equip.optJSONObject("currentUsage")
+        val statusText = when {
+            currentUsage != null -> "使用中"
+            statusInt == 1 -> "正常空闲"
+            statusInt == 2 -> "维护中"
+            statusInt == 0 -> "已停用"
+            else -> "空闲"
+        }
+
+        AlertDialog(
+            onDismissRequest = { scannedEquipmentInfo = null },
+            title = { Text(equipName, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (equipType.isNotBlank()) {
+                        Text("设备类型：$equipType", fontSize = 14.sp, color = Ink)
+                    }
+                    if (equipNo.isNotBlank()) {
+                        Text("设备编号：$equipNo", fontSize = 14.sp, color = Ink)
+                    }
+                    Text("当前状态：$statusText", fontSize = 14.sp, color = Ink)
+                    Text("该设备当前无正在运行的加工任务，可在加工管理中分配使用。", fontSize = 13.sp, color = Muted)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scannedEquipmentInfo = null
+                        onSwitchTab(ScreenTarget.Processing)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) {
+                    Text("前往加工管理")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { scannedEquipmentInfo = null }) {
+                    Text("关闭")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -934,7 +1067,7 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
             },
             actions = {
                 IconButton(onClick = onScan) {
-                    Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码搜索商品", tint = Primary)
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码", tint = Primary)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -959,60 +1092,91 @@ private fun BottomNav(
         ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
         ScreenTarget.Profile to ("我的" to Icons.Default.AccountCircle),
     )
-    Column {
-        HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
-        NavigationBar(
-            modifier = Modifier.navigationBarsPadding(),
-            containerColor = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
         ) {
-            items.forEach { (target, pair) ->
-                val isSelected = when (target) {
-                    is ScreenTarget.Inventory -> current is ScreenTarget.Inventory
-                    is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
-                    is ScreenTarget.Processing -> current is ScreenTarget.Processing
-                    is ScreenTarget.Packages -> current is ScreenTarget.Packages
-                    is ScreenTarget.Profile -> current is ScreenTarget.Profile
-                    else -> false
+            HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items.forEach { (target, pair) ->
+                    val isSelected = when (target) {
+                        is ScreenTarget.Inventory -> current is ScreenTarget.Inventory
+                        is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
+                        is ScreenTarget.Processing -> current is ScreenTarget.Processing
+                        is ScreenTarget.Packages -> current is ScreenTarget.Packages
+                        is ScreenTarget.Profile -> current is ScreenTarget.Profile
+                        else -> false
+                    }
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.12f else 1.0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow,
+                        ),
+                        label = "navIconScale",
+                    )
+                    val contentColor by animateColorAsState(
+                        targetValue = if (isSelected) Primary else Muted,
+                        label = "navContentColor",
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                if (isSelected) onReselect() else onSwitchTab(target)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) PrimarySoft else Color.Transparent)
+                                    .padding(horizontal = 10.dp, vertical = 2.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    pair.second,
+                                    contentDescription = pair.first,
+                                    tint = contentColor,
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .graphicsLayer(
+                                            scaleX = iconScale,
+                                            scaleY = iconScale,
+                                        ),
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = pair.first,
+                                fontSize = 10.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = contentColor,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
-                val iconScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.15f else 1.0f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow,
-                    ),
-                    label = "navIconScale",
-                )
-                NavigationBarItem(
-                    selected = isSelected,
-                    onClick = {
-                        if (isSelected) onReselect() else onSwitchTab(target)
-                    },
-                    icon = {
-                        Icon(
-                            pair.second,
-                            contentDescription = pair.first,
-                            modifier = Modifier.graphicsLayer(
-                                scaleX = iconScale,
-                                scaleY = iconScale,
-                            ),
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = pair.first,
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Primary,
-                        selectedTextColor = Primary,
-                        unselectedIconColor = Muted,
-                        unselectedTextColor = Muted,
-                        indicatorColor = PrimarySoft,
-                    ),
-                )
             }
         }
     }

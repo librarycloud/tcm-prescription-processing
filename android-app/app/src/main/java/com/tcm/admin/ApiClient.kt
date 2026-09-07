@@ -332,6 +332,16 @@ object ApiClient {
     fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
     fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
     fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
+    fun processingPlanByScan(code: String): JSONObject? {
+        val trimmed = code.trim()
+        val query = java.net.URLEncoder.encode(trimmed, "UTF-8")
+        val res = runCatching { request("/admin/processing-plans/by-scan?code=$query") }.getOrNull()
+        val plan = res?.optJSONObject("data")
+        if (plan != null) return plan
+        val cleanCode = trimmed.removePrefix("TCM:PLAN:1:").trim()
+        val paged = runCatching { processingPlansPaged(view = "all", keyword = cleanCode, pageSize = 1) }.getOrNull()
+        return paged?.optJSONArray("list")?.optJSONObject(0)
+    }
     fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
         val cacheDir = File(context.applicationContext.cacheDir, "processing-photos")
         val legacyDir = File(context.applicationContext.filesDir, "processing-photos")
@@ -734,9 +744,18 @@ object ApiClient {
     ) : IllegalStateException(message)
 
     fun processingEquipmentByScan(keyword: String): JSONObject? {
-        val query = java.net.URLEncoder.encode(keyword.trim(), "UTF-8")
+        val trimmed = keyword.trim()
+        val query = java.net.URLEncoder.encode(trimmed, "UTF-8")
         val res = runCatching { request("/admin/processing-equipment?keyword=$query&page=1&pageSize=1") }.getOrNull()
-        return res?.optJSONObject("data")?.optJSONArray("list")?.optJSONObject(0)
+        val match = res?.optJSONObject("data")?.optJSONArray("list")?.optJSONObject(0)
+        if (match != null) return match
+        if (trimmed.startsWith("TCM:EQUIPMENT:1:")) {
+            val token = trimmed.removePrefix("TCM:EQUIPMENT:1:").trim()
+            val tokenQuery = java.net.URLEncoder.encode(token, "UTF-8")
+            val tokenRes = runCatching { request("/admin/processing-equipment?keyword=$tokenQuery&page=1&pageSize=1") }.getOrNull()
+            return tokenRes?.optJSONObject("data")?.optJSONArray("list")?.optJSONObject(0)
+        }
+        return null
     }
 
     private fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {

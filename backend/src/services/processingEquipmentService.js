@@ -10,6 +10,7 @@ import { recordOperation } from "./operationLogService.js";
 import {
   newEquipmentScanToken,
   processingEquipmentQrContent,
+  scanValue,
 } from "../utils/processingCode.js";
 import { toPositiveInt } from "../utils/validators.js";
 
@@ -69,10 +70,12 @@ export async function listProcessingEquipment(prisma, actor, query = {}) {
     where.status = status;
   }
   if (query.keyword) {
-    const keyword = String(query.keyword).trim();
+    const raw = String(query.keyword).trim();
+    const token = scanValue(raw, "EQUIPMENT");
     where.OR = [
-      { equipmentNo: { contains: keyword } },
-      { name: { contains: keyword } },
+      { equipmentNo: { contains: raw } },
+      { name: { contains: raw } },
+      ...(token ? [{ scanToken: token }, { equipmentNo: token.toUpperCase() }] : []),
     ];
   }
   const [list, total] = await Promise.all([

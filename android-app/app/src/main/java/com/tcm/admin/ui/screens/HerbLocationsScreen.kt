@@ -123,7 +123,7 @@ internal fun HerbsScreen(
     }
 
     LaunchedEffect(selectedStoreId, type, reload) {
-        val queryKey = listOf(selectedStoreId.orEmpty(), keyword, type).joinToString("|")
+        val queryKey = listOf(reload, selectedStoreId.orEmpty(), keyword, type).joinToString("|")
         if (listState.loadedQueryKey == queryKey && data != null) return@LaunchedEffect
         error = null
         runCatching {

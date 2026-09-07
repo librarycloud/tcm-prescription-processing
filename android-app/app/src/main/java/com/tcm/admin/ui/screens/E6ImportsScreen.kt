@@ -177,6 +177,8 @@ internal fun E6ImportsScreen(
     var notice by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
+    var lastLoadedOrderDate by remember { mutableStateOf(orderDate) }
+    var lastLoadedPage by remember { mutableStateOf(page) }
     val scope = rememberCoroutineScope()
 
     suspend fun refreshFromServer() {
@@ -197,6 +199,10 @@ internal fun E6ImportsScreen(
             data.optJSONObject("pagination")?.let { pagination ->
                 listState.pages = pagination.optInt("pages", 1).coerceAtLeast(1)
                 listState.total = pagination.optInt("total", list.length())
+            }
+            if (page > listState.pages) {
+                page = listState.pages
+                lastLoadedPage = listState.pages
             }
             ApiClient.saveE6ImportCache(context, data)
             listState.loaded = true
@@ -235,6 +241,10 @@ internal fun E6ImportsScreen(
         val cached = withContext(Dispatchers.IO) { ApiClient.loadE6ImportCache(context) }
         cached?.optJSONArray("list")?.let { list ->
             items = (0 until list.length()).map { list.getJSONObject(it) }
+            cached.optJSONObject("pagination")?.let { pagination ->
+                listState.pages = pagination.optInt("pages", 1).coerceAtLeast(1)
+                listState.total = pagination.optInt("total", list.length())
+            }
             listState.loaded = true
         }
         if (items == null) {
@@ -258,15 +268,27 @@ internal fun E6ImportsScreen(
         kotlinx.coroutines.delay(300)
         if (keyword.trim() != term || lastAutoKeyword == term) return@LaunchedEffect
         lastAutoKeyword = term
-        if (page != 1) page = 1 else if (listState.loaded) refreshFromServer()
+        page = 1
+        lastLoadedPage = 1
+        refreshFromServer()
     }
+
     LaunchedEffect(orderDate) {
-        if (listState.loaded) {
-            if (page != 1) page = 1 else refreshFromServer()
+        if (!listState.loaded) return@LaunchedEffect
+        if (orderDate != lastLoadedOrderDate) {
+            lastLoadedOrderDate = orderDate
+            page = 1
+            lastLoadedPage = 1
+            refreshFromServer()
         }
     }
+
     LaunchedEffect(page) {
-        if (page != 1 && listState.loaded) refreshFromServer()
+        if (!listState.loaded) return@LaunchedEffect
+        if (page != lastLoadedPage) {
+            lastLoadedPage = page
+            refreshFromServer()
+        }
     }
 
     val currentPage = page.coerceIn(1, listState.pages)
@@ -293,13 +315,17 @@ internal fun E6ImportsScreen(
                 SearchBarField(
                     value = keyword,
                     onValueChange = {
-                        page = 1
                         keyword = it
-                        if (it.isBlank()) scope.launch { refreshFromServer() }
+                        if (it.isBlank()) {
+                            page = 1
+                            lastLoadedPage = 1
+                            scope.launch { refreshFromServer() }
+                        }
                     },
                     placeholder = "搜索订单号、顾客、电话或医师编码",
                     onSearch = {
                         page = 1
+                        lastLoadedPage = 1
                         lastAutoKeyword = keyword.trim()
                         scope.launch { refreshFromServer() }
                     },

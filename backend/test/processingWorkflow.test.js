@@ -66,6 +66,10 @@ test("workflow QR contents identify plans and equipment without exposing databas
   );
   assert.equal(scanValue("TCM:PLAN:1:plan-token", "PLAN"), "plan-token");
   assert.equal(scanValue("JG260805-ABC123", "PLAN"), "JG260805-ABC123");
+  assert.equal(
+    scanValue("TCM:EQUIPMENT:1:equipment-token", "EQUIPMENT"),
+    "equipment-token",
+  );
 });
 
 test("processing workflows require a dispensing photo before completion", async () => {

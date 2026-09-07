@@ -1055,8 +1055,6 @@ private fun TextScalingCard(
 @Composable
 internal fun SettingsScreen(
     onOpenThemeAppearance: () -> Unit,
-    onOpenAbout: () -> Unit,
-    hasAppUpdate: Boolean,
     selectedTheme: String,
     themeAccentKey: String,
     textScale: Float,
@@ -1232,54 +1230,6 @@ internal fun SettingsScreen(
                         Text("一键清理缓存", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-        Text("系统与关于", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
-        Spacer(Modifier.height(10.dp))
-
-        // 3. About & Version Check Entry
-        Card(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenAbout),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    modifier = Modifier.size(42.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = PrimarySoft,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.SystemUpdate,
-                            contentDescription = null,
-                            tint = Primary,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("关于与检查更新", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
-                    Spacer(Modifier.height(2.dp))
-                    Text("当前版本 v${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 12.sp)
-                }
-                if (hasAppUpdate) {
-                    Surface(
-                        modifier = Modifier.size(8.dp),
-                        shape = CircleShape,
-                        color = Color(0xFFE5484D),
-                    ) {}
-                    Spacer(Modifier.width(8.dp))
-                }
-                Icon(Icons.Default.ChevronRight, contentDescription = "进入版本更新", tint = Muted)
             }
         }
 
