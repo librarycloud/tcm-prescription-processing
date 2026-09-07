@@ -257,6 +257,7 @@ jobs:
             -X POST "$SYNC_ENDPOINT" \
             -H "X-API-Key: ${RELEASE_HUB_API_KEY}" \
             -H "Content-Type: application/json" \
+            -d '{}' \
             --max-time 180 || echo "CURL_ERROR")
 
           RESPONSE_BODY=$(cat "$RESPONSE_FILE" 2>/dev/null || echo "")
