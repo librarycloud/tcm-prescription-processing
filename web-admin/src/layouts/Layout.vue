@@ -213,7 +213,6 @@ const systemMenuItems = computed(() => {
     'sms-settings',
     'email-settings',
     'robot-notifications',
-    'app-releases',
     'processing-equipment',
     'print-templates'
   ];
