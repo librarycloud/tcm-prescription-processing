@@ -22,6 +22,15 @@ on:
         description: "正式 API 根地址，例如 https://api.tcm.example.com"
         required: false
         type: string
+      update_base_url:
+        description: "可选，独立更新服务根地址（如 https://release.example.com，不填则优先使用环境变量或与 API 同服）"
+        required: false
+        type: string
+      update_app_id:
+        description: "可选，在更新服务中的 App ID（默认 android-main）"
+        required: false
+        default: "android-main"
+        type: string
 
 concurrency:
   group: android-release-${{ github.ref }}
@@ -93,7 +102,9 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
       - name: Build signed release APK
         env:
-          API_BASE_URL: ${{ inputs.api_base_url || secrets.API_BASE_URL }}
+          API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL || secrets.API_BASE_URL }}
+          UPDATE_BASE_URL: ${{ inputs.update_base_url || vars.UPDATE_BASE_URL || secrets.UPDATE_BASE_URL || '' }}
+          UPDATE_APP_ID: ${{ inputs.update_app_id || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || 'android-main' }}
           VERSION_CODE_INPUT: ${{ inputs.version_code }}
           VERSION_NAME_INPUT: ${{ inputs.version_name }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -126,10 +137,19 @@ jobs:
           esac
           test "$version_code" -gt 0
           test -n "$version_name"
-          gradle --no-daemon assembleRelease \
-            -PAPI_BASE_URL="$API_BASE_URL" \
-            -PVERSION_CODE="$version_code" \
+          gradle_args=(
+            --no-daemon assembleRelease
+            -PAPI_BASE_URL="$API_BASE_URL"
+            -PVERSION_CODE="$version_code"
             -PVERSION_NAME="$version_name"
+          )
+          if [ -n "$UPDATE_BASE_URL" ]; then
+            gradle_args+=("-PUPDATE_BASE_URL=$UPDATE_BASE_URL")
+          fi
+          if [ -n "$UPDATE_APP_ID" ]; then
+            gradle_args+=("-PUPDATE_APP_ID=$UPDATE_APP_ID")
+          fi
+          gradle "${gradle_args[@]}"
           printf 'ANDROID_VERSION_CODE=%s\nANDROID_VERSION_NAME=%s\n' "$version_code" "$version_name" >> "$GITHUB_ENV"
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
@@ -179,6 +199,22 @@ jobs:
           files: |
             android-app/app/build/outputs/apk/release/app-release.apk
             android-app/app-version.android.json
+      - name: Notify App Release Hub
+        if: success()
+        env:
+          RELEASE_HUB_URL: ${{ inputs.update_base_url || vars.RELEASE_HUB_URL || secrets.RELEASE_HUB_URL || vars.UPDATE_BASE_URL || secrets.UPDATE_BASE_URL }}
+          RELEASE_HUB_APP_ID: ${{ inputs.update_app_id || vars.RELEASE_HUB_APP_ID || secrets.RELEASE_HUB_APP_ID || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || 'android-main' }}
+          RELEASE_HUB_API_KEY: ${{ secrets.RELEASE_HUB_API_KEY }}
+        run: |
+          if [ -n "$RELEASE_HUB_URL" ] && [ -n "$RELEASE_HUB_API_KEY" ]; then
+            echo "Notifying App Release Hub at $RELEASE_HUB_URL for app $RELEASE_HUB_APP_ID..."
+            curl -s -S -X POST "${RELEASE_HUB_URL%/}/admin/apps/${RELEASE_HUB_APP_ID}/sync" \
+              -H "X-API-Key: ${RELEASE_HUB_API_KEY}" \
+              -H "Content-Type: application/json" \
+              --max-time 30 || echo "::warning::Failed to notify App Release Hub, but release was published."
+          else
+            echo "RELEASE_HUB_URL or RELEASE_HUB_API_KEY not configured, skipping automatic sync notification."
+          fi
       - name: Remove signing keystore
         if: always()
         run: rm -f release.keystore

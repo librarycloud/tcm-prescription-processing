@@ -30,6 +30,18 @@ android {
         .get()
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")
+    val configuredUpdateBaseUrl = providers.gradleProperty("UPDATE_BASE_URL")
+        .orElse(providers.environmentVariable("UPDATE_BASE_URL"))
+        .orElse("")
+        .get()
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    val configuredUpdateAppId = providers.gradleProperty("UPDATE_APP_ID")
+        .orElse(providers.environmentVariable("UPDATE_APP_ID"))
+        .orElse("android-main")
+        .get()
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
     val signingStoreFile = rootProject.file("release.keystore")
     val signingStorePassword = providers.gradleProperty("ANDROID_KEYSTORE_PASSWORD")
         .orElse(providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD"))
@@ -74,10 +86,14 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
+            buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
+            buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
             manifestPlaceholders["cleartextTraffic"] = true
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
+            buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
+            buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
             manifestPlaceholders["cleartextTraffic"] = false
             isMinifyEnabled = true
             isShrinkResources = true

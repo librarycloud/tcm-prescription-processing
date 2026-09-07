@@ -234,6 +234,31 @@ object ApiClient {
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     fun androidAppVersion(versionCode: Int? = null): JSONObject {
         val query = versionCode?.let { "?versionCode=$it" } ?: ""
+        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/')
+        if (updateBase.isNotBlank()) {
+            val url = if (updateBase.contains("/version/android")) {
+                val separator = if (updateBase.contains('?')) "&" else "?"
+                val cleanQuery = query.removePrefix("?")
+                if (cleanQuery.isNotBlank()) "$updateBase$separator$cleanQuery" else updateBase
+            } else {
+                val appId = BuildConfig.UPDATE_APP_ID.ifBlank { "android-main" }
+                "$updateBase/api/apps/$appId/version/android$query"
+            }
+            val request = Request.Builder()
+                .url(url)
+                .header("Accept", "application/json")
+                .get()
+                .build()
+            val response = client.newCall(request).execute()
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+            }
+            if (json.optInt("code", -1) != 0) {
+                throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            }
+            return json.getJSONObject("data")
+        }
         return request("/app/version/android$query").getJSONObject("data")
     }
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {

@@ -130,16 +130,21 @@ internal fun AboutScreen(
 
     fun startFullDownload(version: JSONObject) {
         val rawUrl = version.optString("fallbackApkUrl").ifBlank {
-            version.displayField("apkUrl", "")
+            version.optString("fallbackUrl").ifBlank {
+                version.displayField("apkUrl", "").ifBlank {
+                    version.optString("downloadUrl")
+                }
+            }
         }.trim()
         if (rawUrl.isBlank()) {
             downloadError = "暂未配置下载地址"
             return
         }
+        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/').ifBlank { BuildConfig.API_BASE_URL.trimEnd('/') }
         val url = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
             rawUrl
         } else {
-            BuildConfig.API_BASE_URL.trimEnd('/') + "/" + rawUrl.trimStart('/')
+            updateBase + "/" + rawUrl.trimStart('/')
         }
         runCatching {
             val versionCode = version.optInt("versionCode", 0).coerceAtLeast(0)
@@ -173,6 +178,7 @@ internal fun AboutScreen(
             downloadProgress = 0
             downloadedBytes = 0L
             downloadTotalBytes = version.optLong("fallbackApkSize", 0L).takeIf { it > 0 }
+                ?: version.optLong("fallbackSize", 0L).takeIf { it > 0 }
                 ?: version.optLong("size", 0L).coerceAtLeast(0L)
             downloadId = downloadManager.enqueue(request)
         }.onFailure { downloadError = it.message ?: "无法开始下载" }
@@ -184,10 +190,11 @@ internal fun AboutScreen(
             startFullDownload(version)
             return
         }
+        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/').ifBlank { BuildConfig.API_BASE_URL.trimEnd('/') }
         val patchUrl = if (rawPatchUrl.startsWith("http://") || rawPatchUrl.startsWith("https://")) {
             rawPatchUrl
         } else {
-            BuildConfig.API_BASE_URL.trimEnd('/') + "/" + rawPatchUrl.trimStart('/')
+            updateBase + "/" + rawPatchUrl.trimStart('/')
         }
         val patchSha256 = version.displayField("patchSha256", "").lowercase()
         val targetApkSha256 = version.displayField("targetApkSha256", "").lowercase()
