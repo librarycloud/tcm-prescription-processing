@@ -14,6 +14,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import storeRoutes from './routes/storeRoutes.js';
 import e6IntegrationRoutes from './routes/e6IntegrationRoutes.js';
+import appRoutes from './routes/appRoutes.js';
 import { initializeIpLookup } from './utils/ipLookup.js';
 import { startRobotDeliveryWorker } from './services/robotNotificationService.js';
 
@@ -51,6 +52,7 @@ export async function buildApp() {
   await fastify.register(userRoutes, { prefix: '/user' });
   await fastify.register(storeRoutes);
   await fastify.register(e6IntegrationRoutes, { prefix: '/integrations/e6/v1' });
+  await fastify.register(appRoutes, { prefix: '/app' });
   startRobotDeliveryWorker(fastify);
 
   fastify.setErrorHandler((error, request, reply) => {

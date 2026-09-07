@@ -40,5 +40,7 @@ export const config = {
   githubRepository: process.env.GITHUB_REPOSITORY || '',
   githubToken: process.env.GITHUB_TOKEN || '',
   appDownloadBaseUrl: (process.env.APP_DOWNLOAD_BASE_URL || '').trim().replace(/\/+$/, ''),
+  appReleaseHubUrl: (process.env.APP_RELEASE_HUB_URL || process.env.UPDATE_BASE_URL || '').trim().replace(/\/+$/, ''),
+  appReleaseHubAppId: (process.env.APP_RELEASE_HUB_APP_ID || process.env.UPDATE_APP_ID || 'tcm-admin').trim(),
   nodeEnv
 };

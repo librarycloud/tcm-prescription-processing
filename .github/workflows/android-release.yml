@@ -30,6 +30,7 @@ on:
         description: "更新服务中的 App ID（需与 Hub 中注册的 appId 一致）"
         required: false
         type: string
+        default: "tcm-admin"
 
 concurrency:
   group: android-release-${{ github.ref }}
@@ -118,7 +119,7 @@ jobs:
         run: |
           API_BASE_URL="$(echo "${INPUT_API_BASE_URL:-${VARS_API_BASE_URL:-$SECRET_API_BASE_URL}}" | xargs)"
           UPDATE_BASE_URL="$(echo "${INPUT_UPDATE_BASE_URL:-${VARS_UPDATE_BASE_URL:-$SECRET_UPDATE_BASE_URL}}" | xargs)"
-          UPDATE_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_UPDATE_APP_ID:-$SECRET_UPDATE_APP_ID}}" | xargs)"
+          UPDATE_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_UPDATE_APP_ID:-${SECRET_UPDATE_APP_ID:-tcm-admin}}}" | xargs)"
 
           if [ -z "$API_BASE_URL" ]; then
             echo "::error::API_BASE_URL 未配置！请在 workflow_dispatch 输入框填写，或者在仓库 Settings -> Secrets and variables -> Actions 中设置 Secret 或 Variable：API_BASE_URL（注意必须是 Repository Secret/Variable，不能是 Environment Secret）"
@@ -227,7 +228,7 @@ jobs:
           SECRET_HUB_API_KEY: ${{ secrets.RELEASE_HUB_API_KEY }}
         run: |
           RELEASE_HUB_URL="$(echo "${INPUT_UPDATE_BASE_URL:-${VARS_RELEASE_HUB_URL:-$SECRET_RELEASE_HUB_URL}}" | xargs)"
-          RELEASE_HUB_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_RELEASE_HUB_APP_ID:-$SECRET_RELEASE_HUB_APP_ID}}" | xargs)"
+          RELEASE_HUB_APP_ID="$(echo "${INPUT_UPDATE_APP_ID:-${VARS_RELEASE_HUB_APP_ID:-${SECRET_RELEASE_HUB_APP_ID:-${VARS_UPDATE_APP_ID:-${SECRET_UPDATE_APP_ID:-tcm-admin}}}}}" | xargs)"
           RELEASE_HUB_API_KEY="$(echo "${VARS_HUB_API_KEY:-$SECRET_HUB_API_KEY}" | xargs)"
 
           echo "=== App Release Hub 自动同步检查 ==="
