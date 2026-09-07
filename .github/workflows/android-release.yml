@@ -27,9 +27,8 @@ on:
         required: false
         type: string
       update_app_id:
-        description: "可选，在更新服务中的 App ID（默认 android-main）"
+        description: "更新服务中的 App ID（需与 Hub 中注册的 appId 一致）"
         required: false
-        default: "android-main"
         type: string
 
 concurrency:
@@ -104,7 +103,7 @@ jobs:
         env:
           API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL || secrets.API_BASE_URL }}
           UPDATE_BASE_URL: ${{ inputs.update_base_url || vars.UPDATE_BASE_URL || secrets.UPDATE_BASE_URL || '' }}
-          UPDATE_APP_ID: ${{ inputs.update_app_id || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || 'android-main' }}
+          UPDATE_APP_ID: ${{ inputs.update_app_id || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || '' }}
           VERSION_CODE_INPUT: ${{ inputs.version_code }}
           VERSION_NAME_INPUT: ${{ inputs.version_name }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -203,10 +202,10 @@ jobs:
         if: success()
         env:
           RELEASE_HUB_URL: ${{ inputs.update_base_url || vars.RELEASE_HUB_URL || secrets.RELEASE_HUB_URL || vars.UPDATE_BASE_URL || secrets.UPDATE_BASE_URL }}
-          RELEASE_HUB_APP_ID: ${{ inputs.update_app_id || vars.RELEASE_HUB_APP_ID || secrets.RELEASE_HUB_APP_ID || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || 'android-main' }}
+          RELEASE_HUB_APP_ID: ${{ inputs.update_app_id || vars.RELEASE_HUB_APP_ID || secrets.RELEASE_HUB_APP_ID || vars.UPDATE_APP_ID || secrets.UPDATE_APP_ID || '' }}
           RELEASE_HUB_API_KEY: ${{ secrets.RELEASE_HUB_API_KEY }}
         run: |
-          if [ -n "$RELEASE_HUB_URL" ] && [ -n "$RELEASE_HUB_API_KEY" ]; then
+          if [ -n "$RELEASE_HUB_URL" ] && [ -n "$RELEASE_HUB_APP_ID" ] && [ -n "$RELEASE_HUB_API_KEY" ]; then
             echo "Notifying App Release Hub at $RELEASE_HUB_URL for app $RELEASE_HUB_APP_ID..."
             curl -s -S -X POST "${RELEASE_HUB_URL%/}/admin/apps/${RELEASE_HUB_APP_ID}/sync" \
               -H "X-API-Key: ${RELEASE_HUB_API_KEY}" \

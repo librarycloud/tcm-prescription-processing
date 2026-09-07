@@ -38,7 +38,7 @@ android {
         .replace("\"", "\\\"")
     val configuredUpdateAppId = providers.gradleProperty("UPDATE_APP_ID")
         .orElse(providers.environmentVariable("UPDATE_APP_ID"))
-        .orElse("android-main")
+        .orElse("")
         .get()
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")

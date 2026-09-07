@@ -241,7 +241,10 @@ object ApiClient {
                 val cleanQuery = query.removePrefix("?")
                 if (cleanQuery.isNotBlank()) "$updateBase$separator$cleanQuery" else updateBase
             } else {
-                val appId = BuildConfig.UPDATE_APP_ID.ifBlank { "android-main" }
+                val appId = BuildConfig.UPDATE_APP_ID.trim()
+                if (appId.isBlank()) {
+                    throw IllegalStateException("已配置 UPDATE_BASE_URL 但未配置 UPDATE_APP_ID")
+                }
                 "$updateBase/api/apps/$appId/version/android$query"
             }
             val request = Request.Builder()
