@@ -13,13 +13,13 @@ export default async function appRoutes(fastify) {
     const hubUrl = config.appReleaseHubUrl;
     const appId = config.appReleaseHubAppId;
 
-    if (!hubUrl) {
-      // 未配置 Hub 地址时返回无更新，优雅兜底，避免老手机弹出 404 错误
+    if (!hubUrl || !appId) {
+      // 未配置 Hub 地址或 App ID 时返回无更新，优雅兜底，避免老手机弹出 404 错误
       return ok(reply, {
         hasUpdate: false,
         versionCode: 0,
         versionName: '',
-        message: '未配置 APP_RELEASE_HUB_URL'
+        message: '未配置 APP_RELEASE_HUB_URL 或 UPDATE_APP_ID'
       });
     }
 
@@ -60,7 +60,7 @@ export default async function appRoutes(fastify) {
     const hubUrl = config.appReleaseHubUrl;
     const appId = config.appReleaseHubAppId;
     const filename = String(request.params.filename || '');
-    if (hubUrl) {
+    if (hubUrl && appId) {
       return reply.redirect(302, `${hubUrl}/api/apps/${appId}/releases/${filename}`);
     }
     return reply.code(404).send({ code: 404, message: '文件不存在' });
@@ -71,7 +71,7 @@ export default async function appRoutes(fastify) {
     const hubUrl = config.appReleaseHubUrl;
     const appId = config.appReleaseHubAppId;
     const filename = String(request.params.filename || '');
-    if (hubUrl) {
+    if (hubUrl && appId) {
       return reply.redirect(302, `${hubUrl}/api/apps/${appId}/patches/${filename}`);
     }
     return reply.code(404).send({ code: 404, message: '补丁不存在' });
