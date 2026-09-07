@@ -20,11 +20,7 @@ export function updateClientDisplaySettings(data) {
 export function uploadWechatQrcode(file) {
   const formData = new FormData();
   formData.append('file', file);
-  return request.post('/admin/client-display/qrcode', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  });
+  return request.post('/admin/client-display/qrcode', formData);
 }
 
 /**

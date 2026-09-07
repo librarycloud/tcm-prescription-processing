@@ -63,15 +63,47 @@ export async function getClientDisplayConfig() {
   }
 }
 
+function detectMimeType(buffer) {
+  if (buffer.length >= 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+    return 'image/png';
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return 'image/jpeg';
+  }
+  if (buffer.length >= 4 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) {
+    return 'image/gif';
+  }
+  if (buffer.length >= 12 && buffer.toString('utf8', 0, 4) === 'RIFF' && buffer.toString('utf8', 8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+  return 'image/png';
+}
+
 /**
- * 检查二维码图片是否存在
+ * 检查二维码图片是否存在且合法
  */
 async function checkQrcodeExists() {
   try {
     const s = await stat(getQrcodePath());
-    return s.isFile();
+    return s.isFile() && s.size >= 64;
   } catch {
     return false;
+  }
+}
+
+/**
+ * 获取微信小程序码图片的 Base64 Data URL
+ */
+export async function getWechatQrcodeBase64() {
+  const filePath = getQrcodePath();
+  try {
+    const s = await stat(filePath);
+    if (!s.isFile() || s.size < 64) return null;
+    const buf = await readFile(filePath);
+    const mime = detectMimeType(buf);
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
   }
 }
 
@@ -113,7 +145,10 @@ export async function saveWechatQrcode(buffer, mimeType) {
   const dir = getStorageDir();
   await mkdir(dir, { recursive: true });
   await writeFile(getQrcodePath(), buffer);
-  return { qrcodeUrl: '/client-display/qrcode' };
+  const actualMime = detectMimeType(buffer) || mimeType;
+  return {
+    qrcodeUrl: `data:${actualMime};base64,${buffer.toString('base64')}`
+  };
 }
 
 /**
@@ -123,7 +158,7 @@ export async function getWechatQrcodeFilePath() {
   const filePath = getQrcodePath();
   try {
     const s = await stat(filePath);
-    if (!s.isFile()) return null;
+    if (!s.isFile() || s.size < 64) return null;
     return filePath;
   } catch {
     return null;
@@ -202,11 +237,13 @@ export async function getClientDisplayInfo() {
 
   const downloadUrl = conf.android.customDownloadUrl || hubVersion.downloadUrl || '';
 
+  const qrcodeBase64 = await getWechatQrcodeBase64();
+
   return {
     wechat: {
       appName: conf.wechat.appName,
       appId: conf.wechat.appId,
-      qrcodeUrl: conf.wechat.hasQrcode ? '/client-display/qrcode' : null
+      qrcodeUrl: qrcodeBase64
     },
     android: {
       displayName: conf.android.displayName,

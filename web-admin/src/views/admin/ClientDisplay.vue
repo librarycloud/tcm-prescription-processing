@@ -263,8 +263,8 @@ async function loadSettings() {
         android: { ...form.value.android, ...(res.config.android || {}) },
         announcement: res.config.announcement || ''
       };
-      if (res.config.wechat?.hasQrcode) {
-        qrcodePreviewUrl.value = `/api/client-display/qrcode?t=${Date.now()}`;
+      if (res.config.wechat?.qrcodeUrl) {
+        qrcodePreviewUrl.value = res.config.wechat.qrcodeUrl;
       } else {
         qrcodePreviewUrl.value = '';
       }
@@ -288,6 +288,9 @@ async function saveSettings() {
         android: { ...form.value.android, ...(res.config.android || {}) },
         announcement: res.config.announcement || ''
       };
+      if (res.config.wechat?.qrcodeUrl) {
+        qrcodePreviewUrl.value = res.config.wechat.qrcodeUrl;
+      }
     }
     hubProbe.value = res?.hubProbe || null;
   } catch {
@@ -311,10 +314,12 @@ async function handleFileSelected(uploadFile) {
   }
 
   try {
-    await uploadWechatQrcode(rawFile);
+    const uploadRes = await uploadWechatQrcode(rawFile);
     ElMessage.success('小程序码上传成功');
     form.value.wechat.hasQrcode = true;
-    qrcodePreviewUrl.value = `/api/client-display/qrcode?t=${Date.now()}`;
+    if (uploadRes?.qrcodeUrl) {
+      qrcodePreviewUrl.value = uploadRes.qrcodeUrl;
+    }
   } catch {
     // handled by interceptor
   }

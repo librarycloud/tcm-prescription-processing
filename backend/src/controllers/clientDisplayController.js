@@ -5,6 +5,7 @@ import {
   saveClientDisplayConfig,
   saveWechatQrcode,
   getWechatQrcodeFilePath,
+  getWechatQrcodeBase64,
   getClientDisplayInfo,
   fetchReleaseHubVersion
 } from '../services/clientDisplayService.js';
@@ -15,12 +16,19 @@ import { AppError } from '../utils/appError.js';
  */
 export async function getClientDisplaySettingsController(_request, reply) {
   const conf = await getClientDisplayConfig();
+  const qrcodeBase64 = await getWechatQrcodeBase64();
   const hubProbe = await fetchReleaseHubVersion(
     conf.android.releaseHubUrl,
     conf.android.releaseHubAppId
   );
   return ok(reply, {
-    config: conf,
+    config: {
+      ...conf,
+      wechat: {
+        ...conf.wechat,
+        qrcodeUrl: qrcodeBase64
+      }
+    },
     hubProbe
   });
 }
@@ -31,12 +39,19 @@ export async function getClientDisplaySettingsController(_request, reply) {
 export async function updateClientDisplaySettingsController(request, reply) {
   const body = request.body || {};
   const updated = await saveClientDisplayConfig(body);
+  const qrcodeBase64 = await getWechatQrcodeBase64();
   const hubProbe = await fetchReleaseHubVersion(
     updated.android.releaseHubUrl,
     updated.android.releaseHubAppId
   );
   return ok(reply, {
-    config: updated,
+    config: {
+      ...updated,
+      wechat: {
+        ...updated.wechat,
+        qrcodeUrl: qrcodeBase64
+      }
+    },
     hubProbe
   }, '客户端展示配置已保存');
 }

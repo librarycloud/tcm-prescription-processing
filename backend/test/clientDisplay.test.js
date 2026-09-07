@@ -30,13 +30,16 @@ test('client display service loads default config and saves updates', async () =
   assert.equal(updated.android.releaseHubAppId, 'tcm-admin');
   assert.equal(updated.announcement, '欢迎使用移动客户端');
 
-  // Verify saveWechatQrcode
-  const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-  const qrRes = await saveWechatQrcode(fakePng, 'image/png');
-  assert.equal(qrRes.qrcodeUrl, '/client-display/qrcode');
+  // Verify saveWechatQrcode with a valid 1x1 PNG (67 bytes)
+  const validPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  const qrRes = await saveWechatQrcode(validPng, 'image/png');
+  assert.ok(qrRes.qrcodeUrl.startsWith('data:image/png;base64,'));
 
   const info = await getClientDisplayInfo();
   assert.equal(info.wechat.appName, '测试药房小程序');
-  assert.equal(info.wechat.qrcodeUrl, '/client-display/qrcode');
+  assert.ok(info.wechat.qrcodeUrl?.startsWith('data:image/png;base64,'));
   assert.equal(info.announcement, '欢迎使用移动客户端');
 });
