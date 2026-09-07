@@ -206,6 +206,7 @@ import {
   getClientDisplaySettingsController,
   updateClientDisplaySettingsController,
   uploadWechatQrcodeController,
+  generateWechatQrcodeController,
   getClientDisplayInfoController,
 } from "../controllers/clientDisplayController.js";
 
@@ -579,6 +580,11 @@ export default async function adminRoutes(fastify) {
     "/client-display/qrcode",
     { preHandler: verifySuperAdmin },
     uploadWechatQrcodeController,
+  );
+  fastify.post(
+    "/client-display/wechat-qrcode/generate",
+    { preHandler: verifySuperAdmin },
+    generateWechatQrcodeController,
   );
   fastify.get("/client-display/info", storeStaffRoute, getClientDisplayInfoController);
 }

@@ -34,33 +34,39 @@ function getQrcodePath() {
   return path.join(getStorageDir(), QRCODE_FILE_NAME);
 }
 
+async function getRawConfig() {
+  try {
+    const raw = await readFile(getConfigPath(), 'utf-8');
+    return JSON.parse(raw) || {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * 读取客户端展示配置
  */
 export async function getClientDisplayConfig() {
-  try {
-    const raw = await readFile(getConfigPath(), 'utf-8');
-    const parsed = JSON.parse(raw);
-    const hasQrcode = await checkQrcodeExists();
-    return {
-      wechat: {
-        ...DEFAULT_CONFIG.wechat,
-        ...(parsed.wechat || {}),
-        hasQrcode
-      },
-      android: {
-        ...DEFAULT_CONFIG.android,
-        ...(parsed.android || {})
-      },
-      announcement: parsed.announcement || ''
-    };
-  } catch {
-    const hasQrcode = await checkQrcodeExists();
-    return {
-      ...DEFAULT_CONFIG,
-      wechat: { ...DEFAULT_CONFIG.wechat, hasQrcode }
-    };
-  }
+  const raw = await getRawConfig();
+  const hasQrcode = await checkQrcodeExists();
+  const hasSecret = Boolean(raw.wechat?.appSecret || config.wxSecret);
+  const effectiveAppId = (raw.wechat?.appId || config.wxAppId || '').trim();
+
+  return {
+    wechat: {
+      ...DEFAULT_CONFIG.wechat,
+      ...(raw.wechat || {}),
+      appSecret: undefined, // 不明文返回密钥
+      hasSecret,
+      effectiveAppId,
+      hasQrcode
+    },
+    android: {
+      ...DEFAULT_CONFIG.android,
+      ...(raw.android || {})
+    },
+    announcement: raw.announcement || ''
+  };
 }
 
 function detectMimeType(buffer) {
@@ -111,19 +117,22 @@ export async function getWechatQrcodeBase64() {
  * 保存客户端展示配置
  */
 export async function saveClientDisplayConfig(patch) {
-  const current = await getClientDisplayConfig();
+  const raw = await getRawConfig();
   const updated = {
     wechat: {
-      appName: String(patch.wechat?.appName ?? current.wechat.appName).trim(),
-      appId: String(patch.wechat?.appId ?? current.wechat.appId).trim()
+      appName: String(patch.wechat?.appName ?? raw.wechat?.appName ?? DEFAULT_CONFIG.wechat.appName).trim(),
+      appId: String(patch.wechat?.appId ?? raw.wechat?.appId ?? '').trim(),
+      appSecret: patch.wechat?.appSecret
+        ? String(patch.wechat.appSecret).trim()
+        : (raw.wechat?.appSecret || '')
     },
     android: {
-      releaseHubUrl: String(patch.android?.releaseHubUrl ?? current.android.releaseHubUrl).trim().replace(/\/+$/, ''),
-      releaseHubAppId: String(patch.android?.releaseHubAppId ?? current.android.releaseHubAppId).trim(),
-      customDownloadUrl: String(patch.android?.customDownloadUrl ?? current.android.customDownloadUrl).trim(),
-      displayName: String(patch.android?.displayName ?? current.android.displayName).trim() || '药房助手 Android 版'
+      releaseHubUrl: String(patch.android?.releaseHubUrl ?? raw.android?.releaseHubUrl ?? '').trim().replace(/\/+$/, ''),
+      releaseHubAppId: String(patch.android?.releaseHubAppId ?? raw.android?.releaseHubAppId ?? '').trim(),
+      customDownloadUrl: String(patch.android?.customDownloadUrl ?? raw.android?.customDownloadUrl ?? '').trim(),
+      displayName: String(patch.android?.displayName ?? raw.android?.displayName ?? '').trim() || '药房助手 Android 版'
     },
-    announcement: String(patch.announcement ?? current.announcement).trim()
+    announcement: String(patch.announcement ?? raw.announcement ?? '').trim()
   };
 
   const dir = getStorageDir();
@@ -131,6 +140,84 @@ export async function saveClientDisplayConfig(patch) {
   await writeFile(getConfigPath(), JSON.stringify(updated, null, 2), 'utf-8');
 
   return getClientDisplayConfig();
+}
+
+/**
+ * 调用微信官方 API 生成小程序码 (getwxacodeunlimit)
+ */
+export async function generateWechatOfficialQrcode(options = {}) {
+  const raw = await getRawConfig();
+  const appId = (options.appId || raw.wechat?.appId || config.wxAppId || '').trim();
+  const appSecret = (options.appSecret || raw.wechat?.appSecret || config.wxSecret || '').trim();
+
+  if (!appId || !appSecret) {
+    throw new AppError('未配置微信小程序 AppID 或 AppSecret，请先在下方输入或在系统环境变量中配置 WX_APPID / WX_SECRET', 400);
+  }
+
+  // 1. 获取微信 access_token
+  const tokenUrl = new URL('https://api.weixin.qq.com/cgi-bin/token');
+  tokenUrl.searchParams.set('grant_type', 'client_credential');
+  tokenUrl.searchParams.set('appid', appId);
+  tokenUrl.searchParams.set('secret', appSecret);
+
+  let tokenRes;
+  try {
+    tokenRes = await fetch(tokenUrl, { signal: AbortSignal.timeout(10000) });
+  } catch (err) {
+    throw new AppError(`连接微信服务器超时: ${err.message}`, 500);
+  }
+
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) {
+    throw new AppError(`获取微信 access_token 失败: ${tokenData.errmsg || '未知错误'} (代码: ${tokenData.errcode})`, 400);
+  }
+
+  // 2. 调用 getwxacodeunlimit 生成小程序码
+  const qrcodeApiUrl = `https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=${encodeURIComponent(tokenData.access_token)}`;
+  const payload = {
+    scene: String(options.scene || '1').trim().slice(0, 32),
+    check_path: false,
+    env_version: options.envVersion || 'release',
+    width: Number(options.width) || 430
+  };
+
+  if (options.page && String(options.page).trim()) {
+    payload.page = String(options.page).trim();
+  }
+
+  let codeRes;
+  try {
+    codeRes = await fetch(qrcodeApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (err) {
+    throw new AppError(`请求微信生成小程序码超时: ${err.message}`, 500);
+  }
+
+  const arrayBuffer = await codeRes.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  // 检查是否返回错误 JSON
+  const previewText = buffer.toString('utf8', 0, 120);
+  if (previewText.startsWith('{') && (previewText.includes('"errcode"') || previewText.includes('"errmsg"'))) {
+    try {
+      const errJson = JSON.parse(buffer.toString('utf8'));
+      throw new AppError(`微信官方生成失败: ${errJson.errmsg} (错误码: ${errJson.errcode})`, 400);
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+    }
+  }
+
+  if (buffer.length < 64) {
+    throw new AppError('微信官方返回的图片数据无效', 500);
+  }
+
+  // 3. 保存并返回 Base64
+  const result = await saveWechatQrcode(buffer, 'image/jpeg');
+  return result;
 }
 
 /**

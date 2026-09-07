@@ -24,6 +24,13 @@ export function uploadWechatQrcode(file) {
 }
 
 /**
+ * 从微信官方 API 一键生成小程序码
+ */
+export function generateWechatQrcode(data = {}) {
+  return request.post('/admin/client-display/wechat-qrcode/generate', data);
+}
+
+/**
  * 获取客户端展示数据（供右上角弹窗使用）
  */
 export function getClientDisplayInfo() {

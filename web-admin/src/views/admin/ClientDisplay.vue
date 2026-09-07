@@ -27,10 +27,58 @@
           <el-form-item label="小程序名称">
             <el-input v-model.trim="form.wechat.appName" placeholder="例如：药房助手" />
           </el-form-item>
-          <el-form-item label="小程序 AppID">
-            <el-input v-model.trim="form.wechat.appId" placeholder="例如：wx1234567890abcdef（选填）" />
-          </el-form-item>
-          <el-form-item label="微信小程序码图片">
+          <div class="form-row">
+            <el-form-item label="小程序 AppID" class="flex-1">
+              <el-input v-model.trim="form.wechat.appId" placeholder="留空则使用系统环境变量 WX_APPID" />
+            </el-form-item>
+            <el-form-item label="小程序 AppSecret" class="flex-1">
+              <el-input
+                v-model="form.wechat.appSecret"
+                type="password"
+                show-password
+                :placeholder="form.wechat.hasSecret ? '已配置密钥，留空不修改' : '留空则使用环境变量 WX_SECRET'"
+              />
+            </el-form-item>
+          </div>
+
+          <el-form-item label="微信小程序码生成与上传">
+            <div class="wechat-generate-banner">
+              <div class="generate-btn-group">
+                <el-button
+                  type="success"
+                  :icon="MagicStick"
+                  :loading="generating"
+                  @click="handleGenerateWechatCode"
+                >
+                  一键从微信官方生成小程序码
+                </el-button>
+                <el-popover placement="bottom" :width="280" trigger="click">
+                  <template #reference>
+                    <el-button text type="primary" size="small">
+                      <el-icon><Setting /></el-icon>
+                      <span>生成参数</span>
+                    </el-button>
+                  </template>
+                  <div class="gen-params-form">
+                    <div class="params-title">微信小程序码参数设置</div>
+                    <div class="params-item">
+                      <span class="params-label">版本环境</span>
+                      <el-select v-model="genOptions.envVersion" size="small" style="width: 100%;">
+                        <el-option label="正式版 (release)" value="release" />
+                        <el-option label="体验版 (trial)" value="trial" />
+                        <el-option label="开发版 (develop)" value="develop" />
+                      </el-select>
+                    </div>
+                    <div class="params-item" style="margin-top: 8px;">
+                      <span class="params-label">落地页路径（选填）</span>
+                      <el-input v-model.trim="genOptions.page" size="small" placeholder="默认为主页" />
+                    </div>
+                  </div>
+                </el-popover>
+              </div>
+              <span class="generate-tip">基于微信官方接口一键生成官方圆形菊花码；亦可手动上传自定义图片。</span>
+            </div>
+
             <div class="qrcode-upload-area">
               <div v-if="qrcodePreviewUrl" class="qrcode-preview-box">
                 <el-image
@@ -40,8 +88,13 @@
                   :preview-src-list="[qrcodePreviewUrl]"
                 />
                 <div class="qrcode-meta">
-                  <el-button size="small" type="primary" plain @click="triggerUpload">更换图片</el-button>
-                  <span class="qrcode-tip">支持 PNG / JPG / WebP 格式，最大 5MB</span>
+                  <div class="qrcode-badge-row">
+                    <el-tag type="success" size="small">当前已生效</el-tag>
+                    <span class="qrcode-tip">可在右上角弹窗即刻体验扫码</span>
+                  </div>
+                  <div class="qrcode-btns">
+                    <el-button size="small" type="primary" plain @click="triggerUpload">手动替换图片</el-button>
+                  </div>
                 </div>
               </div>
               <el-upload
@@ -55,10 +108,10 @@
               >
                 <el-icon class="upload-icon"><UploadFilled /></el-icon>
                 <div class="el-upload__text">
-                  将小程序码拖到此处，或<em>点击上传</em>
+                  手动上传：拖到此处，或<em>点击上传</em>
                 </div>
                 <template #tip>
-                  <div class="el-upload__tip">建议上传清晰的正方形微信小程序码</div>
+                  <div class="el-upload__tip">支持 PNG / JPG / WebP 格式，最大 5MB</div>
                 </template>
               </el-upload>
             </div>
@@ -189,24 +242,35 @@ import {
   Cellphone,
   ChatDotRound,
   Download,
+  MagicStick,
   Refresh,
+  Setting,
   UploadFilled,
   Warning
 } from '@element-plus/icons-vue';
 import {
   getClientDisplaySettings,
   updateClientDisplaySettings,
-  uploadWechatQrcode
+  uploadWechatQrcode,
+  generateWechatQrcode
 } from '@/api/clientDisplay';
 
 const loading = ref(false);
 const saving = ref(false);
+const generating = ref(false);
 const uploadRef = ref(null);
+
+const genOptions = ref({
+  envVersion: 'release',
+  page: ''
+});
 
 const form = ref({
   wechat: {
     appName: '药房助手',
     appId: '',
+    appSecret: '',
+    hasSecret: false,
     hasQrcode: false
   },
   android: {
@@ -297,6 +361,27 @@ async function saveSettings() {
     // request interceptor handles it
   } finally {
     saving.value = false;
+  }
+}
+
+async function handleGenerateWechatCode() {
+  generating.value = true;
+  try {
+    const res = await generateWechatQrcode({
+      appId: form.value.wechat.appId,
+      appSecret: form.value.wechat.appSecret,
+      envVersion: genOptions.value.envVersion,
+      page: genOptions.value.page
+    });
+    ElMessage.success('已成功从微信官方生成小程序码！');
+    form.value.wechat.hasQrcode = true;
+    if (res?.qrcodeUrl) {
+      qrcodePreviewUrl.value = res.qrcodeUrl;
+    }
+  } catch {
+    // request interceptor handles it
+  } finally {
+    generating.value = false;
   }
 }
 
@@ -394,6 +479,59 @@ onMounted(() => {
 
 .w-180 {
   width: 180px;
+}
+
+.wechat-generate-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-left: 3px solid var(--el-color-success);
+}
+
+.generate-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.generate-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.gen-params-form {
+  padding: 4px;
+}
+
+.params-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.params-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.params-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.qrcode-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qrcode-btns {
+  margin-top: 6px;
 }
 
 .qrcode-upload-area {

@@ -6,6 +6,7 @@ import {
   saveWechatQrcode,
   getWechatQrcodeFilePath,
   getWechatQrcodeBase64,
+  generateWechatOfficialQrcode,
   getClientDisplayInfo,
   fetchReleaseHubVersion
 } from '../services/clientDisplayService.js';
@@ -76,6 +77,15 @@ export async function uploadWechatQrcodeController(request, reply) {
 
   const result = await saveWechatQrcode(buffer, file.mimetype);
   return ok(reply, result, '微信小程序码上传成功');
+}
+
+/**
+ * 从微信官方 API 一键生成小程序码
+ */
+export async function generateWechatQrcodeController(request, reply) {
+  const options = request.body || {};
+  const result = await generateWechatOfficialQrcode(options);
+  return ok(reply, result, '微信官方小程序码已成功生成并保存');
 }
 
 /**
