@@ -55,6 +55,7 @@
     "store-picker": "/components/store-picker/store-picker"
   },
   "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
   "componentFramework": "glass-easel",
   "sitemapLocation": "sitemap.json"
 }
