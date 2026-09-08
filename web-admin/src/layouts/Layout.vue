@@ -85,7 +85,24 @@
               <el-dropdown-menu>
                 <el-dropdown-item disabled>{{ userStore.user?.phone || '-' }}</el-dropdown-item>
                 <el-dropdown-item command="profile">个人资料</el-dropdown-item>
-                <el-dropdown-item command="toggleTheme">{{ themeStore.isDark ? "切换亮色" : "切换暗色" }}</el-dropdown-item>
+                <el-dropdown-item command="theme-light">
+                  <span class="theme-item">
+                    <span>🌞 亮色</span>
+                    <el-icon v-if="themeStore.themeMode === 'light'" class="theme-check"><Check /></el-icon>
+                  </span>
+                </el-dropdown-item>
+                <el-dropdown-item command="theme-dark">
+                  <span class="theme-item">
+                    <span>🌙 暗色</span>
+                    <el-icon v-if="themeStore.themeMode === 'dark'" class="theme-check"><Check /></el-icon>
+                  </span>
+                </el-dropdown-item>
+                <el-dropdown-item command="theme-system">
+                  <span class="theme-item">
+                    <span>🖥 跟随系统</span>
+                    <el-icon v-if="themeStore.themeMode === 'system'" class="theme-check"><Check /></el-icon>
+                  </span>
+                </el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -208,6 +225,7 @@ import {
   Box,
   Calendar,
   Cellphone,
+  Check,
   CircleCheck,
   Collection,
   DataAnalysis,
@@ -367,8 +385,18 @@ function handleMenuSelect() {
 }
 
 async function handleCommand(command) {
-  if (command === 'toggleTheme') {
-    themeStore.toggleDark();
+  if (command === 'theme-light') {
+    themeStore.setThemeMode('light');
+    return;
+  }
+
+  if (command === 'theme-dark') {
+    themeStore.setThemeMode('dark');
+    return;
+  }
+
+  if (command === 'theme-system') {
+    themeStore.setThemeMode('system');
     return;
   }
 
@@ -552,6 +580,19 @@ onBeforeUnmount(() => {
 .user-role {
   color: var(--app-muted);
   font-size: 12px;
+}
+
+.theme-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 24px;
+}
+
+.theme-check {
+  color: var(--el-color-primary);
+  font-size: 13px;
 }
 
 .header-right {
