@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import android.content.Context
+import com.tcm.admin.util.DeviceUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import okhttp3.OkHttpClient
@@ -232,8 +233,21 @@ object ApiClient {
     fun me(): JSONObject = request("/user/me").getJSONObject("data")
 
     fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
-    fun androidAppVersion(versionCode: Int? = null): JSONObject {
-        val query = versionCode?.let { "?versionCode=$it" } ?: ""
+    fun androidAppVersion(
+        versionCode: Int? = BuildConfig.VERSION_CODE,
+        deviceId: String? = null,
+        context: Context? = null,
+    ): JSONObject {
+        val currentVersionCode = versionCode ?: BuildConfig.VERSION_CODE
+        val resolvedDeviceId = deviceId?.trim()?.ifBlank { null }
+            ?: (context ?: cacheContext)?.let { DeviceUtils.getDeviceId(it) }
+
+        val queryParams = mutableListOf<String>()
+        queryParams.add("versionCode=$currentVersionCode")
+        if (!resolvedDeviceId.isNullOrBlank()) {
+            queryParams.add("deviceId=${java.net.URLEncoder.encode(resolvedDeviceId, "UTF-8")}")
+        }
+        val query = "?" + queryParams.joinToString("&")
         val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/')
         if (updateBase.isNotBlank()) {
             val url = if (updateBase.contains("/version/android")) {
@@ -247,11 +261,13 @@ object ApiClient {
                 }
                 "$updateBase/api/apps/$appId/version/android$query"
             }
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(url)
                 .header("Accept", "application/json")
-                .get()
-                .build()
+            if (!resolvedDeviceId.isNullOrBlank()) {
+                requestBuilder.header("x-device-id", resolvedDeviceId)
+            }
+            val request = requestBuilder.get().build()
             val response = client.newCall(request).execute()
             val responseBodyString = response.body?.string().orEmpty()
             val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
@@ -262,7 +278,23 @@ object ApiClient {
             }
             return json.getJSONObject("data")
         }
-        return request("/app/version/android$query").getJSONObject("data")
+        val backendUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/app/version/android$query"
+        val requestBuilder = Request.Builder()
+            .url(backendUrl)
+            .header("Accept", "application/json")
+        if (!resolvedDeviceId.isNullOrBlank()) {
+            requestBuilder.header("x-device-id", resolvedDeviceId)
+        }
+        applyAuthorizationHeader(requestBuilder)
+        val response = client.newCall(requestBuilder.get().build()).execute()
+        val responseBodyString = response.body?.string().orEmpty()
+        val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+            JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+        }
+        if (json.optInt("code", -1) != 0) {
+            throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
+        }
+        return json.getJSONObject("data")
     }
     fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
         val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)

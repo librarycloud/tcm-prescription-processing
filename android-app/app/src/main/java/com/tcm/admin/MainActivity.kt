@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import android.content.Intent
+import com.tcm.admin.util.DeviceUtils
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -260,7 +261,14 @@ private fun TcmAdminApp() {
 
         scope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { ApiClient.androidAppVersion() }
+                withContext(Dispatchers.IO) {
+                    val deviceId = DeviceUtils.getDeviceId(appContext)
+                    ApiClient.androidAppVersion(
+                        versionCode = BuildConfig.VERSION_CODE,
+                        deviceId = deviceId,
+                        context = appContext,
+                    )
+                }
             }.onSuccess { version ->
                 updatePreferences.edit()
                     .putLong("last_update_check_at", System.currentTimeMillis())

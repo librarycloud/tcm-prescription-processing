@@ -24,10 +24,23 @@ export default async function appRoutes(fastify) {
     }
 
     try {
-      const queryString = request.url.includes('?') ? `?${request.url.split('?')[1]}` : '';
-      const targetUrl = `${hubUrl}/api/apps/${appId}/version/android${queryString}`;
-      const res = await fetch(targetUrl, {
-        headers: { Accept: 'application/json' },
+      const parsedUrl = new URL(request.url, 'http://localhost');
+      const hubTarget = new URL(`${hubUrl}/api/apps/${appId}/version/android`);
+      // 传递所有已有 query 参数（如 versionCode, deviceId, channel 等）
+      parsedUrl.searchParams.forEach((val, key) => {
+        hubTarget.searchParams.set(key, val);
+      });
+      const deviceIdHeader = request.headers['x-device-id'];
+      if (deviceIdHeader && !hubTarget.searchParams.has('deviceId')) {
+        hubTarget.searchParams.set('deviceId', deviceIdHeader);
+      }
+      const headers = { Accept: 'application/json' };
+      const resolvedDeviceId = deviceIdHeader || hubTarget.searchParams.get('deviceId');
+      if (resolvedDeviceId) {
+        headers['x-device-id'] = resolvedDeviceId;
+      }
+      const res = await fetch(hubTarget.toString(), {
+        headers,
         signal: AbortSignal.timeout(10000),
       });
 

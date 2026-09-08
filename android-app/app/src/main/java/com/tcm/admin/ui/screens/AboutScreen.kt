@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import android.app.DownloadManager
+import com.tcm.admin.util.DeviceUtils
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -114,7 +115,12 @@ internal fun AboutScreen(
         error = null
         val version = runCatching {
             withContext(Dispatchers.IO) {
-                ApiClient.androidAppVersion(BuildConfig.VERSION_CODE)
+                val deviceId = DeviceUtils.getDeviceId(context)
+                ApiClient.androidAppVersion(
+                    versionCode = BuildConfig.VERSION_CODE,
+                    deviceId = deviceId,
+                    context = context,
+                )
             }
         }.onSuccess { result ->
             latest = result
