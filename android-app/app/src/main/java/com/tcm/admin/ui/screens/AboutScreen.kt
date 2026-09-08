@@ -380,6 +380,7 @@ internal fun AboutScreen(
     val isIncremental = latest?.optString("updateType") == "incremental"
     val patchSize = latest?.optLong("patchSize", 0L) ?: 0L
     val fullApkSize = latest?.optLong("fallbackApkSize", 0L).takeIf { (it ?: 0L) > 0L }
+        ?: latest?.optLong("fallbackSize", 0L).takeIf { (it ?: 0L) > 0L }
         ?: latest?.optLong("size", 0L) ?: 0L
 
     Column(
@@ -554,7 +555,8 @@ internal fun AboutScreen(
                     }
                     list
                 }
-                val showNotesSection = latest != null && (hasUpdate || notesList.isNotEmpty())
+                val historyNotes = latest?.optJSONArray("historyReleaseNotes")
+                val showNotesSection = latest != null && (hasUpdate || notesList.isNotEmpty() || (historyNotes != null && historyNotes.length() > 0))
 
                 if (showNotesSection) {
                     Spacer(Modifier.height(16.dp))
@@ -565,6 +567,7 @@ internal fun AboutScreen(
                     Spacer(Modifier.height(14.dp))
 
                     ReleaseNotesSection(
+                        latestJson = latest,
                         notesList = notesList,
                         targetVersion = latest?.optString("versionName", "") ?: "",
                         hasUpdate = hasUpdate,
@@ -623,7 +626,39 @@ private data class VersionReleaseSection(
     val entries: List<ReleaseEntry>,
 )
 
-private fun parseReleaseNotesToSections(rawList: List<String>, targetVersion: String): List<VersionReleaseSection> {
+private fun parseReleaseNotesToSections(latestJson: JSONObject?, rawList: List<String>, targetVersion: String): List<VersionReleaseSection> {
+    val historyNotes = latestJson?.optJSONArray("historyReleaseNotes")
+    if (historyNotes != null && historyNotes.length() > 0) {
+        val sections = mutableListOf<VersionReleaseSection>()
+        for (i in 0 until historyNotes.length()) {
+            val obj = historyNotes.optJSONObject(i) ?: continue
+            val vName = obj.optString("versionName", "").ifBlank { obj.optInt("versionCode").toString() }
+            val rawNotes = obj.optJSONArray("releaseNotes")
+            val entries = mutableListOf<ReleaseEntry>()
+            if (rawNotes != null) {
+                for (j in 0 until rawNotes.length()) {
+                    val line = rawNotes.optString(j, "").trim()
+                    if (line.isNotBlank()) {
+                        val cleaned = line.replace(Regex("""^[·•\-\*●◆▪▫\s\d\.]+"""), "").trim()
+                        val (tag, tagType, content) = parseEntryTag(cleaned)
+                        entries.add(ReleaseEntry(tag, tagType, content))
+                    }
+                }
+            }
+            if (entries.isNotEmpty()) {
+                val versionName = if (vName.startsWith("v", ignoreCase = true)) vName else "v$vName"
+                sections.add(
+                    VersionReleaseSection(
+                        version = versionName,
+                        isLatest = sections.isEmpty(),
+                        entries = entries,
+                    )
+                )
+            }
+        }
+        if (sections.isNotEmpty()) return sections
+    }
+
     val sections = mutableListOf<VersionReleaseSection>()
     var currentVersion = ""
     var currentEntries = mutableListOf<ReleaseEntry>()
@@ -731,12 +766,13 @@ private fun parseEntryTag(text: String): Triple<String?, ReleaseTagType, String>
 
 @Composable
 private fun ReleaseNotesSection(
+    latestJson: JSONObject?,
     notesList: List<String>,
     targetVersion: String,
     hasUpdate: Boolean,
 ) {
-    val sections = remember(notesList, targetVersion) {
-        parseReleaseNotesToSections(notesList, targetVersion)
+    val sections = remember(latestJson, notesList, targetVersion) {
+        parseReleaseNotesToSections(latestJson, notesList, targetVersion)
     }
     var showHistory by remember { mutableStateOf(false) }
 

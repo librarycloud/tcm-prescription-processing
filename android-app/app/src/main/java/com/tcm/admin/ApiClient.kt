@@ -244,6 +244,7 @@ object ApiClient {
 
         val queryParams = mutableListOf<String>()
         queryParams.add("versionCode=$currentVersionCode")
+        queryParams.add("policy=fallback_full")
         if (!resolvedDeviceId.isNullOrBlank()) {
             queryParams.add("deviceId=${java.net.URLEncoder.encode(resolvedDeviceId, "UTF-8")}")
         }
