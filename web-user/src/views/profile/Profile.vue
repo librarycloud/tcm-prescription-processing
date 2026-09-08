@@ -8,7 +8,7 @@
       <el-button v-if="!editing" type="primary" @click="startEdit">修改资料</el-button>
     </div>
 
-    <el-card class="form-card" v-loading="loading" shadow="never">
+    <el-card v-loading="loading" class="form-card" shadow="never">
       <div v-if="!editing" class="profile-view">
         <el-avatar :size="72" :src="avatar" />
         <div class="profile-info">
@@ -23,25 +23,67 @@
       </div>
 
       <el-form v-else ref="formRef" :model="form" :rules="rules" label-width="96px" @submit.prevent>
-        <el-form-item label="昵称" prop="nickname"><el-input v-model.trim="form.nickname" maxlength="30" show-word-limit /></el-form-item>
-        <el-form-item label="用户名" prop="username"><el-input v-model.trim="form.username" maxlength="64" placeholder="可选，仅英文和数字且不能是纯数字" /></el-form-item>
-        <el-form-item label="手机号" prop="phone"><el-input v-model.trim="form.phone" maxlength="11" /></el-form-item>
+        <el-form-item label="昵称" prop="nickname"
+          ><el-input v-model.trim="form.nickname" maxlength="30" show-word-limit
+        /></el-form-item>
+        <el-form-item label="用户名" prop="username"
+          ><el-input
+            v-model.trim="form.username"
+            maxlength="64"
+            placeholder="可选，仅英文和数字且不能是纯数字"
+        /></el-form-item>
+        <el-form-item label="手机号" prop="phone"
+          ><el-input v-model.trim="form.phone" maxlength="11"
+        /></el-form-item>
         <el-form-item label="邮箱" prop="email">
           <div class="email-control">
             <el-input v-model.trim="form.email" maxlength="191" placeholder="请输入邮箱" />
-            <el-button :disabled="emailCountdown > 0 || !isValidEmail(form.email)" :loading="emailSending" @click="handleSendEmailCode">
+            <el-button
+              :disabled="emailCountdown > 0 || !isValidEmail(form.email)"
+              :loading="emailSending"
+              @click="handleSendEmailCode"
+            >
               {{ emailCountdown > 0 ? `${emailCountdown}s` : '发送验证码' }}
             </el-button>
           </div>
         </el-form-item>
         <el-form-item label="验证码" prop="emailCode">
-          <div class="email-control"><el-input v-model.trim="form.emailCode" maxlength="6" placeholder="请输入邮箱验证码" /><el-button type="success" :loading="emailVerifying" :disabled="!isValidEmail(form.email) || form.emailCode.length !== 6" @click="handleVerifyEmail">确认邮箱</el-button></div>
+          <div class="email-control">
+            <el-input
+              v-model.trim="form.emailCode"
+              maxlength="6"
+              placeholder="请输入邮箱验证码"
+            /><el-button
+              type="success"
+              :loading="emailVerifying"
+              :disabled="!isValidEmail(form.email) || form.emailCode.length !== 6"
+              @click="handleVerifyEmail"
+              >确认邮箱</el-button
+            >
+          </div>
         </el-form-item>
         <el-form-item label="新密码" prop="password">
-          <el-input v-model="form.password" type="password" show-password placeholder="不修改请留空" maxlength="32" @input="handlePasswordInput" />
+          <el-input
+            v-model="form.password"
+            type="password"
+            show-password
+            placeholder="不修改请留空"
+            maxlength="32"
+            @input="handlePasswordInput"
+          />
         </el-form-item>
-        <el-form-item label="确认新密码" prop="confirmPassword"><el-input v-model="form.confirmPassword" type="password" show-password placeholder="再次输入新密码" maxlength="32" /></el-form-item>
-        <el-form-item><el-button type="primary" :loading="saving" @click="handleSubmit">保存</el-button><el-button @click="cancelEdit">取消</el-button></el-form-item>
+        <el-form-item label="确认新密码" prop="confirmPassword"
+          ><el-input
+            v-model="form.confirmPassword"
+            type="password"
+            show-password
+            placeholder="再次输入新密码"
+            maxlength="32"
+        /></el-form-item>
+        <el-form-item
+          ><el-button type="primary" :loading="saving" @click="handleSubmit">保存</el-button
+          ><el-button @click="cancelEdit">取消</el-button></el-form-item
+        >
       </el-form>
     </el-card>
   </div>
@@ -80,10 +122,15 @@ function isValidEmail(value) {
 }
 
 const rules = {
-  username: [{ validator: (_rule, value, callback) => {
-    if (!value || (/^[A-Za-z0-9]{2,64}$/.test(value) && /[A-Za-z]/.test(value))) callback();
-    else callback(new Error('用户名需为2-64位英文数字且不能是纯数字'));
-  }, trigger: 'blur' }],
+  username: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!value || (/^[A-Za-z0-9]{2,64}$/.test(value) && /[A-Za-z]/.test(value))) callback();
+        else callback(new Error('用户名需为2-64位英文数字且不能是纯数字'));
+      },
+      trigger: 'blur'
+    }
+  ],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     {
@@ -182,7 +229,14 @@ function handlePasswordInput() {
 async function handleSubmit() {
   const valid = await formRef.value.validate().catch(() => false);
   if (!valid) return;
-  if (String(form.email || '').trim().toLowerCase() !== String(userStore.user?.email || '').trim().toLowerCase()) {
+  if (
+    String(form.email || '')
+      .trim()
+      .toLowerCase() !==
+    String(userStore.user?.email || '')
+      .trim()
+      .toLowerCase()
+  ) {
     ElMessage.warning('请先完成邮箱验证码验证，邮箱才会保存');
     return;
   }

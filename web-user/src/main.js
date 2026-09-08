@@ -27,4 +27,3 @@ Object.entries(usedIcons).forEach(([key, component]) => {
 app.use(createPinia());
 app.use(router);
 app.mount('#app');
-

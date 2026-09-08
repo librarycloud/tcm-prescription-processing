@@ -1,0 +1,14 @@
+{
+  "name": "tcm-prescription-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TCM Prescription Processing & Pickup Management System",
+  "type": "module",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3"
+  }
+}
