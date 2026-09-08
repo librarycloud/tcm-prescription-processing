@@ -6,6 +6,7 @@
 **/.vite/
 **/coverage/
 *.tsbuildinfo
+*.pdf
 
 # Local environment configuration
 **/.env
