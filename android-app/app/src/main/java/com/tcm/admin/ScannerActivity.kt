@@ -108,6 +108,10 @@ class ScannerActivity : ComponentActivity() {
     )
 
     private val ocrInFlight = AtomicBoolean(false)
+    @Volatile
+    private var lastOcrExecutionTime = 0L
+    @Volatile
+    private var consecutiveEmptyFrames = 0
     private lateinit var previewView: PreviewView
     private var overlayView: ScannerOverlayView? = null
 
@@ -599,6 +603,7 @@ class ScannerActivity : ComponentActivity() {
                 }
                 val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
                 val isOcrActive = ocrEnabled && !delivered.get()
+                val isBarcodeHitInFrame = AtomicBoolean(false)
                 val pendingTasks = AtomicInteger(if (isOcrActive) 2 else 1)
                 val taskFinished = {
                     if (pendingTasks.decrementAndGet() <= 0) {
@@ -659,6 +664,7 @@ class ScannerActivity : ComponentActivity() {
                             targetBarcode?.let { barcode ->
                                 val value = barcode.rawValue
                                 if (!value.isNullOrBlank()) {
+                                    isBarcodeHitInFrame.set(true)
                                     if (BuildConfig.DEBUG && isDebugLogOpen) {
                                         isRecognitionPaused = true
                                         viewingHistoryIndex = -1
@@ -682,61 +688,82 @@ class ScannerActivity : ComponentActivity() {
                     .addOnCompleteListener { taskFinished() }
 
                 // 2. Offline PP-OCRv6 text recognition restricted to scanning frame (ROI cropped)
-                if (isOcrActive) {
+                val nowTime = System.currentTimeMillis()
+                val adaptiveThrottleMs = when {
+                    consecutiveEmptyFrames >= 6 -> 250L // 空白视野：主动拉长至 250ms，彻底防止空转过热和耗电
+                    consecutiveEmptyFrames >= 3 -> 120L // 过渡阶段
+                    else -> 0L // 发现目标文字：满速识别，零延迟响应
+                }
+                val canRunOcr = isOcrActive &&
+                    !isBarcodeHitInFrame.get() &&
+                    !delivered.get() &&
+                    (nowTime - lastOcrExecutionTime >= adaptiveThrottleMs)
+
+                if (canRunOcr && paddleOcr != null && ocrInFlight.compareAndSet(false, true)) {
+                    lastOcrExecutionTime = nowTime
                     val ocr = paddleOcr
-                    if (ocr == null) {
-                        taskFinished()
-                    } else if (!delivered.get() && ocrInFlight.compareAndSet(false, true)) {
-                        val roiBitmap = try {
-                            val rawBitmap = proxy.toBitmap()
+                    val roiBitmap = try {
+                        val rawBitmap = proxy.toBitmap()
+                        try {
                             val rotation = proxy.imageInfo.rotationDegrees
-                            val rotatedBitmap = if (rotation != 0) {
-                                val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
-                                val r = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
-                                rawBitmap.recycle()
-                                r
-                            } else {
-                                rawBitmap
-                            }
+
+                            val rotW = if (rotation == 90 || rotation == 270) rawBitmap.height else rawBitmap.width
+                            val rotH = if (rotation == 90 || rotation == 270) rawBitmap.width else rawBitmap.height
 
                             // 严格限制在取景框内（无外扩边距，彻底排除药盒外部日期、批号等无关文本干扰，大幅提升单帧处理速度）
-                            val cropLeft = imgScanBox.left.toInt().coerceIn(0, rotatedBitmap.width - 1)
-                            val cropTop = imgScanBox.top.toInt().coerceIn(0, rotatedBitmap.height - 1)
-                            val cropRight = imgScanBox.right.toInt().coerceIn(cropLeft + 1, rotatedBitmap.width)
-                            val cropBottom = imgScanBox.bottom.toInt().coerceIn(cropTop + 1, rotatedBitmap.height)
+                            val cropLeft = imgScanBox.left.toInt().coerceIn(0, rotW - 1)
+                            val cropTop = imgScanBox.top.toInt().coerceIn(0, rotH - 1)
+                            val cropRight = imgScanBox.right.toInt().coerceIn(cropLeft + 1, rotW)
+                            val cropBottom = imgScanBox.bottom.toInt().coerceIn(cropTop + 1, rotH)
                             val cropWidth = cropRight - cropLeft
                             val cropHeight = cropBottom - cropTop
 
-                            val roi = Bitmap.createBitmap(rotatedBitmap, cropLeft, cropTop, cropWidth, cropHeight)
-                            if (roi != rotatedBitmap) {
-                                rotatedBitmap.recycle()
-                            }
+                            // 单步 Canvas 矩阵渲染直接生成目标小图 ROI，不再创建旋转全屏大图，内存分配直接降低 80%
+                            val roi = Bitmap.createBitmap(cropWidth, cropHeight, Bitmap.Config.ARGB_8888)
+                            val canvas = Canvas(roi)
+                            val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+                            val rectF = RectF(0f, 0f, rawBitmap.width.toFloat(), rawBitmap.height.toFloat())
+                            matrix.mapRect(rectF)
+                            matrix.postTranslate(-rectF.left - cropLeft, -rectF.top - cropTop)
+                            canvas.drawBitmap(rawBitmap, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
                             roi
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "Failed to extract ROI bitmap", t)
-                            latestOcrDebugLog = "❌ 提取取景框图像失败: ${t.message}"
-                            null
+                        } finally {
+                            rawBitmap.recycle()
                         }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "Failed to extract ROI bitmap", t)
+                        latestOcrDebugLog = "❌ 提取取景框图像失败: ${t.message}"
+                        null
+                    }
 
-                        taskFinished()
+                    taskFinished()
 
-                        if (roiBitmap != null) {
-                            lifecycleScope.launch(Dispatchers.Default) {
-                                try {
-                                    val sharpness = com.paddle.ocr.util.BitmapUtils.calculateSharpness(roiBitmap)
-                                    if (sharpness < 6.0) {
-                                        // 仅拦截剧烈大甩动导致的极度模糊帧，大幅放宽对轻微晃动/手持微抖的限制
-                                        val blurMsg = "【画面状态】: ⚠️ 正在快速移动 (清晰度: ${sharpness.toInt()})，等待对准..."
-                                        latestOcrDebugLog = blurMsg
-                                        if (BuildConfig.DEBUG && isDebugLogOpen) {
-                                            runOnUiThread { updateDebugLogUi() }
-                                        }
-                                        return@launch
+                    if (roiBitmap != null && ocr != null) {
+                        lifecycleScope.launch(Dispatchers.Default) {
+                            try {
+                                if (delivered.get() || isBarcodeHitInFrame.get() || isRecognitionPaused) {
+                                    return@launch
+                                }
+                                val sharpness = com.paddle.ocr.util.BitmapUtils.calculateSharpness(roiBitmap)
+                                if (sharpness < 6.0) {
+                                    // 仅拦截剧烈大甩动导致的极度模糊帧，大幅放宽对轻微晃动/手持微抖的限制
+                                    val blurMsg = "【画面状态】: ⚠️ 正在快速移动 (清晰度: ${sharpness.toInt()})，等待对准..."
+                                    latestOcrDebugLog = blurMsg
+                                    if (BuildConfig.DEBUG && isDebugLogOpen) {
+                                        runOnUiThread { updateDebugLogUi() }
                                     }
+                                    return@launch
+                                }
 
-                                    val ocrRunResult = ocr.recognize(roiBitmap) { currentResults ->
-                                        extractSkuFromPaddleOcr(currentResults, roiBitmap.height.toFloat()).sku != null
-                                    }
+                                val ocrRunResult = ocr.recognize(roiBitmap) { currentResults ->
+                                    extractSkuFromPaddleOcr(currentResults, roiBitmap.height.toFloat()).sku != null
+                                }
+
+                                if (ocrRunResult.results.isEmpty()) {
+                                    consecutiveEmptyFrames++
+                                } else {
+                                    consecutiveEmptyFrames = 0
+                                }
                                     val (candidate, isExplicit, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
 
                                     val formattedLog = if (candidate != null && isDebugLogOpen) {

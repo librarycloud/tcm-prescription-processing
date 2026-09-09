@@ -564,8 +564,22 @@ object ApiClient {
         }
     }
 
+    fun onTrimMemory(level: Int) {
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+        ) {
+            synchronized(memoryCache) {
+                memoryCache.clear()
+            }
+        }
+    }
+
+    internal fun sanitizePrefix(route: String): String =
+        route.trim('/').replace('/', '_')
+
     fun invalidateCachedRoutes(prefixes: List<String>, context: Context? = cacheContext) {
         if (prefixes.isEmpty()) return
+        val normalizedPrefixes = prefixes.map { sanitizePrefix(it) }.filter { it.isNotBlank() }
         synchronized(memoryCache) {
             val iterator = memoryCache.entries.iterator()
             while (iterator.hasNext()) {
@@ -578,9 +592,18 @@ object ApiClient {
         val ctx = context ?: cacheContext ?: return
         runCatching {
             cacheDir(ctx).listFiles()?.forEach { file ->
-                val firstLine = file.bufferedReader().use { it.readLine() }.orEmpty()
-                if (prefixes.any { firstLine.startsWith(it) }) {
-                    file.delete()
+                val name = file.name
+                if (name.contains("__")) {
+                    // O(1) in-memory string prefix matching, zero disk I/O reads!
+                    if (normalizedPrefixes.any { name.startsWith(it) }) {
+                        file.delete()
+                    }
+                } else {
+                    // Legacy cache file without prefix: read first line once or delete if empty
+                    val firstLine = runCatching { file.bufferedReader().use { it.readLine() }.orEmpty() }.getOrNull().orEmpty()
+                    if (firstLine.isBlank() || prefixes.any { firstLine.startsWith(it) }) {
+                        file.delete()
+                    }
                 }
             }
         }
@@ -875,10 +898,15 @@ object ApiClient {
         return runCatching { JSONObject(entry.data) }.getOrNull()
     }
 
-    private fun cacheKey(path: String): String = MessageDigest
-        .getInstance("SHA-256")
-        .digest(path.toByteArray())
-        .joinToString("") { byte -> "%02x".format(byte) }
+    internal fun cacheKey(path: String): String {
+        val route = path.substringBefore('?')
+        val prefix = sanitizePrefix(route)
+        val hash = MessageDigest
+            .getInstance("SHA-256")
+            .digest(path.toByteArray())
+            .joinToString("") { byte -> "%02x".format(byte) }
+        return if (prefix.isNotBlank()) "${prefix}__${hash}" else hash
+    }
 
     private fun requestBytes(path: String): ByteArray {
         val requestBuilder = Request.Builder()

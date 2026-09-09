@@ -127,6 +127,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { TcmAdminApp() }
     }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        ApiClient.onTrimMemory(level)
+    }
 }
 
 internal sealed class ScreenTarget {
