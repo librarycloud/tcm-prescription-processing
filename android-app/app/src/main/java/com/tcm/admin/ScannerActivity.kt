@@ -108,10 +108,17 @@ class ScannerActivity : ComponentActivity() {
     )
 
     private val ocrInFlight = AtomicBoolean(false)
+    // Per-frame barcode hit flag: reset at the start of each frame so the current frame's OCR
+    // can be short-circuited as soon as ML Kit finds a valid barcode in the *same* frame.
+    // Being an Activity-level field also allows future frames to fast-exit before ML Kit fires
+    // if the result has already been delivered.
+    private val isBarcodeHitInFrame = AtomicBoolean(false)
     @Volatile
     private var lastOcrExecutionTime = 0L
-    @Volatile
-    private var consecutiveEmptyFrames = 0
+    // Use AtomicInteger so reads on cameraExecutor and writes on Dispatchers.Default are
+    // safely visible across threads without needing a synchronized block.
+    private val consecutiveEmptyFrames = AtomicInteger(0)
+
     private lateinit var previewView: PreviewView
     private var overlayView: ScannerOverlayView? = null
 
@@ -603,7 +610,8 @@ class ScannerActivity : ComponentActivity() {
                 }
                 val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
                 val isOcrActive = ocrEnabled && !delivered.get()
-                val isBarcodeHitInFrame = AtomicBoolean(false)
+                // Reset per-frame barcode flag at the start of each frame
+                isBarcodeHitInFrame.set(false)
                 val pendingTasks = AtomicInteger(if (isOcrActive) 2 else 1)
                 val taskFinished = {
                     if (pendingTasks.decrementAndGet() <= 0) {
@@ -690,8 +698,8 @@ class ScannerActivity : ComponentActivity() {
                 // 2. Offline PP-OCRv6 text recognition restricted to scanning frame (ROI cropped)
                 val nowTime = System.currentTimeMillis()
                 val adaptiveThrottleMs = when {
-                    consecutiveEmptyFrames >= 6 -> 250L // 空白视野：主动拉长至 250ms，彻底防止空转过热和耗电
-                    consecutiveEmptyFrames >= 3 -> 120L // 过渡阶段
+                    consecutiveEmptyFrames.get() >= 6 -> 250L // 空白视野：主动拉长至 250ms，彻底防止空转过热和耗电
+                    consecutiveEmptyFrames.get() >= 3 -> 120L // 过渡阶段
                     else -> 0L // 发现目标文字：满速识别，零延迟响应
                 }
                 val canRunOcr = isOcrActive &&
@@ -760,9 +768,9 @@ class ScannerActivity : ComponentActivity() {
                                 }
 
                                 if (ocrRunResult.results.isEmpty()) {
-                                    consecutiveEmptyFrames++
+                                    consecutiveEmptyFrames.incrementAndGet()
                                 } else {
-                                    consecutiveEmptyFrames = 0
+                                    consecutiveEmptyFrames.set(0)
                                 }
                                     val (candidate, isExplicit, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
 
