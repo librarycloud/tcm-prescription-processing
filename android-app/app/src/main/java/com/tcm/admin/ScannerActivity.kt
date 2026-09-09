@@ -832,7 +832,6 @@ class ScannerActivity : ComponentActivity() {
                         taskFinished()
                     }
                 }
-            }
             provider.unbindAll()
             currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
             currentCamera?.let { cam ->
