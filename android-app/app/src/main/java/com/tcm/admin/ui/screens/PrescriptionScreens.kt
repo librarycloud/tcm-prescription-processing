@@ -341,6 +341,7 @@ internal fun PrescriptionsScreen(
     }
 }
 
+@Composable
 internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
     val readOnly = isStoreStaff(user)
     val context = LocalContext.current

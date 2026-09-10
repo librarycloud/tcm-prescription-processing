@@ -45,6 +45,13 @@ class PrescriptionViewModel @Inject constructor(
         }.flow
     }.cachedIn(viewModelScope)
 
+    fun updateFilters(newKeyword: String? = null, newStatus: Int? = -2, newDoctorId: Int? = -2, newStoreId: Int? = -2) {
+        if (newKeyword != null) keyword.value = newKeyword
+        if (newStatus != -2) status.value = newStatus
+        if (newDoctorId != -2) doctorId.value = newDoctorId
+        if (newStoreId != -2) storeId.value = newStoreId
+    }
+
     suspend fun loadFilters() {
         if (filtersLoaded.value) return
         runCatching {
