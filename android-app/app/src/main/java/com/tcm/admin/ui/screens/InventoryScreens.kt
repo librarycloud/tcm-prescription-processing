@@ -100,6 +100,7 @@ internal fun InventoryScreen(
     var listScrollPosition by remember { mutableStateOf(0) }
     var restoreListScroll by remember { mutableStateOf(false) }
     var lastAutoSearchQuery by remember { mutableStateOf(query.trim()) }
+    var hasAutoNavigated by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -128,6 +129,7 @@ internal fun InventoryScreen(
     fun clearSearchResults() {
         viewModel.query.value = ""
         viewModel.selectedProduct.value = null
+        hasAutoNavigated = false
         products.refresh()
     }
 
@@ -138,6 +140,8 @@ internal fun InventoryScreen(
         }
         addSearchHistory(query)
         lastAutoSearchQuery = query.trim()
+        viewModel.selectedProduct.value = null
+        hasAutoNavigated = false
         products.refresh()
     }
 
@@ -147,6 +151,7 @@ internal fun InventoryScreen(
             addSearchHistory(initialQuery)
             lastAutoSearchQuery = initialQuery.trim()
             viewModel.selectedProduct.value = null
+            hasAutoNavigated = false
             products.refresh()
         }
     }
@@ -160,6 +165,8 @@ internal fun InventoryScreen(
         delay(300)
         if (query.trim() == searchTerm && lastAutoSearchQuery != searchTerm) {
             lastAutoSearchQuery = searchTerm
+            viewModel.selectedProduct.value = null
+            hasAutoNavigated = false
             products.refresh()
         }
     }
@@ -172,7 +179,27 @@ internal fun InventoryScreen(
             addSearchHistory(value)
             lastAutoSearchQuery = value
             viewModel.selectedProduct.value = null
+            hasAutoNavigated = false
             products.refresh()
+        }
+    }
+
+    // Auto navigate to product detail if exactly one item matches
+    LaunchedEffect(products.loadState.refresh, products.itemCount) {
+        val refreshState = products.loadState.refresh
+        if (refreshState is LoadState.Loading) {
+            hasAutoNavigated = false
+        } else if (refreshState is LoadState.NotLoading) {
+            if (!hasAutoNavigated && query.isNotBlank() && selectedProduct == null && products.itemCount == 1) {
+                val singleProduct = products.itemSnapshotList.items.firstOrNull() ?: products[0]
+                if (singleProduct != null) {
+                    hasAutoNavigated = true
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = false)
+                    listScrollPosition = listState.firstVisibleItemIndex
+                    viewModel.selectedProduct.value = singleProduct
+                }
+            }
         }
     }
 
@@ -206,6 +233,7 @@ internal fun InventoryScreen(
         onRefresh = {
             if (query.isNotBlank()) {
                 ApiClient.clearResponseCache(context)
+                hasAutoNavigated = false
                 products.refresh()
             }
         },
@@ -269,6 +297,8 @@ internal fun InventoryScreen(
                         viewModel.query.value = term
                         addSearchHistory(term)
                         lastAutoSearchQuery = term
+                        viewModel.selectedProduct.value = null
+                        hasAutoNavigated = false
                         products.refresh()
                     },
                     onClear = ::clearSearchHistory,
@@ -287,7 +317,11 @@ internal fun InventoryScreen(
                         keyboardController?.hide()
                         focusManager.clearFocus(force = false)
                         viewModel.selectedStoreId.value = id.toIntOrNull()
-                        if (query.isNotBlank()) products.refresh()
+                        if (query.isNotBlank()) {
+                            viewModel.selectedProduct.value = null
+                            hasAutoNavigated = false
+                            products.refresh()
+                        }
                     },
                 )
             }

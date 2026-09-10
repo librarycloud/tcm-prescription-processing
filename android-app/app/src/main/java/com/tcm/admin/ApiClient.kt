@@ -596,6 +596,7 @@ object ApiClient {
         }
     }
 
+    @Suppress("DEPRECATION")
     fun onTrimMemory(level: Int) {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
             level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
