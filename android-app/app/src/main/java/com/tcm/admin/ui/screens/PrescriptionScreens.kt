@@ -1,13 +1,25 @@
 package com.tcm.admin
 
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +45,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -352,6 +365,56 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     var busy by remember { mutableStateOf(false) }
     var deletePlan by remember { mutableStateOf<JSONObject?>(null) }
     var deleteAttachment by remember { mutableStateOf(false) }
+    var viewingAttachment by remember { mutableStateOf(false) }
+    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var previewScale by remember { mutableStateOf(1f) }
+    var previewOffsetX by remember { mutableStateOf(0f) }
+    var previewOffsetY by remember { mutableStateOf(0f) }
+
+    fun viewAttachmentFile(attachment: JSONObject) {
+        viewingAttachment = true
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val bytes = ApiClient.prescriptionAttachment(id)
+                    val mimeType = attachment.displayField("mimeType", "").lowercase()
+                    val fileName = attachment.displayField("originalName", "prescription_$id")
+                    val isImg = mimeType.startsWith("image/") ||
+                        listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { fileName.endsWith(it, ignoreCase = true) }
+                    if (isImg) {
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } else {
+                        val cacheDir = File(context.cacheDir, "prescriptions").apply { if (!exists()) mkdirs() }
+                        val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                        val file = File(cacheDir, safeName)
+                        file.writeBytes(bytes)
+                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file
+                        )
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(contentUri, mimeType.ifBlank { "application/pdf" })
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        null
+                    }
+                }
+            }.onSuccess { bmp ->
+                if (bmp != null) {
+                    previewScale = 1f
+                    previewOffsetX = 0f
+                    previewOffsetY = 0f
+                    previewBitmap = bmp
+                }
+            }.onFailure {
+                error = it.message ?: "打开处方原件失败"
+            }
+            viewingAttachment = false
+        }
+    }
+
     val attachmentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) scope.launch {
             busy = true
@@ -458,9 +521,33 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                 Text(attachment.displayField("originalName", "处方原件"), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
                                 Text(attachmentSizeText(attachment.optLong("fileSize")), color = Muted, fontSize = 11.sp)
                             }
-                            if (!readOnly) {
-                                TextButton(enabled = !busy, onClick = { deleteAttachment = true }) {
-                                    Text("删除原件", color = Danger, fontSize = 12.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedButton(
+                                    enabled = !busy && !viewingAttachment,
+                                    onClick = { viewAttachmentFile(attachment) },
+                                    shape = FieldShape,
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                ) {
+                                    if (viewingAttachment) {
+                                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = Primary)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("加载中...", fontSize = 12.sp)
+                                    } else {
+                                        Icon(Icons.Default.Visibility, null, Modifier.size(14.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("查看", fontSize = 12.sp)
+                                    }
+                                }
+                                if (!readOnly) {
+                                    TextButton(
+                                        enabled = !busy && !viewingAttachment,
+                                        onClick = { deleteAttachment = true },
+                                        modifier = Modifier.height(32.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    ) {
+                                        Text("删除", color = Danger, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }
@@ -767,6 +854,60 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
         confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPlan(plan.optInt("id")) } }.onSuccess { deletePlan = null; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
         dismissButton = { TextButton(onClick = { deletePlan = null }) { Text("取消") } },
     ) }
+
+    previewBitmap?.let { bitmap ->
+        Dialog(
+            onDismissRequest = { previewBitmap = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            Surface(
+                color = Color.Black,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    androidx.compose.foundation.Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "处方原件",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clipToBounds()
+                            .graphicsLayer {
+                                scaleX = previewScale
+                                scaleY = previewScale
+                                translationX = previewOffsetX
+                                translationY = previewOffsetY
+                            }
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    previewScale = (previewScale * zoom).coerceIn(1f, 5f)
+                                    previewOffsetX += pan.x
+                                    previewOffsetY += pan.y
+                                }
+                            },
+                    )
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 36.dp, end = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(
+                            onClick = {
+                                previewScale = 1f
+                                previewOffsetX = 0f
+                                previewOffsetY = 0f
+                            },
+                        ) { Text("复位", color = Color.White) }
+                        TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -964,14 +1105,87 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
     }
 }
 
+private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteArray {
+    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IllegalStateException("无法读取处方文件")
+    if (original.size <= 2 * 1024 * 1024) return original
+
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+
+    var sampleSize = 1
+    val maxDim = 2560
+    while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
+        (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
+    ) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    val rawBitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, decodeOptions) }
+        ?: return original
+
+    val rotation = runCatching {
+        context.contentResolver.openInputStream(uri)?.use {
+            val exif = android.media.ExifInterface(it)
+            when (exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }
+    }.getOrNull() ?: 0f
+
+    val rotatedBitmap = if (rotation != 0f) {
+        val matrix = android.graphics.Matrix().apply { postRotate(rotation) }
+        val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+        if (rotated != rawBitmap) rawBitmap.recycle()
+        rotated
+    } else {
+        rawBitmap
+    }
+
+    val finalBitmap = if (rotatedBitmap.width > maxDim || rotatedBitmap.height > maxDim) {
+        val scale = maxDim.toFloat() / maxOf(rotatedBitmap.width, rotatedBitmap.height)
+        val w = (rotatedBitmap.width * scale).toInt().coerceAtLeast(1)
+        val h = (rotatedBitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(rotatedBitmap, w, h, true)
+        if (scaled != rotatedBitmap) rotatedBitmap.recycle()
+        scaled
+    } else {
+        rotatedBitmap
+    }
+
+    val qualities = intArrayOf(88, 80, 70)
+    try {
+        for (quality in qualities) {
+            val output = java.io.ByteArrayOutputStream()
+            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= 4 * 1024 * 1024) {
+                return output.toByteArray()
+            }
+        }
+    } finally {
+        finalBitmap.recycle()
+    }
+    return original
+}
+
 private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri) {
     val cursor = context.contentResolver.query(uri, null, null, null, null)
     val name = cursor?.use {
         if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null
     } ?: "prescription_${System.currentTimeMillis()}"
     val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
-    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, mimeType, bytes)
+    val isImage = mimeType.startsWith("image/") ||
+        listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { name.endsWith(it, ignoreCase = true) }
+    val bytes = if (isImage) {
+        compressPrescriptionImageIfNeeded(context, uri)
+    } else {
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+    }
+    val uploadMime = if (isImage && !mimeType.startsWith("image/")) "image/jpeg" else mimeType
+    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, uploadMime, bytes)
 }
 
 private fun attachmentSizeText(size: Long): String = when {

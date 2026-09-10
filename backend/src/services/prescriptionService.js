@@ -17,7 +17,7 @@ import {
   saveUploadFile,
 } from "./localUploadStorage.js";
 
-export const PRESCRIPTION_ATTACHMENT_MAX_SIZE = 5 * 1024 * 1024;
+export const PRESCRIPTION_ATTACHMENT_MAX_SIZE = 30 * 1024 * 1024;
 
 const PRESCRIPTION_ATTACHMENT_METADATA = {
   id: true,
@@ -267,7 +267,7 @@ export async function uploadPrescriptionAttachment(
   const buffer = Buffer.from(file?.buffer || []);
   if (!buffer.length) throw new AppError("请选择处方文件", 400);
   if (buffer.length > PRESCRIPTION_ATTACHMENT_MAX_SIZE)
-    throw new AppError("处方文件不能超过 5MB", 400);
+    throw new AppError("处方文件不能超过 30MB", 400);
 
   const mimeType = detectPrescriptionMimeType(buffer);
   if (!mimeType) throw new AppError("仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件", 400);

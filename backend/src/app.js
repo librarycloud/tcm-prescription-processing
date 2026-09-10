@@ -24,6 +24,7 @@ import { startRobotDeliveryWorker } from './services/robotNotificationService.js
 
 export async function buildApp() {
   const fastify = Fastify({
+    bodyLimit: 35 * 1024 * 1024,
     trustProxy: config.trustProxy,
     logger: {
       level: config.nodeEnv === 'production' ? 'info' : 'debug',
@@ -39,7 +40,7 @@ export async function buildApp() {
     timeWindow: '1 minute'
   });
   fastify.addHook('onRequest', fastify.rateLimit());
-  await fastify.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
+  await fastify.register(multipart, { limits: { fileSize: 30 * 1024 * 1024, files: 1 } });
   await fastify.register(jwt, { secret: config.jwtSecret });
   await fastify.register(prismaPlugin);
   await fastify.register(authSessionsPlugin);

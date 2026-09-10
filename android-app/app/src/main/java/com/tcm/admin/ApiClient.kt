@@ -357,6 +357,7 @@ object ApiClient {
     suspend fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
     suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject =
         requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes).getJSONObject("data")
+    suspend fun prescriptionAttachment(id: Int): ByteArray = requestBytes("/admin/prescriptions/$id/attachment")
     suspend fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
     suspend fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
     suspend fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
@@ -816,7 +817,10 @@ object ApiClient {
         
         val response = client.newCall(requestBuilder.build()).execute()
         val responseBodyString = response.body?.string().orEmpty()
-        val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
+        val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+            val msg = if (response.code == 413) "文件过大，超出服务器限制 (413)" else "服务器响应格式错误"
+            JSONObject().put("code", -1).put("message", msg)
+        }
         if (response.code == 401) {
             token = null
             onUnauthorized?.invoke()

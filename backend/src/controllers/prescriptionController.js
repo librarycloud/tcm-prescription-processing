@@ -25,10 +25,10 @@ export async function uploadAttachmentController(request, reply) {
     buffer = await file.toBuffer();
   } catch (error) {
     if (error?.code === 'FST_REQ_FILE_TOO_LARGE')
-      throw new AppError('处方文件不能超过 5MB', 400);
+      throw new AppError('处方文件不能超过 30MB', 400);
     throw error;
   }
-  if (file.file?.truncated) throw new AppError('处方文件不能超过 5MB', 400);
+  if (file.file?.truncated) throw new AppError('处方文件不能超过 30MB', 400);
   return ok(
     reply,
     await uploadPrescriptionAttachment(

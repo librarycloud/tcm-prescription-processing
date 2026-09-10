@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.provider.MediaStore
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +47,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AlertDialog
@@ -140,18 +144,63 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
         ?: throw IllegalStateException("无法读取照片")
     if (original.size <= MAX_PROCESSING_PHOTO_BYTES) return original
 
-    val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+
+    var sampleSize = 1
+    val maxDim = 2048
+    while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
+        (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
+    ) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    val rawBitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, decodeOptions) }
         ?: throw IllegalStateException("无法处理照片")
-    val qualities = intArrayOf(92, 84, 76, 68)
+
+    val rotation = runCatching {
+        context.contentResolver.openInputStream(uri)?.use {
+            val exif = ExifInterface(it)
+            when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }
+    }.getOrNull() ?: 0f
+
+    val rotatedBitmap = if (rotation != 0f) {
+        val matrix = Matrix().apply { postRotate(rotation) }
+        val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+        if (rotated != rawBitmap) rawBitmap.recycle()
+        rotated
+    } else {
+        rawBitmap
+    }
+
+    val finalBitmap = if (rotatedBitmap.width > maxDim || rotatedBitmap.height > maxDim) {
+        val scale = maxDim.toFloat() / maxOf(rotatedBitmap.width, rotatedBitmap.height)
+        val w = (rotatedBitmap.width * scale).toInt().coerceAtLeast(1)
+        val h = (rotatedBitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(rotatedBitmap, w, h, true)
+        if (scaled != rotatedBitmap) rotatedBitmap.recycle()
+        scaled
+    } else {
+        rotatedBitmap
+    }
+
+    val qualities = intArrayOf(88, 80, 70, 60)
     try {
         for (quality in qualities) {
             val output = java.io.ByteArrayOutputStream()
-            if (bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= MAX_PROCESSING_PHOTO_BYTES) {
+            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= MAX_PROCESSING_PHOTO_BYTES) {
                 return output.toByteArray()
             }
         }
     } finally {
-        bitmap.recycle()
+        finalBitmap.recycle()
     }
     throw IllegalStateException("照片压缩后仍超过 5MB，请选择较小的照片")
 }
@@ -812,23 +861,40 @@ internal fun WorkflowOperationScreen(
         }
     }
 
-    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        val uri = pendingPhotoUri
-        pendingPhotoUri = null
-        if (!success || uri == null) return@rememberLauncherForActivityResult
+    fun uploadDispensingPhoto(uri: Uri) {
         busy = true
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
+                    val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                    val ext = when {
+                        mimeType.contains("png") -> "png"
+                        mimeType.contains("webp") -> "webp"
+                        else -> "jpg"
+                    }
                     ApiClient.completeDispensing(
                         plan.optInt("id"),
-                        "dispensing_${System.currentTimeMillis()}.jpg",
-                        "image/jpeg",
+                        "dispensing_${System.currentTimeMillis()}.$ext",
+                        mimeType,
                         readProcessingPhoto(context, uri),
                     )
                 }
             }.onSuccess { reload() }.onFailure { error = it.message ?: "照片上传失败" }
             busy = false
+        }
+    }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = pendingPhotoUri
+        pendingPhotoUri = null
+        if (success && uri != null) {
+            uploadDispensingPhoto(uri)
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            uploadDispensingPhoto(uri)
         }
     }
 
@@ -1220,7 +1286,7 @@ internal fun WorkflowOperationScreen(
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Text("称量调配完成后拍照留存凭证", color = Muted, fontSize = 12.sp)
+            Text("称量调配完成后拍照或从相册上传留存凭证", color = Muted, fontSize = 12.sp)
 
             if (photoCount > 0 && photos != null) {
                 Spacer(Modifier.height(10.dp))
@@ -1281,12 +1347,31 @@ internal fun WorkflowOperationScreen(
 
             if (canUpload) {
                 Spacer(Modifier.height(10.dp))
-                Button(
-                    enabled = !busy,
-                    onClick = ::launchPhotoCapture,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    shape = FieldShape,
-                ) { Text(if (photoCount > 0) "补充调配照片" else "拍照并完成调配", fontSize = 13.sp) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        enabled = !busy,
+                        onClick = ::launchPhotoCapture,
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        shape = FieldShape,
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (photoCount > 0) "拍照补充" else "拍照调配", fontSize = 13.sp)
+                    }
+                    OutlinedButton(
+                        enabled = !busy,
+                        onClick = { galleryLauncher.launch("image/*") },
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        shape = FieldShape,
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (photoCount > 0) "相册补充" else "相册选择", fontSize = 13.sp)
+                    }
+                }
             }
         }
 
