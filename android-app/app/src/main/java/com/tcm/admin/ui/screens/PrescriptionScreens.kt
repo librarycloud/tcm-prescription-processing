@@ -67,6 +67,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tcm.admin.ui.viewmodels.PrescriptionViewModel
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,65 +98,34 @@ internal fun PrescriptionsScreen(
     onNavigate: (ScreenTarget) -> Unit,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
+    viewModel: PrescriptionViewModel = hiltViewModel()
 ) {
-    val listOwner = "prescriptions"
     val readOnly = isStoreStaff(user)
-    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
-    var status by rememberRetainedListValue(listOwner, "status") { null as Int? }
-    var doctorId by rememberRetainedListValue(listOwner, "doctorId") { null as Int? }
-    var doctors by rememberRetainedListValue(listOwner, "doctors") { emptyList<JSONObject>() }
-    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
-    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
-    var items by rememberRetainedListValue(listOwner, "items") { null as List<JSONObject>? }
-    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
-    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
-    var page by rememberRetainedListValue(listOwner, "page") { 1 }
-    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
-    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
-    var filtersLoaded by rememberRetainedListValue(listOwner, "filtersLoaded") { false }
+    val keyword by viewModel.keyword.collectAsStateWithLifecycle()
+    val status by viewModel.status.collectAsStateWithLifecycle()
+    val doctorId by viewModel.doctorId.collectAsStateWithLifecycle()
+    val selectedStoreId by viewModel.storeId.collectAsStateWithLifecycle()
+    val doctors by viewModel.doctors.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+    
+    val items = viewModel.prescriptionsFlow.collectAsLazyPagingItems()
+    
     var deleteTarget by remember { mutableStateOf<JSONObject?>(null) }
     var deleting by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(false) }
-    var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        if (filtersLoaded) return@LaunchedEffect
-        runCatching { withContext(Dispatchers.IO) { Pair(ApiClient.doctors(), ApiClient.availableStores()) } }
-            .onSuccess { (doctorValues, storeValues) ->
-                doctors = (0 until doctorValues.length()).map { doctorValues.getJSONObject(it) }
-                stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
-                filtersLoaded = true
-                if (!isSuperAdmin(user) && stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
-            }
+        viewModel.loadFilters()
     }
-    LaunchedEffect(reload, status, doctorId, selectedStoreId, page) {
-        val queryKey = listOf(reload, keyword, status, doctorId, selectedStoreId, page).joinToString("|")
-        if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
-        error = null
-        loading = true
-        runCatching {
-            withContext(Dispatchers.IO) {
-                ApiClient.prescriptionsPaged(status, keyword.trim(), selectedStoreId.toIntOrNull(), doctorId, page)
-            }
-        }.onSuccess { data ->
-            error = null
-            val list = data.optJSONArray("list") ?: JSONArray()
-            items = (0 until list.length()).map { list.getJSONObject(it) }
-            pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            loading = false
-            refreshing = false
-            loadedQueryKey = queryKey
-        }.onFailure {
-            if (it.isCancellation()) return@onFailure
-            error = it.message ?: "加载处方失败"
-            loading = false
-            refreshing = false
+    
+    LaunchedEffect(stores) {
+        if (!isSuperAdmin(user) && stores.size == 1 && selectedStoreId == -2) {
+            viewModel.updateFilters(newStoreId = stores.first().optInt("id"))
         }
     }
-
+    
     LaunchedEffect(keyword) {
         val term = keyword.trim()
         if (!shouldAutoSearchQuery(term)) {
@@ -158,202 +135,153 @@ internal fun PrescriptionsScreen(
         kotlinx.coroutines.delay(300)
         if (keyword.trim() == term && lastAutoKeyword != term) {
             lastAutoKeyword = term
-            page = 1
-            reload++
+            items.refresh()
         }
     }
 
     PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                ApiClient.clearResponseCache(context)
-                reload++
-            }
-        },
+        isRefreshing = items.loadState.refresh is LoadState.Loading,
+        onRefresh = { items.refresh() },
         modifier = Modifier.fillMaxSize(),
     ) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-    ) {
-        item(key = "header") {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
-                if (!readOnly) {
-                    Button(
-                        onClick = { onNavigate(ScreenTarget.PrescriptionEdit()) },
-                        shape = FieldShape,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                    ) {
-                        Icon(Icons.Default.Add, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("新建处方", fontSize = 13.sp)
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+        ) {
+            item(key = "header") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
+                    if (!readOnly) {
+                        Button(
+                            onClick = { onNavigate(ScreenTarget.PrescriptionEdit()) },
+                            shape = FieldShape,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("新建处方", fontSize = 13.sp)
+                        }
                     }
                 }
-            }
-            Spacer(Modifier.height(12.dp))
-            SearchBarField(
-                keyword,
-                {
-                    keyword = it
-                    page = 1
-                    if (it.isBlank()) reload++
-                },
-                "搜索患者姓名、手机号、处方号或医生",
-                onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SegmentedButton("全部状态", status == null, onClick = { status = null; page = 1 })
-                SegmentedButton("进行中", status == 0, onClick = { status = 0; page = 1 })
-                SegmentedButton("已完成", status == 1, onClick = { status = 1; page = 1 })
-                SegmentedButton("已取消", status == 2, onClick = { status = 2; page = 1 })
-            }
-        }
-
-        if (doctors.isNotEmpty()) {
-            item(key = "doctors_filter") {
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SegmentedButton("全部医生", doctorId == null, onClick = { doctorId = null; page = 1 })
-                    doctors.forEach { doctor ->
-                        val doctorValue = doctor.optInt("id")
-                        SegmentedButton(doctor.displayField("name", "医生"), doctorId == doctorValue, onClick = { doctorId = doctorValue; page = 1 })
-                    }
-                }
-            }
-        }
-
-        if (isSuperAdmin(user) && stores.isNotEmpty()) {
-            item(key = "stores_filter") {
-                Spacer(Modifier.height(8.dp))
-                StoreChipsRow(stores, selectedStoreId, onSelectStore = { selectedStoreId = it; page = 1 })
-            }
-        }
-
-        if (error != null) {
-            item(key = "error") {
-                Spacer(Modifier.height(14.dp))
-                ErrorStateView(message = error!!, onRetry = { reload++ })
-            }
-        }
-
-        if (loading && items != null) {
-            item(key = "revalidating_indicator") {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = Primary,
-                    trackColor = Primary.copy(alpha = 0.12f),
+                Spacer(Modifier.height(12.dp))
+                SearchBarField(
+                    keyword,
+                    {
+                        viewModel.updateFilters(newKeyword = it)
+                        if (it.isBlank()) items.refresh()
+                    },
+                    "搜索患者姓名、手机号、处方号或医生",
+                    onSearch = { lastAutoKeyword = keyword.trim(); items.refresh() },
                 )
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("全部状态", status == null, onClick = { viewModel.updateFilters(newStatus = null) })
+                    SegmentedButton("进行中", status == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code, onClick = { viewModel.updateFilters(newStatus = com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) })
+                    SegmentedButton("已完成", status == com.tcm.admin.PrescriptionStatus.COMPLETED.code, onClick = { viewModel.updateFilters(newStatus = com.tcm.admin.PrescriptionStatus.COMPLETED.code) })
+                    SegmentedButton("已取消", status == com.tcm.admin.PrescriptionStatus.CANCELLED.code, onClick = { viewModel.updateFilters(newStatus = com.tcm.admin.PrescriptionStatus.CANCELLED.code) })
+                }
             }
-        }
 
-        if (items == null && error == null) {
-            item(key = "loading") {
-                Spacer(Modifier.height(14.dp))
-                AppEmptyState("正在加载处方列表...")
-            }
-        }
-
-        if (items != null && items!!.isEmpty()) {
-            item(key = "empty") {
-                Spacer(Modifier.height(14.dp))
-                AppEmptyState("暂无匹配处方", onRetry = { reload++ })
-            }
-        }
-
-        if (items != null && items!!.isNotEmpty()) {
-            item(key = "items_spacer_top") {
-                Spacer(Modifier.height(14.dp))
-            }
-            items(items!!, key = { it.optInt("id") }) { item ->
-                val plans = item.optJSONArray("plans") ?: JSONArray()
-                val remainingDose = (item.optInt("totalDose", 0) - item.optInt("takenDose", 0)).coerceAtLeast(0)
-                AppCard(modifier = Modifier.padding(bottom = 12.dp), onClick = { onNavigate(ScreenTarget.PrescriptionDetail(item.optInt("id"))) }) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(item.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
-                            Text(item.displayField("prescriptionNo"), color = Muted, fontSize = 12.sp)
-                        }
-                        StatusPill(prescriptionStatusLabel(item.optInt("status")))
-                    }
+            if (doctors.isNotEmpty()) {
+                item(key = "doctors_filter") {
                     Spacer(Modifier.height(8.dp))
-                    InfoRowItem("联系电话", maskPhone(item.displayField("phone", "")))
-                    InfoRowItem("主治医生", item.optJSONObject("doctor")?.displayField("name") ?: "-")
-                    InfoRowItem("剂数进度", "${quantityText(item.opt("takenDose"), "0")} / ${quantityText(item.opt("totalDose"), "0")} 剂（余 $remainingDose 剂）")
-                    InfoRowItem("加工批次", "${plans.length()} 批")
-                    if (isSuperAdmin(user)) {
-                        item.optJSONObject("store")?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("所属门店", it) }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                        if (!readOnly && item.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
-                            Spacer(Modifier.width(6.dp))
-                            Button(
-                                onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject().put("prescriptionId", item.optInt("id")).put("prescription", item))) },
-                                shape = FieldShape,
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                            ) { Text("新增加工", fontSize = 12.sp) }
-                        }
-
-                        if (!readOnly && item.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
-                            Spacer(Modifier.width(6.dp))
-                            OutlinedButton(
-                                onClick = { onNavigate(ScreenTarget.PrescriptionEdit(item)) },
-                                shape = FieldShape,
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            ) { Text("编辑", fontSize = 12.sp) }
-                        }
-                        if (!readOnly && plans.length() == 0) {
-                            Spacer(Modifier.width(6.dp))
-                            OutlinedButton(
-                                onClick = { deleteTarget = item },
-                                shape = FieldShape,
-                                modifier = Modifier.height(32.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            ) {
-                                Icon(Icons.Default.Delete, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(2.dp))
-                                Text("删除", fontSize = 12.sp)
-                            }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SegmentedButton("全部医生", doctorId == null, onClick = { viewModel.updateFilters(newDoctorId = null) })
+                        doctors.forEach { doctor ->
+                            val doctorValue = doctor.optInt("id")
+                            SegmentedButton(doctor.displayField("name", "医生"), doctorId == doctorValue, onClick = { viewModel.updateFilters(newDoctorId = doctorValue) })
                         }
                     }
                 }
             }
-        }
 
-        if (items != null && pages > 1) {
-            item(key = "pagination") {
-                AppPagination(page = page, pages = pages, onPrev = { page-- }, onNext = { page++ })
-                Spacer(Modifier.height(20.dp))
+            if (isSuperAdmin(user) && stores.isNotEmpty()) {
+                item(key = "stores_filter") {
+                    Spacer(Modifier.height(8.dp))
+                    StoreChipsRow(stores, selectedStoreId?.toString() ?: "", onSelectStore = { viewModel.updateFilters(newStoreId = it.toIntOrNull()) })
+                }
+            }
+            
+            val loadState = items.loadState.refresh
+            if (loadState is LoadState.Error) {
+                item(key = "error") {
+                    Spacer(Modifier.height(14.dp))
+                    ErrorStateView(message = loadState.error.message ?: "加载处方失败", onRetry = { items.retry() })
+                }
+            }
+
+            if (loadState is LoadState.Loading && items.itemCount == 0) {
+                item(key = "revalidating_indicator") {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = Primary,
+                        trackColor = Primary.copy(alpha = 0.12f),
+                    )
+                }
+            } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
+                item(key = "empty") {
+                    Spacer(Modifier.height(32.dp))
+                    AppEmptyState(if (keyword.isNotBlank()) "没有找到包含 “$keyword” 的处方" else "暂无处方")
+                }
+            }
+
+            items(
+                count = items.itemCount,
+                key = items.itemKey { it.optInt("id") }
+            ) { index ->
+                val item = items[index]
+                if (item != null) {
+                    Spacer(Modifier.height(12.dp))
+                    PrescriptionCard(
+                        item = item,
+                        onClick = { onNavigate(ScreenTarget.PrescriptionDetail(item.optInt("id"))) },
+                        onDelete = { deleteTarget = item }
+                    )
+                }
+            }
+            
+            if (items.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Spacer(Modifier.height(16.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
             }
         }
     }
-    deleteTarget?.let { target -> AlertDialog(
-        onDismissRequest = { if (!deleting) deleteTarget = null }, title = { Text("删除处方") },
-        text = { Text("确认删除处方 ${target.displayField("prescriptionNo")}？删除后无法恢复。") },
-        confirmButton = { Button(enabled = !deleting, onClick = { deleting = true; scope.launch {
-            runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescription(target.optInt("id")) } }
-                .onSuccess { deleteTarget = null; page = 1; reload++ }
-                .onFailure { error = it.message ?: "删除处方失败" }
-            deleting = false
-        } }) { Text(if (deleting) "删除中..." else "确认删除") } },
-        dismissButton = { TextButton(enabled = !deleting, onClick = { deleteTarget = null }) { Text("取消") } },
-    ) }
+
+    if (deleteTarget != null) {
+        val name = deleteTarget!!.displayField("patientName", "患者")
+        AppAlertDialog(
+            title = "删除处方",
+            text = "确定要删除 $name 的处方吗？此操作不可撤销。",
+            confirmText = "确认删除",
+            dismissText = "取消",
+            isDanger = true,
+            onConfirm = {
+                if (deleting) return@AppAlertDialog
+                deleting = true
+                scope.launch {
+                    runCatching { viewModel.deletePrescription(deleteTarget!!.optInt("id")) }
+                        .onSuccess {
+                            deleting = false
+                            deleteTarget = null
+                            items.refresh()
+                        }
+                        .onFailure {
+                            deleting = false
+                            Toast.makeText(context, it.message ?: "删除失败", Toast.LENGTH_SHORT).show()
+                        }
+                }
+            },
+            onDismiss = { deleteTarget = null }
+        )
     }
 }
 
-@Composable
 internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
     val readOnly = isStoreStaff(user)
     val context = LocalContext.current
