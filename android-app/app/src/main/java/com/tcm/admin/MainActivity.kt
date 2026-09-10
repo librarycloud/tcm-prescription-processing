@@ -222,17 +222,11 @@ private fun TcmAdminApp() {
             popUpTo<Route.Inventory> { inclusive = true }
         }
     }
-} else {
-            backStack.add(target)
-        }
     }
 
     fun navigateBack(): Boolean {
     return navController.popBackStack()
-} else {
-            false
-        }
-    }
+}
 
     fun switchTab(target: Route) {
     navController.navigate(target) {
@@ -278,15 +272,6 @@ private fun TcmAdminApp() {
             Toast.makeText(appContext, "再按一次退出应用", Toast.LENGTH_SHORT).show()
         }
     }
-} else {
-            val now = System.currentTimeMillis()
-            if (now - lastBackPressTime < 2000L) {
-                activity?.finish()
-            } else {
-                lastBackPressTime = now
-                Toast.makeText(appContext, "再按一次退出应用", Toast.LENGTH_SHORT).show()
-            }
-        }
     }
 
     val currentAccent = remember(themeAccentKey, customColorHex) {
