@@ -976,7 +976,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
     }
 }
 
-private fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri) {
+private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri) {
     val cursor = context.contentResolver.query(uri, null, null, null, null)
     val name = cursor?.use {
         if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null

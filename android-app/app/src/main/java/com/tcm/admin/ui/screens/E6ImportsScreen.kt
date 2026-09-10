@@ -413,7 +413,7 @@ internal fun E6ImportsScreen(
 
             if (error != null) {
                 item(key = "error") {
-                    ErrorStateView(message = error!!, onRetry = { reload++ })
+                    ErrorStateView(message = error!!, onRetry = { scope.launch { refreshFromServer() } })
                 }
             }
 

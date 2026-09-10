@@ -1214,7 +1214,7 @@ internal fun ProcessingPlanFormScreen(
         }
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            ErrorStateView(message = error!!, onRetry = { reload++ })
+            ErrorStateView(message = error!!, onRetry = { error = null })
         }
         Spacer(Modifier.height(16.dp))
         Button(
@@ -1884,7 +1884,7 @@ internal fun WorkflowOperationScreen(
             Spacer(Modifier.height(10.dp))
             Surface(color = DangerSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    ErrorStateView(message = error!!, onRetry = { reload++ })
+                    ErrorStateView(message = error!!, onRetry = { error = null })
                     occupyingPlanTarget?.let { occPlan ->
                         Spacer(Modifier.height(8.dp))
                         OccupyingPlanCard(
@@ -3008,7 +3008,7 @@ internal fun WorkflowOperationDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (error != null) {
-                    ErrorStateView(message = error!!, onRetry = { reload++ })
+                    ErrorStateView(message = error!!, onRetry = { error = null })
                     Spacer(Modifier.height(8.dp))
                 }
                 Text("工序阶段选择", color = Muted, fontSize = 12.sp)

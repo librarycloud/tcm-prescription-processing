@@ -407,7 +407,7 @@ object ApiClient {
         val paged = runCatching { processingPlansPaged(view = "all", keyword = cleanCode, pageSize = 1) }.getOrNull()
         return paged?.optJSONArray("list")?.optJSONObject(0)
     }
-    suspend fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
+    fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
         val cacheDir = File(context.applicationContext.cacheDir, "processing-photos")
         val legacyDir = File(context.applicationContext.filesDir, "processing-photos")
         if (planId != null && photoId != null) {
@@ -582,13 +582,13 @@ object ApiClient {
         }
         return data
     }
-    suspend fun clearE6ImportCache(context: Context) {
+    fun clearE6ImportCache(context: Context) {
         context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
             .edit()
             .remove(E6_IMPORT_CACHE_KEY)
             .apply()
     }
-    suspend fun clearResponseCache(context: Context? = cacheContext) {
+    fun clearResponseCache(context: Context? = cacheContext) {
         synchronized(memoryCache) { memoryCache.clear() }
         val ctx = context ?: cacheContext ?: return
         runCatching {
@@ -606,7 +606,7 @@ object ApiClient {
         }
     }
 
-    internal suspend fun sanitizePrefix(route: String): String =
+    internal fun sanitizePrefix(route: String): String =
         route.trim('/').replace('/', '_')
 
     fun invalidateCachedRoutes(prefixes: List<String>, context: Context? = cacheContext) {
@@ -930,7 +930,7 @@ object ApiClient {
         return runCatching { JSONObject(entry.data) }.getOrNull()
     }
 
-    internal suspend fun cacheKey(path: String): String {
+    internal fun cacheKey(path: String): String {
         val route = path.substringBefore('?')
         val prefix = sanitizePrefix(route)
         val hash = MessageDigest

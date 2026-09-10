@@ -712,7 +712,7 @@ internal fun PackageFormScreen(
 
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            ErrorStateView(message = error!!, onRetry = { reload++ })
+            ErrorStateView(message = error!!, onRetry = { error = null })
         }
 
         Spacer(Modifier.height(24.dp))
@@ -846,7 +846,7 @@ internal fun PackageVerifyScreen(
 
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            ErrorStateView(message = error!!, onRetry = { reload++ })
+            ErrorStateView(message = error!!, onRetry = { error = null })
         }
 
         Spacer(Modifier.height(24.dp))
