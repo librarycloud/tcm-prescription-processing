@@ -178,7 +178,7 @@ private fun TcmAdminApp() {
     }
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
-    val processingScrollState = rememberScrollState()
+    val processingListState = rememberLazyListState()
     val packagesListState = rememberLazyListState()
     val herbsListState = rememberHerbsListState()
     val profileScrollState = rememberScrollState()
@@ -410,11 +410,11 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, processingScrollState) {
+                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = processingListState) {
                     ProcessingScreenV2(
                         user = session?.user,
                         onNavigate = ::navigateTo,
-                        scrollState = processingScrollState,
+                        listState = processingListState,
                     )
                 }
                 is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
