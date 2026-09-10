@@ -19,6 +19,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "21"
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+        )
     }
 
     val configuredApiBaseUrl = providers.gradleProperty("API_BASE_URL")

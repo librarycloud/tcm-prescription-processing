@@ -69,7 +69,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ProcessingScreenV2(
     user: JSONObject?,
@@ -523,6 +523,7 @@ internal fun ProcessingScreenV2(
                                 Spacer(Modifier.height(8.dp))
 
                                 // Plan Actions
+                                @OptIn(ExperimentalLayoutApi::class)
                                 FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
