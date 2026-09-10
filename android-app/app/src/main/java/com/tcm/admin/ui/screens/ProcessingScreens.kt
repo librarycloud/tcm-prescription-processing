@@ -91,12 +91,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import androidx.paging.LoadState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.tcm.admin.ui.viewmodels.ProcessingViewModel
 
 import androidx.compose.ui.window.Dialog
@@ -177,7 +180,7 @@ internal fun ProcessingScreenV2(
     val activeView by viewModel.activeView.collectAsStateWithLifecycle()
     val pickupStatus by viewModel.pickupStatus.collectAsStateWithLifecycle()
     val keyword = if (mode == "plans") viewModel.plansKeyword.collectAsStateWithLifecycle().value else viewModel.pickupKeyword.collectAsStateWithLifecycle().value
-    val selectedStoreId = if (mode == "plans") viewModel.plansStoreId.collectAsStateWithLifecycle().value else viewModel.pickupStoreId.collectAsStateWithLifecycle().value
+    val selectedStoreId = if (mode == "plans") viewModel.plansStoreId.collectAsStateWithLifecycle().value?.toString() else viewModel.pickupStoreId.collectAsStateWithLifecycle().value?.toString()
     
     val stores by viewModel.stores.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
@@ -186,9 +189,9 @@ internal fun ProcessingScreenV2(
     val pickupItems = viewModel.pickupFlow.collectAsLazyPagingItems()
 
     var lastAutoKeyword by remember { mutableStateOf("") }
-    var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
     var quickScanTargetPlan by remember { mutableStateOf<JSONObject?>(null) }
     var quickScanPromptData by remember { mutableStateOf<QuickScanPromptData?>(null) }
+    var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -203,8 +206,12 @@ internal fun ProcessingScreenV2(
                     context = context,
                     plan = targetPlan,
                     scanned = scanned,
-                    onSuccess = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() },
-                    onPrompt = { prompt -> quickScanPromptData = prompt },
+                    onSuccess = { msg ->
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    },
+                    onPrompt = { prompt ->
+                        quickScanPromptData = prompt
+                    },
                 )
             }
         }
@@ -230,7 +237,7 @@ internal fun ProcessingScreenV2(
     }
     
     LaunchedEffect(selectedStoreId, activeView, pickupStatus, mode) {
-        viewModel.refreshStats(selectedStoreId)
+        viewModel.refreshStats(selectedStoreId?.toIntOrNull())
     }
 
     LaunchedEffect(keyword, mode) {
@@ -245,7 +252,7 @@ internal fun ProcessingScreenV2(
             if (mode == "plans") plansItems.refresh() else pickupItems.refresh()
         }
     }
-
+    
     val currentItemsRefreshState = if (mode == "plans") plansItems.loadState.refresh else pickupItems.loadState.refresh
     val isRefreshing = currentItemsRefreshState is LoadState.Loading
 
@@ -255,472 +262,573 @@ internal fun ProcessingScreenV2(
             onRefresh = {
                 ApiClient.clearResponseCache(context)
                 if (mode == "plans") plansItems.refresh() else pickupItems.refresh()
-                viewModel.refreshStats(selectedStoreId)
+                viewModel.refreshStats(selectedStoreId?.toIntOrNull())
             },
             modifier = Modifier.fillMaxSize(),
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+        ) {
+            item(key = "header") {
+        // Top Action Bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                modifier = Modifier.weight(1f).height(CompactControlHeight),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
             ) {
-                item(key = "header") {
-                    // Top Action Bar
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                            modifier = Modifier.weight(1f).height(CompactControlHeight),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
-                        ) {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("扫码作业", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        }
-                        if (mode != "pickup") {
-                            Button(
-                                onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject())) },
-                                modifier = Modifier.weight(1f).height(CompactControlHeight),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("扫码作业", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            if (mode != "pickup") {
+                Button(
+                    onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject())) },
+                    modifier = Modifier.weight(1f).height(CompactControlHeight),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("新建加工计划", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // Mode Switch: 加工计划 vs 领取列表
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SegmentedButton(
+                label = "加工计划",
+                selected = mode == "plans",
+                onClick = { viewModel.mode.value = "plans" },
+                modifier = Modifier.weight(1f),
+                centerLabel = true,
+            )
+            SegmentedButton(
+                label = "领取列表",
+                selected = mode == "pickup",
+                onClick = { viewModel.mode.value = "pickup" },
+                modifier = Modifier.weight(1f),
+                centerLabel = true,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // In "plans" mode, show interactive stats grid
+        if (mode == "plans") {
+            val statItems = listOf(
+                "今日全部" to (todayAllStat(stats) to "today-all"),
+                "今日待加工" to (stat(stats, "waitingCount") to "today-waiting"),
+                "逾期未开工" to (stat(stats, "overdueCount") to "overdue"),
+                "加工中" to (stat(stats, "processingCount") to "processing"),
+                "等待顾客" to (stat(stats, "waitingNoticeCount") to "notice"),
+                // The API uses `tomorrow` for the next-day date filter. Using a
+                // different key here leaves the server view unfiltered.
+                "明日加工" to (stat(stats, "tomorrowWaitingCount") to "tomorrow"),
+                "全部" to (stat(stats, "processingPlanTotalCount") to "all"),
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                statItems.chunked(4).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.forEach { (label, pair) ->
+                            val (value, viewKey) = pair
+                            val isSelected = activeView == viewKey
+                            val isPositive = value != "0" && value != "-"
+                            val isAlert = label.contains("逾期") || label.contains("等待")
+
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(64.dp),
+                                shape = CardShape,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
+                                ),
+                                border = BorderStroke(
+                                    if (isSelected) 1.5.dp else 1.dp,
+                                    if (isSelected) Primary else CardBorderColor,
+                                ),
+                                onClick = { if (activeView != viewKey) viewModel.activeView.value = viewKey },
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("新建加工计划", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    // Mode Switch
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedButton(
-                            label = "加工计划",
-                            selected = mode == "plans",
-                            onClick = { viewModel.mode.value = "plans" },
-                            modifier = Modifier.weight(1f),
-                            centerLabel = true,
-                        )
-                        SegmentedButton(
-                            label = "领取列表",
-                            selected = mode == "pickup",
-                            onClick = { viewModel.mode.value = "pickup" },
-                            modifier = Modifier.weight(1f),
-                            centerLabel = true,
-                        )
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    if (mode == "plans") {
-                        val statItems = listOf(
-                            "今日全部" to (todayAllStat(stats) to "today-all"),
-                            "今日待加工" to (stat(stats, "waitingCount") to "today-waiting"),
-                            "逾期未开工" to (stat(stats, "overdueCount") to "overdue"),
-                            "加工中" to (stat(stats, "processingCount") to "processing"),
-                            "等待顾客" to (stat(stats, "waitingNoticeCount") to "notice"),
-                            "明日加工" to (stat(stats, "tomorrowWaitingCount") to "tomorrow"),
-                            "全部" to (stat(stats, "processingPlanTotalCount") to "all"),
-                        )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            statItems.chunked(4).forEach { row ->
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    row.forEach { (label, pair) ->
-                                        val (value, viewKey) = pair
-                                        val isSelected = activeView == viewKey
-                                        val isPositive = value != "0" && value != "-"
-                                        val isAlert = label.contains("逾期") || label.contains("等待")
-
-                                        Card(
-                                            modifier = Modifier.weight(1f).height(64.dp),
-                                            shape = CardShape,
-                                            colors = CardDefaults.cardColors(containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface),
-                                            border = BorderStroke(if (isSelected) 1.5.dp else 1.dp, if (isSelected) Primary else CardBorderColor),
-                                            onClick = { if (activeView != viewKey) viewModel.activeView.value = viewKey },
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.fillMaxSize().padding(horizontal = 7.dp, vertical = 4.dp),
-                                                verticalArrangement = Arrangement.Center,
-                                            ) {
-                                                Text(
-                                                    text = value,
-                                                    fontSize = 17.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = when {
-                                                        !isPositive -> Ink
-                                                        isAlert -> Danger
-                                                        label.contains("完成") -> Success
-                                                        else -> Primary
-                                                    },
-                                                )
-                                                Spacer(Modifier.height(2.dp))
-                                                Text(
-                                                    text = label,
-                                                    color = if (isSelected) Primary else Muted,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                                )
-                                            }
-                                        }
-                                    }
-                                    if (row.size < 4) {
-                                        repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(14.dp))
-                    } else {
-                        val pickupStatItems = listOf(
-                            "等待药材" to (stat(stats, "pickupWaitingCount") to 0),
-                            "已领取药材" to (stat(stats, "pickupReceivedCount") to 1),
-                        )
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            pickupStatItems.forEach { (label, pair) ->
-                                val (value, status) = pair
-                                val isSelected = pickupStatus == status
-                                Card(
-                                    modifier = Modifier.weight(1f).height(64.dp),
-                                    shape = CardShape,
-                                    colors = CardDefaults.cardColors(containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface),
-                                    border = BorderStroke(if (isSelected) 1.5.dp else 1.dp, if (isSelected) Primary else CardBorderColor),
-                                    onClick = { if (pickupStatus != status) viewModel.pickupStatus.value = status },
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                                    verticalArrangement = Arrangement.Center,
                                 ) {
-                                    Column(
-                                        modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalArrangement = Arrangement.Center,
-                                    ) {
-                                        Text(
-                                            text = value,
-                                            fontSize = 17.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) Primary else Ink,
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                        Text(
-                                            text = label,
-                                            color = if (isSelected) Primary else Muted,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                        )
-                                    }
+                                    Text(
+                                        text = value,
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = when {
+                                            !isPositive -> Ink
+                                            isAlert -> Danger
+                                            label.contains("完成") -> Success
+                                            else -> Primary
+                                        },
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Primary else Muted,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
                                 }
-                            }
-                        }
-                        Spacer(Modifier.height(14.dp))
-                    }
-
-                    SearchBarField(
-                        value = keyword,
-                        onValueChange = {
-                            if (mode == "plans") viewModel.plansKeyword.value = it else viewModel.pickupKeyword.value = it
-                            if (it.isBlank()) { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
-                        },
-                        placeholder = "搜索顾客姓名、手机号或备注",
-                        onSearch = { lastAutoKeyword = keyword.trim(); if (mode == "plans") plansItems.refresh() else pickupItems.refresh() },
-                    )
-
-                    if (showStore && stores.size > 1) {
-                        Spacer(Modifier.height(8.dp))
-                        val storeOptions = listOf(JSONObject().put("id", "").put("name", "全部")) + stores
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            storeOptions.chunked(3).forEach { row ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    row.forEach { store ->
-                                        val sid = store.opt("id")?.toString()?.takeIf { it.isNotBlank() }
-                                        val isSelected = selectedStoreId?.toString() == sid
-                                        FilterChip(
-                                            selected = isSelected,
-                                            onClick = { 
-                                                val idInt = sid?.toIntOrNull()
-                                                if (mode == "plans") viewModel.plansStoreId.value = idInt else viewModel.pickupStoreId.value = idInt 
-                                            },
-                                            label = { Text(store.displayField("name", "")) },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    if (row.size < 3) {
-                                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                }
-
-                if (currentItemsRefreshState is LoadState.Error) {
-                    item(key = "error") {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.05f)),
-                            border = BorderStroke(0.5.dp, Danger.copy(alpha = 0.4f)),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        ) {
-                            ErrorStateView(message = currentItemsRefreshState.error.message ?: "加载失败", onRetry = { if (mode == "plans") plansItems.retry() else pickupItems.retry() })
-                        }
-                    }
-                }
-
-                if (mode == "plans") {
-                    if (currentItemsRefreshState is LoadState.Loading && plansItems.itemCount == 0) {
-                        item(key = "loading_plans") {
-                            Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
-                            }
-                        }
-                    } else if (plansItems.itemCount == 0 && currentItemsRefreshState !is LoadState.Error && currentItemsRefreshState !is LoadState.Loading) {
-                        item(key = "empty_plans") {
-                            AppEmptyState("暂无加工计划")
-                        }
-                    }
-
-                    items(count = plansItems.itemCount, key = plansItems.itemKey { it.optInt("id") }) { index ->
-                        val plan = plansItems[index]
-                        if (plan != null) {
-                            val prescription = plan.optJSONObject("prescription")
-                            val processType = plan.optJSONObject("processType")
-                            val store = plan.optJSONObject("store")
-                            val customerName = plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "-" }
-                            val phone = plan.displayField("customerPhone", "").ifBlank { prescription?.displayField("phone") ?: "-" }
-                            val doctorName = plan.displayField("doctorName", "").ifBlank { prescription?.optJSONObject("doctor")?.displayField("name") ?: "-" }
-                            val isUrgent = plan.optBoolean("isUrgent") || plan.optInt("isUrgent") == 1
-                            val status = plan.optInt("status")
-                            val batchNo = plan.optInt("batchNo", 1)
-                            val totalDose = plan.optInt("totalDose", 0)
-                            val bagCount = plan.optInt("bagCount", 0)
-                            val volumeMl = plan.optInt("volumeMl", 0)
-                            val pickupMethod = plan.optInt("pickupMethod", 0)
-                            val scheduleDate = serverDateOnly(plan.opt("processDate"), "")
-
-                            AppCard(
-                                modifier = Modifier.padding(bottom = 12.dp),
-                                onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, plan.optString("currentStep", "START"), "START")) },
-                            ) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                                    Column(Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (isUrgent) {
-                                                Surface(color = Danger, shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(end = 6.dp)) {
-                                                    Text("加急", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                                                }
-                                            }
-                                            Text(customerName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(maskPhone(phone), fontSize = 13.sp, color = Muted)
-                                        }
-                                        Spacer(Modifier.height(4.dp))
-                                        Text("${processType?.displayField("name") ?: "未知工艺"} / 第 $batchNo 批", color = Muted, fontSize = 12.sp)
-                                    }
-                                    StatusPill(processingStatusLabel(status))
-                                }
-
-                                Spacer(Modifier.height(10.dp))
-                                val specs = mutableListOf<String>()
-                                if (totalDose > 0) specs.add("$totalDose 剂")
-                                if (bagCount > 0) specs.add("$bagCount 袋")
-                                if (volumeMl > 0) specs.add("$volumeMl ml/袋")
-                                InfoRowItem("加工规格", specs.joinToString(" / ").ifBlank { "-" })
-                                InfoRowItem("加工时间", scheduleDate)
-                                InfoRowItem("处方医生", doctorName)
-                                if (showStore) InfoRowItem("门店", store?.displayField("name") ?: "-")
-
-                                val reqType = plan.optInt("requestType", 0)
-                                val pNo = plan.displayField("processingNo", "")
-                                if (reqType == 1 && pNo.isNotBlank()) {
-                                    InfoRowItem("外发单号", pNo)
-                                }
-
-                                Spacer(Modifier.height(12.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (pickupMethod == 1) {
-                                            Icon(Icons.Default.LocalShipping, contentDescription = "邮寄", tint = Primary, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("需要发货物流", color = Primary, fontSize = 12.sp)
-                                        } else {
-                                            Icon(Icons.Default.Storefront, contentDescription = "自提", tint = Muted, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("顾客到店自提", color = Muted, fontSize = 12.sp)
-                                        }
-                                    }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (status == 1 && pickupMethod == 1) {
-                                            OutlinedButton(
-                                                onClick = { generatePackagePlan = plan },
-                                                shape = FieldShape,
-                                                modifier = Modifier.height(32.dp),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                            ) { Text("生成物流包裹", fontSize = 12.sp) }
-                                        }
-
-                                        val currentStep = plan.optString("currentStep", "")
-                                        if (currentStep.isNotBlank() && currentStep != "START" && currentStep != "FINISH") {
-                                            Button(
-                                                onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, currentStep, "RESUME")) },
-                                                shape = FieldShape,
-                                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                                                modifier = Modifier.height(32.dp),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                            ) { Text("继续加工", fontSize = 12.sp) }
-                                        }
-                                        OutlinedButton(
-                                            onClick = { quickScanTargetPlan = plan; planQuickScanLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                                            shape = FieldShape,
-                                            modifier = Modifier.height(32.dp),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                        ) {
-                                            Icon(Icons.Default.QrCodeScanner, null, Modifier.size(14.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("扫码快速录入", fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (plansItems.loadState.append is LoadState.Loading) {
-                        item(key = "append_loading_plans") {
-                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
-                            }
-                        }
-                    }
-
-                } else {
-                    if (currentItemsRefreshState is LoadState.Loading && pickupItems.itemCount == 0) {
-                        item(key = "loading_pickup") {
-                            Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
-                            }
-                        }
-                    } else if (pickupItems.itemCount == 0 && currentItemsRefreshState !is LoadState.Error && currentItemsRefreshState !is LoadState.Loading) {
-                        item(key = "empty_pickup") {
-                            AppEmptyState(if (pickupStatus == 0) "暂无待领取的药材" else "暂无已领取记录")
-                        }
-                    }
-
-                    items(count = pickupItems.itemCount, key = pickupItems.itemKey { it.id }) { index ->
-                        val item = pickupItems[index]
-                        if (item != null) {
-                            PackageSummaryCard(
-                                item = item,
-                                showStore = showStore,
-                                modifier = Modifier.padding(bottom = 12.dp),
-                                onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                                onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
-                            )
-                        }
-                    }
-                    if (pickupItems.loadState.append is LoadState.Loading) {
-                        item(key = "append_loading_pickup") {
-                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
                             }
                         }
                     }
                 }
             }
+            Spacer(Modifier.height(14.dp))
+        } else {
+            val pickupStatItems = listOf(
+                "待领取" to (stat(stats, "pendingCount") to 0),
+                "已领取" to (stat(stats, "pickedCount") to 1),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pickupStatItems.forEach { (label, pair) ->
+                    val (value, status) = pair
+                    val isSelected = pickupStatus == status
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
+                        ),
+                        border = BorderStroke(
+                            if (isSelected) 1.5.dp else 1.dp,
+                            if (isSelected) Primary else CardBorderColor,
+                        ),
+                        onClick = { if (pickupStatus != status) viewModel.pickupStatus.value = status },
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = value,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Primary else Ink,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = label,
+                                color = if (isSelected) Primary else Muted,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
         }
 
-        // Quick Scan Flow Overlays
-        quickScanPromptData?.let { prompt ->
-            if (prompt.options.isNotEmpty()) {
-                AlertDialog(
-                    onDismissRequest = { quickScanPromptData = null },
-                    title = { Text(prompt.message, fontSize = 16.sp) },
-                    text = {
-                        Column {
-                            prompt.options.forEach { option ->
+        // Search Field
+        SearchBarField(
+            value = keyword,
+            onValueChange = {
+                if (mode == "plans") viewModel.plansKeyword.value = it else viewModel.pickupKeyword.value = it
+                if (it.isBlank()) { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+            },
+            placeholder = "搜索顾客姓名、手机号或备注",
+            onSearch = { lastAutoKeyword = keyword.trim(); if (mode == "plans") plansItems.refresh() else pickupItems.refresh() },
+        )
+
+        // Store chips stay compact and wrap naturally below the search field.
+        if (showStore && stores.size > 1) {
+            Spacer(Modifier.height(8.dp))
+            val storeOptions = listOf(JSONObject().put("id", "").put("name", "全部")) + stores
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                storeOptions.chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val chipWeight = Modifier.weight(1f)
+                        row.forEach { store ->
+                            val id = store.displayField("id", "")
+                            SegmentedButton(store.displayField("name", "门店"), selectedStoreId == id, { selectedStoreId = id; page = 1; reload++ }, chipWeight)
+                        }
+                        repeat(3 - row.size) { Spacer(chipWeight) }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // Error Banner
+        if (error != null) {
+            Surface(
+                color = DangerSoft,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(0.5.dp, Danger.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            ) {
+                ErrorStateView(message = error!!, onRetry = { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() })
+            }
+        }
+
+
+
+        // Processing Plans List
+        if (mode == "plans") {
+            if (currentItemsRefreshState is LoadState.Loading && plansItems.itemCount == 0) {
+                item(key = "loading_plans") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+                    }
+                }
+            } else if (plansItems.itemCount == 0 && currentItemsRefreshState !is LoadState.Error && currentItemsRefreshState !is LoadState.Loading) {
+                item(key = "empty_plans") {
+                    AppEmptyState("暂无加工计划")
+                }
+            }
+
+            items(count = plansItems.itemCount, key = plansItems.itemKey { it.optInt("id") }) { index ->
+                val plan = plansItems[index]
+                if (plan != null) {
+                    val prescription = plan.optJSONObject("prescription")
+                    val processType = plan.optJSONObject("processType")
+                    val store = plan.optJSONObject("store")
+                    val customerName = plan.displayField("customerName", "").ifBlank { prescription?.displayField("customerName") ?: "-" }
+                    val phone = plan.displayField("customerPhone", "").ifBlank { prescription?.displayField("phone") ?: "-" }
+                    val doctorName = plan.displayField("doctorName", "").ifBlank { prescription?.optJSONObject("doctor")?.displayField("name") ?: "-" }
+                    val isUrgent = plan.optBoolean("isUrgent") || plan.optInt("isUrgent") == 1
+                    val status = plan.optInt("status")
+                    val batchNo = plan.optInt("batchNo", 1)
+                    val totalDose = plan.optInt("totalDose", 0)
+                    val bagCount = plan.optInt("bagCount", 0)
+                    val volumeMl = plan.optInt("volumeMl", 0)
+                    val pickupMethod = plan.optInt("pickupMethod", 0)
+                    val scheduleDate = serverDateOnly(plan.opt("processDate"), "")
+                    val isDecoction = processType?.displayField("name", "")?.contains("煎") == true || plan.displayField("processTypeName", "").contains("煎")
+                    val packageCreated = plan.optBoolean("packageCreated") || plan.optInt("packageId", 0) > 0
+
+                    AppCard(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
+                    ) {
+                        // Header Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "$customerName · ${processType?.displayField("name", "加工") ?: "加工"}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Ink,
+                                    )
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "${maskPhone(phone)} · 医生：$doctorName",
+                                    color = Muted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (isUrgent) UrgentBadge()
+                                StatusPill(planStatus(status))
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Spacer(Modifier.height(5.dp))
+
+                        // Detail Rows
+                        InfoRowItem("批次剂数", "第 $batchNo 批 · $totalDose 剂", verticalPadding = 0.dp)
+                        if (isDecoction && bagCount > 0) {
+                            InfoRowItem("代煎规格", "$bagCount 袋 · ${volumeMl}ml", verticalPadding = 0.dp)
+                        }
+                        InfoRowItem("取货方式", pickupMethodLabel(pickupMethod), verticalPadding = 0.dp)
+                        InfoRowItem("计划开工", scheduleDate.ifBlank { "未安排" }, verticalPadding = 0.dp)
+                        if (showStore) {
+                            store?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let {
+                                InfoRowItem("加工门店", it, verticalPadding = 0.dp)
+                            }
+                        }
+                        plan.displayField("startDate", "").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("实际开工", serverDateTime(it), verticalPadding = 0.dp)
+                        }
+                        plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("完成时间", serverDateTime(it), verticalPadding = 0.dp)
+                        }
+                        plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("备注", it, verticalPadding = 0.dp)
+                        }
+                        plan.displayField("processRemark", "").takeIf { it.isNotBlank() }?.let {
+                            InfoRowItem("加工备注", it, verticalPadding = 0.dp)
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Keep plan actions on one compact row without horizontal scrolling.
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // 关联处方查看
+                            val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
+                            if (prescriptionId > 0) {
+                                OutlinedButton(
+                                    onClick = { onNavigate(ScreenTarget.PrescriptionDetail(prescriptionId)) },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Text("处方", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
+
+                            if (status == com.tcm.admin.ProcessingPlanStatus.WAITING.code) { // 待加工
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 1) } }
+                                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+                                                .onFailure { Toast.makeText(context, it.message ?: "开始加工失败", Toast.LENGTH_SHORT).show() }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Text("开始加工", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
                                 OutlinedButton(
                                     onClick = {
                                         scope.launch {
-                                            executeAutoQuickScan(
-                                                context = context,
-                                                plan = prompt.plan,
-                                                scanned = prompt.scanned,
-                                                optionId = option.optInt("id"),
-                                                onSuccess = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() },
-                                                onPrompt = { newPrompt -> quickScanPromptData = newPrompt },
-                                            )
-                                            quickScanPromptData = null
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.delayPlan(plan.optInt("id"), 1) } }
+                                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+                                                .onFailure { Toast.makeText(context, it.message ?: "延期失败", Toast.LENGTH_SHORT).show() }
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    shape = RoundedCornerShape(8.dp)
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
                                 ) {
-                                    Text(option.displayField("name"))
+                                    Text("延期明天", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
+
+                            if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code) { // 加工中：快捷扫码（直接扫码，默认下一步）
+                                Button(
+                                    onClick = {
+                                        quickScanTargetPlan = plan
+                                        planQuickScanLauncher.launch(Intent(context, ScannerActivity::class.java))
+                                    },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("扫码", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
+
+                            if (status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code && !packageCreated) { // 完成但未生成包裹
+                                Button(
+                                    onClick = { generatePackagePlan = plan },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Text("生成包裹", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
+
+                            // 完成、待领取、已领取和已取消的计划不再开放完整编辑。
+                            if (status in 0..1) {
+                                OutlinedButton(
+                                    onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(plan)) },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Text("编辑", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
+
+                            if (status in listOf(0, 1)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { ApiClient.cancelPlan(plan.optInt("id"), "管理员取消") } }
+                                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+                                                .onFailure { Toast.makeText(context, it.message ?: "取消失败", Toast.LENGTH_SHORT).show() }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                ) {
+                                    Text("取消", fontSize = 11.sp, maxLines = 1, softWrap = false)
                                 }
                             }
                         }
-                    },
-                    confirmButton = {},
-                    dismissButton = {
-                        TextButton(onClick = { quickScanPromptData = null }) { Text("取消") }
                     }
-                )
-            } else {
-                AlertDialog(
-                    onDismissRequest = { quickScanPromptData = null },
-                    title = { Text("操作确认") },
-                    text = { Text(prompt.message) },
-                    confirmButton = {
-                        Button(onClick = {
-                            scope.launch {
-                                executeAutoQuickScan(
-                                    context = context,
-                                    plan = prompt.plan,
-                                    scanned = prompt.scanned,
-                                    confirmed = true,
-                                    onSuccess = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() },
-                                    onPrompt = { newPrompt -> quickScanPromptData = newPrompt },
-                                )
-                                quickScanPromptData = null
-                            }
-                        }) { Text("继续") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { quickScanPromptData = null }) { Text("取消") }
                     }
-                )
+                }
+
+                // Pagination
+                if (pages > 1) {
+                    AppPagination(
+                        page = page,
+                        pages = pages,
+                        onPrev = { if (page > 1) page-- },
+                        onNext = { if (page < pages) page++ },
+                    )
+                }
             }
         }
 
-        generatePackagePlan?.let { plan ->
-            val pid = plan.optInt("id")
-            val pNo = plan.displayField("processingNo", "")
-            val cid = plan.optJSONObject("prescription")?.optInt("id") ?: 0
-            AlertDialog(
-                onDismissRequest = { generatePackagePlan = null },
-                title = { Text("生成物流包裹") },
-                text = { Text("将根据此加工计划的处方及代煎信息，自动生成一个待发货的物流包裹记录。") },
-                confirmButton = {
-                    Button(onClick = {
-                        generatePackagePlan = null
-                        onNavigate(
-                            ScreenTarget.PackageForm(
-                                initial = PackageItem(
-                                    id = 0,
-                                    code = "",
-                                    status = 0,
-                                    type = 2,
-                                    metadata = JSONObject().put("prescriptionId", cid).put("processingPlanId", pid).put("sourceNote", "加工单: $pNo"),
-                                    createdAt = "",
-                                )
-                            )
+        // Pickup List
+        if (mode == "pickup" && (!loading || hasExistingPickup)) {
+            if (currentPickup == null || currentPickup.isEmpty()) {
+                if (!loading) AppEmptyState(if (pickupStatus == 0) "暂无待领取记录" else "暂无已领取记录")
+            } else {
+                currentPickup.forEach { item ->
+                    key(item.id) {
+                        PackageSummaryCard(
+                            item = item,
+                            showStore = showStore,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
+                            onVerify = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
+                                        .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+                                        .onFailure { Toast.makeText(context, it.message ?: "核销失败", Toast.LENGTH_SHORT).show() }
+                                }
+                            },
                         )
-                    }) { Text("前往生成") }
-                },
-                dismissButton = {
-                    OutlinedButton(onClick = { generatePackagePlan = null }) { Text("取消") }
-                },
+                    }
+            }
+            if (pickupItems.loadState.append is LoadState.Loading) {
+                item(key = "append_loading_pickup") {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
+            }
+        }
+    } // LazyColumn
+    } // PullToRefreshBox
+
+    generatePackagePlan?.let { plan ->
+        var packageRemark by remember(plan) {
+            mutableStateOf(
+                plan.displayField("processRemark", "")
+                    .ifBlank { plan.displayField("remark", "") },
             )
         }
+        AlertDialog(
+            onDismissRequest = { generatePackagePlan = null },
+            title = { Text("生成包裹") },
+            text = {
+                Column {
+                    Text("该加工计划已完成，确认生成待领取包裹吗？")
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = packageRemark,
+                        onValueChange = { packageRemark = it.take(500) },
+                        label = { Text("包裹备注") },
+                        placeholder = { Text("可填写代煎、配送或取货说明") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = FieldShape,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val planId = plan.optInt("id")
+                        generatePackagePlan = null
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.generatePlanPackage(
+                                        planId,
+                                        JSONObject().put("itemInfo", packageRemark.trim()),
+                                    )
+                                }
+                            }
+                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+                                .onFailure { Toast.makeText(context, it.message ?: "生成包裹失败", Toast.LENGTH_SHORT).show() }
+                        }
+                    },
+                ) {
+                    Text("确认")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { generatePackagePlan = null }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    quickScanPromptData?.let { promptData ->
+        QuickScanPromptDialog(
+            data = promptData,
+            onDismiss = { quickScanPromptData = null },
+            onOpenDetail = {
+                val p = promptData.plan
+                quickScanPromptData = null
+                onNavigate(ScreenTarget.WorkflowOperation(p, "", "open"))
+            },
+            onEquipmentScanned = {
+                quickScanPromptData = null
+            },
+            onNavigatePlan = { targetPlan ->
+                quickScanPromptData = null
+                onNavigate(ScreenTarget.WorkflowOperation(targetPlan, "", "open"))
+            },
+        )
+    }
+
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ProcessingPlanFormScreen(
     initial: JSONObject,
@@ -2758,7 +2866,7 @@ internal fun WorkflowOperationScreen(
                                 Toast.makeText(context, "待取包裹生成成功", Toast.LENGTH_SHORT).show()
                                 reload()
                             }.onFailure {
-                                if (!it.isCancellation()) error = it.message ?: "生成包裹失败"
+                                if (!it.isCancellation()) Toast.makeText(context, it.message ?: "生成包裹失败", Toast.LENGTH_SHORT).show()
                             }
                             busy = false
                         }
