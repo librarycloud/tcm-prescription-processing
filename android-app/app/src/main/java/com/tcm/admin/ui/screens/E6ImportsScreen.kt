@@ -160,7 +160,7 @@ private fun e6Batches(totalDose: Int, count: Int): JSONArray {
 @Composable
 internal fun E6ImportsScreen(
     user: JSONObject?,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     listState: E6ImportsListState,
 ) {
     val context = LocalContext.current.applicationContext
@@ -441,8 +441,8 @@ internal fun E6ImportsScreen(
                         selectable = !isStoreStaff && e6CanReview(item),
                         canManage = !isStoreStaff,
                         onSelect = { checked -> selectedIds = if (checked) selectedIds + item.optInt("id") else selectedIds - item.optInt("id") },
-                        onDetail = { onNavigate(ScreenTarget.E6ImportDetail(item.optInt("id"))) },
-                        onConfirm = { onNavigate(ScreenTarget.E6ImportConfirm(item)) },
+                        onDetail = { onNavigate(Route.E6ImportDetail(item.optInt("id"))) },
+                        onConfirm = { onNavigate(Route.E6ImportConfirm(RouteParams.put(item))) },
                         onRevalidate = { runAction({ ApiClient.revalidateE6Import(item.optInt("id")) }, "已完成重新校验") },
                         onReject = { rejectTarget = item },
                     )
@@ -453,7 +453,7 @@ internal fun E6ImportsScreen(
                     item(key = "merge_button") {
                         Button(
                             enabled = mergeItems.size >= 2 && !actionLoading,
-                            onClick = { onNavigate(ScreenTarget.E6ImportConfirm(mergeItems.first(), mergeItems.map { it.optInt("id") })) },
+                            onClick = { onNavigate(Route.E6ImportConfirm(RouteParams.put(mergeItems.first()), mergeItems.map { it.optInt("id") })) },
                             modifier = Modifier.fillMaxWidth().height(44.dp),
                             shape = FieldShape,
                             colors = ButtonDefaults.buttonColors(containerColor = Primary),

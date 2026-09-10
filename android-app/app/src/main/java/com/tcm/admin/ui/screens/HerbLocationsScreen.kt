@@ -96,7 +96,7 @@ internal fun rememberHerbsListState(): HerbsListState {
 @Composable
 internal fun HerbsScreen(
     user: JSONObject?,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     listState: HerbsListState,
 ) {
     val showStore = user?.optInt("role", -1) == 0
@@ -183,7 +183,7 @@ internal fun HerbsScreen(
                 Spacer(Modifier.width(10.dp))
                 Button(
                     onClick = {
-                        onNavigate(ScreenTarget.HerbLocationAssign(JSONObject(), selectedStoreId?.toIntOrNull()))
+                        onNavigate(Route.HerbLocationAssign(RouteParams.put(JSONObject()), selectedStoreId?.toIntOrNull()))
                     },
                     shape = FieldShape,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -304,7 +304,7 @@ internal fun HerbsScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            onNavigate(ScreenTarget.HerbLocationAssign(loc, selectedStoreId?.toIntOrNull()))
+                                            onNavigate(Route.HerbLocationAssign(RouteParams.put(loc), selectedStoreId?.toIntOrNull()))
                                         },
                                     shape = FieldShape,
                                     color = MaterialTheme.colorScheme.surfaceVariant,

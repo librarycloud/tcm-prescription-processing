@@ -96,7 +96,7 @@ private fun isSuperAdmin(user: JSONObject?): Boolean = user?.optInt("role", -1) 
 @Composable
 internal fun PrescriptionsScreen(
     user: JSONObject?,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
     viewModel: PrescriptionViewModel = hiltViewModel()
@@ -155,7 +155,7 @@ internal fun PrescriptionsScreen(
                 Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
                 if (!readOnly) {
                     Button(
-                        onClick = { onNavigate(ScreenTarget.PrescriptionEdit()) },
+                        onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(JSONObject()))) },
                         shape = FieldShape,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
@@ -240,7 +240,7 @@ internal fun PrescriptionsScreen(
                 if (item != null) {
                     val plans = item.optJSONArray("plans") ?: JSONArray()
                     val remainingDose = (item.optInt("totalDose", 0) - item.optInt("takenDose", 0)).coerceAtLeast(0)
-                    AppCard(modifier = Modifier.padding(bottom = 12.dp), onClick = { onNavigate(ScreenTarget.PrescriptionDetail(item.optInt("id"))) }) {
+                    AppCard(modifier = Modifier.padding(bottom = 12.dp), onClick = { onNavigate(Route.PrescriptionDetail(item.optInt("id"))) }) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(item.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
@@ -261,7 +261,7 @@ internal fun PrescriptionsScreen(
                             if (!readOnly && item.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                                 Spacer(Modifier.width(6.dp))
                                 Button(
-                                    onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject().put("prescriptionId", item.optInt("id")).put("prescription", item))) },
+                                    onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject()).put("prescriptionId", item.optInt("id")).put("prescription", item))) },
                                     shape = FieldShape,
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -272,7 +272,7 @@ internal fun PrescriptionsScreen(
                             if (!readOnly && item.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
                                 Spacer(Modifier.width(6.dp))
                                 OutlinedButton(
-                                    onClick = { onNavigate(ScreenTarget.PrescriptionEdit(item)) },
+                                    onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(item))) },
                                     shape = FieldShape,
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -342,7 +342,7 @@ internal fun PrescriptionsScreen(
 }
 
 @Composable
-internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (ScreenTarget) -> Unit) {
+internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (Route) -> Unit) {
     val readOnly = isStoreStaff(user)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -407,7 +407,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                 if (!readOnly && p.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
-                        onClick = { onNavigate(ScreenTarget.PrescriptionEdit(p)) },
+                        onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(p))) },
                         shape = FieldShape,
                         modifier = Modifier.height(32.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -477,7 +477,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                     SectionHeader("加工批次", "共 ${plans.length()} 批", modifier = Modifier.weight(1f))
                     if (!readOnly && p.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                         Button(
-                            onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject().put("prescriptionId", id).put("prescription", p))) },
+                            onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject()).put("prescriptionId", id).put("prescription", p))) },
                             shape = FieldShape,
                             modifier = Modifier.height(32.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -502,7 +502,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                         border = BorderStroke(1.dp, CardBorderColor),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
+                            .clickable { onNavigate(Route.WorkflowOperation(RouteParams.put(plan), "", "open")) },
                     ) {
                         Column(Modifier.padding(12.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -527,7 +527,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                                                     withContext(Dispatchers.IO) {
                                                         packageItem(ApiClient.packageDetail(pItem.optInt("id")))
                                                     }
-                                                }.onSuccess { onNavigate(ScreenTarget.PackageDetail(it)) }
+                                                }.onSuccess { onNavigate(Route.PackageDetail(RouteParams.put(it))) }
                                                     .onFailure { error = it.message ?: "加载包裹失败" }
                                             }
                                         },
@@ -540,7 +540,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                                 if (!readOnly && plan.optInt("status") in 0..1) {
                                     Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
-                                        onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject(plan.toString()).put("prescription", p))) },
+                                        onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject(plan.toString())).put("prescription", p))) },
                                         shape = FieldShape,
                                         modifier = Modifier.height(30.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
@@ -625,7 +625,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                                                     withContext(Dispatchers.IO) {
                                                         packageItem(ApiClient.packageDetail(pItem.optInt("id")))
                                                     }
-                                                }.onSuccess { onNavigate(ScreenTarget.PackageDetail(it)) }
+                                                }.onSuccess { onNavigate(Route.PackageDetail(RouteParams.put(it))) }
                                                     .onFailure { error = it.message ?: "加载包裹失败" }
                                             }
                                         },

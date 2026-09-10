@@ -126,7 +126,7 @@ private fun FakeQr(value: String) {
 @Composable
 internal fun PackagesScreen(
     user: JSONObject?,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
     viewModel: PackageViewModel = hiltViewModel()
@@ -147,7 +147,7 @@ internal fun PackagesScreen(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
-            onNavigate(ScreenTarget.PackageVerify(value))
+            onNavigate(Route.PackageVerify(value))
         }
     }
 
@@ -259,8 +259,8 @@ internal fun PackagesScreen(
                         item = item,
                         showStore = showStore,
                         modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                        onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
+                        onClick = { onNavigate(Route.PackageDetail(RouteParams.put(item))) },
+                        onVerify = { onNavigate(Route.PackageVerify(item.code)) },
                     )
                 }
             }
@@ -374,7 +374,7 @@ internal fun PackageSummaryCard(
 internal fun PackageDetailPage(
     pkg: PackageItem,
     showStore: Boolean,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -464,7 +464,7 @@ internal fun PackageDetailPage(
         ) {
             if (pkg.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
                 OutlinedButton(
-                    onClick = { onNavigate(ScreenTarget.PackageForm(pkg)) },
+                    onClick = { onNavigate(Route.PackageForm(RouteParams.put(pkg))) },
                     shape = FieldShape,
                     modifier = Modifier.weight(1f).height(46.dp),
                 ) {
@@ -476,7 +476,7 @@ internal fun PackageDetailPage(
 
             if (pkg.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
                 Button(
-                    onClick = { onNavigate(ScreenTarget.PackageVerify(pkg.code)) },
+                    onClick = { onNavigate(Route.PackageVerify(pkg.code)) },
                     shape = FieldShape,
                     colors = ButtonDefaults.buttonColors(containerColor = Success),
                     modifier = Modifier.weight(1f).height(46.dp),

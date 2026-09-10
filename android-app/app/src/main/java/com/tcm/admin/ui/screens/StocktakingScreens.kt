@@ -81,7 +81,7 @@ import org.json.JSONObject
 @Composable
 internal fun StocktakingScreen(
     user: JSONObject? = null,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     listState: LazyListState = rememberLazyListState(),
     viewModel: StocktakingViewModel = hiltViewModel(),
 ) {
@@ -185,7 +185,7 @@ internal fun StocktakingScreen(
 
                     AppCard(
                         modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { onNavigate(ScreenTarget.StocktakingDetail(check.optInt("id"))) },
+                        onClick = { onNavigate(Route.StocktakingDetail(check.optInt("id"))) },
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),

@@ -70,7 +70,7 @@ import org.json.JSONObject
 @Composable
 internal fun ProcessingScreenV2(
     user: JSONObject?,
-    onNavigate: (ScreenTarget) -> Unit = {},
+    onNavigate: (Route) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
     viewModel: ProcessingViewModel = hiltViewModel(),
 ) {
@@ -188,7 +188,7 @@ internal fun ProcessingScreenV2(
                         }
                         if (mode != "pickup") {
                             Button(
-                                onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject())) },
+                                onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject()))) },
                                 modifier = Modifier.weight(1f).height(CompactControlHeight),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -457,7 +457,7 @@ internal fun ProcessingScreenV2(
 
                             AppCard(
                                 modifier = Modifier.padding(bottom = 12.dp),
-                                onClick = { onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open")) },
+                                onClick = { onNavigate(Route.WorkflowOperation(RouteParams.put(plan), "", "open")) },
                             ) {
                                 // Header Row
                                 Row(
@@ -526,7 +526,7 @@ internal fun ProcessingScreenV2(
                                     val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
                                     if (prescriptionId > 0) {
                                         OutlinedButton(
-                                            onClick = { onNavigate(ScreenTarget.PrescriptionDetail(prescriptionId)) },
+                                            onClick = { onNavigate(Route.PrescriptionDetail(prescriptionId)) },
                                             modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
@@ -598,7 +598,7 @@ internal fun ProcessingScreenV2(
 
                                     if (status in 0..1) {
                                         OutlinedButton(
-                                            onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(plan)) },
+                                            onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(plan))) },
                                             modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
@@ -656,7 +656,7 @@ internal fun ProcessingScreenV2(
                                 item = item,
                                 showStore = showStore,
                                 modifier = Modifier.padding(bottom = 12.dp),
-                                onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
+                                onClick = { onNavigate(Route.PackageDetail(RouteParams.put(item))) },
                                 onVerify = {
                                     scope.launch {
                                         runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
@@ -742,14 +742,14 @@ internal fun ProcessingScreenV2(
                 onOpenDetail = {
                     val p = promptData.plan
                     quickScanPromptData = null
-                    onNavigate(ScreenTarget.WorkflowOperation(p, "", "open"))
+                    onNavigate(Route.WorkflowOperation(RouteParams.put(p), "", "open"))
                 },
                 onEquipmentScanned = {
                     quickScanPromptData = null
                 },
                 onNavigatePlan = { targetPlan ->
                     quickScanPromptData = null
-                    onNavigate(ScreenTarget.WorkflowOperation(targetPlan, "", "open"))
+                    onNavigate(Route.WorkflowOperation(RouteParams.put(targetPlan), "", "open"))
                 },
             )
         }

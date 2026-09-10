@@ -10,6 +10,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -137,35 +144,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal sealed class ScreenTarget {
-    object Login : ScreenTarget()
-    object Prescriptions : ScreenTarget()
-    object E6Imports : ScreenTarget()
-    data class E6ImportDetail(val id: Int) : ScreenTarget()
-    data class E6ImportConfirm(val initial: JSONObject, val mergeIds: List<Int> = emptyList()) : ScreenTarget()
-    data class PrescriptionDetail(val id: Int) : ScreenTarget()
-    data class PrescriptionEdit(val initial: JSONObject = JSONObject()) : ScreenTarget()
-    object Processing : ScreenTarget()
-    data class ProcessingPlanForm(val initial: JSONObject = JSONObject()) : ScreenTarget()
-    data class WorkflowOperation(val plan: JSONObject, val currentStep: String, val action: String) : ScreenTarget()
-    object Packages : ScreenTarget()
-    data class PackageDetail(val item: PackageItem) : ScreenTarget()
-    data class PackageForm(val initial: PackageItem? = null) : ScreenTarget()
-    data class PackageVerify(val initialCode: String = "") : ScreenTarget()
-    object Herbs : ScreenTarget()
-    data class HerbLocationAssign(val location: JSONObject, val storeId: Int?) : ScreenTarget()
-    object Profile : ScreenTarget()
-    object ProfileDetail : ScreenTarget()
-    object Settings : ScreenTarget()
-    object ThemeAppearance : ScreenTarget()
-    object About : ScreenTarget()
-    data class Inventory(val initialQuery: String = "", val scanRequestId: Long = 0L) : ScreenTarget()
-    object Stocktaking : ScreenTarget()
-    data class StocktakingDetail(val checkId: Int) : ScreenTarget()
-    object Differences : ScreenTarget()
-    object Transfers : ScreenTarget()
-    data class TransferDetail(val id: Int) : ScreenTarget()
-}
+
 
 
 
@@ -173,9 +152,7 @@ internal sealed class ScreenTarget {
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
-    val backStack = remember {
-        mutableStateListOf<ScreenTarget>(if (restoredSession != null) ScreenTarget.Inventory() else ScreenTarget.Login)
-    }
+    val navController = rememberNavController()
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
     val processingListState = rememberLazyListState()
@@ -187,7 +164,8 @@ private fun TcmAdminApp() {
     val stocktakingDetailScrollState = rememberScrollState()
     val differencesListState = rememberLazyListState()
     val transfersListState = rememberLazyListState()
-    val currentScreen = backStack.lastOrNull() ?: ScreenTarget.Login
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
 
     var session by remember { mutableStateOf(restoredSession) }
     var loginError by remember { mutableStateOf<String?>(null) }
@@ -231,35 +209,36 @@ private fun TcmAdminApp() {
                 ApiClient.clearSession(appContext)
                 clearRetainedListValues()
                 session = null
-                backStack.clear()
-                backStack.add(ScreenTarget.Login)
+                navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
                 Toast.makeText(appContext, "登录已过期，请重新登录", Toast.LENGTH_SHORT).show()
             }
         }
         onDispose { ApiClient.onUnauthorized = null }
     }
 
-    fun navigateTo(target: ScreenTarget) {
-        if (target is ScreenTarget.Inventory && backStack.lastOrNull() is ScreenTarget.Inventory) {
-            backStack[backStack.size - 1] = target
-        } else {
+    fun navigateTo(target: Route) {
+    navController.navigate(target) {
+        if (target is Route.Inventory && currentDestination?.hasRoute<Route.Inventory>() == true) {
+            popUpTo<Route.Inventory> { inclusive = true }
+        }
+    }
+} else {
             backStack.add(target)
         }
     }
 
     fun navigateBack(): Boolean {
-        return if (backStack.size > 1) {
-            backStack.removeAt(backStack.size - 1)
-            true
-        } else {
+    return navController.popBackStack()
+} else {
             false
         }
     }
 
-    fun switchTab(target: ScreenTarget) {
-        backStack.clear()
-        backStack.add(target)
+    fun switchTab(target: Route) {
+    navController.navigate(target) {
+        popUpTo(navController.graph.id) { inclusive = true }
     }
+}
 
     fun checkForAppUpdateIfDue() {
         val lastCheckedAt = updatePreferences.getLong("last_update_check_at", 0L)
@@ -289,10 +268,17 @@ private fun TcmAdminApp() {
 
     val activity = LocalContext.current as? ComponentActivity
     var lastBackPressTime by remember { mutableStateOf(0L) }
-    BackHandler(enabled = currentScreen !is ScreenTarget.Login) {
-        if (backStack.size > 1) {
-            navigateBack()
+    BackHandler(enabled = currentDestination?.hasRoute<Route.Login>() == false) {
+    if (!navigateBack()) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressTime < 2000L) {
+            activity?.finish()
         } else {
+            lastBackPressTime = now
+            Toast.makeText(appContext, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+        }
+    }
+} else {
             val now = System.currentTimeMillis()
             if (now - lastBackPressTime < 2000L) {
                 activity?.finish()
@@ -356,254 +342,328 @@ private fun TcmAdminApp() {
             ),
         ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
-            when (currentScreen) {
-                is ScreenTarget.Login -> LoginScreen(loginLoading, loginError) { identifier, password ->
-                    loginLoading = true
-                    loginError = null
-                    scope.launch {
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                ApiClient.login(identifier, password)
+                        NavHost(
+                navController = navController,
+                startDestination = if (session != null) Route.Inventory() else Route.Login,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                composable<Route.Login> {
+                    LoginScreen(loginLoading, loginError) { identifier, password ->
+                        loginLoading = true
+                        loginError = null
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password) }
+                            }.onSuccess { value ->
+                                ApiClient.saveSession(appContext, value)
+                                session = value
+                                navController.navigate(Route.Inventory()) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                }
+                            }.onFailure {
+                                loginError = it.message ?: "登录失败"
                             }
-                        }.onSuccess { value ->
-                            ApiClient.saveSession(appContext, value)
-                            session = value
-                            backStack.clear()
-                            backStack.add(ScreenTarget.Inventory())
-                        }.onFailure {
-                            loginError = it.message ?: "登录失败"
+                            loginLoading = false
                         }
-                        loginLoading = false
                     }
                 }
 
-                // Main Navigation Tabs
-                is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = prescriptionsListState) {
-                    PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, listState = prescriptionsListState)
+                composable<Route.Prescriptions> {
+                    MainShell(it.toRoute<Route.Prescriptions>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = prescriptionsListState) {
+                        PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, listState = prescriptionsListState)
+                    }
                 }
-                is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = e6ImportsListState.lazyListState) {
-                    E6ImportsScreen(
-                        user = session?.user,
-                        onNavigate = ::navigateTo,
-                        listState = e6ImportsListState,
-                    )
+                composable<Route.E6Imports> {
+                    MainShell(it.toRoute<Route.E6Imports>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = e6ImportsListState.lazyListState) {
+                        E6ImportsScreen(user = session?.user, onNavigate = ::navigateTo, listState = e6ImportsListState)
+                    }
                 }
-                is ScreenTarget.E6ImportDetail -> DetailShell("E6订单详情", onBack = { navigateBack() }) {
-                    E6ImportDetailScreen(
-                        id = currentScreen.id,
-                        user = session?.user,
-                        onConfirm = { item -> navigateTo(ScreenTarget.E6ImportConfirm(item)) },
-                        onPrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
-                    )
+                composable<Route.E6ImportDetail> { entry ->
+                    val route = entry.toRoute<Route.E6ImportDetail>()
+                    DetailShell("E6订单详情", onBack = { navigateBack() }) {
+                        E6ImportDetailScreen(
+                            id = route.id,
+                            user = session?.user,
+                            onConfirm = { item -> navigateTo(Route.E6ImportConfirm(RouteParams.put(item))) },
+                            onPrescription = { prescriptionId -> navigateTo(Route.PrescriptionDetail(prescriptionId)) },
+                        )
+                    }
                 }
-                is ScreenTarget.E6ImportConfirm -> DetailShell("确认导入并生成加工计划", onBack = { navigateBack() }) {
-                    E6ImportConfirmScreen(
-                        initial = currentScreen.initial,
-                        mergeIds = currentScreen.mergeIds,
-                        onDone = {
-                            e6ImportsListState.loaded = false
-                            e6ImportsListState.items = null
-                            invalidateRetainedList("prescriptions")
-                            invalidateRetainedList("processing")
-                            navigateBack()
-                            if (backStack.lastOrNull() is ScreenTarget.E6ImportDetail) navigateBack()
-                        },
-                    )
+                composable<Route.E6ImportConfirm> { entry ->
+                    val route = entry.toRoute<Route.E6ImportConfirm>()
+                    val initial = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    DetailShell("确认导入并生成加工计划", onBack = { navigateBack() }) {
+                        E6ImportConfirmScreen(
+                            initial = initial,
+                            mergeIds = route.mergeIds,
+                            onDone = {
+                                e6ImportsListState.loaded = false
+                                e6ImportsListState.items = null
+                                invalidateRetainedList("prescriptions")
+                                invalidateRetainedList("processing")
+                                navigateBack()
+                                // Wait, to pop E6ImportDetail we can pop up to it
+                            },
+                        )
+                    }
                 }
-                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = processingListState) {
-                    ProcessingScreenV2(
-                        user = session?.user,
-                        onNavigate = ::navigateTo,
-                        listState = processingListState,
-                    )
+                composable<Route.Processing> {
+                    MainShell(it.toRoute<Route.Processing>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = processingListState) {
+                        ProcessingScreenV2(user = session?.user, onNavigate = ::navigateTo, listState = processingListState)
+                    }
                 }
-                is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
-                    PackagesScreen(user = session?.user, onNavigate = ::navigateTo, listState = packagesListState)
+                composable<Route.Packages> {
+                    MainShell(it.toRoute<Route.Packages>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
+                        PackagesScreen(user = session?.user, onNavigate = ::navigateTo, listState = packagesListState)
+                    }
                 }
-                is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = herbsListState.lazyListState) {
-                    HerbsScreen(user = session?.user, onNavigate = ::navigateTo, listState = herbsListState)
+                composable<Route.Herbs> {
+                    MainShell(it.toRoute<Route.Herbs>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = herbsListState.lazyListState) {
+                        HerbsScreen(user = session?.user, onNavigate = ::navigateTo, listState = herbsListState)
+                    }
                 }
-                is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
-                    ProfileScreen(
-                        user = session?.user,
-                        onOpenDetails = { navigateTo(ScreenTarget.ProfileDetail) },
-                        onOpenSettings = { navigateTo(ScreenTarget.Settings) },
-                        onOpenAbout = { navigateTo(ScreenTarget.About) },
-                        onEntered = ::checkForAppUpdateIfDue,
-                        hasAppUpdate = hasAppUpdate,
-                        scrollState = profileScrollState,
-                        onSessionUpdated = { updated ->
-                            ApiClient.saveSession(appContext, updated)
-                            session = updated
-                        },
-                    )
+                composable<Route.Profile> {
+                    MainShell(it.toRoute<Route.Profile>(), ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
+                        ProfileScreen(
+                            user = session?.user,
+                            onOpenDetails = { navigateTo(Route.ProfileDetail) },
+                            onOpenSettings = { navigateTo(Route.Settings) },
+                            onOpenAbout = { navigateTo(Route.About) },
+                            onEntered = ::checkForAppUpdateIfDue,
+                            hasAppUpdate = hasAppUpdate,
+                            scrollState = profileScrollState,
+                            onSessionUpdated = { updated ->
+                                ApiClient.saveSession(appContext, updated)
+                                session = updated
+                            },
+                        )
+                    }
                 }
-                is ScreenTarget.About -> DetailShell("关于药房助手", onBack = { navigateBack() }) {
-                    AboutScreen { hasAppUpdate = it }
+                composable<Route.About> {
+                    DetailShell("关于药房助手", onBack = { navigateBack() }) {
+                        AboutScreen { hasAppUpdate = it }
+                    }
                 }
-                is ScreenTarget.ProfileDetail -> DetailShell("个人资料", onBack = { navigateBack() }) {
-                    ProfileDetailScreen(
-                        user = session?.user,
-                        onLogout = {
-                            ApiClient.clearSession(appContext)
-                            clearRetainedListValues()
-                            session = null
-                            backStack.clear()
-                            backStack.add(ScreenTarget.Login)
-                        },
-                        onSessionUpdated = { updated ->
-                            ApiClient.saveSession(appContext, updated)
-                            session = updated
-                        },
-                    )
+                composable<Route.ProfileDetail> {
+                    DetailShell("个人资料", onBack = { navigateBack() }) {
+                        ProfileDetailScreen(
+                            user = session?.user,
+                            onLogout = {
+                                ApiClient.clearSession(appContext)
+                                clearRetainedListValues()
+                                session = null
+                                navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
+                            },
+                            onSessionUpdated = { updated ->
+                                ApiClient.saveSession(appContext, updated)
+                                session = updated
+                            },
+                        )
+                    }
                 }
-                is ScreenTarget.Settings -> DetailShell("设置", onBack = { navigateBack() }) {
-                    SettingsScreen(
-                        onOpenThemeAppearance = { navigateTo(ScreenTarget.ThemeAppearance) },
-                        selectedTheme = themeMode,
-                        themeAccentKey = themeAccentKey,
-                        textScale = textScale,
-                    )
+                composable<Route.Settings> {
+                    DetailShell("设置", onBack = { navigateBack() }) {
+                        SettingsScreen(
+                            onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
+                            selectedTheme = themeMode,
+                            themeAccentKey = themeAccentKey,
+                            textScale = textScale,
+                        )
+                    }
                 }
-                is ScreenTarget.ThemeAppearance -> DetailShell("主题与外观", onBack = { navigateBack() }) {
-                    ThemeAppearanceScreen(
-                        selectedTheme = themeMode,
-                        onThemeSelected = { mode ->
-                            themeMode = mode
-                            settingsPreferences.edit().putString("theme_mode", mode).apply()
-                        },
-                        pureBlackMode = pureBlackMode,
-                        onPureBlackModeChanged = { enabled ->
-                            pureBlackMode = enabled
-                            settingsPreferences.edit().putBoolean("pure_black_mode", enabled).apply()
-                        },
-                        themeAccentKey = themeAccentKey,
-                        customColorHex = customColorHex,
-                        onThemeAccentSelected = { key ->
-                            themeAccentKey = key
-                            settingsPreferences.edit().putString("theme_accent_key", key).apply()
-                        },
-                        onCustomColorChanged = { hex ->
-                            customColorHex = hex
-                            themeAccentKey = "custom"
-                            settingsPreferences.edit()
-                                .putString("theme_custom_color", hex)
-                                .putString("theme_accent_key", "custom")
-                                .apply()
-                        },
-                        textScale = textScale,
-                        onTextScaleChanged = { scale ->
-                            textScale = scale
-                            settingsPreferences.edit().putFloat("text_scale", scale).apply()
-                        },
-                    )
+                composable<Route.ThemeAppearance> {
+                    DetailShell("主题与外观", onBack = { navigateBack() }) {
+                        ThemeAppearanceScreen(
+                            selectedTheme = themeMode,
+                            onThemeSelected = { mode ->
+                                themeMode = mode
+                                settingsPreferences.edit().putString("theme_mode", mode).apply()
+                            },
+                            pureBlackMode = pureBlackMode,
+                            onPureBlackModeChanged = { enabled ->
+                                pureBlackMode = enabled
+                                settingsPreferences.edit().putBoolean("pure_black_mode", enabled).apply()
+                            },
+                            themeAccentKey = themeAccentKey,
+                            customColorHex = customColorHex,
+                            onThemeAccentSelected = { key ->
+                                themeAccentKey = key
+                                settingsPreferences.edit().putString("theme_accent_key", key).apply()
+                            },
+                            onCustomColorChanged = { hex ->
+                                customColorHex = hex
+                                themeAccentKey = "custom"
+                                settingsPreferences.edit()
+                                    .putString("theme_custom_color", hex)
+                                    .putString("theme_accent_key", "custom")
+                                    .apply()
+                            },
+                            textScale = textScale,
+                            onTextScaleChanged = { scale ->
+                                textScale = scale
+                                settingsPreferences.edit().putFloat("text_scale", scale).apply()
+                            },
+                        )
+                    }
                 }
 
-                // Sub-screens & Details (Page navigation instead of dialogs)
-                is ScreenTarget.Inventory -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = inventoryListState) {
-                    InventoryScreen(
-                        user = session?.user,
-                        initialQuery = currentScreen.initialQuery,
-                        scanRequestId = currentScreen.scanRequestId,
-                        listState = inventoryListState,
-                    )
+                composable<Route.Inventory> { entry ->
+                    val route = entry.toRoute<Route.Inventory>()
+                    MainShell(route, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = inventoryListState) {
+                        InventoryScreen(
+                            user = session?.user,
+                            initialQuery = route.initialQuery,
+                            scanRequestId = route.scanRequestId,
+                            listState = inventoryListState,
+                        )
+                    }
                 }
-                is ScreenTarget.PrescriptionDetail -> DetailShell("处方详情", onBack = { navigateBack() }) {
-                    PrescriptionDetailScreen(
-                        id = currentScreen.id,
-                        user = session?.user,
-                        onNavigate = ::navigateTo,
-                    )
+                composable<Route.PrescriptionDetail> { entry ->
+                    val route = entry.toRoute<Route.PrescriptionDetail>()
+                    DetailShell("处方详情", onBack = { navigateBack() }) {
+                        PrescriptionDetailScreen(
+                            id = route.id,
+                            user = session?.user,
+                            onNavigate = ::navigateTo,
+                        )
+                    }
                 }
-                is ScreenTarget.PrescriptionEdit -> DetailShell(
-                    if (currentScreen.initial.has("id")) "编辑处方" else "新建处方",
-                    onBack = { navigateBack() },
-                ) {
-                    PrescriptionFormScreen(
-                        initial = currentScreen.initial,
-                        user = session?.user,
-                        onSaved = {
-                            invalidateRetainedList("prescriptions")
-                            navigateBack()
-                        },
-                    )
-                }
-                is ScreenTarget.ProcessingPlanForm -> DetailShell(
-                    if (currentScreen.initial.has("id")) "编辑加工计划" else "新建加工计划",
-                    onBack = { navigateBack() },
-                ) {
-                    ProcessingPlanFormScreen(
-                        initial = currentScreen.initial,
-                        onSaved = {
-                            invalidateRetainedList("processing")
-                            invalidateRetainedList("prescriptions")
-                            navigateBack()
-                        },
-                    )
-                }
-                is ScreenTarget.WorkflowOperation -> DetailShell("工序详情", onBack = { navigateBack() }) {
-                    WorkflowOperationScreen(
-                        plan = currentScreen.plan,
-                        onNavigatePrescription = { prescriptionId -> navigateTo(ScreenTarget.PrescriptionDetail(prescriptionId)) },
-                        onPlanStatusChanged = {
-                            invalidateRetainedList("processing")
-                        },
-                        onNavigatePlan = { targetPlan -> navigateTo(ScreenTarget.WorkflowOperation(targetPlan, "", "open")) },
-                    )
-                }
-                is ScreenTarget.PackageDetail -> DetailShell("包裹详情", onBack = { navigateBack() }) {
-                    PackageDetailPage(
-                        pkg = currentScreen.item,
-                        showStore = session?.user?.optInt("role", -1) == 0,
-                        onNavigate = ::navigateTo,
+                composable<Route.PrescriptionEdit> { entry ->
+                    val route = entry.toRoute<Route.PrescriptionEdit>()
+                    val initial = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    DetailShell(
+                        if (initial.has("id")) "编辑处方" else "新建处方",
                         onBack = { navigateBack() },
-                    )
+                    ) {
+                        PrescriptionFormScreen(
+                            initial = initial,
+                            user = session?.user,
+                            onSaved = {
+                                invalidateRetainedList("prescriptions")
+                                navigateBack()
+                            },
+                        )
+                    }
                 }
-                is ScreenTarget.PackageForm -> DetailShell(
-                    if (currentScreen.initial != null) "编辑包裹" else "创建包裹",
-                    onBack = { navigateBack() },
-                ) {
-                    PackageFormScreen(initial = currentScreen.initial, onSaved = {
-                        invalidateRetainedList("packages")
-                        navigateBack()
-                    })
+                composable<Route.ProcessingPlanForm> { entry ->
+                    val route = entry.toRoute<Route.ProcessingPlanForm>()
+                    val initial = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    DetailShell(
+                        if (initial.has("id")) "编辑加工计划" else "新建加工计划",
+                        onBack = { navigateBack() },
+                    ) {
+                        ProcessingPlanFormScreen(
+                            initial = initial,
+                            onSaved = {
+                                invalidateRetainedList("processing")
+                                invalidateRetainedList("prescriptions")
+                                navigateBack()
+                            },
+                        )
+                    }
                 }
-                is ScreenTarget.PackageVerify -> DetailShell("取货码核销", onBack = { navigateBack() }) {
-                    PackageVerifyScreen(initialCode = currentScreen.initialCode, onVerified = {
-                        invalidateRetainedList("packages")
-                        invalidateRetainedList("processing")
-                        navigateBack()
-                    })
+                composable<Route.WorkflowOperation> { entry ->
+                    val route = entry.toRoute<Route.WorkflowOperation>()
+                    val plan = RouteParams.peek(route.argId) as? JSONObject
+                    if (plan == null) {
+                        LaunchedEffect(Unit) { navigateBack() }
+                    } else {
+                        DetailShell("工序详情", onBack = { navigateBack() }) {
+                            WorkflowOperationScreen(
+                                plan = plan,
+                                onNavigatePrescription = { prescriptionId -> navigateTo(Route.PrescriptionDetail(prescriptionId)) },
+                                onPlanStatusChanged = {
+                                    invalidateRetainedList("processing")
+                                },
+                                onNavigatePlan = { targetPlan -> navigateTo(Route.WorkflowOperation(RouteParams.put(targetPlan), "", "open")) },
+                            )
+                        }
+                    }
                 }
-                is ScreenTarget.HerbLocationAssign -> DetailShell("配置货位", onBack = { navigateBack() }) {
-                    HerbLocationAssignScreen(
-                        location = currentScreen.location,
-                        storeId = currentScreen.storeId,
-                        onSaved = {
-                            herbsListState.invalidate()
+                composable<Route.PackageDetail> { entry ->
+                    val route = entry.toRoute<Route.PackageDetail>()
+                    val item = RouteParams.peek(route.argId) as? PackageItem
+                    if (item == null) {
+                        LaunchedEffect(Unit) { navigateBack() }
+                    } else {
+                        DetailShell("包裹详情", onBack = { navigateBack() }) {
+                            PackageDetailPage(
+                                pkg = item,
+                                showStore = session?.user?.optInt("role", -1) == 0,
+                                onNavigate = ::navigateTo,
+                                onBack = { navigateBack() },
+                            )
+                        }
+                    }
+                }
+                composable<Route.PackageForm> { entry ->
+                    val route = entry.toRoute<Route.PackageForm>()
+                    val initial = RouteParams.peek(route.argId) as? PackageItem
+                    DetailShell(
+                        if (initial != null) "编辑包裹" else "创建包裹",
+                        onBack = { navigateBack() },
+                    ) {
+                        PackageFormScreen(initial = initial, onSaved = {
+                            invalidateRetainedList("packages")
                             navigateBack()
-                        },
-                    )
+                        })
+                    }
                 }
-                is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }, lazyListState = stocktakingListState) {
-                    StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, listState = stocktakingListState)
+                composable<Route.PackageVerify> { entry ->
+                    val route = entry.toRoute<Route.PackageVerify>()
+                    DetailShell("取货码核销", onBack = { navigateBack() }) {
+                        PackageVerifyScreen(initialCode = route.initialCode, onVerified = {
+                            invalidateRetainedList("packages")
+                            invalidateRetainedList("processing")
+                            navigateBack()
+                        })
+                    }
                 }
-                is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }, scrollState = stocktakingDetailScrollState) {
-                    StocktakingDetailScreen(
-                        checkId = currentScreen.checkId,
-                        user = session?.user,
-                        scrollState = stocktakingDetailScrollState,
-                        refreshKey = stocktakingDetailRevision,
-                    )
+                composable<Route.HerbLocationAssign> { entry ->
+                    val route = entry.toRoute<Route.HerbLocationAssign>()
+                    val location = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    DetailShell("配置货位", onBack = { navigateBack() }) {
+                        HerbLocationAssignScreen(
+                            location = location,
+                            storeId = route.storeId,
+                            onSaved = {
+                                herbsListState.invalidate()
+                                navigateBack()
+                            },
+                        )
+                    }
                 }
-                is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, lazyListState = differencesListState) {
-                    DifferencesScreen(user = session?.user, listState = differencesListState)
+                composable<Route.Stocktaking> {
+                    DetailShell("商品盘点", onBack = { navigateBack() }, lazyListState = stocktakingListState) {
+                        StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, listState = stocktakingListState)
+                    }
                 }
-                is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, lazyListState = transfersListState) {
-                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo, listState = transfersListState)
+                composable<Route.StocktakingDetail> { entry ->
+                    val route = entry.toRoute<Route.StocktakingDetail>()
+                    DetailShell("盘点单明细", onBack = { navigateBack() }, scrollState = stocktakingDetailScrollState) {
+                        StocktakingDetailScreen(
+                            checkId = route.checkId,
+                            user = session?.user,
+                            scrollState = stocktakingDetailScrollState,
+                            refreshKey = stocktakingDetailRevision,
+                        )
+                    }
                 }
-                is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
-                    TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
+                composable<Route.Differences> {
+                    DetailShell("库存差异", onBack = { navigateBack() }, lazyListState = differencesListState) {
+                        DifferencesScreen(user = session?.user, listState = differencesListState)
+                    }
+                }
+                composable<Route.Transfers> {
+                    DetailShell("门店调拨", onBack = { navigateBack() }, lazyListState = transfersListState) {
+                        TransfersScreen(user = session?.user, onNavigate = ::navigateTo, listState = transfersListState)
+                    }
+                }
+                composable<Route.TransferDetail> { entry ->
+                    val route = entry.toRoute<Route.TransferDetail>()
+                    DetailShell("调拨详情", onBack = { navigateBack() }) {
+                        TransferDetailScreen(id = route.id, onBack = { navigateBack() })
+                    }
                 }
             }
         }
@@ -733,9 +793,9 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainShell(
-    current: ScreenTarget,
-    onSwitchTab: (ScreenTarget) -> Unit,
-    onNavigate: (ScreenTarget) -> Unit,
+    current: Route,
+    onSwitchTab: (Route) -> Unit,
+    onNavigate: (Route) -> Unit,
     showUpdateBadge: Boolean,
     scrollState: ScrollState? = null,
     lazyListState: LazyListState? = null,
@@ -757,13 +817,13 @@ private fun MainShell(
                     when {
                         // 1. 取货码核销 (TCM:PICKUP:1:...)
                         value.startsWith("TCM:PICKUP:1:") -> {
-                            onNavigate(ScreenTarget.PackageVerify(value))
+                            onNavigate(Route.PackageVerify(value))
                         }
                         // 2. 加工计划二维码 (TCM:PLAN:1:...)
                         value.startsWith("TCM:PLAN:1:") -> {
                             val plan = withContext(Dispatchers.IO) { ApiClient.processingPlanByScan(value) }
                             if (plan != null) {
-                                onNavigate(ScreenTarget.WorkflowOperation(plan, "", "open"))
+                                onNavigate(Route.WorkflowOperation(RouteParams.put(plan), "", "open"))
                                 Toast.makeText(context, "已打开加工计划：${plan.optString("planCode", value)}", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "未找到对应加工计划", Toast.LENGTH_SHORT).show()
@@ -783,14 +843,14 @@ private fun MainShell(
                                         else ApiClient.processingWorkflow(planId)
                                     } ?: occupyingPlan
                                     if (fullPlan != null) {
-                                        onNavigate(ScreenTarget.WorkflowOperation(fullPlan, "", "open"))
+                                        onNavigate(Route.WorkflowOperation(RouteParams.put(fullPlan), "", "open"))
                                         Toast.makeText(context, "已定位到设备【${equip.optString("name")}】当前加工计划", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        onSwitchTab(ScreenTarget.Processing)
+                                        onSwitchTab(Route.Processing)
                                         scannedEquipmentInfo = equip
                                     }
                                 } else {
-                                    onSwitchTab(ScreenTarget.Processing)
+                                    onSwitchTab(Route.Processing)
                                     scannedEquipmentInfo = equip
                                 }
                             } else {
@@ -799,7 +859,7 @@ private fun MainShell(
                         }
                         // 4. 其余所有扫码（商品条形码、SKU、药材条码等） -> 默认进入商品库存查询
                         else -> {
-                            onNavigate(ScreenTarget.Inventory(value, System.nanoTime()))
+                            onNavigate(Route.Inventory(value, System.nanoTime()))
                         }
                     }
                 } catch (e: Exception) {
@@ -842,50 +902,50 @@ private fun MainShell(
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = CardBorderColor)
                 Spacer(Modifier.height(8.dp))
 
-                DrawerItem("库存查询", current is ScreenTarget.Inventory, Icons.Default.Inventory) {
-                    onNavigate(ScreenTarget.Inventory())
+                DrawerItem("库存查询", current is Route.Inventory, Icons.Default.Inventory) {
+                    onNavigate(Route.Inventory())
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("处方管理", current is ScreenTarget.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {
-                    onSwitchTab(ScreenTarget.Prescriptions)
+                DrawerItem("处方管理", current is Route.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {
+                    onSwitchTab(Route.Prescriptions)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("E6诊所处方导入", current is ScreenTarget.E6Imports, Icons.Default.CloudDownload) {
-                    onSwitchTab(ScreenTarget.E6Imports)
+                DrawerItem("E6诊所处方导入", current is Route.E6Imports, Icons.Default.CloudDownload) {
+                    onSwitchTab(Route.E6Imports)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("加工管理", current is ScreenTarget.Processing, Icons.Default.Sync) {
-                    onSwitchTab(ScreenTarget.Processing)
+                DrawerItem("加工管理", current is Route.Processing, Icons.Default.Sync) {
+                    onSwitchTab(Route.Processing)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("包裹管理", current is ScreenTarget.Packages, Icons.Default.AssignmentTurnedIn) {
-                    onSwitchTab(ScreenTarget.Packages)
+                DrawerItem("包裹管理", current is Route.Packages, Icons.Default.AssignmentTurnedIn) {
+                    onSwitchTab(Route.Packages)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("斗谱管理", current is ScreenTarget.Herbs, Icons.Default.GridView) {
-                    onSwitchTab(ScreenTarget.Herbs)
+                DrawerItem("斗谱管理", current is Route.Herbs, Icons.Default.GridView) {
+                    onSwitchTab(Route.Herbs)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
                 DrawerItem("商品盘点", false, Icons.AutoMirrored.Filled.CompareArrows) {
-                    onNavigate(ScreenTarget.Stocktaking)
+                    onNavigate(Route.Stocktaking)
                     scope.launch { drawerState.close() }
                 }
                 DrawerItem("库存差异", false, Icons.Default.Tune) {
-                    onNavigate(ScreenTarget.Differences)
+                    onNavigate(Route.Differences)
                     scope.launch { drawerState.close() }
                 }
                 DrawerItem("门店调拨", false, Icons.Default.SwapHoriz) {
-                    onNavigate(ScreenTarget.Transfers)
+                    onNavigate(Route.Transfers)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
-                DrawerItem("我的", current is ScreenTarget.Profile, Icons.Default.AccountCircle) {
-                    onSwitchTab(ScreenTarget.Profile)
+                DrawerItem("我的", current is Route.Profile, Icons.Default.AccountCircle) {
+                    onSwitchTab(Route.Profile)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", current is ScreenTarget.About, Icons.Default.SystemUpdate, showBadge = showUpdateBadge) {
-                    onNavigate(ScreenTarget.About)
+                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", current is Route.About, Icons.Default.SystemUpdate, showBadge = showUpdateBadge) {
+                    onNavigate(Route.About)
                     scope.launch { drawerState.close() }
                 }
             }
@@ -981,7 +1041,7 @@ private fun MainShell(
                 Button(
                     onClick = {
                         scannedEquipmentInfo = null
-                        onSwitchTab(ScreenTarget.Processing)
+                        onSwitchTab(Route.Processing)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 ) {
@@ -1097,16 +1157,16 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
 
 @Composable
 private fun BottomNav(
-    current: ScreenTarget,
-    onSwitchTab: (ScreenTarget) -> Unit,
+    current: Route,
+    onSwitchTab: (Route) -> Unit,
     onReselect: () -> Unit,
 ) {
     val items = listOf(
-        ScreenTarget.Inventory() to ("库存查询" to Icons.Default.Inventory),
-        ScreenTarget.Herbs to ("斗谱" to Icons.Default.GridView),
-        ScreenTarget.Processing to ("加工" to Icons.Default.Sync),
-        ScreenTarget.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
-        ScreenTarget.Profile to ("我的" to Icons.Default.AccountCircle),
+        Route.Inventory() to ("库存查询" to Icons.Default.Inventory),
+        Route.Herbs to ("斗谱" to Icons.Default.GridView),
+        Route.Processing to ("加工" to Icons.Default.Sync),
+        Route.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
+        Route.Profile to ("我的" to Icons.Default.AccountCircle),
     )
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -1127,11 +1187,11 @@ private fun BottomNav(
             ) {
                 items.forEach { (target, pair) ->
                     val isSelected = when (target) {
-                        is ScreenTarget.Inventory -> current is ScreenTarget.Inventory
-                        is ScreenTarget.Herbs -> current is ScreenTarget.Herbs
-                        is ScreenTarget.Processing -> current is ScreenTarget.Processing
-                        is ScreenTarget.Packages -> current is ScreenTarget.Packages
-                        is ScreenTarget.Profile -> current is ScreenTarget.Profile
+                        is Route.Inventory -> current is Route.Inventory
+                        is Route.Herbs -> current is Route.Herbs
+                        is Route.Processing -> current is Route.Processing
+                        is Route.Packages -> current is Route.Packages
+                        is Route.Profile -> current is Route.Profile
                         else -> false
                     }
                     val iconScale by animateFloatAsState(

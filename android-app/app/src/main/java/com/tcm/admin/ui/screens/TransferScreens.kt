@@ -79,7 +79,7 @@ import java.time.LocalDate
 @Composable
 internal fun TransfersScreen(
     user: JSONObject?,
-    onNavigate: (ScreenTarget) -> Unit,
+    onNavigate: (Route) -> Unit,
     listState: LazyListState = rememberLazyListState(),
     viewModel: TransferViewModel = hiltViewModel(),
 ) {
@@ -286,7 +286,7 @@ internal fun TransfersScreen(
 
                     AppCard(
                         modifier = Modifier.padding(bottom = 12.dp),
-                        onClick = { onNavigate(ScreenTarget.TransferDetail(transfer.optInt("id"))) },
+                        onClick = { onNavigate(Route.TransferDetail(transfer.optInt("id"))) },
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
