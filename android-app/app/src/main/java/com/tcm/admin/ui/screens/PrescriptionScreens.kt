@@ -261,7 +261,7 @@ internal fun PrescriptionsScreen(
                             if (!readOnly && item.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                                 Spacer(Modifier.width(6.dp))
                                 Button(
-                                    onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject()).put("prescriptionId", item.optInt("id")).put("prescription", item))) },
+                                    onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject().put("prescriptionId", item.optInt("id")).put("prescription", item)))) },
                                     shape = FieldShape,
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -477,7 +477,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     SectionHeader("加工批次", "共 ${plans.length()} 批", modifier = Modifier.weight(1f))
                     if (!readOnly && p.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                         Button(
-                            onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject()).put("prescriptionId", id).put("prescription", p))) },
+                            onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject().put("prescriptionId", id).put("prescription", p)))) },
                             shape = FieldShape,
                             modifier = Modifier.height(32.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -540,7 +540,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                 if (!readOnly && plan.optInt("status") in 0..1) {
                                     Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
-                                        onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject(plan.toString())).put("prescription", p))) },
+                                        onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject(plan.toString()).put("prescription", p)))) },
                                         shape = FieldShape,
                                         modifier = Modifier.height(30.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
