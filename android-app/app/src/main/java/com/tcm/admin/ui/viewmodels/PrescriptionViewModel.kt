@@ -11,7 +11,8 @@ import com.tcm.admin.data.paging.PrescriptionsPagingSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    flatMapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,7 +38,8 @@ class PrescriptionViewModel @Inject constructor(
         keyword, status, doctorId, storeId
     ) { k, s, d, st ->
         FilterParams(k, s, d, st)
-    }.flatMapLatest { params ->
+    }.@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    flatMapLatest { params ->
         Pager(
             config = PagingConfig(pageSize = 20, enablePlaceholders = false)
         ) {
