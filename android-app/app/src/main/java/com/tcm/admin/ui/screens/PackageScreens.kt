@@ -325,7 +325,7 @@ internal fun PackagesScreen(
 
         if (error != null) {
             item(key = "error") {
-                Text(error!!, color = Danger, fontSize = 13.sp)
+                ErrorStateView(message = error!!, onRetry = { reload++ })
                 Spacer(Modifier.height(8.dp))
             }
         }
@@ -453,7 +453,7 @@ internal fun PackageSummaryCard(
             InfoRowItem(label = "备注", value = it)
         }
 
-        if (item.statusCode == 0) {
+        if (item.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -564,7 +564,7 @@ internal fun PackageDetailPage(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (pkg.statusCode == 0) {
+            if (pkg.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
                 OutlinedButton(
                     onClick = { onNavigate(ScreenTarget.PackageForm(pkg)) },
                     shape = FieldShape,
@@ -576,7 +576,7 @@ internal fun PackageDetailPage(
                 }
             }
 
-            if (pkg.statusCode == 0) {
+            if (pkg.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
                 Button(
                     onClick = { onNavigate(ScreenTarget.PackageVerify(pkg.code)) },
                     shape = FieldShape,
@@ -712,7 +712,7 @@ internal fun PackageFormScreen(
 
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            Text(error!!, color = Danger, fontSize = 13.sp)
+            ErrorStateView(message = error!!, onRetry = { reload++ })
         }
 
         Spacer(Modifier.height(24.dp))
@@ -846,7 +846,7 @@ internal fun PackageVerifyScreen(
 
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            Text(error!!, color = Danger, fontSize = 13.sp)
+            ErrorStateView(message = error!!, onRetry = { reload++ })
         }
 
         Spacer(Modifier.height(24.dp))

@@ -239,7 +239,7 @@ internal fun PrescriptionsScreen(
         if (error != null) {
             item(key = "error") {
                 Spacer(Modifier.height(14.dp))
-                Text(error!!, color = Danger, fontSize = 13.sp)
+                ErrorStateView(message = error!!, onRetry = { reload++ })
             }
         }
 
@@ -293,7 +293,7 @@ internal fun PrescriptionsScreen(
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                        if (!readOnly && item.optInt("status") == 0) {
+                        if (!readOnly && item.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                             Spacer(Modifier.width(6.dp))
                             Button(
                                 onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject().put("prescriptionId", item.optInt("id")).put("prescription", item))) },
@@ -304,7 +304,7 @@ internal fun PrescriptionsScreen(
                             ) { Text("新增加工", fontSize = 12.sp) }
                         }
 
-                        if (!readOnly && item.optInt("status") != 1) {
+                        if (!readOnly && item.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
                             Spacer(Modifier.width(6.dp))
                             OutlinedButton(
                                 onClick = { onNavigate(ScreenTarget.PrescriptionEdit(item)) },
@@ -416,7 +416,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                     }
                     StatusPill(prescriptionStatusLabel(p.optInt("status")))
                 }
-                if (!readOnly && p.optInt("status") != 1) {
+                if (!readOnly && p.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = { onNavigate(ScreenTarget.PrescriptionEdit(p)) },
@@ -487,7 +487,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
             AppCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     SectionHeader("加工批次", "共 ${plans.length()} 批", modifier = Modifier.weight(1f))
-                    if (!readOnly && p.optInt("status") == 0) {
+                    if (!readOnly && p.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                         Button(
                             onClick = { onNavigate(ScreenTarget.ProcessingPlanForm(JSONObject().put("prescriptionId", id).put("prescription", p))) },
                             shape = FieldShape,
@@ -559,7 +559,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (S
                                     ) { Text("编辑", fontSize = 11.5.sp) }
                                 }
 
-                                if (!readOnly && plan.optInt("status") == 0) {
+                                if (!readOnly && plan.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
                                     Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
                                         onClick = { deletePlan = plan },

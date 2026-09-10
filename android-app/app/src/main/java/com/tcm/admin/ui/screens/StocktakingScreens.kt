@@ -149,7 +149,7 @@ internal fun StocktakingScreen(
         }
 
         if (checks == null && error == null) AppEmptyState("加载盘点列表中...")
-        if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
+        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
         if (checks != null && checks!!.isEmpty()) AppEmptyState("暂无盘点单记录")
 
         checks.orEmpty().forEach { check ->
@@ -323,7 +323,7 @@ internal fun StocktakingDetailScreen(
             .padding(16.dp),
     ) {
         if (check == null && error == null) AppEmptyState("加载盘点明细中...")
-        if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
+        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
 
         check?.let { selected ->
             val items = selected.optJSONArray("items") ?: JSONArray()

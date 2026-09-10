@@ -265,7 +265,7 @@ internal fun TransfersScreen(
         }
 
         if (transfers == null && error == null) AppEmptyState("加载中...")
-        if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
+        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
         if (transfers != null && transfers!!.isEmpty()) AppEmptyState("暂无调拨单")
 
         transfers.orEmpty().forEach { transfer ->
@@ -530,7 +530,7 @@ internal fun TransferDetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (error == null) AppEmptyState("正在加载调拨详情...")
-            else Text(error!!, color = Danger, fontSize = 13.sp)
+            else ErrorStateView(message = error!!, onRetry = { reload++ })
         }
         return
     }
@@ -723,7 +723,7 @@ internal fun TransferDetailScreen(
         }
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            Text(error!!, color = Danger, fontSize = 13.sp)
+            ErrorStateView(message = error!!, onRetry = { reload++ })
         }
         Spacer(Modifier.height(16.dp))
     }

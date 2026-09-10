@@ -235,7 +235,7 @@ internal fun HerbsScreen(
         }
         if (error != null) {
             item(key = "error") {
-                Text(error!!, color = Danger, fontSize = 13.sp)
+                ErrorStateView(message = error!!, onRetry = { reload++ })
                 Spacer(Modifier.height(10.dp))
             }
         }
@@ -780,7 +780,7 @@ internal fun HerbLocationAssignScreen(
 
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            Text(error!!, color = Danger, fontSize = 13.sp)
+            ErrorStateView(message = error!!, onRetry = { reload++ })
         }
 
         Spacer(Modifier.height(24.dp))

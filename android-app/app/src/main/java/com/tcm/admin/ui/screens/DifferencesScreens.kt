@@ -144,7 +144,7 @@ internal fun DifferencesScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        if (error != null) Text(error!!, color = Danger, fontSize = 13.sp)
+        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
 
         if (tab == "current") {
             if (products == null && error == null) AppEmptyState("加载中...")

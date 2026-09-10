@@ -58,3 +58,24 @@ internal fun packageItem(value: JSONObject): PackageItem {
         verifierName = operatorName("verifier"),
     )
 }
+
+enum class PrescriptionStatus(val code: Int) {
+    IN_PROGRESS(0), COMPLETED(1), CANCELLED(2), UNKNOWN(-1)
+}
+
+enum class ProcessingPlanStatus(val code: Int) {
+    WAITING(0), IN_PROGRESS(1), COMPLETED(2), PENDING_PICKUP(3), PICKED_UP(4), CANCELLED(5), UNKNOWN(-1)
+}
+
+enum class PackageStatus(val code: Int) {
+    PENDING(0), PICKED_UP(1), CLOSED(2), UNKNOWN(-1)
+}
+
+fun Int?.toPrescriptionStatus(): PrescriptionStatus =
+    PrescriptionStatus.entries.find { it.code == this } ?: PrescriptionStatus.UNKNOWN
+
+fun Int?.toProcessingPlanStatus(): ProcessingPlanStatus =
+    ProcessingPlanStatus.entries.find { it.code == this } ?: ProcessingPlanStatus.UNKNOWN
+
+fun Int?.toPackageStatus(): PackageStatus =
+    PackageStatus.entries.find { it.code == this } ?: PackageStatus.UNKNOWN

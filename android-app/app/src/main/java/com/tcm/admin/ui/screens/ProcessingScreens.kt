@@ -106,7 +106,7 @@ import java.time.LocalDate
 private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
 private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
 
-private fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap {
+private suspend fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap = withContext(Dispatchers.IO) {
     val cacheFile = java.io.File(context.cacheDir, "processing-photos/$planId-$photoId")
     val legacyFile = java.io.File(context.filesDir, "processing-photos/$planId-$photoId")
     if (legacyFile.exists()) {
@@ -114,7 +114,7 @@ private fun loadProcessingPhoto(context: android.content.Context, planId: Int, p
     }
     val cacheAge = System.currentTimeMillis() - cacheFile.lastModified()
     if (cacheFile.isFile && cacheAge in 0..PROCESSING_PHOTO_CACHE_TTL_MILLIS) {
-        BitmapFactory.decodeFile(cacheFile.absolutePath)?.let { return it }
+        BitmapFactory.decodeFile(cacheFile.absolutePath)?.let { return@withContext it }
     }
     cacheFile.delete()
 
@@ -125,7 +125,7 @@ private fun loadProcessingPhoto(context: android.content.Context, planId: Int, p
         cacheFile.parentFile?.mkdirs()
         cacheFile.writeBytes(bytes)
     }
-    return bitmap
+    bitmap
 }
 
 private fun todayAllStat(stats: JSONObject?): String {
@@ -550,7 +550,7 @@ internal fun ProcessingScreenV2(
                 border = BorderStroke(0.5.dp, Danger.copy(alpha = 0.4f)),
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             ) {
-                Text(error!!, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+                ErrorStateView(message = error!!, onRetry = { reload++ })
             }
         }
 
@@ -682,7 +682,7 @@ internal fun ProcessingScreenV2(
                                 }
                             }
 
-                            if (status == 0) { // 待加工
+                            if (status == com.tcm.admin.ProcessingPlanStatus.WAITING.code) { // 待加工
                                 Button(
                                     onClick = {
                                         scope.launch {
@@ -714,7 +714,7 @@ internal fun ProcessingScreenV2(
                                 }
                             }
 
-                            if (status == 1) { // 加工中：快捷扫码（直接扫码，默认下一步）
+                            if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code) { // 加工中：快捷扫码（直接扫码，默认下一步）
                                 Button(
                                     onClick = {
                                         quickScanTargetPlan = plan
@@ -731,7 +731,7 @@ internal fun ProcessingScreenV2(
                                 }
                             }
 
-                            if (status == 2 && !packageCreated) { // 完成但未生成包裹
+                            if (status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code && !packageCreated) { // 完成但未生成包裹
                                 Button(
                                     onClick = { generatePackagePlan = plan },
                                     modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
@@ -1214,7 +1214,7 @@ internal fun ProcessingPlanFormScreen(
         }
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            Text(error!!, color = Danger, fontSize = 13.sp)
+            ErrorStateView(message = error!!, onRetry = { reload++ })
         }
         Spacer(Modifier.height(16.dp))
         Button(
@@ -1733,7 +1733,7 @@ internal fun WorkflowOperationScreen(
     val photoCount = photos?.length() ?: 0
     val status = detail?.optInt("status", plan.optInt("status")) ?: plan.optInt("status")
     val currentStage = detail?.optInt("currentStage", 1) ?: 1
-    val canUpload = status == 1 && currentStage in listOf(1, 2) && photoCount < 3
+    val canUpload = status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code && currentStage in listOf(1, 2) && photoCount < 3
     val canFinish = detail?.optBoolean("canCompleteWorkflow") == true || detail?.optBoolean("canFinalizeWorkflow") == true
     val exceptions = detail?.optJSONArray("workflowExceptions")?.let { arr ->
         (0 until arr.length()).map { arr.getJSONObject(it) }
@@ -1776,23 +1776,23 @@ internal fun WorkflowOperationScreen(
     val decoctionStartedAt = earliestStageStartedAt(4)
     val packagingStartedAt = earliestStageStartedAt(5)
     val dispensingState = when {
-        status == 2 || photoCount > 0 -> "已完成调配"
-        status == 1 -> "调配中"
+        status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code || photoCount > 0 -> "已完成调配"
+        status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code -> "调配中"
         else -> "待调配"
     }
     val soakingState = when {
-        status == 2 -> "浸泡已完成"
+        status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code -> "浸泡已完成"
         activeSoakings.isNotEmpty() -> "浸泡中"
         else -> "等待浸泡"
     }
     val decoctionState = when {
-        status == 2 -> "煎煮已完成"
+        status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code -> "煎煮已完成"
         activeDecoctions.isNotEmpty() -> "煎煮中"
         activeSoakings.isNotEmpty() -> "等待浸泡完成"
         else -> "等待煎煮"
     }
     val packagingState = when {
-        status == 2 -> "全部分组已打包"
+        status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code -> "全部分组已打包"
         activePackagings.isNotEmpty() -> "打包中"
         activeDecoctions.isNotEmpty() -> "等待煎煮完成"
         else -> "等待打包"
@@ -1800,11 +1800,11 @@ internal fun WorkflowOperationScreen(
     val prescriptionCardClick: (() -> Unit)? = if (prescriptionId > 0) {
         onNavigatePrescription?.let { callback -> { callback(prescriptionId) } }
     } else null
-    val isDispensingCompleted = status == 2 || photoCount > 0
-    val isWorkflowCompleted = status == 2
+    val isDispensingCompleted = status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code || photoCount > 0
+    val isWorkflowCompleted = status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code
     val dispensingTimeLabel = when {
         isDispensingCompleted && dispensingCompletedAt.isNotBlank() -> dispensingCompletedAt
-        status == 1 && dispensingStartedAt.isNotBlank() -> dispensingStartedAt
+        status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code && dispensingStartedAt.isNotBlank() -> dispensingStartedAt
         else -> ""
     }
     val soakingTimeLabel = when {
@@ -1884,7 +1884,7 @@ internal fun WorkflowOperationScreen(
             Spacer(Modifier.height(10.dp))
             Surface(color = DangerSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(error!!, color = Danger, fontSize = 13.sp)
+                    ErrorStateView(message = error!!, onRetry = { reload++ })
                     occupyingPlanTarget?.let { occPlan ->
                         Spacer(Modifier.height(8.dp))
                         OccupyingPlanCard(
@@ -1898,7 +1898,7 @@ internal fun WorkflowOperationScreen(
             }
         }
 
-        if (status == 0) {
+        if (status == com.tcm.admin.ProcessingPlanStatus.WAITING.code) {
             Spacer(Modifier.height(12.dp))
             Button(
                 enabled = !busy,
@@ -1953,7 +1953,7 @@ internal fun WorkflowOperationScreen(
                     dispensingState,
                     color = when {
                         isDispensingCompleted -> Success
-                        status == 1 -> Primary
+                        status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code -> Primary
                         else -> Muted
                     },
                     fontSize = 12.sp,
@@ -1979,9 +1979,7 @@ internal fun WorkflowOperationScreen(
                                     busy = true
                                     scope.launch {
                                         runCatching {
-                                            withContext(Dispatchers.IO) {
-                                                loadProcessingPhoto(context, plan.optInt("id"), photoId)
-                                            }
+                                            loadProcessingPhoto(context, plan.optInt("id"), photoId)
                                         }.onSuccess {
                                             previewBitmap = it
                                             previewPhotoId = photoId
@@ -1994,7 +1992,7 @@ internal fun WorkflowOperationScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                             ) { Text("查看照片 ${index + 1}", fontSize = 12.sp) }
 
-                            if (status == 1 && currentStage in listOf(1, 2)) {
+                            if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code && currentStage in listOf(1, 2)) {
                                 OutlinedButton(
                                     enabled = !photoDeleting && !busy,
                                     onClick = {
@@ -2098,7 +2096,7 @@ internal fun WorkflowOperationScreen(
                                     Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
                                     Text("操作人：$operator · 开始：${serverDateTime(item.opt("startedAt"))}", color = Muted, fontSize = 11.sp)
                                 }
-                                if (status == 1) {
+                                if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code) {
                                     OutlinedButton(
                                         onClick = {
                                             exceptionTargetUsage = item
@@ -2117,7 +2115,7 @@ internal fun WorkflowOperationScreen(
                     }
                 }
 
-                if (status == 1) {
+                if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code) {
                     Spacer(Modifier.height(8.dp))
                     Button(
                         enabled = !busy,
@@ -2179,7 +2177,7 @@ internal fun WorkflowOperationScreen(
                 Spacer(Modifier.height(8.dp))
 
                 // Waiting soaking portions ready to start decoction
-                if (status == 1 && activeSoakings.isNotEmpty()) {
+                if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code && activeSoakings.isNotEmpty()) {
                     activeSoakings.forEach { item ->
                         val equipment = item.optJSONObject("equipment")?.displayField("name", "浸泡桶") ?: "浸泡桶"
                         val portion = item.optInt("portionNo", 1)
@@ -2235,7 +2233,7 @@ internal fun WorkflowOperationScreen(
                                     Text("第 ${item.optInt("portionNo", 1)} 组 · $equipment · 煎煮中", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
                                     Text("操作人：$operator · 开始：${serverDateTime(item.opt("startedAt"))}", color = Muted, fontSize = 11.sp)
                                 }
-                                if (status == 1) {
+                                if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code) {
                                     OutlinedButton(
                                         onClick = {
                                             exceptionTargetUsage = item
@@ -2302,7 +2300,7 @@ internal fun WorkflowOperationScreen(
                 Spacer(Modifier.height(8.dp))
 
                 // Waiting decoction portions ready to start packaging
-                if (status == 1 && activeDecoctions.isNotEmpty()) {
+                if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code && activeDecoctions.isNotEmpty()) {
                     activeDecoctions.forEach { item ->
                         val equipment = item.optJSONObject("equipment")?.displayField("name", "煎药机") ?: "煎药机"
                         val usageId = item.optInt("id")
@@ -2493,7 +2491,7 @@ internal fun WorkflowOperationScreen(
         }
 
         // Finish Bar
-        if (status == 1 && canFinish) {
+        if (status == com.tcm.admin.ProcessingPlanStatus.IN_PROGRESS.code && canFinish) {
             Spacer(Modifier.height(14.dp))
             Button(
                 enabled = !busy,
@@ -2507,8 +2505,8 @@ internal fun WorkflowOperationScreen(
             ) { Text("完成加工", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         }
 
-        val packageCreated = detail?.optBoolean("packageCreated") == true || detail?.optJSONObject("package") != null || status == 3 || status == 4
-        if (status == 2 && !packageCreated) {
+        val packageCreated = detail?.optBoolean("packageCreated") == true || detail?.optJSONObject("package") != null || status == com.tcm.admin.ProcessingPlanStatus.PENDING_PICKUP.code || status == com.tcm.admin.ProcessingPlanStatus.PICKED_UP.code
+        if (status == com.tcm.admin.ProcessingPlanStatus.COMPLETED.code && !packageCreated) {
             Spacer(Modifier.height(14.dp))
             Button(
                 enabled = !busy,
@@ -3010,7 +3008,7 @@ internal fun WorkflowOperationDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (error != null) {
-                    Text(error!!, color = Danger, fontSize = 12.sp)
+                    ErrorStateView(message = error!!, onRetry = { reload++ })
                     Spacer(Modifier.height(8.dp))
                 }
                 Text("工序阶段选择", color = Muted, fontSize = 12.sp)

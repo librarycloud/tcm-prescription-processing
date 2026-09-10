@@ -167,6 +167,19 @@ object ApiClient {
         return trimmed
     }
 
+    private fun getSessionPrefs(context: Context): android.content.SharedPreferences {
+        val masterKey = androidx.security.crypto.MasterKey.Builder(context)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return androidx.security.crypto.EncryptedSharedPreferences.create(
+            context,
+            "admin_session_enc",
+            masterKey,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
     fun saveSession(context: Context, session: AdminSession) {
         cacheContext = context.applicationContext
         clearE6ImportCache(context)
@@ -174,16 +187,35 @@ object ApiClient {
         clearProcessingPhotoCache(context)
         val cleanToken = sanitizeToken(session.token) ?: session.token
         token = cleanToken
-        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(TOKEN_KEY, encodeSecret(cleanToken))
-            .putString(USER_KEY, encodeSecret(session.user.toString()))
-            .apply()
+        
+        runCatching {
+            getSessionPrefs(context).edit()
+                .putString(TOKEN_KEY, encodeSecret(cleanToken))
+                .putString(USER_KEY, encodeSecret(session.user.toString()))
+                .apply()
+        }
     }
 
     fun loadSession(context: Context): AdminSession? {
         cacheContext = context.applicationContext
-        val preferences = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+        
+        // Migrate from old plain prefs if needed
+        val oldPrefs = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+        if (oldPrefs.contains(TOKEN_KEY) || oldPrefs.contains(USER_KEY)) {
+            val oldRawToken = oldPrefs.getString(TOKEN_KEY, null)
+            val oldRawUser = oldPrefs.getString(USER_KEY, null)
+            if (oldRawToken != null && oldRawUser != null) {
+                runCatching {
+                    getSessionPrefs(context).edit()
+                        .putString(TOKEN_KEY, oldRawToken)
+                        .putString(USER_KEY, oldRawUser)
+                        .apply()
+                }
+            }
+            oldPrefs.edit().clear().apply()
+        }
+
+        val preferences = runCatching { getSessionPrefs(context) }.getOrNull() ?: return null
         val rawToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
         val rawUser = preferences.getString(USER_KEY, null) ?: return null
         val savedToken = decodeToken(rawToken)
@@ -207,33 +239,33 @@ object ApiClient {
     fun clearSession(context: Context) {
         cacheContext = context.applicationContext
         token = null
-        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .apply()
+        runCatching {
+            getSessionPrefs(context).edit().clear().apply()
+        }
+        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         clearE6ImportCache(context)
         clearResponseCache(context)
         clearProcessingPhotoCache(context)
     }
 
-    fun login(identifier: String, password: String): AdminSession {
+    suspend fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
         val receivedToken = sanitizeToken(result.getString("token")) ?: result.getString("token")
         return AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
     }
 
-    fun updateMe(payload: JSONObject): AdminSession {
+    suspend fun updateMe(payload: JSONObject): AdminSession {
         val data = request("/user/me", "PUT", payload).getJSONObject("data")
         val newToken = sanitizeToken(data.getString("token")) ?: data.getString("token")
         val newUser = data.getJSONObject("user")
         return AdminSession(newToken, newUser).also { token = it.token }
     }
 
-    fun me(): JSONObject = request("/user/me").getJSONObject("data")
+    suspend fun me(): JSONObject = request("/user/me").getJSONObject("data")
 
-    fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
-    fun androidAppVersion(
+    suspend fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    suspend fun androidAppVersion(
         versionCode: Int? = BuildConfig.VERSION_CODE,
         deviceId: String? = null,
         context: Context? = null,
@@ -297,11 +329,11 @@ object ApiClient {
         }
         return json.getJSONObject("data")
     }
-    fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
+    suspend fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
         val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)
         return data.optJSONArray("list") ?: JSONArray()
     }
-    fun prescriptionsPaged(
+    suspend fun prescriptionsPaged(
         status: Int? = null,
         keyword: String = "",
         storeId: Int? = null,
@@ -319,16 +351,16 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/prescriptions?$query").getJSONObject("data")
     }
-    fun prescriptionDetail(id: Int): JSONObject = request("/admin/prescriptions/$id").getJSONObject("data")
-    fun createPrescription(payload: JSONObject): JSONObject = request("/admin/prescriptions", "POST", payload).getJSONObject("data")
-    fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
-    fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
-    fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject =
+    suspend fun prescriptionDetail(id: Int): JSONObject = request("/admin/prescriptions/$id").getJSONObject("data")
+    suspend fun createPrescription(payload: JSONObject): JSONObject = request("/admin/prescriptions", "POST", payload).getJSONObject("data")
+    suspend fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
+    suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject =
         requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes).getJSONObject("data")
-    fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
-    fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
-    fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
-    fun plans(view: String = "today-all", keyword: String = "", storeId: Int? = null): JSONArray {
+    suspend fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
+    suspend fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
+    suspend fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
+    suspend fun plans(view: String = "today-all", keyword: String = "", storeId: Int? = null): JSONArray {
         val query = buildList {
             add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
             add("page=1")
@@ -338,10 +370,10 @@ object ApiClient {
         }.joinToString("&")
         return list(request("/admin/processing-plans?$query").getJSONObject("data"))
     }
-    fun processingWorkflow(id: Int): JSONObject = request("/admin/processing-plans/$id/workflow").getJSONObject("data")
+    suspend fun processingWorkflow(id: Int): JSONObject = request("/admin/processing-plans/$id/workflow").getJSONObject("data")
     // Compatibility helpers for screen modules that use descriptive API names.
-    fun processingStats(storeId: Int? = null): JSONObject = stats(storeId)
-    fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
+    suspend fun processingStats(storeId: Int? = null): JSONObject = stats(storeId)
+    suspend fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList {
             add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
             add("page=$page"); add("pageSize=$pageSize")
@@ -350,22 +382,22 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/processing-plans?$query").getJSONObject("data")
     }
-    fun pickupTasks(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray =
+    suspend fun pickupTasks(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray =
         packages(status = status, keyword = keyword, storeId = storeId)
-    fun pickupTasksPaged(status: Int? = null, keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject =
+    suspend fun pickupTasksPaged(status: Int? = null, keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject =
         packagesPaged(status = status, keyword = keyword, storeId = storeId, page = page, pageSize = pageSize)
-    fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
-    fun updatePlan(id: Int, payload: JSONObject): JSONObject = updateProcessingPlan(id, payload)
-    fun cancelPlan(id: Int, reason: String = ""): JSONObject = transitionPlan(id, 5)
-    fun generatePlanPackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = generatePackage(id, payload)
-    fun delayPlan(planId: Int, days: Int): JSONObject = delayPlan(planId, JSONObject().put("days", days))
-    fun createProcessingPlan(payload: JSONObject): JSONObject = request("/admin/processing-plans", "POST", payload).getJSONObject("data")
-    fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
-    fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
-    fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
-    fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
-    fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
-    fun processingPlanByScan(code: String): JSONObject? {
+    suspend fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
+    suspend fun updatePlan(id: Int, payload: JSONObject): JSONObject = updateProcessingPlan(id, payload)
+    suspend fun cancelPlan(id: Int, reason: String = ""): JSONObject = transitionPlan(id, 5)
+    suspend fun generatePlanPackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = generatePackage(id, payload)
+    suspend fun delayPlan(planId: Int, days: Int): JSONObject = delayPlan(planId, JSONObject().put("days", days))
+    suspend fun createProcessingPlan(payload: JSONObject): JSONObject = request("/admin/processing-plans", "POST", payload).getJSONObject("data")
+    suspend fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
+    suspend fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
+    suspend fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
+    suspend fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
+    suspend fun processingPlanByScan(code: String): JSONObject? {
         val trimmed = code.trim()
         val query = java.net.URLEncoder.encode(trimmed, "UTF-8")
         val res = runCatching { request("/admin/processing-plans/by-scan?code=$query") }.getOrNull()
@@ -375,7 +407,7 @@ object ApiClient {
         val paged = runCatching { processingPlansPaged(view = "all", keyword = cleanCode, pageSize = 1) }.getOrNull()
         return paged?.optJSONArray("list")?.optJSONObject(0)
     }
-    fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
+    suspend fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
         val cacheDir = File(context.applicationContext.cacheDir, "processing-photos")
         val legacyDir = File(context.applicationContext.filesDir, "processing-photos")
         if (planId != null && photoId != null) {
@@ -388,7 +420,7 @@ object ApiClient {
             legacyDir.delete()
         }
     }
-    fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {
+    suspend fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {
         val query = buildList {
             add("page=1")
             add("pageSize=100")
@@ -402,7 +434,7 @@ object ApiClient {
         }.joinToString("&")
         return list(request("/admin/packages?$query").getJSONObject("data"))
     }
-    fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 10): JSONObject {
+    suspend fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList {
             add("page=$page"); add("pageSize=$pageSize")
             add("sortBy=${java.net.URLEncoder.encode(sortBy, "UTF-8")}"); add("sortOrder=desc")
@@ -413,28 +445,28 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/packages?$query").getJSONObject("data")
     }
-   fun packageDetail(id: Int): JSONObject = request("/admin/packages/$id").getJSONObject("data")
-    fun packageByCode(code: String): JSONObject = request("/admin/packages/by-code/${java.net.URLEncoder.encode(code, "UTF-8")}").getJSONObject("data")
-    fun createPackage(payload: JSONObject): JSONObject = request("/admin/packages", "POST", payload).getJSONObject("data")
-    fun updatePackage(id: Int, payload: JSONObject): JSONObject = request("/admin/packages/$id", "PUT", payload).getJSONObject("data")
-    fun deletePackage(id: Int): JSONObject = request("/admin/packages/$id", "DELETE").getJSONObject("data")
-    fun inventory(keyword: String = "", storeId: Int? = null): JSONArray = list(request(
+   suspend fun packageDetail(id: Int): JSONObject = request("/admin/packages/$id").getJSONObject("data")
+    suspend fun packageByCode(code: String): JSONObject = request("/admin/packages/by-code/${java.net.URLEncoder.encode(code, "UTF-8")}").getJSONObject("data")
+    suspend fun createPackage(payload: JSONObject): JSONObject = request("/admin/packages", "POST", payload).getJSONObject("data")
+    suspend fun updatePackage(id: Int, payload: JSONObject): JSONObject = request("/admin/packages/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deletePackage(id: Int): JSONObject = request("/admin/packages/$id", "DELETE").getJSONObject("data")
+    suspend fun inventory(keyword: String = "", storeId: Int? = null): JSONArray = list(request(
         "/admin/e6-pharmacy/products?page=1&pageSize=50" +
             (storeId?.let { "&storeId=$it" } ?: "") +
             (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
     ).getJSONObject("data"))
-    fun inventoryPaged(keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject = request(
+    suspend fun inventoryPaged(keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject = request(
         "/admin/e6-pharmacy/products?page=$page&pageSize=$pageSize" +
             (storeId?.let { "&storeId=$it" } ?: "") +
             (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
     ).getJSONObject("data")
-    fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
-    fun differences(): JSONArray = differenceProducts()
-    fun productCatalog(keyword: String = ""): JSONArray = list(request(
+    suspend fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
+    suspend fun differences(): JSONArray = differenceProducts()
+    suspend fun productCatalog(keyword: String = ""): JSONArray = list(request(
         "/admin/products?page=1&pageSize=100" +
             (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
     ).getJSONObject("data"))
-    fun differenceSummary(storeId: Int? = null): JSONObject {
+    suspend fun differenceSummary(storeId: Int? = null): JSONObject {
         val summary = request("/admin/product-differences/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
         return JSONObject()
             .put("preReceiptQuantity", summary.optInt("more", 0))
@@ -442,7 +474,7 @@ object ApiClient {
             .put("affectedProducts", summary.optInt("total", 0))
             .put("total", summary.optInt("total", 0))
     }
-    fun differenceProducts(): JSONArray {
+    suspend fun differenceProducts(): JSONArray {
         val values = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
         return JSONArray().also { result ->
             for (index in 0 until values.length()) {
@@ -454,7 +486,7 @@ object ApiClient {
             }
         }
     }
-    fun differenceProductsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
+    suspend fun differenceProductsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
         val data = request("/admin/products?onlyDifference=1&page=$page&pageSize=$pageSize").getJSONObject("data")
         val list = data.optJSONArray("list") ?: data.optJSONArray("items") ?: JSONArray()
         val normalized = JSONArray().also { result ->
@@ -468,7 +500,7 @@ object ApiClient {
         }
         return JSONObject(data.toString()).put("list", normalized)
     }
-    fun differenceLogs(): JSONArray {
+    suspend fun differenceLogs(): JSONArray {
         val values = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
         return JSONArray().also { result ->
             for (index in 0 until values.length()) {
@@ -478,7 +510,7 @@ object ApiClient {
             }
         }
     }
-    fun differenceLogsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
+    suspend fun differenceLogsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
         val data = request("/admin/product-differences/logs?page=$page&pageSize=$pageSize").getJSONObject("data")
         val source = data.optJSONArray("list") ?: data.optJSONArray("items") ?: JSONArray()
         val normalized = JSONArray().also { result ->
@@ -490,13 +522,13 @@ object ApiClient {
         data.put("list", normalized)
         return data
     }
-    fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
+    suspend fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList { add("page=$page"); add("pageSize=$pageSize"); storeId?.let { add("storeId=$it") } }.joinToString("&")
         return request("/admin/yd-goods-check?$query").getJSONObject("data")
     }
-    fun prescriptionSources(): JSONArray = dictionaries("PrescriptionSource")
-    fun processTypes(): JSONArray = dictionaries("ProcessType")
-    fun e6Imports(
+    suspend fun prescriptionSources(): JSONArray = dictionaries("PrescriptionSource")
+    suspend fun processTypes(): JSONArray = dictionaries("ProcessType")
+    suspend fun e6Imports(
         keyword: String = "",
         orderDate: String = "",
         status: Int? = null,
@@ -516,7 +548,7 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/e6/imports?$query").getJSONObject("data")
     }
-    fun e6ImportsAll(): JSONObject {
+    suspend fun e6ImportsAll(): JSONObject {
         val first = e6Imports(page = 1, pageSize = 100)
         val list = JSONArray()
         val firstList = first.optJSONArray("list") ?: JSONArray()
@@ -528,7 +560,7 @@ object ApiClient {
         }
         return JSONObject().put("list", list).put("pagination", JSONObject().put("total", list.length()).put("pages", 1).put("page", 1).put("pageSize", list.length().coerceAtLeast(1)))
     }
-    fun saveE6ImportCache(context: Context, data: JSONObject) {
+    suspend fun saveE6ImportCache(context: Context, data: JSONObject) {
         context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
             .edit()
             .putString(
@@ -537,7 +569,7 @@ object ApiClient {
             )
             .apply()
     }
-    fun loadE6ImportCache(context: Context): JSONObject? {
+    suspend fun loadE6ImportCache(context: Context): JSONObject? {
         val preferences = context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
         val cached = preferences.getString(E6_IMPORT_CACHE_KEY, null)
             ?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -550,13 +582,13 @@ object ApiClient {
         }
         return data
     }
-    fun clearE6ImportCache(context: Context) {
+    suspend fun clearE6ImportCache(context: Context) {
         context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
             .edit()
             .remove(E6_IMPORT_CACHE_KEY)
             .apply()
     }
-    fun clearResponseCache(context: Context? = cacheContext) {
+    suspend fun clearResponseCache(context: Context? = cacheContext) {
         synchronized(memoryCache) { memoryCache.clear() }
         val ctx = context ?: cacheContext ?: return
         runCatching {
@@ -574,7 +606,7 @@ object ApiClient {
         }
     }
 
-    internal fun sanitizePrefix(route: String): String =
+    internal suspend fun sanitizePrefix(route: String): String =
         route.trim('/').replace('/', '_')
 
     fun invalidateCachedRoutes(prefixes: List<String>, context: Context? = cacheContext) {
@@ -630,12 +662,12 @@ object ApiClient {
         }
         invalidateCachedRoutes(prefixesToInvalidate)
     }
-    fun e6ImportDetail(id: Int): JSONObject = request("/admin/e6/imports/$id").getJSONObject("data")
-    fun confirmE6Import(id: Int, payload: JSONObject): JSONObject = request("/admin/e6/imports/$id/confirm", "POST", payload).getJSONObject("data")
-    fun mergeE6Imports(payload: JSONObject): JSONObject = request("/admin/e6/imports/merge", "POST", payload).getJSONObject("data")
-    fun rejectE6Import(id: Int, reason: String): JSONObject = request("/admin/e6/imports/$id/reject", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
-    fun revalidateE6Import(id: Int): JSONObject = request("/admin/e6/imports/$id/revalidate", "POST").getJSONObject("data")
-    fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject {
+    suspend fun e6ImportDetail(id: Int): JSONObject = request("/admin/e6/imports/$id").getJSONObject("data")
+    suspend fun confirmE6Import(id: Int, payload: JSONObject): JSONObject = request("/admin/e6/imports/$id/confirm", "POST", payload).getJSONObject("data")
+    suspend fun mergeE6Imports(payload: JSONObject): JSONObject = request("/admin/e6/imports/merge", "POST", payload).getJSONObject("data")
+    suspend fun rejectE6Import(id: Int, reason: String): JSONObject = request("/admin/e6/imports/$id/reject", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun revalidateE6Import(id: Int): JSONObject = request("/admin/e6/imports/$id/revalidate", "POST").getJSONObject("data")
+    suspend fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject {
         val root = herbLocations(storeId?.toString())
         val allLocations = root.optJSONArray("locations") ?: JSONArray()
         val units = linkedMapOf<String, JSONObject>()
@@ -672,11 +704,11 @@ object ApiClient {
                 .put("emptyLocations", visibleLocations - assigned)
                 .put("totalHerbs", (root.optJSONArray("herbs") ?: JSONArray()).length()))
     }
-    fun stocktaking(storeId: Int? = null): JSONObject = stocktakings(storeId)
-    fun recordCheckItemCount(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = recountGoodsCheckItem(itemId, payload)
-    fun updateCheckItemLocation(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = updateGoodsCheckLocation(itemId, payload)
-    fun searchGoodsCheckCandidates(checkId: Int, keyword: String = ""): JSONArray = goodsCheckCandidates(checkId, keyword)
-    fun transfers(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false): JSONArray {
+    suspend fun stocktaking(storeId: Int? = null): JSONObject = stocktakings(storeId)
+    suspend fun recordCheckItemCount(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = recountGoodsCheckItem(itemId, payload)
+    suspend fun updateCheckItemLocation(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = updateGoodsCheckLocation(itemId, payload)
+    suspend fun searchGoodsCheckCandidates(checkId: Int, keyword: String = ""): JSONArray = goodsCheckCandidates(checkId, keyword)
+    suspend fun transfers(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false): JSONArray {
         val query = buildList {
             add("page=1"); add("pageSize=100")
             keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
@@ -685,7 +717,7 @@ object ApiClient {
         }.joinToString("&")
         return list(request("/admin/store-transfers?$query").getJSONObject("data"))
     }
-    fun transfersPaged(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false, page: Int = 1, pageSize: Int = 10): JSONObject {
+    suspend fun transfersPaged(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false, page: Int = 1, pageSize: Int = 10): JSONObject {
         val query = buildList {
             add("page=$page"); add("pageSize=$pageSize")
             keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
@@ -694,18 +726,18 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/store-transfers?$query").getJSONObject("data")
     }
-    fun transferStats(storeId: Int? = null): JSONObject = request("/admin/store-transfers/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
-    fun herbLocations(storeId: String? = null): JSONObject = request("/admin/herb-locations${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
-    fun stores(): JSONArray = request("/admin/herb-locations/stores").getJSONArray("data")
-    fun assignHerbLocation(payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments", "POST", payload).getJSONObject("data")
-    fun updateHerb(id: Int, payload: JSONObject): JSONObject = request("/admin/herb-locations/herbs/$id", "PUT", payload).getJSONObject("data")
-    fun moveHerbLocationAssignment(id: Int, payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments/$id", "PUT", payload).getJSONObject("data")
-    fun deleteHerbLocationAssignment(id: Int): JSONObject = request("/admin/herb-locations/assignments/$id", "DELETE").getJSONObject("data")
-    fun transitionPlan(id: Int, status: Int, createPackage: Boolean = false): JSONObject = request("/admin/processing-plans/$id/transition", "POST", JSONObject().put("status", status).put("createPackage", createPackage)).getJSONObject("data")
-    fun generatePackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST", payload).getJSONObject("data")
-    fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
-    fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
-    fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = "", includeSummary: Boolean = true, loadItems: Boolean = true): JSONObject {
+    suspend fun transferStats(storeId: Int? = null): JSONObject = request("/admin/store-transfers/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    suspend fun herbLocations(storeId: String? = null): JSONObject = request("/admin/herb-locations${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    suspend fun stores(): JSONArray = request("/admin/herb-locations/stores").getJSONArray("data")
+    suspend fun assignHerbLocation(payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments", "POST", payload).getJSONObject("data")
+    suspend fun updateHerb(id: Int, payload: JSONObject): JSONObject = request("/admin/herb-locations/herbs/$id", "PUT", payload).getJSONObject("data")
+    suspend fun moveHerbLocationAssignment(id: Int, payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deleteHerbLocationAssignment(id: Int): JSONObject = request("/admin/herb-locations/assignments/$id", "DELETE").getJSONObject("data")
+    suspend fun transitionPlan(id: Int, status: Int, createPackage: Boolean = false): JSONObject = request("/admin/processing-plans/$id/transition", "POST", JSONObject().put("status", status).put("createPackage", createPackage)).getJSONObject("data")
+    suspend fun generatePackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST", payload).getJSONObject("data")
+    suspend fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
+    suspend fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
+    suspend fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = "", includeSummary: Boolean = true, loadItems: Boolean = true): JSONObject {
         val query = buildList {
             add("page=$page")
             add("pageSize=$pageSize")
@@ -715,32 +747,32 @@ object ApiClient {
         }.joinToString("&")
         return request("/admin/yd-goods-check/$id?$query").getJSONObject("data")
     }
-    fun goodsCheckCandidates(id: Int, keyword: String = ""): JSONArray = arrayData(request("/admin/yd-goods-check/$id/candidates?page=1&pageSize=100${keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: ""}").opt("data"))
-    fun addGoodsCheckItem(checkId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/$checkId/items", "POST", payload).getJSONObject("data")
-    fun recountGoodsCheckItem(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/recount", "PUT", payload).getJSONObject("data")
-    fun updateGoodsCheckLocation(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/location", "PUT", payload).getJSONObject("data")
-    fun reviewGoodsCheckItem(itemId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/yd-goods-check/items/$itemId/review", "POST", payload).getJSONObject("data")
-    fun finishGoodsCheck(id: Int): JSONObject = request("/admin/yd-goods-check/$id/finish", "POST").getJSONObject("data")
-    fun registerDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/register", "POST", payload).getJSONObject("data")
-    fun writeOffDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/write-off", "POST", payload).getJSONObject("data")
-    fun reverseDifference(logId: Int, reason: String): JSONObject = request("/admin/product-differences/logs/$logId/reverse", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
-    fun cancelTransfer(id: Int, reason: String): JSONObject = request("/admin/store-transfers/$id/cancel", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
-    fun confirmOutbound(id: Int): JSONObject = request("/admin/store-transfers/$id/confirm-outbound", "POST").getJSONObject("data")
-    fun confirmReturn(id: Int, returnId: Int): JSONObject = request("/admin/store-transfers/$id/returns/$returnId/confirm", "POST").getJSONObject("data")
-    fun addTransferReturns(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns", "POST", payload).getJSONObject("data")
-    fun updateTransferReturn(id: Int, returnId: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns/$returnId", "PUT", payload).getJSONObject("data")
-    fun transferDetail(id: Int): JSONObject = request("/admin/store-transfers/$id").getJSONObject("data")
-    fun transferStores(): JSONArray = request("/admin/store-transfers/stores").getJSONArray("data")
-    fun createTransfer(payload: JSONObject): JSONObject = request("/admin/store-transfers", "POST", payload).getJSONObject("data")
-    fun updateTransfer(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id", "PUT", payload).getJSONObject("data")
-    fun updateExpectedReturnDate(id: Int, date: String): JSONObject = request("/admin/store-transfers/$id/expected-return-date", "PUT", JSONObject().put("expectedReturnDate", date)).getJSONObject("data")
-    fun startEquipmentUsage(planId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/equipment-usages", "POST", payload).getJSONObject("data")
-    fun startPackaging(planId: Int, usageId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/start-packaging", "POST", payload).getJSONObject("data")
-    fun finishEquipmentUsage(planId: Int, usageId: Int): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/finish", "POST").getJSONObject("data")
-    fun voidEquipmentUsage(planId: Int, usageId: Int, reason: String): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/void", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
-    fun transferFaultyEquipment(planId: Int, usageId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/fault-transfer", "POST", payload).getJSONObject("data")
-    fun delayPlan(planId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/delay", "POST", payload).getJSONObject("data")
-    fun receiveNotice(planId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$planId/receive-notice", "POST", payload).getJSONObject("data")
+    suspend fun goodsCheckCandidates(id: Int, keyword: String = ""): JSONArray = arrayData(request("/admin/yd-goods-check/$id/candidates?page=1&pageSize=100${keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: ""}").opt("data"))
+    suspend fun addGoodsCheckItem(checkId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/$checkId/items", "POST", payload).getJSONObject("data")
+    suspend fun recountGoodsCheckItem(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/recount", "PUT", payload).getJSONObject("data")
+    suspend fun updateGoodsCheckLocation(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/location", "PUT", payload).getJSONObject("data")
+    suspend fun reviewGoodsCheckItem(itemId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/yd-goods-check/items/$itemId/review", "POST", payload).getJSONObject("data")
+    suspend fun finishGoodsCheck(id: Int): JSONObject = request("/admin/yd-goods-check/$id/finish", "POST").getJSONObject("data")
+    suspend fun registerDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/register", "POST", payload).getJSONObject("data")
+    suspend fun writeOffDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/write-off", "POST", payload).getJSONObject("data")
+    suspend fun reverseDifference(logId: Int, reason: String): JSONObject = request("/admin/product-differences/logs/$logId/reverse", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun cancelTransfer(id: Int, reason: String): JSONObject = request("/admin/store-transfers/$id/cancel", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun confirmOutbound(id: Int): JSONObject = request("/admin/store-transfers/$id/confirm-outbound", "POST").getJSONObject("data")
+    suspend fun confirmReturn(id: Int, returnId: Int): JSONObject = request("/admin/store-transfers/$id/returns/$returnId/confirm", "POST").getJSONObject("data")
+    suspend fun addTransferReturns(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns", "POST", payload).getJSONObject("data")
+    suspend fun updateTransferReturn(id: Int, returnId: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns/$returnId", "PUT", payload).getJSONObject("data")
+    suspend fun transferDetail(id: Int): JSONObject = request("/admin/store-transfers/$id").getJSONObject("data")
+    suspend fun transferStores(): JSONArray = request("/admin/store-transfers/stores").getJSONArray("data")
+    suspend fun createTransfer(payload: JSONObject): JSONObject = request("/admin/store-transfers", "POST", payload).getJSONObject("data")
+    suspend fun updateTransfer(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id", "PUT", payload).getJSONObject("data")
+    suspend fun updateExpectedReturnDate(id: Int, date: String): JSONObject = request("/admin/store-transfers/$id/expected-return-date", "PUT", JSONObject().put("expectedReturnDate", date)).getJSONObject("data")
+    suspend fun startEquipmentUsage(planId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/equipment-usages", "POST", payload).getJSONObject("data")
+    suspend fun startPackaging(planId: Int, usageId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/start-packaging", "POST", payload).getJSONObject("data")
+    suspend fun finishEquipmentUsage(planId: Int, usageId: Int): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/finish", "POST").getJSONObject("data")
+    suspend fun voidEquipmentUsage(planId: Int, usageId: Int, reason: String): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/void", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun transferFaultyEquipment(planId: Int, usageId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/fault-transfer", "POST", payload).getJSONObject("data")
+    suspend fun delayPlan(planId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/delay", "POST", payload).getJSONObject("data")
+    suspend fun receiveNotice(planId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$planId/receive-notice", "POST", payload).getJSONObject("data")
 
     private fun list(data: JSONObject): JSONArray = when {
         data.has("list") -> data.optJSONArray("list") ?: JSONArray()
@@ -764,7 +796,7 @@ object ApiClient {
         }
     }
 
-    private fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray): JSONObject {
+    private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
@@ -790,7 +822,7 @@ object ApiClient {
         }
         if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
         invalidateCacheForMutation(path)
-        return json
+        json
     }
 
     open class ApiException(
@@ -799,7 +831,7 @@ object ApiClient {
         val data: JSONObject? = null,
     ) : IllegalStateException(message)
 
-    fun processingEquipmentByScan(keyword: String): JSONObject? {
+    suspend fun processingEquipmentByScan(keyword: String): JSONObject? {
         val trimmed = keyword.trim()
         val query = java.net.URLEncoder.encode(trimmed, "UTF-8")
         val res = runCatching { request("/admin/processing-equipment?keyword=$query&page=1&pageSize=1") }.getOrNull()
@@ -814,11 +846,11 @@ object ApiClient {
         return null
     }
 
-    private fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
+    private suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val normalizedMethod = method.uppercase()
         val cacheTtl = if (normalizedMethod == "GET") cacheTtlMillis(path) else null
         if (cacheTtl != null) {
-            cachedResponse(path, cacheTtl)?.let { return it }
+            cachedResponse(path, cacheTtl)?.let { return@withContext it }
         }
         val requestBuilder = Request.Builder()
             .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
@@ -854,7 +886,7 @@ object ApiClient {
         if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
         if (normalizedMethod != "GET") invalidateCacheForMutation(path)
         else if (cacheTtl != null) cacheResponse(path, json.toString())
-        return json
+        json
     }
 
     private fun cacheResponse(path: String, value: String) {
@@ -898,7 +930,7 @@ object ApiClient {
         return runCatching { JSONObject(entry.data) }.getOrNull()
     }
 
-    internal fun cacheKey(path: String): String {
+    internal suspend fun cacheKey(path: String): String {
         val route = path.substringBefore('?')
         val prefix = sanitizePrefix(route)
         val hash = MessageDigest
@@ -908,7 +940,7 @@ object ApiClient {
         return if (prefix.isNotBlank()) "${prefix}__${hash}" else hash
     }
 
-    private fun requestBytes(path: String): ByteArray {
+    private suspend fun requestBytes(path: String): ByteArray = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val requestBuilder = Request.Builder()
             .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
             .header("Accept", "image/*")
@@ -919,6 +951,6 @@ object ApiClient {
             val json = runCatching { JSONObject(message) }.getOrNull()
             throw IllegalStateException(json?.optString("message")?.takeIf { it.isNotBlank() } ?: "照片加载失败")
         }
-        return response.body?.bytes() ?: throw IllegalStateException("照片内容为空")
+        response.body?.bytes() ?: throw IllegalStateException("照片内容为空")
     }
 }

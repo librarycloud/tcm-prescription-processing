@@ -413,7 +413,7 @@ internal fun E6ImportsScreen(
 
             if (error != null) {
                 item(key = "error") {
-                    Text(error!!, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp))
+                    ErrorStateView(message = error!!, onRetry = { reload++ })
                 }
             }
 

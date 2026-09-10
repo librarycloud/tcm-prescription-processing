@@ -412,7 +412,7 @@ internal fun AboutScreen(
                 Spacer(Modifier.height(10.dp))
                 when {
                     checking -> Text("正在检查最新版本...", color = Muted, fontSize = 13.sp)
-                    error != null -> Text(error!!, color = Danger, fontSize = 13.sp)
+                    error != null -> ErrorStateView(message = error!!, onRetry = { reload++ })
                     latest != null && hasUpdate -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("发现新版本 ${latest!!.displayField("versionName")}", color = Primary, fontWeight = FontWeight.SemiBold)
