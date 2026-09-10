@@ -1,5 +1,12 @@
 package com.tcm.admin
 
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import com.tcm.admin.ui.viewmodels.InventoryViewModel
+
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -80,25 +87,20 @@ internal fun InventoryScreen(
     scanRequestId: Long = 0L,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
+    viewModel: InventoryViewModel = hiltViewModel(),
 ) {
-    val listOwner = "inventory"
     val showStore = user?.optInt("role", -1) == 0
-    var query by rememberRetainedListValue(listOwner, "query") { initialQuery }
-    var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
-    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
-    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
-    var selectedProduct by remember { mutableStateOf<JSONObject?>(null) }
-    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
-    var loading by remember { mutableStateOf(false) }
-    var refreshing by remember { mutableStateOf(false) }
-    var searchRequest by rememberRetainedListValue(listOwner, "searchRequest") { if (initialQuery.isBlank()) 0 else 1 }
-    var page by rememberRetainedListValue(listOwner, "page") { 1 }
-    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
-    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
-    var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
-    var listScrollPosition by rememberRetainedListValue(listOwner, "scrollPosition") { 0 }
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val selectedStoreId by viewModel.selectedStoreId.collectAsStateWithLifecycle()
+    val selectedProduct by viewModel.selectedProduct.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+
+    val products = viewModel.productsFlow.collectAsLazyPagingItems()
+
+    var listScrollPosition by remember { mutableStateOf(0) }
     var restoreListScroll by remember { mutableStateOf(false) }
-    var lastAutoSearchQuery by rememberRetainedListValue(listOwner, "lastAutoSearchQuery") { query.trim() }
+    var lastAutoSearchQuery by remember { mutableStateOf(query.trim()) }
+
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -124,15 +126,9 @@ internal fun InventoryScreen(
     }
 
     fun clearSearchResults() {
-        searchRequest++
-        products = null
-        selectedProduct = null
-        error = null
-        loading = false
-        refreshing = false
-        page = 1
-        pages = 1
-        loadedQueryKey = null
+        viewModel.query.value = ""
+        viewModel.selectedProduct.value = null
+        products.refresh()
     }
 
     fun searchInventory() {
@@ -141,19 +137,17 @@ internal fun InventoryScreen(
             return
         }
         addSearchHistory(query)
-        page = 1
         lastAutoSearchQuery = query.trim()
-        searchRequest++
+        products.refresh()
     }
 
     LaunchedEffect(initialQuery, scanRequestId) {
         if (initialQuery.isNotBlank()) {
-            query = initialQuery
+            viewModel.query.value = initialQuery
             addSearchHistory(initialQuery)
-            page = 1
             lastAutoSearchQuery = initialQuery.trim()
-            selectedProduct = null
-            searchRequest++
+            viewModel.selectedProduct.value = null
+            products.refresh()
         }
     }
 
@@ -165,9 +159,8 @@ internal fun InventoryScreen(
         }
         delay(300)
         if (query.trim() == searchTerm && lastAutoSearchQuery != searchTerm) {
-            page = 1
             lastAutoSearchQuery = searchTerm
-            searchRequest++
+            products.refresh()
         }
     }
 
@@ -175,62 +168,26 @@ internal fun InventoryScreen(
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            query = value
+            viewModel.query.value = value
             addSearchHistory(value)
-            page = 1
             lastAutoSearchQuery = value
-            selectedProduct = null
-            searchRequest++
+            viewModel.selectedProduct.value = null
+            products.refresh()
         }
     }
 
     LaunchedEffect(showStore) {
-        if (storesLoaded) return@LaunchedEffect
-        if (!showStore) return@LaunchedEffect
-        runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
-            .onSuccess { values ->
-                stores = (0 until values.length()).map { values.getJSONObject(it) }
-                storesLoaded = true
-                if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
-            }
+        if (showStore) viewModel.loadStores()
     }
 
-    LaunchedEffect(searchRequest, selectedStoreId, page) {
-        if (searchRequest == 0 || query.isBlank()) return@LaunchedEffect
-        val requestId = searchRequest
-        val queryKey = listOf(searchRequest, query, selectedStoreId, page).joinToString("|")
-        if (loadedQueryKey == queryKey && products != null) return@LaunchedEffect
-        error = null
-        selectedProduct = null
-        loading = true
-        runCatching {
-            withContext(Dispatchers.IO) {
-                ApiClient.inventoryPaged(query.trim(), selectedStoreId.toIntOrNull(), page, 10)
-            }
-        }.onSuccess { values ->
-            if (requestId != searchRequest || query.isBlank()) return@onSuccess
-            val array = values.optJSONArray("list") ?: JSONArray()
-            val list = (0 until array.length()).map { array.getJSONObject(it) }
-            products = list
-            error = null
-            pages = values.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            if (list.size == 1) {
-                selectedProduct = list.first()
-            }
-            loading = false
-            refreshing = false
-            loadedQueryKey = queryKey
-        }.onFailure {
-            if (it.isCancellation()) return@onFailure
-            if (requestId != searchRequest || query.isBlank()) return@onFailure
-            error = it.message ?: "加载库存失败"
-            loading = false
-            refreshing = false
+    LaunchedEffect(stores) {
+        if (showStore && stores.size == 1 && selectedStoreId == null) {
+            viewModel.selectedStoreId.value = stores.first().optInt("id")
         }
     }
 
     BackHandler(enabled = selectedProduct != null) {
-        selectedProduct = null
+        viewModel.selectedProduct.value = null
         restoreListScroll = true
     }
 
@@ -242,13 +199,14 @@ internal fun InventoryScreen(
         }
     }
 
+    val isRefreshing = products.loadState.refresh is LoadState.Loading && query.isNotBlank()
+
     PullToRefreshBox(
-        isRefreshing = refreshing,
+        isRefreshing = isRefreshing,
         onRefresh = {
-            if (!refreshing && query.isNotBlank()) {
-                refreshing = true
+            if (query.isNotBlank()) {
                 ApiClient.clearResponseCache(context)
-                searchRequest++
+                products.refresh()
             }
         },
         modifier = Modifier.fillMaxSize(),
@@ -285,8 +243,7 @@ internal fun InventoryScreen(
             SearchBarField(
                 value = query,
                 onValueChange = {
-                    query = it
-                    page = 1
+                    viewModel.query.value = it
                     if (it.isBlank()) clearSearchResults()
                 },
                 placeholder = "输入商品名称、编码或条码",
@@ -309,38 +266,37 @@ internal fun InventoryScreen(
                     onSelect = { term ->
                         keyboardController?.hide()
                         focusManager.clearFocus(force = false)
-                        query = term
+                        viewModel.query.value = term
                         addSearchHistory(term)
-                        page = 1
                         lastAutoSearchQuery = term
-                        searchRequest++
+                        products.refresh()
                     },
                     onClear = ::clearSearchHistory,
                 )
             }
         }
 
-        // Store Chips
-        if (showStore && stores.size > 1) {
+        // Store selection filter chips
+        if (showStore && stores.size > 1 && selectedProduct == null) {
             item(key = "store_chips") {
                 Spacer(Modifier.height(10.dp))
                 StoreChipsRow(
                     stores = stores,
-                    selectedStoreId = selectedStoreId,
+                    selectedStoreId = selectedStoreId?.toString().orEmpty(),
                     onSelectStore = { id ->
                         keyboardController?.hide()
                         focusManager.clearFocus(force = false)
-                        selectedStoreId = id
-                        page = 1
-                        if (query.isNotBlank()) searchRequest++
+                        viewModel.selectedStoreId.value = id.toIntOrNull()
+                        if (query.isNotBlank()) products.refresh()
                     },
                 )
             }
         }
 
         // Error message
-        if (error != null) {
+        if (products.loadState.refresh is LoadState.Error) {
             item(key = "error") {
+                val err = (products.loadState.refresh as LoadState.Error).error
                 Spacer(Modifier.height(16.dp))
                 Surface(
                     color = DangerSoft,
@@ -349,7 +305,7 @@ internal fun InventoryScreen(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 ) {
                     Text(
-                        text = error!!,
+                        text = err.message ?: "加载库存失败",
                         color = Danger,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(12.dp),
@@ -359,8 +315,8 @@ internal fun InventoryScreen(
         }
 
         // Loading
-        if (loading) {
-            if (products == null) {
+        if (products.loadState.refresh is LoadState.Loading && query.isNotBlank()) {
+            if (products.itemCount == 0) {
                 item(key = "loading") {
                     Spacer(Modifier.height(16.dp))
                     Box(
@@ -392,7 +348,26 @@ internal fun InventoryScreen(
 
             item(key = "product_info_header") {
                 Spacer(Modifier.height(16.dp))
-                SectionHeader(title = "商品信息")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SectionHeader(title = "商品信息")
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.selectedProduct.value = null
+                            restoreListScroll = true
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("返回列表", fontSize = 12.sp)
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
 
                 AppCard {
@@ -428,16 +403,35 @@ internal fun InventoryScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "编码：${product.displayField("productCode")}",
+                            text = "商品编码",
                             color = Muted,
                             fontSize = 11.sp,
-                            maxLines = 1,
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "条码：${product.displayField("barcode").ifBlank { "-" }}",
+                            text = product.displayField("productCode").ifBlank { "-" },
+                            color = Ink,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "商品条码",
                             color = Muted,
                             fontSize = 11.sp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = product.displayField("barcode").ifBlank { "无条码" },
+                            color = Ink,
+                            fontSize = 12.sp,
                             maxLines = 1,
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                         )
@@ -559,44 +553,55 @@ internal fun InventoryScreen(
                                 }
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text = "货位：$location",
-                                    color = Ink,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "货位：${location.ifBlank { "未分配" }}",
+                                    color = if (location.isNotBlank()) Primary else Muted,
+                                    fontSize = 12.sp,
                                 )
                             }
-                            Text(
-                                text = "${quantityText(qty)} $unit",
-                                color = Primary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                            )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "${quantityText(qty)} $unit",
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryDark,
+                                    fontSize = 15.sp,
+                                )
+                                if (expiringSoon) {
+                                    Text(
+                                        text = "即将过期",
+                                        color = Danger,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
                         }
 
-                        Spacer(Modifier.height(4.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Spacer(Modifier.height(4.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text("生产日期", color = Muted, fontSize = 9.sp)
-                                Text(prodDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text("有效期", color = Muted, fontSize = 9.sp)
-                                Text(
-                                    expDate.ifBlank { "-" },
-                                    color = if (expiringSoon) Danger else Muted,
-                                    fontSize = 10.sp,
-                                    maxLines = 1,
-                                )
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text("入库日期", color = Muted, fontSize = 9.sp)
-                                Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
+                        if (prodDate.isNotBlank() || expDate.isNotBlank() || inDate.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("生产日期", color = Muted, fontSize = 9.sp)
+                                    Text(prodDate.ifBlank { "-" }, color = RegularText, fontSize = 10.sp, maxLines = 1)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("有效期至", color = Muted, fontSize = 9.sp)
+                                    Text(
+                                        expDate.ifBlank { "-" },
+                                        color = if (expiringSoon) Danger else RegularText,
+                                        fontWeight = if (expiringSoon) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("入库日期", color = Muted, fontSize = 9.sp)
+                                    Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
+                                }
                             }
                         }
                     }
@@ -605,11 +610,10 @@ internal fun InventoryScreen(
         }
 
         // When multiple products match and none is selected -> show selection list
-        if (selectedProduct == null && (!loading || products != null)) {
-            if (products != null) {
-                if (products!!.isEmpty()) {
-                    if (!loading) {
-                        item(key = "empty_matches") {
+        if (selectedProduct == null) {
+            if (query.isNotBlank()) {
+                if (products.itemCount == 0 && products.loadState.refresh !is LoadState.Loading && products.loadState.refresh !is LoadState.Error) {
+                    item(key = "empty_matches") {
                         Spacer(Modifier.height(16.dp))
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -636,7 +640,6 @@ internal fun InventoryScreen(
                                 }
                                 OutlinedButton(
                                     onClick = {
-                                        query = ""
                                         clearSearchResults()
                                     },
                                     shape = RoundedCornerShape(8.dp),
@@ -648,81 +651,85 @@ internal fun InventoryScreen(
                             }
                         }
                     }
-                    }
-                } else {
+                } else if (products.itemCount > 0) {
                     item(key = "matches_header") {
                         Spacer(Modifier.height(16.dp))
                         SectionHeader(
                             title = "匹配商品",
-                            subtitle = "共找到 ${products!!.size} 个商品，点击查看库存批次",
+                            subtitle = "共找到 ${products.itemCount} 个商品，点击查看库存批次",
                         )
                         Spacer(Modifier.height(10.dp))
                     }
 
-                    items(products!!, key = { it.optString("productCode", it.optString("id", it.toString())) }) { product ->
-                        val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
-                        val unit = product.displayField("unit", "")
-                        val spec = product.displayField("specification", "")
-                        val barcode = product.displayField("barcode", "")
-                        val manufacturer = product.displayField("manufacturer", "")
+                    items(count = products.itemCount, key = products.itemKey { it.optString("productCode", it.optString("id", it.toString())) }) { index ->
+                        val product = products[index]
+                        if (product != null) {
+                            val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+                            val unit = product.displayField("unit", "")
+                            val spec = product.displayField("specification", "")
+                            val barcode = product.displayField("barcode", "")
+                            val manufacturer = product.displayField("manufacturer", "")
 
-                        AppCard(
-                            modifier = Modifier.padding(bottom = 10.dp),
-                            onClick = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus(force = false)
-                                listScrollPosition = listState.firstVisibleItemIndex
-                                selectedProduct = product
-                            },
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.Top,
-                                ) {
-                                    HighlightedText(
-                                        text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
-                                        highlight = query,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = Ink,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    if (!retailPrice.isNullOrBlank()) {
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = "¥${priceText(retailPrice)}",
-                                            color = Danger,
+                            AppCard(
+                                modifier = Modifier.padding(bottom = 10.dp),
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus(force = false)
+                                    listScrollPosition = listState.firstVisibleItemIndex
+                                    viewModel.selectedProduct.value = product
+                                },
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.Top,
+                                    ) {
+                                        HighlightedText(
+                                            text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
+                                            highlight = query,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp,
+                                            fontSize = 14.sp,
+                                            color = Ink,
+                                            modifier = Modifier.weight(1f),
                                         )
+                                        if (!retailPrice.isNullOrBlank()) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = "¥${priceText(retailPrice)}",
+                                                color = Danger,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                            )
+                                        }
                                     }
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(
+                                        text = "规格：${spec.ifBlank { "-" }}　单位：${unit.ifBlank { "-" }}",
+                                        color = Muted,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    HighlightedText(
+                                        text = "厂家：${manufacturer.ifBlank { "-" }}　条码：${barcode.ifBlank { "无条码" }}",
+                                        highlight = query,
+                                        color = Muted,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
                                 }
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = "规格：${spec.ifBlank { "-" }}　单位：${unit.ifBlank { "-" }}",
-                                    color = Muted,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                HighlightedText(
-                                    text = "厂家：${manufacturer.ifBlank { "-" }}　条码：${barcode.ifBlank { "无条码" }}",
-                                    highlight = query,
-                                    color = Muted,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
                             }
                         }
                     }
 
-                    if (pages > 1) {
-                        item(key = "pagination") {
-                            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
+                    if (products.loadState.append is LoadState.Loading) {
+                        item(key = "append_loading") {
+                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                            }
                         }
                     }
                 }
-            } else if (searchRequest == 0) {
+            } else {
                 item(key = "empty_prompt") {
                     Spacer(Modifier.height(16.dp))
                     AppEmptyState(
