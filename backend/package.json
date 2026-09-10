@@ -32,7 +32,7 @@
     "exceljs": "^4.4.0",
     "fastify": "^5.12.1",
     "ipdb": "^0.4.0",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^9.1.1",
     "pino-pretty": "^13.0.0",
     "redis": "^5.10.0"
   },
