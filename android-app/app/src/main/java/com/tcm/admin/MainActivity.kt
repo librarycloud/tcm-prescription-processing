@@ -178,7 +178,7 @@ private fun TcmAdminApp() {
     }
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
-    val processingListState = rememberLazyListState()
+    val processingScrollState = rememberScrollState()
     val packagesListState = rememberLazyListState()
     val herbsListState = rememberHerbsListState()
     val profileScrollState = rememberScrollState()
@@ -379,14 +379,12 @@ private fun TcmAdminApp() {
 
                 // Main Navigation Tabs
                 is ScreenTarget.Prescriptions -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = prescriptionsListState) {
-                    PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo,
-                        listState = processingListState, listState = prescriptionsListState)
+                    PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, listState = prescriptionsListState)
                 }
                 is ScreenTarget.E6Imports -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = e6ImportsListState.lazyListState) {
                     E6ImportsScreen(
                         user = session?.user,
                         onNavigate = ::navigateTo,
-                        listState = processingListState,
                         listState = e6ImportsListState,
                     )
                 }
@@ -412,21 +410,18 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = processingListState) {
+                is ScreenTarget.Processing -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, processingScrollState) {
                     ProcessingScreenV2(
                         user = session?.user,
                         onNavigate = ::navigateTo,
-                        listState = processingListState,
-                        
+                        scrollState = processingScrollState,
                     )
                 }
                 is ScreenTarget.Packages -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
-                    PackagesScreen(user = session?.user, onNavigate = ::navigateTo,
-                        listState = processingListState, listState = packagesListState)
+                    PackagesScreen(user = session?.user, onNavigate = ::navigateTo, listState = packagesListState)
                 }
                 is ScreenTarget.Herbs -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = herbsListState.lazyListState) {
-                    HerbsScreen(user = session?.user, onNavigate = ::navigateTo,
-                        listState = processingListState, listState = herbsListState)
+                    HerbsScreen(user = session?.user, onNavigate = ::navigateTo, listState = herbsListState)
                 }
                 is ScreenTarget.Profile -> MainShell(currentScreen, ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
                     ProfileScreen(
@@ -518,7 +513,6 @@ private fun TcmAdminApp() {
                         id = currentScreen.id,
                         user = session?.user,
                         onNavigate = ::navigateTo,
-                        listState = processingListState,
                     )
                 }
                 is ScreenTarget.PrescriptionEdit -> DetailShell(
@@ -562,7 +556,6 @@ private fun TcmAdminApp() {
                         pkg = currentScreen.item,
                         showStore = session?.user?.optInt("role", -1) == 0,
                         onNavigate = ::navigateTo,
-                        listState = processingListState,
                         onBack = { navigateBack() },
                     )
                 }
@@ -593,8 +586,7 @@ private fun TcmAdminApp() {
                     )
                 }
                 is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }, scrollState = stocktakingScrollState) {
-                    StocktakingScreen(user = session?.user, onNavigate = ::navigateTo,
-                        listState = processingListState, scrollState = stocktakingScrollState)
+                    StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = stocktakingScrollState)
                 }
                 is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }, scrollState = stocktakingDetailScrollState) {
                     StocktakingDetailScreen(
@@ -608,8 +600,7 @@ private fun TcmAdminApp() {
                     DifferencesScreen(user = session?.user, scrollState = differencesScrollState)
                 }
                 is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, scrollState = transfersScrollState) {
-                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo,
-                        listState = processingListState, scrollState = transfersScrollState)
+                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = transfersScrollState)
                 }
                 is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
                     TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })

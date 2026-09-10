@@ -91,17 +91,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
-import androidx.paging.LoadState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import com.tcm.admin.ui.viewmodels.ProcessingViewModel
-
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
@@ -172,26 +161,33 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
 internal fun ProcessingScreenV2(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit = {},
-    listState: LazyListState = rememberLazyListState(),
-    viewModel: ProcessingViewModel = hiltViewModel()
+    scrollState: ScrollState,
 ) {
+    val listOwner = "processing"
     val showStore = user?.optInt("role", -1) == 0
-    val mode by viewModel.mode.collectAsStateWithLifecycle()
-    val activeView by viewModel.activeView.collectAsStateWithLifecycle()
-    val pickupStatus by viewModel.pickupStatus.collectAsStateWithLifecycle()
-    val keyword = if (mode == "plans") viewModel.plansKeyword.collectAsStateWithLifecycle().value else viewModel.pickupKeyword.collectAsStateWithLifecycle().value
-    val selectedStoreId = if (mode == "plans") viewModel.plansStoreId.collectAsStateWithLifecycle().value?.toString() else viewModel.pickupStoreId.collectAsStateWithLifecycle().value?.toString()
-    
-    val stores by viewModel.stores.collectAsStateWithLifecycle()
-    val stats by viewModel.stats.collectAsStateWithLifecycle()
-    
-    val plansItems = viewModel.plansFlow.collectAsLazyPagingItems()
-    val pickupItems = viewModel.pickupFlow.collectAsLazyPagingItems()
-
+    var mode by rememberRetainedListValue(listOwner, "mode") { "plans" } // "plans" | "pickup"
+    var activeView by rememberRetainedListValue(listOwner, "activeView") { "today-all" }
+    var pickupStatus by rememberRetainedListValue(listOwner, "pickupStatus") { 0 } // 0=待领取, 1=已领取
+    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
+    var plans by rememberRetainedListValue(listOwner, "plans") { null as List<JSONObject>? }
+    var pickupTasks by rememberRetainedListValue(listOwner, "pickupTasks") { null as List<PackageItem>? }
+    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
+    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
+    var stats by rememberRetainedListValue(listOwner, "stats") { null as JSONObject? }
+    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
+    var loading by remember { mutableStateOf(false) }
+    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
+    var page by rememberRetainedListValue(listOwner, "page") { 1 }
+    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
+    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
+    var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
+
+    // Dialog states
+    var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
     var quickScanTargetPlan by remember { mutableStateOf<JSONObject?>(null) }
     var quickScanPromptData by remember { mutableStateOf<QuickScanPromptData?>(null) }
-    var generatePackagePlan by remember { mutableStateOf<JSONObject?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -220,27 +216,79 @@ internal fun ProcessingScreenV2(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
-            if (mode == "plans") viewModel.plansKeyword.value = value else viewModel.pickupKeyword.value = value
+            keyword = value
+            reload++
         }
     }
 
     LaunchedEffect(showStore) {
-        if (showStore) viewModel.loadStores()
-    }
-    
-    LaunchedEffect(stores) {
-        if (showStore && stores.size == 1 && selectedStoreId == null) {
-            val sid = stores.first().optInt("id")
-            viewModel.plansStoreId.value = sid
-            viewModel.pickupStoreId.value = sid
-        }
-    }
-    
-    LaunchedEffect(selectedStoreId, activeView, pickupStatus, mode) {
-        viewModel.refreshStats(selectedStoreId?.toIntOrNull())
+        if (storesLoaded) return@LaunchedEffect
+        if (!showStore) return@LaunchedEffect
+        runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
+            .onSuccess { values ->
+                stores = (0 until values.length()).map { values.getJSONObject(it) }
+                storesLoaded = true
+                if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
+            }
     }
 
-    LaunchedEffect(keyword, mode) {
+    LaunchedEffect(reload, mode, activeView, pickupStatus, selectedStoreId, page) {
+        val queryKey = listOf(reload, mode, activeView, pickupStatus, selectedStoreId, keyword, page).joinToString("|")
+        val existingItems = if (mode == "plans") plans else pickupTasks
+        if (loadedQueryKey == queryKey && existingItems != null) return@LaunchedEffect
+        error = null
+        loading = true
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val storeIdInt = selectedStoreId.toIntOrNull()
+                val summary = ApiClient.processingStats(storeIdInt)
+                if (mode == "plans") {
+                    val paged = ApiClient.processingPlansPaged(
+                        view = activeView,
+                        keyword = keyword.trim(),
+                        storeId = storeIdInt,
+                        page = page,
+                        pageSize = 10,
+                    )
+                    Triple<JSONObject, JSONObject?, JSONObject?>(summary, paged, null)
+                } else {
+                    val pickupData = ApiClient.pickupTasksPaged(
+                        status = pickupStatus,
+                        keyword = keyword.trim(),
+                        storeId = storeIdInt,
+                        page = page,
+                        pageSize = 10,
+                    )
+                    Triple<JSONObject, JSONObject?, JSONObject?>(summary, null, pickupData)
+                }
+            }
+        }.onSuccess { (summary, pagedPlans, pickupData) ->
+            error = null
+            stats = summary
+            if (pagedPlans != null) {
+                val list = pagedPlans.optJSONArray("list") ?: JSONArray()
+                plans = (0 until list.length()).map { list.getJSONObject(it) }
+                pages = pagedPlans.optJSONObject("pagination")?.optInt("pages", 1) ?: 1
+            }
+            if (pickupData != null) {
+                val list = pickupData.optJSONArray("list") ?: JSONArray()
+                pickupTasks = (0 until list.length()).map {
+                    packageItem(list.getJSONObject(it))
+                }
+                pages = pickupData.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+            }
+            loading = false
+            refreshing = false
+            loadedQueryKey = queryKey
+        }.onFailure {
+            if (it.isCancellation()) return@onFailure
+            error = it.message ?: "加载加工数据失败"
+            loading = false
+            refreshing = false
+        }
+    }
+
+    LaunchedEffect(keyword) {
         val term = keyword.trim()
         if (!shouldAutoSearchQuery(term)) {
             lastAutoKeyword = ""
@@ -249,29 +297,29 @@ internal fun ProcessingScreenV2(
         kotlinx.coroutines.delay(300)
         if (keyword.trim() == term && lastAutoKeyword != term) {
             lastAutoKeyword = term
-            if (mode == "plans") plansItems.refresh() else pickupItems.refresh()
+            page = 1
+            reload++
         }
     }
-    
-    val currentItemsRefreshState = if (mode == "plans") plansItems.loadState.refresh else pickupItems.loadState.refresh
-    val isRefreshing = currentItemsRefreshState is LoadState.Loading
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
-            isRefreshing = isRefreshing,
+            isRefreshing = refreshing,
             onRefresh = {
-                ApiClient.clearResponseCache(context)
-                if (mode == "plans") plansItems.refresh() else pickupItems.refresh()
-                viewModel.refreshStats(selectedStoreId?.toIntOrNull())
+                if (!refreshing) {
+                    refreshing = true
+                    ApiClient.clearResponseCache(context)
+                    reload++
+                }
             },
             modifier = Modifier.fillMaxSize(),
         ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-        ) {
-            item(key = "header") {
+        Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+    ) {
         // Top Action Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -311,14 +359,14 @@ internal fun ProcessingScreenV2(
             SegmentedButton(
                 label = "加工计划",
                 selected = mode == "plans",
-                onClick = { viewModel.mode.value = "plans" },
+                onClick = { mode = "plans"; page = 1 },
                 modifier = Modifier.weight(1f),
                 centerLabel = true,
             )
             SegmentedButton(
                 label = "领取列表",
                 selected = mode == "pickup",
-                onClick = { viewModel.mode.value = "pickup" },
+                onClick = { mode = "pickup"; page = 1 },
                 modifier = Modifier.weight(1f),
                 centerLabel = true,
             )
@@ -364,7 +412,13 @@ internal fun ProcessingScreenV2(
                                     if (isSelected) 1.5.dp else 1.dp,
                                     if (isSelected) Primary else CardBorderColor,
                                 ),
-                                onClick = { if (activeView != viewKey) viewModel.activeView.value = viewKey },
+                                onClick = {
+                                    if (activeView != viewKey) {
+                                        error = null
+                                        activeView = viewKey
+                                        page = 1
+                                    }
+                                },
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -422,7 +476,13 @@ internal fun ProcessingScreenV2(
                             if (isSelected) 1.5.dp else 1.dp,
                             if (isSelected) Primary else CardBorderColor,
                         ),
-                        onClick = { if (pickupStatus != status) viewModel.pickupStatus.value = status },
+                        onClick = {
+                            if (pickupStatus != status) {
+                                error = null
+                                pickupStatus = status
+                                page = 1
+                            }
+                        },
                     ) {
                         Column(
                             modifier = Modifier
@@ -454,11 +514,12 @@ internal fun ProcessingScreenV2(
         SearchBarField(
             value = keyword,
             onValueChange = {
-                if (mode == "plans") viewModel.plansKeyword.value = it else viewModel.pickupKeyword.value = it
-                if (it.isBlank()) { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
+                keyword = it
+                page = 1
+                if (it.isBlank()) reload++
             },
             placeholder = "搜索顾客姓名、手机号或备注",
-            onSearch = { lastAutoKeyword = keyword.trim(); if (mode == "plans") plansItems.refresh() else pickupItems.refresh() },
+            onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
         )
 
         // Store chips stay compact and wrap naturally below the search field.
@@ -489,29 +550,40 @@ internal fun ProcessingScreenV2(
                 border = BorderStroke(0.5.dp, Danger.copy(alpha = 0.4f)),
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             ) {
-                ErrorStateView(message = error!!, onRetry = { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() })
+                ErrorStateView(message = error!!, onRetry = { reload++ })
             }
         }
 
+        val currentPlans = plans
+        val currentPickup = pickupTasks
+        val hasExistingPlans = currentPlans != null
+        val hasExistingPickup = currentPickup != null
+        val hasExistingData = if (mode == "plans") hasExistingPlans else hasExistingPickup
 
+        // Silent progress indicator during background refresh
+        if (loading && hasExistingData) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = Primary,
+                trackColor = Primary.copy(alpha = 0.12f),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Initial Loading (only show full spinner when there is no data at all yet)
+        if (loading && !hasExistingData) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+            }
+        }
 
         // Processing Plans List
-        if (mode == "plans") {
-            if (currentItemsRefreshState is LoadState.Loading && plansItems.itemCount == 0) {
-                item(key = "loading_plans") {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
-                    }
-                }
-            } else if (plansItems.itemCount == 0 && currentItemsRefreshState !is LoadState.Error && currentItemsRefreshState !is LoadState.Loading) {
-                item(key = "empty_plans") {
-                    AppEmptyState("暂无加工计划")
-                }
-            }
-
-            items(count = plansItems.itemCount, key = plansItems.itemKey { it.optInt("id") }) { index ->
-                val plan = plansItems[index]
-                if (plan != null) {
+        if (mode == "plans" && (!loading || hasExistingPlans)) {
+            if (currentPlans == null || currentPlans.isEmpty()) {
+                if (!loading) AppEmptyState("暂无加工计划")
+            } else {
+                currentPlans.forEach { plan ->
+                    key(plan.optInt("id")) {
                     val prescription = plan.optJSONObject("prescription")
                     val processType = plan.optJSONObject("processType")
                     val store = plan.optJSONObject("store")
@@ -615,8 +687,8 @@ internal fun ProcessingScreenV2(
                                     onClick = {
                                         scope.launch {
                                             runCatching { withContext(Dispatchers.IO) { ApiClient.transitionPlan(plan.optInt("id"), 1) } }
-                                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
-                                                .onFailure { Toast.makeText(context, it.message ?: "开始加工失败", Toast.LENGTH_SHORT).show() }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "开始加工失败" }
                                         }
                                     },
                                     modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
@@ -630,8 +702,8 @@ internal fun ProcessingScreenV2(
                                     onClick = {
                                         scope.launch {
                                             runCatching { withContext(Dispatchers.IO) { ApiClient.delayPlan(plan.optInt("id"), 1) } }
-                                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
-                                                .onFailure { Toast.makeText(context, it.message ?: "延期失败", Toast.LENGTH_SHORT).show() }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "延期失败" }
                                         }
                                     },
                                     modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
@@ -688,8 +760,8 @@ internal fun ProcessingScreenV2(
                                     onClick = {
                                         scope.launch {
                                             runCatching { withContext(Dispatchers.IO) { ApiClient.cancelPlan(plan.optInt("id"), "管理员取消") } }
-                                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
-                                                .onFailure { Toast.makeText(context, it.message ?: "取消失败", Toast.LENGTH_SHORT).show() }
+                                                .onSuccess { reload++ }
+                                                .onFailure { error = it.message ?: "取消失败" }
                                         }
                                     },
                                     modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
@@ -732,23 +804,22 @@ internal fun ProcessingScreenV2(
                             onVerify = {
                                 scope.launch {
                                     runCatching { withContext(Dispatchers.IO) { ApiClient.verifyPackage(item.code, 0, "") } }
-                                        .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
-                                        .onFailure { Toast.makeText(context, it.message ?: "核销失败", Toast.LENGTH_SHORT).show() }
+                                        .onSuccess { reload++ }
+                                        .onFailure { error = it.message ?: "核销失败" }
                                 }
                             },
                         )
                     }
-            }
-            if (pickupItems.loadState.append is LoadState.Loading) {
-                item(key = "append_loading_pickup") {
-                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
-                    }
+                }
+                if (pages > 1) {
+                    AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
                 }
             }
         }
-    } // LazyColumn
-    } // PullToRefreshBox
+
+        Spacer(Modifier.height(16.dp))
+        }
+        }
 
     generatePackagePlan?.let { plan ->
         var packageRemark by remember(plan) {
@@ -790,8 +861,8 @@ internal fun ProcessingScreenV2(
                                     )
                                 }
                             }
-                                .onSuccess { if (mode == "plans") plansItems.refresh() else pickupItems.refresh() }
-                                .onFailure { Toast.makeText(context, it.message ?: "生成包裹失败", Toast.LENGTH_SHORT).show() }
+                                .onSuccess { reload++ }
+                                .onFailure { error = it.message ?: "生成包裹失败" }
                         }
                     },
                 ) {
@@ -826,7 +897,6 @@ internal fun ProcessingScreenV2(
     }
 
     }
-}
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -2867,7 +2937,7 @@ internal fun WorkflowOperationScreen(
                                 Toast.makeText(context, "待取包裹生成成功", Toast.LENGTH_SHORT).show()
                                 reload()
                             }.onFailure {
-                                if (!it.isCancellation()) Toast.makeText(context, it.message ?: "生成包裹失败", Toast.LENGTH_SHORT).show()
+                                if (!it.isCancellation()) error = it.message ?: "生成包裹失败"
                             }
                             busy = false
                         }
