@@ -827,6 +827,7 @@ internal fun ProcessingScreenV2(
 
     }
 }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
