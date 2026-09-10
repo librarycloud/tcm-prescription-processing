@@ -183,9 +183,9 @@ private fun TcmAdminApp() {
     val herbsListState = rememberHerbsListState()
     val profileScrollState = rememberScrollState()
     val inventoryListState = rememberLazyListState()
-    val stocktakingScrollState = rememberScrollState()
+    val stocktakingListState = rememberLazyListState()
     val stocktakingDetailScrollState = rememberScrollState()
-    val differencesScrollState = rememberScrollState()
+    val differencesListState = rememberLazyListState()
     val transfersListState = rememberLazyListState()
     val currentScreen = backStack.lastOrNull() ?: ScreenTarget.Login
 
@@ -585,8 +585,8 @@ private fun TcmAdminApp() {
                         },
                     )
                 }
-                is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }, scrollState = stocktakingScrollState) {
-                    StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = stocktakingScrollState)
+                is ScreenTarget.Stocktaking -> DetailShell("商品盘点", onBack = { navigateBack() }, lazyListState = stocktakingListState) {
+                    StocktakingScreen(user = session?.user, onNavigate = ::navigateTo, listState = stocktakingListState)
                 }
                 is ScreenTarget.StocktakingDetail -> DetailShell("盘点单明细", onBack = { navigateBack() }, scrollState = stocktakingDetailScrollState) {
                     StocktakingDetailScreen(
@@ -596,8 +596,8 @@ private fun TcmAdminApp() {
                         refreshKey = stocktakingDetailRevision,
                     )
                 }
-                is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
-                    DifferencesScreen(user = session?.user, scrollState = differencesScrollState)
+                is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, lazyListState = differencesListState) {
+                    DifferencesScreen(user = session?.user, listState = differencesListState)
                 }
                 is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, lazyListState = transfersListState) {
                     TransfersScreen(user = session?.user, onNavigate = ::navigateTo, listState = transfersListState)

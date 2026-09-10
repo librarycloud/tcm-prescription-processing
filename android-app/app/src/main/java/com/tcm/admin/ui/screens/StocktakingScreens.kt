@@ -1,5 +1,19 @@
 package com.tcm.admin
 
+import android.widget.Toast
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import com.tcm.admin.ui.viewmodels.StocktakingViewModel
+
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -63,159 +77,170 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StocktakingScreen(
     user: JSONObject? = null,
     onNavigate: (ScreenTarget) -> Unit,
-    scrollState: ScrollState,
+    listState: LazyListState = rememberLazyListState(),
+    viewModel: StocktakingViewModel = hiltViewModel(),
 ) {
-    val listOwner = "stocktaking"
-    var checks by rememberRetainedListValue(listOwner, "checks") { null as List<JSONObject>? }
-    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
-    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
-    var page by rememberRetainedListValue(listOwner, "page") { 1 }
-    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
-    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
-    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
-    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    val isSuperAdmin = user?.optInt("role", -1) == 0
+    val isManager = isSuperAdmin || user?.optInt("role", -1) == 2
+    val selectedStoreId by viewModel.selectedStoreId.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+    val checks = viewModel.checksFlow.collectAsLazyPagingItems()
+
     var createVisible by remember { mutableStateOf(false) }
     var checkName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val isSuperAdmin = user?.optInt("role", -1) == 0
-    val isManager = isSuperAdmin || user?.optInt("role", -1) == 2
-    val isStoreStaff = user?.optInt("role", -1) == 3
+    val context = LocalContext.current
 
-    LaunchedEffect(reload, selectedStoreId, page) {
-        val queryKey = listOf(reload, selectedStoreId, page).joinToString("|")
-        if (loadedQueryKey == queryKey && checks != null) return@LaunchedEffect
-        error = null
-        runCatching {
-            withContext(Dispatchers.IO) {
-                val values = ApiClient.stocktakings(selectedStoreId.toIntOrNull(), page = page, pageSize = 10)
-                val storeValues = if (isSuperAdmin) ApiClient.availableStores() else JSONArray()
-                Pair(values, storeValues)
-            }
-        }.onSuccess { (values, storeValues) ->
-            error = null
-            checks = (0 until (values.optJSONArray("list")?.length() ?: 0)).map { values.getJSONArray("list").getJSONObject(it) }
-            pages = values.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
-            if (isSuperAdmin && selectedStoreId.isBlank() && stores.size == 1) {
-                selectedStoreId = stores.first().optInt("id").toString()
-            }
-            loadedQueryKey = queryKey
-        }.onFailure {
-            if (it.isCancellation()) return@onFailure
-            error = it.message ?: "加载盘点单失败"
+    LaunchedEffect(isSuperAdmin) {
+        if (isSuperAdmin) viewModel.loadStores()
+    }
+
+    LaunchedEffect(stores) {
+        if (isSuperAdmin && stores.size == 1 && selectedStoreId == null) {
+            viewModel.selectedStoreId.value = stores.first().optInt("id")
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
+    val isRefreshing = checks.loadState.refresh is LoadState.Loading
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            ApiClient.clearResponseCache(context)
+            checks.refresh()
+        },
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
         ) {
-            Column(Modifier.weight(1f)) {
-                SectionHeader("商品盘点", "商品盘点计划与差异录入")
-            }
-            if (isManager) {
-                Button(
-                    onClick = { createVisible = true },
-                    modifier = Modifier.height(CompactControlHeight),
-                    shape = FieldShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("新建盘点")
-                }
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        if (isSuperAdmin && stores.size > 1) {
-            StoreChipsRow(
-                stores = stores,
-                selectedStoreId = selectedStoreId,
-                onSelectStore = { selectedStoreId = it; page = 1 },
-            )
-            Spacer(Modifier.height(14.dp))
-        }
-
-        if (checks == null && error == null) AppEmptyState("加载盘点列表中...")
-        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
-        if (checks != null && checks!!.isEmpty()) AppEmptyState("暂无盘点单记录")
-
-        checks.orEmpty().forEach { check ->
-            key(check.optInt("id")) {
-            val status = check.optInt("status")
-            val summary = check.optJSONObject("summary") ?: JSONObject()
-            val total = summary.optInt("total", 0)
-            val counted = summary.optInt("counted", 0)
-            val diff = summary.optInt("adjustment", 0)
-            val progress = if (total > 0) (counted.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
-
-            AppCard(
-                modifier = Modifier.padding(bottom = 12.dp),
-                onClick = { onNavigate(ScreenTarget.StocktakingDetail(check.optInt("id"))) },
-            ) {
+            item(key = "header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = check.displayField("checkNo", check.displayField("id")),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Ink,
+                    Column(Modifier.weight(1f)) {
+                        SectionHeader("商品盘点", "商品盘点计划与差异录入")
+                    }
+                    if (isManager) {
+                        Button(
+                            onClick = { createVisible = true },
+                            modifier = Modifier.height(CompactControlHeight),
+                            shape = FieldShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("新建盘点")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                if (isSuperAdmin && stores.size > 1) {
+                    StoreChipsRow(
+                        stores = stores,
+                        selectedStoreId = selectedStoreId?.toString().orEmpty(),
+                        onSelectStore = { viewModel.selectedStoreId.value = it.toIntOrNull() },
                     )
-                    StatusPill(text = goodsCheckStatus(status))
+                    Spacer(Modifier.height(14.dp))
                 }
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                        text = check.displayField("checkName", check.displayField("name", "未命名盘点")),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    color = Ink,
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    MetricCell("总条目", total.toString(), Modifier.weight(1f))
-                    MetricCell("已盘点", counted.toString(), Modifier.weight(1f))
-                    MetricCell("有差异", diff.toString(), Modifier.weight(1f))
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = Primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-
             }
+
+            if (checks.loadState.refresh is LoadState.Error) {
+                item(key = "error") {
+                    val err = (checks.loadState.refresh as LoadState.Error).error
+                    ErrorStateView(message = err.message ?: "加载盘点单失败", onRetry = { checks.retry() })
+                }
+            }
+
+            if (checks.loadState.refresh is LoadState.Loading && checks.itemCount == 0) {
+                item(key = "loading") {
+                    AppEmptyState("加载盘点列表中...")
+                }
+            } else if (checks.itemCount == 0 && checks.loadState.refresh !is LoadState.Error && checks.loadState.refresh !is LoadState.Loading) {
+                item(key = "empty") {
+                    AppEmptyState("暂无盘点单记录")
+                }
+            }
+
+            items(count = checks.itemCount, key = checks.itemKey { it.optInt("id") }) { index ->
+                val check = checks[index]
+                if (check != null) {
+                    val status = check.optInt("status")
+                    val summary = check.optJSONObject("summary") ?: JSONObject()
+                    val total = summary.optInt("total", 0)
+                    val counted = summary.optInt("counted", 0)
+                    val diff = summary.optInt("adjustment", 0)
+                    val progress = if (total > 0) (counted.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+
+                    AppCard(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { onNavigate(ScreenTarget.StocktakingDetail(check.optInt("id"))) },
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = check.displayField("checkNo", check.displayField("id")),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Ink,
+                            )
+                            StatusPill(text = goodsCheckStatus(status))
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Text(
+                            text = check.displayField("checkName", check.displayField("name", "未命名盘点")),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = Ink,
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            MetricCell("总条目", total.toString(), Modifier.weight(1f))
+                            MetricCell("已盘点", counted.toString(), Modifier.weight(1f))
+                            MetricCell("有差异", diff.toString(), Modifier.weight(1f))
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = Primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            if (checks.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
             }
         }
-        if (checks != null && pages > 1) {
-            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
-        }
-
-        Spacer(Modifier.height(16.dp))
     }
 
     if (createVisible) {
@@ -244,15 +269,15 @@ internal fun StocktakingScreen(
                                 withContext(Dispatchers.IO) {
                                     ApiClient.createGoodsCheck(
                                         checkName.trim(),
-                                        storeId = selectedStoreId.toIntOrNull(),
+                                        storeId = selectedStoreId,
                                     )
                                 }
                             }.onSuccess {
                                 createVisible = false
                                 checkName = ""
-                                reload++
+                                checks.refresh()
                             }.onFailure {
-                                error = it.message ?: "创建盘点单失败"
+                                Toast.makeText(context, it.message ?: "创建盘点单失败", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },

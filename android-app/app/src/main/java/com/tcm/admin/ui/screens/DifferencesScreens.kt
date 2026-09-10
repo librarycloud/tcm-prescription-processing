@@ -1,5 +1,19 @@
 package com.tcm.admin
 
+import android.widget.Toast
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import com.tcm.admin.ui.viewmodels.DifferencesViewModel
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -44,22 +58,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DifferencesScreen(
     user: JSONObject? = null,
-    scrollState: ScrollState,
+    listState: LazyListState = rememberLazyListState(),
+    viewModel: DifferencesViewModel = hiltViewModel(),
 ) {
     val isStoreStaff = user?.optInt("role", -1) == 3
-    val listOwner = "differences"
-    var tab by rememberRetainedListValue(listOwner, "tab") { "current" }
-    var products by rememberRetainedListValue(listOwner, "products") { null as List<JSONObject>? }
-    var registerProducts by rememberRetainedListValue(listOwner, "registerProducts") { emptyList<JSONObject>() }
-    var logs by rememberRetainedListValue(listOwner, "logs") { null as List<JSONObject>? }
-    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
-    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
-    var page by rememberRetainedListValue(listOwner, "page") { 1 }
-    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
-    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    val tab by viewModel.tab.collectAsStateWithLifecycle()
+    val registerProducts by viewModel.registerProducts.collectAsStateWithLifecycle()
+    val items = viewModel.differencesFlow.collectAsLazyPagingItems()
+
     var writeOff by remember { mutableStateOf<Pair<JSONObject, String>?>(null) }
     var writeOffQuantity by remember { mutableStateOf("") }
     var registerVisible by remember { mutableStateOf(false) }
@@ -68,195 +78,193 @@ internal fun DifferencesScreen(
     var registerQuantity by remember { mutableStateOf("") }
     var registerKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-
-    LaunchedEffect(reload, tab, page) {
-        val queryKey = listOf(reload, tab, page).joinToString("|")
-        val loaded = if (tab == "current") products else logs
-        if (loadedQueryKey == queryKey && loaded != null) return@LaunchedEffect
-        error = null
-        runCatching {
-            withContext(Dispatchers.IO) {
-                if (tab == "current") {
-                    Pair(ApiClient.differenceProductsPaged(page, 10), null)
-                } else {
-                    Pair(null, ApiClient.differenceLogsPaged(page, 10))
-                }
-            }
-        }.onSuccess { (productData, logData) ->
-            productData?.let { data ->
-                val list = data.optJSONArray("list") ?: JSONArray()
-                products = (0 until list.length()).map { list.getJSONObject(it) }
-                pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            }
-            logData?.let { data ->
-                val list = data.optJSONArray("list") ?: JSONArray()
-                logs = (0 until list.length()).map { list.getJSONObject(it) }
-                pages = data.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            }
-            loadedQueryKey = queryKey
-        }.onFailure {
-            error = it.message ?: "加载库存差异失败"
-        }
-    }
+    val context = LocalContext.current
 
     LaunchedEffect(registerVisible) {
-        if (registerVisible && registerProducts.isEmpty()) {
-            runCatching {
-                withContext(Dispatchers.IO) { ApiClient.productCatalog() }
-            }.onSuccess { values ->
-                registerProducts = (0 until values.length()).map { values.getJSONObject(it) }
-            }.onFailure {
-                error = it.message ?: "加载商品目录失败"
-            }
-        }
+        if (registerVisible) viewModel.loadRegisterProducts()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
+    val isRefreshing = items.loadState.refresh is LoadState.Loading
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            ApiClient.clearResponseCache(context)
+            items.refresh()
+        },
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
         ) {
-            Column(Modifier.weight(1f)) {
-                SectionHeader("库存差异", "管理未入库/未销库的实货差异")
-            }
-            if (!isStoreStaff) {
-                Button(
-                    onClick = { registerVisible = true },
-                    modifier = Modifier.height(CompactControlHeight),
-                    shape = RoundedCornerShape(8.dp),
+            item(key = "header") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("登记差异")
-                }
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegmentedButton("当前差异", tab == "current", onClick = { tab = "current"; page = 1 })
-            SegmentedButton("差异流水", tab == "logs", onClick = { tab = "logs"; page = 1 })
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
-
-        if (tab == "current") {
-            if (products == null && error == null) AppEmptyState("加载中...")
-            if (products != null && products!!.isEmpty()) AppEmptyState("暂无未销账差异")
-            products.orEmpty().forEach { product ->
-                val preReceipt = product.optDouble("preReceiptQuantity", 0.0)
-                val preShipment = product.optDouble("preShipmentQuantity", 0.0)
-                val unit = product.displayField("unit")
-
-                AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
-                                fontWeight = FontWeight.Bold,
-                                color = Ink,
-                                fontSize = 14.sp,
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text("规格：${product.displayField("specification")} · 生产厂商：${product.displayField("manufacturer")}", color = Muted, fontSize = 12.sp)
+                    Column(Modifier.weight(1f)) {
+                        SectionHeader("库存差异", "管理未入库/未销库的实货差异")
+                    }
+                    if (!isStoreStaff) {
+                        Button(
+                            onClick = { registerVisible = true },
+                            modifier = Modifier.height(CompactControlHeight),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text("登记差异")
                         }
                     }
+                }
 
-                    Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (preReceipt > 0) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(6.dp),
-                                border = BorderStroke(1.dp, CardBorderColor),
-                                modifier = Modifier.weight(1f),
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("当前差异", tab == "current", onClick = { viewModel.tab.value = "current" })
+                    SegmentedButton("差异流水", tab == "logs", onClick = { viewModel.tab.value = "logs" })
+                }
+
+                Spacer(Modifier.height(14.dp))
+            }
+
+            if (items.loadState.refresh is LoadState.Error) {
+                item(key = "error") {
+                    val err = (items.loadState.refresh as LoadState.Error).error
+                    ErrorStateView(message = err.message ?: "加载库存差异失败", onRetry = { items.retry() })
+                }
+            }
+
+            if (items.loadState.refresh is LoadState.Loading && items.itemCount == 0) {
+                item(key = "loading") {
+                    AppEmptyState("加载中...")
+                }
+            } else if (items.itemCount == 0 && items.loadState.refresh !is LoadState.Error && items.loadState.refresh !is LoadState.Loading) {
+                item(key = "empty") {
+                    AppEmptyState(if (tab == "current") "暂无未销账差异" else "暂无差异流水记录")
+                }
+            }
+
+            if (tab == "current") {
+                items(count = items.itemCount, key = items.itemKey { it.optInt("id", it.optString("productCode", it.toString()).hashCode()) }) { index ->
+                    val product = items[index]
+                    if (product != null) {
+                        val preReceipt = product.optDouble("preReceiptQuantity", 0.0)
+                        val preShipment = product.optDouble("preShipmentQuantity", 0.0)
+                        val unit = product.displayField("unit")
+
+                        AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
+                            Row(verticalAlignment = Alignment.Top) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Ink,
+                                        fontSize = 14.sp,
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text("规格：${product.displayField("specification")} · 生产厂商：${product.displayField("manufacturer")}", color = Muted, fontSize = 12.sp)
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text("先到货：+${quantityText(preReceipt)} $unit", color = Success, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                    if (!isStoreStaff) {
-                                        TextButton(
-                                            onClick = { writeOff = Pair(product, "WRITE_OFF_RECEIPT"); writeOffQuantity = quantityText(preReceipt, "0") },
-                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                if (preReceipt > 0) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, CardBorderColor),
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
                                         ) {
-                                            Text("入库销账", fontSize = 11.sp)
+                                            Text("先到货：+${quantityText(preReceipt)} $unit", color = Success, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                            if (!isStoreStaff) {
+                                                TextButton(
+                                                    onClick = { writeOff = Pair(product, "WRITE_OFF_RECEIPT"); writeOffQuantity = quantityText(preReceipt, "0") },
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                                ) {
+                                                    Text("入库销账", fontSize = 11.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if (preShipment > 0) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, CardBorderColor),
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
+                                            Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                            if (!isStoreStaff) {
+                                                TextButton(
+                                                    onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                                ) {
+                                                    Text("销库销账", fontSize = 11.sp)
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                        if (preShipment > 0) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(6.dp),
-                                border = BorderStroke(1.dp, CardBorderColor),
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text("先出货：-${quantityText(preShipment)} $unit", color = Danger, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                    if (!isStoreStaff) {
-                                        TextButton(
-                                            onClick = { writeOff = Pair(product, "WRITE_OFF_SHIPMENT"); writeOffQuantity = quantityText(preShipment, "0") },
-                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                        ) {
-                                            Text("销库销账", fontSize = 11.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
-            }
-        } else {
-            if (logs == null && error == null) AppEmptyState("加载中...")
-            if (logs != null && logs!!.isEmpty()) AppEmptyState("暂无差异流水记录")
-            logs.orEmpty().forEach { log ->
-                val product = log.optJSONObject("product") ?: JSONObject()
-                val opType = log.displayField("operationType", "")
-                val qty = log.optDouble("quantity", 0.0)
+            } else {
+                items(count = items.itemCount, key = items.itemKey { it.optInt("id") }) { index ->
+                    val log = items[index]
+                    if (log != null) {
+                        val product = log.optJSONObject("product") ?: JSONObject()
+                        val opType = log.displayField("operationType", "")
+                        val qty = log.optDouble("quantity", 0.0)
 
-                AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
-                                fontWeight = FontWeight.SemiBold,
-                                color = Ink,
-                                fontSize = 14.sp,
-                            )
-                            Text(
-                                text = "${log.displayField("businessDate").take(10)} · ${log.optJSONObject("operator")?.displayField("username") ?: "-"}",
-                                color = Muted,
-                                fontSize = 12.sp,
-                            )
+                        AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Ink,
+                                        fontSize = 14.sp,
+                                    )
+                                    Text(
+                                        text = "${log.displayField("businessDate").take(10)} · ${log.optJSONObject("operator")?.displayField("username") ?: "-"}",
+                                        color = Muted,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                                StatusPill(diffOperationLabel(opType))
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text("变动数量：${quantityText(qty)} ${product.displayField("unit")}", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
-                        StatusPill(diffOperationLabel(opType))
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text("变动数量：${quantityText(qty)} ${product.displayField("unit")}", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
-        }
-        if (pages > 1) {
-            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
+
+            if (items.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
+            }
         }
     }
 
@@ -296,9 +304,9 @@ internal fun DifferencesScreen(
                                 }
                             }.onSuccess {
                                 writeOff = null
-                                reload++
+                                items.refresh()
                             }.onFailure {
-                                error = it.message ?: "销账失败"
+                                Toast.makeText(context, it.message ?: "销账失败", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -389,9 +397,9 @@ internal fun DifferencesScreen(
                                     registerProduct = null
                                     registerQuantity = ""
                                     registerKeyword = ""
-                                    reload++
+                                    items.refresh()
                                 }.onFailure {
-                                    error = it.message ?: "登记差异失败"
+                                    Toast.makeText(context, it.message ?: "登记差异失败", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
