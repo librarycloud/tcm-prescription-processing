@@ -8,7 +8,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.tcm.admin.ApiClient
 import com.tcm.admin.data.paging.PackagesPagingSource
-import com.tcm.admin.ui.PackageItem
+import com.tcm.admin.PackageItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

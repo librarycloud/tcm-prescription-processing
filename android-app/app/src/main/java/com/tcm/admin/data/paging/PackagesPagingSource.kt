@@ -3,8 +3,8 @@ package com.tcm.admin.data.paging
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.tcm.admin.ApiClient
-import com.tcm.admin.ui.PackageItem
-import com.tcm.admin.ui.packageItem
+import com.tcm.admin.PackageItem
+import com.tcm.admin.packageItem
 
 class PackagesPagingSource(
     private val apiClient: ApiClient,
