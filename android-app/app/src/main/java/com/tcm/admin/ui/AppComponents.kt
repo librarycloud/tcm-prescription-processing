@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -521,7 +523,7 @@ internal fun SearchBarField(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(SearchControlHeight)
+            .heightIn(min = SearchControlHeight)
             .background(MaterialTheme.colorScheme.surfaceVariant, FieldShape)
             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), FieldShape)
             .padding(horizontal = 8.dp),
@@ -969,7 +971,7 @@ internal fun StatsGrid(
                     Card(
                         modifier = Modifier
                             .then(cellWeight)
-                            .height(68.dp)
+                            .heightIn(min = 68.dp)
                             .then(
                                 when {
                                     onItemClick != null -> Modifier.clickable { onItemClick(itemIndex) }
@@ -986,7 +988,8 @@ internal fun StatsGrid(
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = 68.dp)
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.Center,
                         ) {

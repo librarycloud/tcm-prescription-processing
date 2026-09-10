@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -384,26 +385,24 @@ internal fun InventoryScreen(
 
             item(key = "product_info_header") {
                 Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SectionHeader(title = "商品信息")
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.selectedProduct.value = null
-                            restoreListScroll = true
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("返回列表", fontSize = 12.sp)
-                    }
-                }
+                SectionHeader(
+                    title = "商品信息",
+                    action = {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.selectedProduct.value = null
+                                restoreListScroll = true
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.heightIn(min = 28.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("返回列表", fontSize = 12.sp)
+                        }
+                    },
+                )
                 Spacer(Modifier.height(6.dp))
 
                 AppCard {

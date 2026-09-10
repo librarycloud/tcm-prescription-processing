@@ -6,12 +6,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -360,7 +364,7 @@ internal fun E6ImportsScreen(
                         onClick = { datePickerOpen = true },
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp),
+                            .heightIn(min = 48.dp),
                         shape = FieldShape,
                         color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, CardBorderColor),
@@ -454,7 +458,7 @@ internal fun E6ImportsScreen(
                         Button(
                             enabled = mergeItems.size >= 2 && !actionLoading,
                             onClick = { onNavigate(Route.E6ImportConfirm(RouteParams.put(mergeItems.first()), mergeItems.map { it.optInt("id") })) },
-                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                             shape = FieldShape,
                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
                         ) { Text("合并选中订单并生成处方 (${mergeItems.size})", fontWeight = FontWeight.SemiBold) }
@@ -581,13 +585,18 @@ private fun E6ImportCard(
         }
         if (canManage) {
             Spacer(Modifier.height(5.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 if (e6CanReview(item)) {
-                    TextButton(onClick = onRevalidate) { Icon(Icons.Default.Sync, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("重校验") }
-                    TextButton(onClick = onReject) { Icon(Icons.Default.Close, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("驳回", color = Danger) }
+                    TextButton(onClick = onRevalidate, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) { Icon(Icons.Default.Sync, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("重校验") }
+                    TextButton(onClick = onReject, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) { Icon(Icons.Default.Close, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("驳回", color = Danger) }
                 }
                 if (e6CanConfirm(item)) {
-                    Button(onClick = onConfirm, shape = FieldShape, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)) { Icon(Icons.Default.CheckCircle, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("确认导入") }
+                    Button(onClick = onConfirm, shape = FieldShape, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)) { Icon(Icons.Default.CheckCircle, null, Modifier.width(16.dp)); Spacer(Modifier.width(4.dp)); Text("确认导入") }
                 }
             }
         }
@@ -710,7 +719,7 @@ internal fun E6ImportDetailScreen(
                 val isStoreStaff = user?.optInt("role", -1) == 3
                 if (!isStoreStaff && e6CanConfirm(value)) {
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = { onConfirm(value) }, modifier = Modifier.fillMaxWidth().height(46.dp), shape = FieldShape, colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
+                    Button(onClick = { onConfirm(value) }, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), shape = FieldShape, colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
                         Text(if (value.isNull("prescriptionId")) "确认导入并生成加工计划" else "重新生成加工计划", fontWeight = FontWeight.SemiBold)
                     }
                 }
@@ -843,7 +852,7 @@ internal fun E6ImportConfirmScreen(
             Spacer(Modifier.height(8.dp))
             batches.forEachIndexed { index, batch ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("第${index + 1}批", color = Ink, fontSize = 12.sp, modifier = Modifier.width(42.dp))
+                    Text("第${index + 1}批", color = Ink, fontSize = 12.sp, modifier = Modifier.defaultMinSize(minWidth = 42.dp))
                     OutlinedTextField(
                         batch.dose,
                         { value -> batches = batches.toMutableList().also { it[index] = batch.copy(dose = value.filter(Char::isDigit)) } },
@@ -960,7 +969,7 @@ internal fun E6ImportConfirmScreen(
                     loading = false
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(48.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         )
         Spacer(Modifier.height(20.dp))
     }
@@ -970,7 +979,7 @@ internal fun E6ImportConfirmScreen(
 private fun DetailLine(label: String, value: String, color: Color = RegularText) {
     val display = value.trim().takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) } ?: "-"
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.width(76.dp))
+        Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.defaultMinSize(minWidth = 76.dp))
         Text(display, color = color, fontSize = 13.sp)
     }
 }

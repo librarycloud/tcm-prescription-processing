@@ -9,6 +9,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -178,7 +181,7 @@ internal fun ProcessingScreenV2(
                     ) {
                         OutlinedButton(
                             onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-                            modifier = Modifier.weight(1f).height(CompactControlHeight),
+                            modifier = Modifier.weight(1f).heightIn(min = CompactControlHeight),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
                         ) {
@@ -189,7 +192,7 @@ internal fun ProcessingScreenV2(
                         if (mode != "pickup") {
                             Button(
                                 onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject()))) },
-                                modifier = Modifier.weight(1f).height(CompactControlHeight),
+                                modifier = Modifier.weight(1f).heightIn(min = CompactControlHeight),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                             ) {
@@ -252,7 +255,7 @@ internal fun ProcessingScreenV2(
                                         Card(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(64.dp),
+                                                .heightIn(min = 64.dp),
                                             shape = CardShape,
                                             colors = CardDefaults.cardColors(
                                                 containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
@@ -269,8 +272,9 @@ internal fun ProcessingScreenV2(
                                         ) {
                                             Column(
                                                 modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .padding(horizontal = 7.dp, vertical = 4.dp),
+                                                    .fillMaxWidth()
+                                                    .defaultMinSize(minHeight = 64.dp)
+                                                    .padding(horizontal = 6.dp, vertical = 6.dp),
                                                 verticalArrangement = Arrangement.Center,
                                             ) {
                                                 Text(
@@ -318,7 +322,7 @@ internal fun ProcessingScreenV2(
                                 Card(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(64.dp),
+                                        .heightIn(min = 64.dp),
                                     shape = CardShape,
                                     colors = CardDefaults.cardColors(
                                         containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
@@ -335,8 +339,9 @@ internal fun ProcessingScreenV2(
                                 ) {
                                     Column(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = 64.dp)
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
                                         verticalArrangement = Arrangement.Center,
                                     ) {
                                         Text(
@@ -518,20 +523,20 @@ internal fun ProcessingScreenV2(
                                 Spacer(Modifier.height(8.dp))
 
                                 // Plan Actions
-                                Row(
+                                FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
                                     val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
                                     if (prescriptionId > 0) {
                                         OutlinedButton(
                                             onClick = { onNavigate(Route.PrescriptionDetail(prescriptionId)) },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
-                                            Text("处方", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("处方", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
 
@@ -544,12 +549,12 @@ internal fun ProcessingScreenV2(
                                                         .onFailure { Toast.makeText(context, it.message ?: "开始加工失败", Toast.LENGTH_SHORT).show() }
                                                 }
                                             },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
-                                            Text("开始加工", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("开始加工", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                         OutlinedButton(
                                             onClick = {
@@ -559,11 +564,11 @@ internal fun ProcessingScreenV2(
                                                         .onFailure { Toast.makeText(context, it.message ?: "延期失败", Toast.LENGTH_SHORT).show() }
                                                 }
                                             },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
-                                            Text("延期明天", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("延期明天", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
 
@@ -573,37 +578,37 @@ internal fun ProcessingScreenV2(
                                                 quickScanTargetPlan = plan
                                                 planQuickScanLauncher.launch(Intent(context, ScannerActivity::class.java))
                                             },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
                                             Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(13.dp))
                                             Spacer(Modifier.width(2.dp))
-                                            Text("扫码", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("扫码", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
 
                                     if (status == ProcessingPlanStatus.COMPLETED.code && !packageCreated) {
                                         Button(
                                             onClick = { generatePackagePlan = plan },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Success),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
-                                            Text("生成包裹", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("生成包裹", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
 
                                     if (status in 0..1) {
                                         OutlinedButton(
                                             onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(plan))) },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
-                                            Text("编辑", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("编辑", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
 
@@ -616,12 +621,12 @@ internal fun ProcessingScreenV2(
                                                         .onFailure { Toast.makeText(context, it.message ?: "取消失败", Toast.LENGTH_SHORT).show() }
                                                 }
                                             },
-                                            modifier = Modifier.weight(1f).height(32.dp).defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                                            modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         ) {
-                                            Text("取消", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                            Text("取消", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
                                 }

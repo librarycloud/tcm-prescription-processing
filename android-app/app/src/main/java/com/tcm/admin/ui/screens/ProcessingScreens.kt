@@ -93,6 +93,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -437,7 +438,7 @@ internal fun ProcessingPlanFormScreen(
             Spacer(Modifier.height(14.dp))
             Text("取货方式 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (value, label) ->
                     SegmentedButton(label, pickupMethod == value, { pickupMethod = value })
                 }
@@ -557,7 +558,7 @@ internal fun ProcessingPlanFormScreen(
                     busy = false
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             shape = FieldShape,
             colors = ButtonDefaults.buttonColors(containerColor = Primary),
         ) {
@@ -1247,32 +1248,33 @@ internal fun WorkflowOperationScreen(
         // STEP 1: 调配
         Spacer(Modifier.height(12.dp))
         AppCard {
-            Box(
+            Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.align(Alignment.CenterStart),
-                    verticalAlignment = Alignment.CenterVertically,
+                Surface(
+                    shape = CircleShape,
+                    color = PrimarySoft,
+                    modifier = Modifier.size(24.dp),
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = PrimarySoft,
-                        modifier = Modifier.size(24.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("1", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("1", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Text("调配", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                 }
+                Spacer(Modifier.width(8.dp))
+                Text("调配", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                 if (dispensingTimeLabel.isNotBlank()) {
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         dispensingTimeLabel,
                         color = Muted,
                         fontSize = 10.sp,
-                        modifier = Modifier.align(Alignment.Center),
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
                     )
+                    Spacer(Modifier.width(6.dp))
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
                 Text(
                     dispensingState,
@@ -1282,7 +1284,6 @@ internal fun WorkflowOperationScreen(
                         else -> Muted
                     },
                     fontSize = 12.sp,
-                    modifier = Modifier.align(Alignment.CenterEnd),
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -1313,7 +1314,7 @@ internal fun WorkflowOperationScreen(
                                     }
                                 },
                                 shape = FieldShape,
-                                modifier = Modifier.height(32.dp),
+                                modifier = Modifier.heightIn(min = 32.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                             ) { Text("查看照片 ${index + 1}", fontSize = 12.sp) }
 
@@ -1335,7 +1336,7 @@ internal fun WorkflowOperationScreen(
                                         }
                                     },
                                     shape = FieldShape,
-                                    modifier = Modifier.height(32.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                 ) { Text("删除", fontSize = 12.sp) }
@@ -1354,7 +1355,7 @@ internal fun WorkflowOperationScreen(
                     Button(
                         enabled = !busy,
                         onClick = ::launchPhotoCapture,
-                        modifier = Modifier.weight(1f).height(40.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 40.dp),
                         shape = FieldShape,
                     ) {
                         Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1364,7 +1365,7 @@ internal fun WorkflowOperationScreen(
                     OutlinedButton(
                         enabled = !busy,
                         onClick = { galleryLauncher.launch("image/*") },
-                        modifier = Modifier.weight(1f).height(40.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 40.dp),
                         shape = FieldShape,
                     ) {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1379,32 +1380,33 @@ internal fun WorkflowOperationScreen(
         if (isDecoction) {
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Box(
+                Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterStart),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimarySoft,
+                        modifier = Modifier.size(24.dp),
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = PrimarySoft,
-                            modifier = Modifier.size(24.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("2", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("2", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
+                    Spacer(Modifier.width(8.dp))
+                    Text("浸泡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     if (soakingTimeLabel.isNotBlank()) {
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             soakingTimeLabel,
                             color = Muted,
                             fontSize = 10.sp,
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
                         )
+                        Spacer(Modifier.width(6.dp))
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
                     Text(
                         soakingState,
@@ -1414,7 +1416,6 @@ internal fun WorkflowOperationScreen(
                             else -> Muted
                         },
                         fontSize = 12.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1448,7 +1449,7 @@ internal fun WorkflowOperationScreen(
                                             exceptionEquipmentCode = ""
                                             exceptionDialogType = 0 // show selection sheet
                                         },
-                                        modifier = Modifier.height(30.dp),
+                                        modifier = Modifier.heightIn(min = 30.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                         shape = FieldShape,
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Warning),
@@ -1467,7 +1468,7 @@ internal fun WorkflowOperationScreen(
                             scanningAction = "soaking"
                             scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
                         },
-                        modifier = Modifier.fillMaxWidth().height(38.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
                         shape = FieldShape,
                     ) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1480,32 +1481,33 @@ internal fun WorkflowOperationScreen(
             // STEP 3: 煎煮
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Box(
+                Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterStart),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimarySoft,
+                        modifier = Modifier.size(24.dp),
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = PrimarySoft,
-                            modifier = Modifier.size(24.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("3", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("3", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
+                    Spacer(Modifier.width(8.dp))
+                    Text("煎煮", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     if (decoctionTimeLabel.isNotBlank()) {
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             decoctionTimeLabel,
                             color = Muted,
                             fontSize = 10.sp,
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
                         )
+                        Spacer(Modifier.width(6.dp))
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
                     Text(
                         decoctionState,
@@ -1515,7 +1517,6 @@ internal fun WorkflowOperationScreen(
                             else -> Muted
                         },
                         fontSize = 12.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1540,13 +1541,13 @@ internal fun WorkflowOperationScreen(
                                     Text("第 $portion 组 · 等待转煎煮", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 13.sp)
                                     Text("浸泡桶：$equipment", color = Muted, fontSize = 11.sp)
                                 }
-                                Button(
+                                 Button(
                                     enabled = !busy,
                                     onClick = {
                                         scanningAction = "decoction_$portion"
                                         scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
                                     },
-                                    modifier = Modifier.height(30.dp),
+                                    modifier = Modifier.heightIn(min = 30.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                     shape = FieldShape,
                                 ) { Text("扫锅煎煮", fontSize = 12.sp) }
@@ -1585,7 +1586,7 @@ internal fun WorkflowOperationScreen(
                                             exceptionEquipmentCode = ""
                                             exceptionDialogType = 0
                                         },
-                                        modifier = Modifier.height(30.dp),
+                                        modifier = Modifier.heightIn(min = 30.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                         shape = FieldShape,
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Warning),
@@ -1603,32 +1604,33 @@ internal fun WorkflowOperationScreen(
             // STEP 4: 打包
             Spacer(Modifier.height(12.dp))
             AppCard {
-                Box(
+                Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterStart),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimarySoft,
+                        modifier = Modifier.size(24.dp),
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = PrimarySoft,
-                            modifier = Modifier.size(24.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("4", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("4", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     }
+                    Spacer(Modifier.width(8.dp))
+                    Text("打包", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     if (packagingTimeLabel.isNotBlank()) {
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             packagingTimeLabel,
                             color = Muted,
                             fontSize = 10.sp,
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
                         )
+                        Spacer(Modifier.width(6.dp))
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
                     Text(
                         packagingState,
@@ -1638,7 +1640,6 @@ internal fun WorkflowOperationScreen(
                             else -> Muted
                         },
                         fontSize = 12.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1669,7 +1670,7 @@ internal fun WorkflowOperationScreen(
                                         scanningAction = "packaging_$usageId"
                                         scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
                                     },
-                                    modifier = Modifier.height(30.dp),
+                                    modifier = Modifier.heightIn(min = 30.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                     shape = FieldShape,
                                 ) { Text("扫包装机打包", fontSize = 12.sp) }
@@ -1843,7 +1844,7 @@ internal fun WorkflowOperationScreen(
                     createPackageImmediately = true
                     showFinishConfirmDialog = true
                 },
-                modifier = Modifier.fillMaxWidth().height(46.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Success),
                 shape = FieldShape,
             ) { Text("完成加工", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
@@ -1857,7 +1858,7 @@ internal fun WorkflowOperationScreen(
                 onClick = {
                     showGeneratePackageDialog = true
                 },
-                modifier = Modifier.fillMaxWidth().height(46.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 shape = FieldShape,
             ) { Text("生成待取包裹", fontWeight = FontWeight.Bold, fontSize = 15.sp) }

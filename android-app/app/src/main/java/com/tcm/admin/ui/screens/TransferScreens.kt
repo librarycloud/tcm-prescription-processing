@@ -17,12 +17,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -638,9 +642,9 @@ internal fun TransferDetailScreen(
                             returnItem = item
                             returnQuantity = quantityText(item.opt("availableReturnQuantity"), "0")
                         },
-                        modifier = Modifier.height(34.dp),
+                        modifier = Modifier.heightIn(min = 34.dp),
                         shape = FieldShape,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                     ) { Text("申请归还", fontSize = 12.sp) }
                 }
             }
@@ -684,10 +688,10 @@ internal fun TransferDetailScreen(
                                         .onFailure { saving = false; error = it.message ?: "确认归还失败" }
                                 }
                             },
-                            modifier = Modifier.height(34.dp),
+                            modifier = Modifier.heightIn(min = 34.dp),
                             enabled = !saving,
                             shape = FieldShape,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                         ) { Text("确认归还", fontSize = 12.sp) }
                     }
                 }
@@ -696,7 +700,12 @@ internal fun TransferDetailScreen(
 
         if (permissions?.optBoolean("canConfirmOutbound") == true || permissions?.optBoolean("canCancel") == true) {
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 if (permissions?.optBoolean("canConfirmOutbound") == true) {
                     Button(
                         onClick = {
@@ -707,10 +716,10 @@ internal fun TransferDetailScreen(
                                     .onFailure { saving = false; error = it.message ?: "确认调出失败" }
                             }
                         },
-                        modifier = Modifier.height(34.dp),
+                        modifier = Modifier.heightIn(min = 34.dp).defaultMinSize(minHeight = 34.dp),
                         enabled = !saving,
                         shape = FieldShape,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                     ) { Text("确认调出", fontSize = 12.sp) }
                 }
                 if (permissions?.optBoolean("canCancel") == true) {
@@ -723,10 +732,10 @@ internal fun TransferDetailScreen(
                                     .onFailure { saving = false; error = it.message ?: "取消调拨失败" }
                             }
                         },
-                        modifier = Modifier.height(34.dp),
+                        modifier = Modifier.heightIn(min = 34.dp).defaultMinSize(minHeight = 34.dp),
                         enabled = !saving,
                         shape = FieldShape,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
                     ) { Text("取消调拨", fontSize = 12.sp) }
                 }

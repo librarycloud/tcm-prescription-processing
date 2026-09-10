@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -114,7 +115,7 @@ internal fun DifferencesScreen(
                     if (!isStoreStaff) {
                         Button(
                             onClick = { registerVisible = true },
-                            modifier = Modifier.height(CompactControlHeight),
+                            modifier = Modifier.heightIn(min = CompactControlHeight),
                             shape = RoundedCornerShape(8.dp),
                         ) {
                             Text("登记差异")
@@ -332,7 +333,7 @@ internal fun DifferencesScreen(
             onDismissRequest = { registerVisible = false },
             title = { Text("登记库存差异") },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("PRE_RECEIPT" to "先到货", "PRE_SHIPMENT" to "先出货").forEach { (key, label) ->
                             SegmentedButton(label, registerType == key, onClick = { registerType = key })

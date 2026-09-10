@@ -23,12 +23,16 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -270,35 +274,37 @@ internal fun PrescriptionsScreen(
                             item.optJSONObject("store")?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("所属门店", it) }
                         }
                         Spacer(Modifier.height(10.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                             if (!readOnly && item.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
-                                Spacer(Modifier.width(6.dp))
                                 Button(
                                     onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject().put("prescriptionId", item.optInt("id")).put("prescription", item)))) },
                                     shape = FieldShape,
-                                    modifier = Modifier.height(32.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
                                 ) { Text("新增加工", fontSize = 12.sp) }
                             }
 
                             if (!readOnly && item.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
-                                Spacer(Modifier.width(6.dp))
                                 OutlinedButton(
                                     onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(item))) },
                                     shape = FieldShape,
-                                    modifier = Modifier.height(32.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                 ) { Text("编辑", fontSize = 12.sp) }
                             }
                             if (!readOnly && plans.length() == 0) {
-                                Spacer(Modifier.width(6.dp))
                                 OutlinedButton(
                                     onClick = { deleteTarget = item },
                                     shape = FieldShape,
-                                    modifier = Modifier.height(32.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                 ) { Text("删除", fontSize = 12.sp) }
                             }
                         }
@@ -472,8 +478,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     OutlinedButton(
                         onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(p))) },
                         shape = FieldShape,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.heightIn(min = 32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                     ) {
                         Icon(Icons.Default.Edit, null, Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
@@ -504,8 +510,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                             enabled = !busy,
                             onClick = { attachmentLauncher.launch(arrayOf("image/*", "application/pdf")) },
                             shape = FieldShape,
-                            modifier = Modifier.height(32.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier.heightIn(min = 32.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                         ) {
                             Icon(Icons.Default.UploadFile, null, Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
@@ -526,8 +532,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                     enabled = !busy && !viewingAttachment,
                                     onClick = { viewAttachmentFile(attachment) },
                                     shape = FieldShape,
-                                    modifier = Modifier.height(32.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                 ) {
                                     if (viewingAttachment) {
                                         CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = Primary)
@@ -543,8 +549,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                     TextButton(
                                         enabled = !busy && !viewingAttachment,
                                         onClick = { deleteAttachment = true },
-                                        modifier = Modifier.height(32.dp),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                        modifier = Modifier.heightIn(min = 32.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                                     ) {
                                         Text("删除", color = Danger, fontSize = 12.sp)
                                     }
@@ -566,8 +572,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                         Button(
                             onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject().put("prescriptionId", id).put("prescription", p)))) },
                             shape = FieldShape,
-                            modifier = Modifier.height(32.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier.heightIn(min = 32.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Primary),
                         ) { Text("新增批次", fontSize = 12.sp) }
                     }
@@ -605,7 +611,12 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                 Text("取货码：${it.displayField("pickupCode")}", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 2.dp))
                             }
                             Spacer(Modifier.height(8.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                            @OptIn(ExperimentalLayoutApi::class)
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
                                 pkg?.let { pItem ->
                                     OutlinedButton(
                                         onClick = {
@@ -619,29 +630,27 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                             }
                                         },
                                         shape = FieldShape,
-                                        modifier = Modifier.height(30.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                     ) { Text("包裹", fontSize = 11.5.sp) }
                                 }
 
                                 if (!readOnly && plan.optInt("status") in 0..1) {
-                                    Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
                                         onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject(plan.toString()).put("prescription", p)))) },
                                         shape = FieldShape,
-                                        modifier = Modifier.height(30.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                     ) { Text("编辑", fontSize = 11.5.sp) }
                                 }
 
                                 if (!readOnly && plan.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
-                                    Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
                                         onClick = { deletePlan = plan },
                                         shape = FieldShape,
-                                        modifier = Modifier.height(30.dp),
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                     ) { Text("删除", fontSize = 11.5.sp) }
                                 }
                             }
@@ -717,8 +726,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                             }
                                         },
                                         shape = FieldShape,
-                                        modifier = Modifier.height(30.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                     ) { Text("详情", fontSize = 11.5.sp) }
                                 }
                             }
@@ -1055,7 +1064,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
             }
             if (isEdit) {
                 Spacer(Modifier.height(14.dp)); Text("处方状态", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SegmentedButton("进行中", status == 0, onClick = { status = 0 })
                     SegmentedButton("已完成", status == 1, onClick = { status = 1 })
                     SegmentedButton("已取消", status == 2, onClick = { status = 2 })
@@ -1095,7 +1104,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
                     busy = false
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(46.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
             shape = FieldShape,
             colors = ButtonDefaults.buttonColors(containerColor = Primary),
         ) {
