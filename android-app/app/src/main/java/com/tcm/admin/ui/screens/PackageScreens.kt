@@ -72,6 +72,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tcm.admin.ui.viewmodels.PackageViewModel
+
 import androidx.compose.ui.graphics.asImageBitmap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
@@ -121,25 +129,18 @@ internal fun PackagesScreen(
     onNavigate: (ScreenTarget) -> Unit,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
+    viewModel: PackageViewModel = hiltViewModel()
 ) {
-    val listOwner = "packages"
     val showStore = user?.optInt("role", -1) == 0
-    var status by rememberRetainedListValue(listOwner, "status") { null as Int? } // null=全部, 0=待取, 1=已取
-    var sortBy by rememberRetainedListValue(listOwner, "sortBy") { "createdAt" } // "createdAt" | "pickedAt"
-    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
-    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
-    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
-    var items by rememberRetainedListValue(listOwner, "items") { null as List<PackageItem>? }
-    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
-    var loading by remember { mutableStateOf(false) }
-    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
-    var page by rememberRetainedListValue(listOwner, "page") { 1 }
-    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
-    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
-    var storesLoaded by rememberRetainedListValue(listOwner, "storesLoaded") { false }
-    var refreshing by remember { mutableStateOf(false) }
+    val keyword by viewModel.keyword.collectAsStateWithLifecycle()
+    val status by viewModel.status.collectAsStateWithLifecycle()
+    val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
+    val selectedStoreId by viewModel.storeId.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+    
+    val items = viewModel.packagesFlow.collectAsLazyPagingItems()
+    
     var lastAutoKeyword by remember { mutableStateOf("") }
-
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -151,231 +152,128 @@ internal fun PackagesScreen(
     }
 
     LaunchedEffect(showStore) {
-        if (storesLoaded) return@LaunchedEffect
-        if (!showStore) return@LaunchedEffect
-        runCatching { withContext(Dispatchers.IO) { ApiClient.availableStores() } }
-            .onSuccess { values ->
-                stores = (0 until values.length()).map { values.getJSONObject(it) }
-                storesLoaded = true
-                if (stores.size == 1) selectedStoreId = stores.first().opt("id")?.toString().orEmpty()
-            }
+        if (showStore) viewModel.loadStores()
     }
-
-    LaunchedEffect(status, sortBy, selectedStoreId, reload, page) {
-        val queryKey = listOf(status, sortBy, keyword, selectedStoreId, reload, page).joinToString("|")
-        if (loadedQueryKey == queryKey && items != null) return@LaunchedEffect
-        error = null
-        loading = true
-        runCatching {
-            withContext(Dispatchers.IO) {
-                ApiClient.packagesPaged(
-                    status = status,
-                    keyword = keyword.trim(),
-                    storeId = selectedStoreId.toIntOrNull(),
-                    sortBy = sortBy,
-                    page = page,
-                    pageSize = 10,
-                )
-            }
-        }.onSuccess { root ->
-            error = null
-            val list = root.optJSONArray("list")
-            pages = root.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            if (list != null) {
-                items = (0 until list.length()).map { packageItem(list.getJSONObject(it)) }
-            } else {
-                items = emptyList()
-            }
-            loading = false
-            refreshing = false
-            loadedQueryKey = queryKey
-        }.onFailure {
-            if (it.isCancellation()) return@onFailure
-            error = it.message ?: "加载包裹列表失败"
-            loading = false
-            refreshing = false
+    
+    LaunchedEffect(stores) {
+        if (showStore && stores.size == 1 && selectedStoreId == null) {
+            viewModel.updateFilters(newStoreId = stores.first().optInt("id"))
         }
     }
-
+    
     LaunchedEffect(keyword) {
         val term = keyword.trim()
-        if (term.isBlank() || !shouldAutoSearchQuery(term)) {
+        if (!shouldAutoSearchQuery(term)) {
             lastAutoKeyword = ""
-            if (term.isBlank()) reload++
             return@LaunchedEffect
         }
         kotlinx.coroutines.delay(300)
         if (keyword.trim() == term && lastAutoKeyword != term) {
             lastAutoKeyword = term
-            page = 1
-            reload++
+            items.refresh()
         }
     }
 
     PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                ApiClient.clearResponseCache(context)
-                reload++
-            }
-        },
+        isRefreshing = items.loadState.refresh is LoadState.Loading,
+        onRefresh = { items.refresh() },
         modifier = Modifier.fillMaxSize(),
     ) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-    ) {
-        // Top action bar
-        item(key = "header") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    SectionHeader("包裹工作台", "管理待领取、自提与跑腿核销")
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { onNavigate(ScreenTarget.PackageVerify("")) },
-                        modifier = Modifier.height(CompactControlHeight),
-                        shape = FieldShape,
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("核销")
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+        ) {
+            item(key = "header") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        SectionHeader("包裹管理", "取件记录与物流登记")
                     }
                     Button(
-                        onClick = { onNavigate(ScreenTarget.PackageForm(null)) },
-                        modifier = Modifier.height(CompactControlHeight),
+                        onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
                         shape = FieldShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.QrCodeScanner, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("新建")
+                        Text("取件核销", fontSize = 13.sp)
                     }
+                }
+                Spacer(Modifier.height(12.dp))
+                SearchBarField(
+                    keyword,
+                    {
+                        viewModel.updateFilters(newKeyword = it)
+                        if (it.isBlank()) items.refresh()
+                    },
+                    "搜索包裹号、处方号、收件人或手机号",
+                    onSearch = { lastAutoKeyword = keyword.trim(); items.refresh() },
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("全部包裹", status == null, onClick = { viewModel.updateFilters(newStatus = null) })
+                    SegmentedButton("待取件", status == 0, onClick = { viewModel.updateFilters(newStatus = 0) })
+                    SegmentedButton("已完成", status == 1, onClick = { viewModel.updateFilters(newStatus = 1) })
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("按入库时间排序", sortBy == "createdAt", onClick = { viewModel.updateFilters(newSortBy = "createdAt") })
+                    SegmentedButton("按取件时间排序", sortBy == "pickedAt", onClick = { viewModel.updateFilters(newSortBy = "pickedAt") })
+                }
+                if (showStore && stores.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    StoreChipsRow(stores, selectedStoreId?.toString() ?: "", onSelectStore = { viewModel.updateFilters(newStoreId = it.toIntOrNull()) })
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
+            val loadState = items.loadState.refresh
+            if (loadState is LoadState.Error) {
+                item(key = "error") {
+                    ErrorStateView(message = loadState.error.message ?: "加载包裹失败", onRetry = { items.retry() })
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
-
-            SearchBarField(
-                value = keyword,
-                onValueChange = {
-                    keyword = it
-                    page = 1
-                },
-                placeholder = "搜索姓名、手机号或取货码",
-                onSearch = { page = 1; lastAutoKeyword = keyword.trim(); reload++ },
-                onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            // Status filter tabs
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SegmentedButton("全部包裹", status == null, onClick = { status = null; page = 1 })
-                SegmentedButton("待领取", status == 0, onClick = { status = 0; page = 1 })
-                SegmentedButton("已领取", status == 1, onClick = { status = 1; page = 1 })
-            }
-        }
-
-        if (showStore && stores.size > 1) {
-            item(key = "store_chips") {
-                Spacer(Modifier.height(8.dp))
-                StoreChipsRow(
-                    stores = stores,
-                    selectedStoreId = selectedStoreId,
-                    onSelectStore = { selectedStoreId = it; page = 1 },
-                )
-            }
-        }
-
-        item(key = "sort_switcher") {
-            Spacer(Modifier.height(10.dp))
-
-            // Sort switcher
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Default.SwapVert, contentDescription = null, tint = Muted, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = if (sortBy == "createdAt") "按创建时间" else "按领取时间",
-                    color = Primary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable {
-                        sortBy = if (sortBy == "createdAt") "pickedAt" else "createdAt"
-                    },
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-        }
-
-        if (error != null) {
-            item(key = "error") {
-                ErrorStateView(message = error!!, onRetry = { reload++ })
-                Spacer(Modifier.height(8.dp))
-            }
-        }
-
-        if (loading && items != null) {
-            item(key = "revalidating_indicator") {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = Primary,
-                    trackColor = Primary.copy(alpha = 0.12f),
-                )
-                Spacer(Modifier.height(8.dp))
-            }
-        }
-
-        if (loading && items == null) {
-            item(key = "loading") {
-                AppEmptyState("加载包裹列表中...")
-            }
-        } else if (items != null && items!!.isEmpty()) {
-            item(key = "empty") {
-                AppEmptyState("暂无匹配包裹")
-            }
-        } else {
-            items(items.orEmpty(), key = { it.id }) { item ->
-                PackageSummaryCard(
-                    item = item,
-                    showStore = showStore,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                    onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
-                    onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
-                )
+            if (loadState is LoadState.Loading && items.itemCount == 0) {
+                item(key = "revalidating_indicator") {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = Primary,
+                        trackColor = Primary.copy(alpha = 0.12f),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
+                item(key = "empty") {
+                    AppEmptyState("暂无匹配包裹")
+                }
             }
 
-            if (pages > 1) {
-                item(key = "pagination") {
-                    AppPagination(
-                        page = page,
-                        pages = pages,
-                        onPrev = { if (page > 1) page-- },
-                        onNext = { if (page < pages) page++ },
+            items(
+                count = items.itemCount,
+                key = items.itemKey { it.id }
+            ) { index ->
+                val item = items[index]
+                if (item != null) {
+                    PackageSummaryCard(
+                        item = item,
+                        showStore = showStore,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { onNavigate(ScreenTarget.PackageDetail(item)) },
+                        onVerify = { onNavigate(ScreenTarget.PackageVerify(item.code)) },
                     )
                 }
             }
+            
+            if (items.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Spacer(Modifier.height(16.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
+            }
         }
-
-        item(key = "spacer_bottom") {
-            Spacer(Modifier.height(16.dp))
-        }
-    }
     }
 }
 
