@@ -1,5 +1,10 @@
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import 'dotenv/config'; // 确保加载到环境变量
+
+const databaseUrl = process.env.DATABASE_URL;
+const adapter = new PrismaMariaDb(databaseUrl);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('开始迁移旧配置数据...');
