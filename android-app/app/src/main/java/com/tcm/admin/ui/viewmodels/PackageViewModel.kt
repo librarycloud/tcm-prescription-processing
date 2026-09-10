@@ -21,7 +21,7 @@ import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
-class PackageViewModel @Inject constructor(
+internal class PackageViewModel @Inject constructor(
     private val apiClient: ApiClient
 ) : ViewModel() {
 

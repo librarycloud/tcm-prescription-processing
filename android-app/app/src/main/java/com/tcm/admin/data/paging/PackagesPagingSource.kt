@@ -6,7 +6,7 @@ import com.tcm.admin.ApiClient
 import com.tcm.admin.PackageItem
 import com.tcm.admin.packageItem
 
-class PackagesPagingSource(
+internal class PackagesPagingSource(
     private val apiClient: ApiClient,
     private val status: Int?,
     private val keyword: String,
