@@ -11,10 +11,10 @@ import com.tcm.admin.data.paging.PrescriptionsPagingSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    flatMapLatest
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.json.JSONArray
@@ -34,12 +34,12 @@ class PrescriptionViewModel @Inject constructor(
     val stores = MutableStateFlow<List<JSONObject>>(emptyList())
     val filtersLoaded = MutableStateFlow(false)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val prescriptionsFlow: Flow<PagingData<JSONObject>> = combine(
         keyword, status, doctorId, storeId
     ) { k, s, d, st ->
         FilterParams(k, s, d, st)
-    }.@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    flatMapLatest { params ->
+    }.flatMapLatest { params ->
         Pager(
             config = PagingConfig(pageSize = 20, enablePlaceholders = false)
         ) {
