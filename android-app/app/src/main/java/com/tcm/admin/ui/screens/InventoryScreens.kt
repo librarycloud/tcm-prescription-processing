@@ -14,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -585,12 +587,29 @@ internal fun InventoryScreen(
                                         StatusPill(storeName)
                                     }
                                 }
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = "货位：${location.ifBlank { "未分配" }}",
-                                    color = if (location.isNotBlank()) Primary else Muted,
-                                    fontSize = 12.sp,
-                                )
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = if (location.isNotBlank()) {
+                                        Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(PrimarySoft)
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    } else Modifier,
+                                ) {
+                                    Text(
+                                        text = "货位：",
+                                        color = if (location.isNotBlank()) PrimaryDark else Muted,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                    )
+                                    Text(
+                                        text = location.ifBlank { "未分配" },
+                                        color = if (location.isNotBlank()) PrimaryDark else Muted,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp,
+                                    )
+                                }
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(

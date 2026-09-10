@@ -1167,7 +1167,7 @@ private fun BottomNav(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
+                    .height(58.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 items.forEach { (target, pair) ->
@@ -1205,7 +1205,6 @@ private fun BottomNav(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
