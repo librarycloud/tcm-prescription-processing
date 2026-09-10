@@ -1,5 +1,16 @@
 package com.tcm.admin
 
+import android.widget.Toast
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import com.tcm.admin.ui.viewmodels.TransferViewModel
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -68,22 +79,19 @@ import java.time.LocalDate
 internal fun TransfersScreen(
     user: JSONObject?,
     onNavigate: (ScreenTarget) -> Unit,
-    scrollState: ScrollState,
+    listState: LazyListState = rememberLazyListState(),
+    viewModel: TransferViewModel = hiltViewModel(),
 ) {
-    val listOwner = "transfers"
     val showStore = user?.optInt("role", -1) == 0
-    var transfers by rememberRetainedListValue(listOwner, "transfers") { null as List<JSONObject>? }
-    var stores by rememberRetainedListValue(listOwner, "stores") { emptyList<JSONObject>() }
-    var stats by rememberRetainedListValue(listOwner, "stats") { null as JSONObject? }
-    var keyword by rememberRetainedListValue(listOwner, "keyword") { "" }
-    var statusFilter by rememberRetainedListValue(listOwner, "statusFilter") { null as Int? }
-    var overdueOnly by rememberRetainedListValue(listOwner, "overdueOnly") { false }
-    var selectedStoreId by rememberRetainedListValue(listOwner, "selectedStoreId") { "" }
-    var error by rememberRetainedListValue(listOwner, "error") { null as String? }
-    var reload by rememberRetainedListValue(listOwner, "reload") { 0 }
-    var page by rememberRetainedListValue(listOwner, "page") { 1 }
-    var pages by rememberRetainedListValue(listOwner, "pages") { 1 }
-    var loadedQueryKey by rememberRetainedListValue(listOwner, "loadedQueryKey") { null as String? }
+    val keyword by viewModel.keyword.collectAsStateWithLifecycle()
+    val statusFilter by viewModel.statusFilter.collectAsStateWithLifecycle()
+    val overdueOnly by viewModel.overdueOnly.collectAsStateWithLifecycle()
+    val selectedStoreId by viewModel.selectedStoreId.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
+
+    val transfers = viewModel.transfersFlow.collectAsLazyPagingItems()
+
     var createVisible by remember { mutableStateOf(false) }
     var fromStoreId by remember { mutableStateOf("") }
     var toStoreId by remember { mutableStateOf("") }
@@ -92,41 +100,23 @@ internal fun TransfersScreen(
     var itemSpecification by remember { mutableStateOf("") }
     var itemQuantity by remember { mutableStateOf("1") }
     var itemUnit by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
-    var refreshing by remember { mutableStateOf(false) }
     var lastAutoKeyword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    LaunchedEffect(reload, statusFilter, overdueOnly, selectedStoreId, page) {
-        val queryKey = listOf(reload, keyword, statusFilter, overdueOnly, selectedStoreId, page).joinToString("|")
-        if (loadedQueryKey == queryKey && transfers != null) return@LaunchedEffect
-        error = null
-        loading = true
-        runCatching {
-            withContext(Dispatchers.IO) {
-                Triple(
-                    ApiClient.transfersPaged(keyword, statusFilter, selectedStoreId.takeIf { showStore }?.toIntOrNull(), overdueOnly, page, 10),
-                    ApiClient.transferStores(),
-                    ApiClient.transferStats(selectedStoreId.takeIf { showStore }?.toIntOrNull()),
-                )
-            }
-        }.onSuccess { (transferData, storeValues, summary) ->
-            error = null
-            val transferValues = transferData.optJSONArray("list") ?: JSONArray()
-            transfers = (0 until transferValues.length()).map { transferValues.getJSONObject(it) }
-            pages = transferData.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
-            stores = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
-            stats = summary
-            loadedQueryKey = queryKey
-            loading = false
-            refreshing = false
-        }.onFailure {
-            if (it.isCancellation()) return@onFailure
-            error = it.message ?: "加载门店调拨失败"
-            loading = false
-            refreshing = false
+    LaunchedEffect(showStore) {
+        if (showStore) viewModel.loadStores()
+    }
+
+    LaunchedEffect(stores) {
+        if (showStore && stores.size == 1 && selectedStoreId == null) {
+            val sid = stores.first().optInt("id")
+            viewModel.selectedStoreId.value = sid
         }
+    }
+
+    LaunchedEffect(selectedStoreId) {
+        viewModel.refreshStats(selectedStoreId)
     }
 
     LaunchedEffect(keyword) {
@@ -138,241 +128,261 @@ internal fun TransfersScreen(
         kotlinx.coroutines.delay(300)
         if (keyword.trim() == term && lastAutoKeyword != term) {
             lastAutoKeyword = term
-            page = 1
-            reload++
+            transfers.refresh()
         }
     }
 
+    val isRefreshing = transfers.loadState.refresh is LoadState.Loading
+
     PullToRefreshBox(
-        isRefreshing = refreshing,
+        isRefreshing = isRefreshing,
         onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                ApiClient.clearResponseCache(context)
-                reload++
-            }
+            ApiClient.clearResponseCache(context)
+            transfers.refresh()
+            viewModel.refreshStats(selectedStoreId)
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
         ) {
-            Column(Modifier.weight(1f)) {
-                SectionHeader("门店调拨", "跨门店物资借调与归还跟踪")
-            }
-            Button(
-                onClick = { createVisible = true },
-                shape = FieldShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("新建调拨")
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // Stats
-        stats?.let {
-            StatsGrid(
-                listOf(
-                    "借出中" to it.optInt("borrowing").toString(),
-                    "部分归还" to it.optInt("partReturned").toString(),
-                    "已逾期" to it.optInt("overdue").toString(),
-                ),
-                selectedIndex = when {
-                    overdueOnly -> 2
-                    statusFilter == 0 -> 0
-                    statusFilter == 1 -> 1
-                    else -> null
-                },
-                onItemClick = { index ->
-                    error = null
-                    when (index) {
-                        0 -> { statusFilter = 0; overdueOnly = false }
-                        1 -> { statusFilter = 1; overdueOnly = false }
-                        2 -> { statusFilter = null; overdueOnly = true }
-                    }
-                },
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // Search Bar
-        SearchBarField(
-            value = keyword,
-            onValueChange = { keyword = it; page = 1; if (it.isBlank()) reload++ },
-            placeholder = "输入单号、门店、物品或批号",
-            onSearch = { lastAutoKeyword = keyword.trim(); reload++ },
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        // Status Filter Chips
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SegmentedButton("全部状态", statusFilter == null && !overdueOnly, onClick = {
-                statusFilter = null
-                overdueOnly = false
-                page = 1
-            })
-            SegmentedButton("借出中", statusFilter == 0 && !overdueOnly, onClick = {
-                statusFilter = 0
-                overdueOnly = false
-                page = 1
-            })
-            SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly, onClick = {
-                statusFilter = 1
-                overdueOnly = false
-                page = 1
-            })
-            SegmentedButton("已逾期", overdueOnly, onClick = {
-                statusFilter = null
-                overdueOnly = true
-                page = 1
-            })
-        }
-
-        if (showStore && stores.size > 1) {
-            Spacer(Modifier.height(8.dp))
-            StoreChipsRow(
-                stores = stores,
-                selectedStoreId = selectedStoreId,
-                onSelectStore = { selectedStoreId = it; page = 1 },
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        if (loading && transfers != null) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = Primary,
-                trackColor = Primary.copy(alpha = 0.12f),
-            )
-            Spacer(Modifier.height(8.dp))
-        }
-
-        if (transfers == null && error == null) AppEmptyState("加载中...")
-        if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
-        if (transfers != null && transfers!!.isEmpty()) AppEmptyState("暂无调拨单")
-
-        transfers.orEmpty().forEach { transfer ->
-            key(transfer.optInt("id")) {
-            val items = transfer.optJSONArray("items") ?: JSONArray()
-            val status = transfer.optInt("status")
-            val outboundStatus = transfer.optInt("outboundStatus")
-            val isOverdue = transfer.optBoolean("overdue")
-
-            AppCard(
-                modifier = Modifier.padding(bottom = 12.dp),
-                onClick = { onNavigate(ScreenTarget.TransferDetail(transfer.optInt("id"))) },
-            ) {
+            item(key = "header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = transfer.displayField("transferNo"),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Ink,
-                    )
-                    StatusPill(
-                        text = if (isOverdue) "已逾期" else transferStatusLabel(status, outboundStatus),
+                    Column(Modifier.weight(1f)) {
+                        SectionHeader("门店调拨", "跨门店物资借调与归还跟踪")
+                    }
+                    Button(
+                        onClick = { createVisible = true },
+                        shape = FieldShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("新建调拨")
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Stats
+                stats?.let {
+                    StatsGrid(
+                        listOf(
+                            "借出中" to it.optInt("borrowing").toString(),
+                            "部分归还" to it.optInt("partReturned").toString(),
+                            "已逾期" to it.optInt("overdue").toString(),
+                        ),
+                        selectedIndex = when {
+                            overdueOnly -> 2
+                            statusFilter == 0 -> 0
+                            statusFilter == 1 -> 1
+                            else -> null
+                        },
+                        onItemClick = { index ->
+                            when (index) {
+                                0 -> {
+                                    viewModel.statusFilter.value = 0
+                                    viewModel.overdueOnly.value = false
+                                }
+                                1 -> {
+                                    viewModel.statusFilter.value = 1
+                                    viewModel.overdueOnly.value = false
+                                }
+                                2 -> {
+                                    viewModel.statusFilter.value = null
+                                    viewModel.overdueOnly.value = true
+                                }
+                            }
+                        },
                     )
                 }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Search Bar
+                SearchBarField(
+                    value = keyword,
+                    onValueChange = {
+                        viewModel.keyword.value = it
+                        if (it.isBlank()) transfers.refresh()
+                    },
+                    placeholder = "输入单号、门店、物品或批号",
+                    onSearch = {
+                        lastAutoKeyword = keyword.trim()
+                        transfers.refresh()
+                    },
+                )
 
                 Spacer(Modifier.height(10.dp))
 
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = FieldShape,
-                    border = BorderStroke(1.dp, CardBorderColor),
-                    modifier = Modifier.fillMaxWidth(),
+                // Status Filter Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    SegmentedButton("全部状态", statusFilter == null && !overdueOnly, onClick = {
+                        viewModel.statusFilter.value = null
+                        viewModel.overdueOnly.value = false
+                    })
+                    SegmentedButton("借出中", statusFilter == 0 && !overdueOnly, onClick = {
+                        viewModel.statusFilter.value = 0
+                        viewModel.overdueOnly.value = false
+                    })
+                    SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly, onClick = {
+                        viewModel.statusFilter.value = 1
+                        viewModel.overdueOnly.value = false
+                    })
+                    SegmentedButton("已逾期", overdueOnly, onClick = {
+                        viewModel.statusFilter.value = null
+                        viewModel.overdueOnly.value = true
+                    })
+                }
+
+                if (showStore && stores.size > 1) {
+                    Spacer(Modifier.height(8.dp))
+                    StoreChipsRow(
+                        stores = stores,
+                        selectedStoreId = selectedStoreId?.toString().orEmpty(),
+                        onSelectStore = {
+                            viewModel.selectedStoreId.value = it.toIntOrNull()
+                        },
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+            }
+
+            if (transfers.loadState.refresh is LoadState.Error) {
+                item(key = "error") {
+                    val err = (transfers.loadState.refresh as LoadState.Error).error
+                    ErrorStateView(message = err.message ?: "加载失败", onRetry = { transfers.retry() })
+                }
+            }
+
+            if (transfers.loadState.refresh is LoadState.Loading && transfers.itemCount == 0) {
+                item(key = "loading") {
+                    AppEmptyState("加载中...")
+                }
+            } else if (transfers.itemCount == 0 && transfers.loadState.refresh !is LoadState.Error && transfers.loadState.refresh !is LoadState.Loading) {
+                item(key = "empty") {
+                    AppEmptyState("暂无调拨单")
+                }
+            }
+
+            items(count = transfers.itemCount, key = transfers.itemKey { it.optInt("id") }) { index ->
+                val transfer = transfers[index]
+                if (transfer != null) {
+                    val items = transfer.optJSONArray("items") ?: JSONArray()
+                    val status = transfer.optInt("status")
+                    val outboundStatus = transfer.optInt("outboundStatus")
+                    val isOverdue = transfer.optBoolean("overdue")
+
+                    AppCard(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { onNavigate(ScreenTarget.TransferDetail(transfer.optInt("id"))) },
                     ) {
-                        Text(
-                            text = transfer.optJSONObject("fromStore")?.displayField("name") ?: "-",
-                            fontWeight = FontWeight.SemiBold,
-                            color = Ink,
-                            fontSize = 13.sp,
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = transfer.displayField("transferNo"),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Ink,
+                            )
+                            StatusPill(
+                                text = if (isOverdue) "已逾期" else transferStatusLabel(status, outboundStatus),
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = transfer.optJSONObject("fromStore")?.displayField("name") ?: "-",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Ink,
+                                    fontSize = 13.sp,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.CompareArrows,
+                                    contentDescription = null,
+                                    tint = Primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = transfer.optJSONObject("toStore")?.displayField("name") ?: "-",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Ink,
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        val count = items.length()
+                        val itemNames = (0 until count)
+                            .mapNotNull { items.optJSONObject(it)?.optString("itemName")?.trim() }
+                            .filter { it.isNotBlank() }
+                        val itemsDisplay = when {
+                            itemNames.isEmpty() -> "-"
+                            count > 2 -> "${itemNames.take(2).joinToString("、")} 等${count}项"
+                            else -> itemNames.joinToString("、")
+                        }
+
+                        InfoRowItem(
+                            label = "调拨物品",
+                            value = itemsDisplay,
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            Icons.AutoMirrored.Filled.CompareArrows,
-                            contentDescription = null,
-                            tint = Primary,
-                            modifier = Modifier.size(18.dp),
+                        InfoRowItem(
+                            label = "调拨日期",
+                            value = serverDateOnly(transfer.opt("transferDate"), "-"),
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = transfer.optJSONObject("toStore")?.displayField("name") ?: "-",
-                            fontWeight = FontWeight.SemiBold,
-                            color = Ink,
-                            fontSize = 13.sp,
+                        InfoRowItem(
+                            label = "预计归还",
+                            value = serverDateOnly(transfer.opt("expectedReturnDate"), "-"),
+                            valueColor = if (isOverdue) Danger else Ink,
+                            isBold = isOverdue,
                         )
+
+                        if (outboundStatus == 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text("提示：调出方尚未确认出库", color = Warning, fontSize = 12.sp)
+                        }
+
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
-
-                Spacer(Modifier.height(8.dp))
-
-                val count = items.length()
-                val itemNames = (0 until count)
-                    .mapNotNull { items.optJSONObject(it)?.optString("itemName")?.trim() }
-                    .filter { it.isNotBlank() }
-                val itemsDisplay = when {
-                    itemNames.isEmpty() -> "-"
-                    count > 2 -> "${itemNames.take(2).joinToString("、")} 等${count}项"
-                    else -> itemNames.joinToString("、")
-                }
-
-                InfoRowItem(
-                    label = "调拨物品",
-                    value = itemsDisplay,
-                )
-                InfoRowItem(
-                    label = "调拨日期",
-                            value = serverDateOnly(transfer.opt("transferDate"), "-"),
-                )
-                InfoRowItem(
-                    label = "预计归还",
-                            value = serverDateOnly(transfer.opt("expectedReturnDate"), "-"),
-                    valueColor = if (isOverdue) Danger else Ink,
-                    isBold = isOverdue,
-                )
-
-                if (outboundStatus == 0) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("提示：调出方尚未确认出库", color = Warning, fontSize = 12.sp)
-                }
-
-                Spacer(Modifier.height(12.dp))
             }
+
+            if (transfers.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
             }
         }
-
-        if (transfers != null && pages > 1) {
-            AppPagination(page = page, pages = pages, onPrev = { if (page > 1) page-- }, onNext = { if (page < pages) page++ })
-        }
-
-        Spacer(Modifier.height(16.dp))
-    }
     }
 
     // Create Transfer Dialog
@@ -482,9 +492,10 @@ internal fun TransfersScreen(
                                 itemSpecification = ""
                                 itemQuantity = "1"
                                 itemUnit = ""
-                                reload++
+                                transfers.refresh()
+                                viewModel.refreshStats(selectedStoreId)
                             }.onFailure {
-                                error = it.message ?: "创建调拨失败"
+                                Toast.makeText(context, it.message ?: "创建调拨失败", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -499,7 +510,6 @@ internal fun TransfersScreen(
             },
         )
     }
-
 }
 
 @Composable

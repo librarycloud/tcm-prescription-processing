@@ -186,7 +186,7 @@ private fun TcmAdminApp() {
     val stocktakingScrollState = rememberScrollState()
     val stocktakingDetailScrollState = rememberScrollState()
     val differencesScrollState = rememberScrollState()
-    val transfersScrollState = rememberScrollState()
+    val transfersListState = rememberLazyListState()
     val currentScreen = backStack.lastOrNull() ?: ScreenTarget.Login
 
     var session by remember { mutableStateOf(restoredSession) }
@@ -599,8 +599,8 @@ private fun TcmAdminApp() {
                 is ScreenTarget.Differences -> DetailShell("库存差异", onBack = { navigateBack() }, scrollState = differencesScrollState) {
                     DifferencesScreen(user = session?.user, scrollState = differencesScrollState)
                 }
-                is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, scrollState = transfersScrollState) {
-                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo, scrollState = transfersScrollState)
+                is ScreenTarget.Transfers -> DetailShell("门店调拨", onBack = { navigateBack() }, lazyListState = transfersListState) {
+                    TransfersScreen(user = session?.user, onNavigate = ::navigateTo, listState = transfersListState)
                 }
                 is ScreenTarget.TransferDetail -> DetailShell("调拨详情", onBack = { navigateBack() }) {
                     TransferDetailScreen(id = currentScreen.id, onBack = { navigateBack() })
