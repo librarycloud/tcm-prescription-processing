@@ -26,7 +26,8 @@ function requireRequestId(value) {
 
 async function getProviderResources(prisma, provider, pickupMethod, requireEnabled = true) {
   await ensureSmsDefaults(prisma);
-  const config = await prisma.smsConfig.findUnique({ where: { provider } });
+  const record = await prisma.systemConfig.findUnique({ where: { item: `sms_config_${provider}` } });
+  const config = record && record.value ? JSON.parse(record.value) : null;
   const template = await prisma.smsTemplate.findUnique({
     where: { provider_pickupMethod: { provider, pickupMethod: Number(pickupMethod) } }
   });
@@ -78,7 +79,8 @@ export async function getPackageNotifications(prisma, actor, packageIdValue) {
     NOTIFICATION_PACKAGE_INCLUDE
   );
   await ensureSmsDefaults(prisma);
-  const activeConfig = await prisma.smsConfig.findFirst({ where: { enabled: 1 } });
+  const smsRecords = await prisma.systemConfig.findMany({ where: { class: 'sms' } });
+  const activeConfig = smsRecords.map(r => JSON.parse(r.value)).find(c => c.enabled === 1);
   const template = activeConfig
     ? await prisma.smsTemplate.findUnique({
       where: {
@@ -90,8 +92,8 @@ export async function getPackageNotifications(prisma, actor, packageIdValue) {
     })
     : null;
   await ensureEmailDefaults(prisma);
-  const [emailConfig, emailTemplate, emailUser] = await Promise.all([
-    prisma.emailConfig.findUnique({ where: { configKey: 'default' } }),
+  const [emailRecord, emailTemplate, emailUser] = await Promise.all([
+    prisma.systemConfig.findUnique({ where: { item: 'email_config' } }),
     prisma.emailTemplate.findUnique({
       where: { scene: `pickup_${Number(packageData.pickupMethod)}` }
     }),
@@ -102,6 +104,7 @@ export async function getPackageNotifications(prisma, actor, packageIdValue) {
       })
       : Promise.resolve(null)
   ]);
+  const emailConfig = emailRecord && emailRecord.value ? JSON.parse(emailRecord.value) : null;
   const logs = await prisma.notificationLog.findMany({
     where: { packageId },
     orderBy: { createdAt: 'desc' },
@@ -171,7 +174,8 @@ export async function sendPackageNotification(prisma, actor, packageIdValue, pay
   });
   if (recent) throw new AppError('通知发送过于频繁，请一分钟后再试', 429);
 
-  const activeConfig = await prisma.smsConfig.findFirst({ where: { enabled: 1 } });
+  const smsRecords = await prisma.systemConfig.findMany({ where: { class: 'sms' } });
+  const activeConfig = smsRecords.map(r => JSON.parse(r.value)).find(c => c.enabled === 1);
   if (!activeConfig) throw new AppError('当前没有启用的短信供应商', 400);
   const { config, template } = await getProviderResources(
     prisma,
@@ -270,10 +274,11 @@ async function sendPackageEmailNotification(prisma, actor, packageIdValue, paylo
   if (recent) throw new AppError('邮件发送过于频繁，请一分钟后再试', 429);
 
   await ensureEmailDefaults(prisma);
-  const [config, template] = await Promise.all([
-    prisma.emailConfig.findUnique({ where: { configKey: 'default' } }),
+  const [record, template] = await Promise.all([
+    prisma.systemConfig.findUnique({ where: { item: 'email_config' } }),
     prisma.emailTemplate.findUnique({ where: { scene: `pickup_${Number(packageData.pickupMethod)}` } })
   ]);
+  const config = record && record.value ? JSON.parse(record.value) : null;
   if (!config?.enabled || !config.passwordEncrypted) throw new AppError('邮件服务尚未完整配置', 400);
   if (!template || template.enabled !== 1) throw new AppError('当前取货方式邮件模板尚未启用', 400);
 

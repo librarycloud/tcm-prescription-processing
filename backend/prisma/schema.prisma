@@ -752,22 +752,7 @@ model E6Import {
   @@map("e6_imports")
 }
 
-model SmsConfig {
-  id              Int      @id @default(autoincrement())
-  provider        String   @unique @db.VarChar(20)
-  enabled         Int      @default(0) @db.TinyInt
-  accessKeyId     String?  @map("access_key_id") @db.VarChar(255)
-  secretEncrypted String?  @map("secret_encrypted") @db.Text
-  signName        String?  @map("sign_name") @db.VarChar(100)
-  sdkAppId        String?  @map("sdk_app_id") @db.VarChar(64)
-  smsAccount      String?  @map("sms_account") @db.VarChar(128)
-  region          String?  @db.VarChar(64)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  updatedBy       Int?     @map("updated_by")
 
-  @@map("sms_configs")
-}
 
 model SmsTemplate {
   id              Int      @id @default(autoincrement())
@@ -836,23 +821,7 @@ model LoginLog {
   @@map("login_logs")
 }
 
-model EmailConfig {
-  id                Int      @id @default(autoincrement())
-  configKey         String   @unique @default("default") @map("config_key") @db.VarChar(32)
-  host              String?  @db.VarChar(255)
-  port              Int      @default(465)
-  secure            Int      @default(1) @db.TinyInt
-  username          String?  @db.VarChar(255)
-  passwordEncrypted String?  @map("password_encrypted") @db.Text
-  fromName          String?  @map("from_name") @db.VarChar(100)
-  fromEmail         String?  @map("from_email") @db.VarChar(191)
-  enabled           Int      @default(0) @db.TinyInt
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  updatedBy         Int?     @map("updated_by")
 
-  @@map("email_configs")
-}
 
 model EmailTemplate {
   id        Int      @id @default(autoincrement())
@@ -1116,4 +1085,19 @@ model OperationLog {
   @@index([actorId, createdAt])
   @@index([module, action, createdAt])
   @@map("operation_logs")
+}
+
+model SystemConfig {
+  id        Int      @id @default(autoincrement())
+  item      String   @unique @db.VarChar(255)
+  value     String   @default("") @db.VarChar(2048)
+  class     String   @default("") @db.VarChar(16)
+  isPublic  Boolean  @default(false) @map("is_public")
+  type      String   @default("string") @db.VarChar(16)
+  default   String   @default("") @db.VarChar(2048)
+  mark      String   @default("") @db.VarChar(255)
+
+  @@index([class])
+  @@index([isPublic])
+  @@map("system_configs")
 }

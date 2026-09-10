@@ -18,31 +18,46 @@ export async function updateController(request, reply) { return ok(reply, await 
 export async function deleteController(request, reply) { return ok(reply, await deletePrescription(request.server.prisma, request.user, request.params.id), '删除成功'); }
 
 export async function uploadAttachmentController(request, reply) {
-  const file = await request.file();
-  if (!file) throw new AppError('请选择处方文件', 400);
-  let buffer;
-  try {
-    buffer = await file.toBuffer();
-  } catch (error) {
-    if (error?.code === 'FST_REQ_FILE_TOO_LARGE')
-      throw new AppError('处方文件不能超过 30MB', 400);
-    throw error;
+  let fileData = {};
+  
+  if (request.isMultipart()) {
+    const file = await request.file();
+    if (!file) throw new AppError('请选择处方文件', 400);
+    if (file.file?.truncated) throw new AppError('处方文件不能超过 30MB', 400);
+    
+    let buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (error) {
+      if (error?.code === 'FST_REQ_FILE_TOO_LARGE')
+        throw new AppError('处方文件不能超过 30MB', 400);
+      throw error;
+    }
+    
+    fileData = {
+      buffer,
+      filename: request.query?.originalName || file.fields?.originalName?.value || file.filename,
+      mimetype: file.mimetype,
+    };
+  } else {
+    // 兼容前端直传 OSS 后传回 JSON 的方式
+    const body = request.body || {};
+    if (!body.storagePath) throw new AppError('缺少 storagePath 参数', 400);
+    fileData = {
+      storagePath: body.storagePath,
+      filename: body.filename || request.query?.originalName || 'unknown.jpg',
+      mimetype: body.mimetype || 'image/jpeg',
+      size: body.size || 0,
+    };
   }
-  if (file.file?.truncated) throw new AppError('处方文件不能超过 30MB', 400);
+
   return ok(
     reply,
     await uploadPrescriptionAttachment(
       request.server.prisma,
       request.user,
       request.params.id,
-      {
-        buffer,
-        filename:
-          request.query?.originalName ||
-          file.fields?.originalName?.value ||
-          file.filename,
-        mimetype: file.mimetype,
-      },
+      fileData
     ),
     '处方原件已上传',
   );

@@ -34,20 +34,44 @@ function validateEmail(value) {
 }
 
 export async function ensureEmailDefaults(prisma) {
-  await prisma.emailConfig.upsert({
-    where: { configKey: 'default' },
-    update: {},
-    create: { configKey: 'default', port: 465, secure: 1, enabled: 0 }
-  });
+  let record = await prisma.systemConfig.findUnique({ where: { item: 'email_config' } });
+  if (!record) {
+    await prisma.systemConfig.create({
+      data: {
+        item: 'email_config',
+        value: JSON.stringify({
+          host: null,
+          port: 465,
+          secure: 1,
+          username: null,
+          passwordEncrypted: null,
+          fromName: null,
+          fromEmail: null,
+          enabled: 0
+        }),
+        class: 'email',
+        type: 'json'
+      }
+    });
+  }
   await prisma.emailTemplate.createMany({
     data: DEFAULT_TEMPLATES.map((template) => ({ ...template, enabled: 0 })),
     skipDuplicates: true
   });
 }
 
-function publicConfig(config) {
+function parseEmailConfig(record) {
+  if (!record || !record.value) return {};
+  try {
+    return JSON.parse(record.value);
+  } catch (e) {
+    return {};
+  }
+}
+
+function publicConfig(config, record) {
   return {
-    id: config.id,
+    id: record ? record.id : 0,
     host: config.host || '',
     port: config.port,
     secure: config.secure === 1,
@@ -56,7 +80,7 @@ function publicConfig(config) {
     fromName: config.fromName || '',
     fromEmail: config.fromEmail || '',
     enabled: config.enabled === 1,
-    updatedAt: config.updatedAt,
+    updatedAt: record ? record.updatedAt : null,
     updatedBy: config.updatedBy
   };
 }
@@ -71,11 +95,12 @@ function publicTemplate(template) {
 
 export async function getEmailSettings(prisma) {
   await ensureEmailDefaults(prisma);
-  const [config, templates] = await Promise.all([
-    prisma.emailConfig.findUnique({ where: { configKey: 'default' } }),
+  const [record, templates] = await Promise.all([
+    prisma.systemConfig.findUnique({ where: { item: 'email_config' } }),
     prisma.emailTemplate.findMany({ orderBy: { id: 'asc' } })
   ]);
-  return { config: publicConfig(config), templates: templates.map(publicTemplate), variables: EMAIL_TEMPLATE_VARIABLES };
+  const config = parseEmailConfig(record);
+  return { config: publicConfig(config, record), templates: templates.map(publicTemplate), variables: EMAIL_TEMPLATE_VARIABLES };
 }
 
 function validateEnabled(config) {
@@ -87,7 +112,9 @@ function validateEnabled(config) {
 
 export async function updateEmailConfig(prisma, adminId, payload) {
   await ensureEmailDefaults(prisma);
-  const current = await prisma.emailConfig.findUnique({ where: { configKey: 'default' } });
+  const record = await prisma.systemConfig.findUnique({ where: { item: 'email_config' } });
+  const current = parseEmailConfig(record);
+  
   const data = { updatedBy: Number(adminId) };
   if (payload.host !== undefined) data.host = clean(payload.host, 255, 'SMTP 主机');
   if (payload.port !== undefined) {
@@ -107,7 +134,13 @@ export async function updateEmailConfig(prisma, adminId, payload) {
 
   const merged = { ...current, ...data };
   if (merged.enabled === 1) validateEnabled(merged);
-  return prisma.emailConfig.update({ where: { configKey: 'default' }, data }).then(publicConfig);
+  
+  const updatedRecord = await prisma.systemConfig.update({
+    where: { item: 'email_config' },
+    data: { value: JSON.stringify(merged) }
+  });
+  
+  return publicConfig(merged, updatedRecord);
 }
 
 export async function updateEmailTemplate(prisma, adminId, id, payload) {

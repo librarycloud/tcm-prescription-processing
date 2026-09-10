@@ -34,7 +34,8 @@ export async function testEmailController(request, reply) {
   const email = String(request.body?.email || '').trim();
   if (!email) throw new AppError('请输入测试邮箱', 400);
   await ensureEmailDefaults(request.server.prisma);
-  const config = await request.server.prisma.emailConfig.findUnique({ where: { configKey: 'default' } });
+  const record = await request.server.prisma.systemConfig.findUnique({ where: { item: 'email_config' } });
+  const config = record && record.value ? JSON.parse(record.value) : null;
   if (!config?.enabled || !config.passwordEncrypted) throw new AppError('请先启用并完整配置 SMTP', 400);
   await sendSmtpEmail(config, decryptSetting(config.passwordEncrypted), {
     to: email,

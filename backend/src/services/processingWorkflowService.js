@@ -316,17 +316,27 @@ export async function completeDispensing(prisma, actor, id, file) {
       `调配照片最多上传 ${PROCESSING_PHOTO_MAX_COUNT} 张`,
       409,
     );
-  const buffer = Buffer.from(file?.buffer || []);
-  if (!buffer.length) throw new AppError("请选择调配完成照片", 400);
-  if (buffer.length > PROCESSING_PHOTO_MAX_SIZE)
-    throw new AppError("照片不能超过 5MB", 400);
-  const mimeType = detectImageMimeType(buffer);
-  if (!mimeType) throw new AppError("仅支持 JPG、PNG 或 WEBP 图片", 400);
 
-  const storagePath = await saveUploadFile(buffer, {
-    category: "processing-photos",
-    mimeType,
-  });
+  let finalStoragePath;
+  let mimeType = file.mimetype || 'image/jpeg';
+  let fileSize = file.size || 0;
+
+  if (file?.storagePath) {
+    finalStoragePath = file.storagePath;
+  } else {
+    const buffer = Buffer.from(file?.buffer || []);
+    if (!buffer.length) throw new AppError("请选择调配完成照片", 400);
+    if (buffer.length > PROCESSING_PHOTO_MAX_SIZE)
+      throw new AppError("照片不能超过 5MB", 400);
+    mimeType = detectImageMimeType(buffer);
+    if (!mimeType) throw new AppError("仅支持 JPG、PNG 或 WEBP 图片", 400);
+    fileSize = buffer.length;
+
+    finalStoragePath = await saveUploadFile(buffer, {
+      category: "processing-photos",
+      mimeType,
+    });
+  }
   try {
     return await prisma.$transaction(async (tx) => {
       const photo = await tx.processingPhoto.create({
@@ -335,8 +345,8 @@ export async function completeDispensing(prisma, actor, id, file) {
           kind: PROCESSING_PHOTO_KIND.DISPENSING_COMPLETED,
           originalName: attachmentName(file.filename),
           mimeType,
-          fileSize: buffer.length,
-          storagePath,
+          fileSize,
+          storagePath: finalStoragePath,
           data: null,
           createdBy: Number(actor.id),
         },

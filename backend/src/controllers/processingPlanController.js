@@ -213,27 +213,42 @@ export async function scanController(request, reply) {
 }
 
 export async function completeDispensingController(request, reply) {
-  const file = await request.file();
-  if (!file) throw new AppError("请选择调配完成照片", 400);
-  let buffer;
-  try {
-    buffer = await file.toBuffer();
-  } catch (error) {
-    if (error?.code === "FST_REQ_FILE_TOO_LARGE")
-      throw new AppError("照片不能超过 5MB", 400);
-    throw error;
+  let fileData = {};
+  
+  if (request.isMultipart()) {
+    const file = await request.file();
+    if (!file) throw new AppError("请选择调配完成照片", 400);
+    let buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (error) {
+      if (error?.code === "FST_REQ_FILE_TOO_LARGE")
+        throw new AppError("照片不能超过 5MB", 400);
+      throw error;
+    }
+    fileData = {
+      buffer,
+      filename: file.filename,
+      mimetype: file.mimetype,
+    };
+  } else {
+    const body = request.body || {};
+    if (!body.storagePath) throw new AppError("请提供调配完成照片路径", 400);
+    fileData = {
+      storagePath: body.storagePath,
+      filename: body.filename || 'dispensing.jpg',
+      mimetype: body.mimetype || 'image/jpeg',
+      size: body.size || 0,
+    };
   }
+
   return ok(
     reply,
     await completeDispensing(
       request.server.prisma,
       request.user,
       request.params.id,
-      {
-        buffer,
-        filename: file.filename,
-        mimetype: file.mimetype,
-      },
+      fileData
     ),
     "调配已完成",
   );

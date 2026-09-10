@@ -13,12 +13,13 @@ function validateEmail(value) {
   return email;
 }
 
-async function emailResources(prisma, scene) {
+export async function getEmailResources(prisma, scene) {
   await ensureEmailDefaults(prisma);
-  const [config, template] = await Promise.all([
-    prisma.emailConfig.findUnique({ where: { configKey: 'default' } }),
+  const [record, template] = await Promise.all([
+    prisma.systemConfig.findUnique({ where: { item: 'email_config' } }),
     prisma.emailTemplate.findUnique({ where: { scene } })
   ]);
+  const config = record && record.value ? JSON.parse(record.value) : null;
   if (!config?.enabled) throw new AppError('邮件服务尚未启用', 400);
   if (!template?.enabled) throw new AppError('当前邮件模板尚未启用', 400);
   if (!config.passwordEncrypted) throw new AppError('SMTP 密码尚未配置', 400);
@@ -37,7 +38,7 @@ export async function sendVerificationCode(prisma, userId, emailValue) {
   });
   if (recent) throw new AppError('验证码发送过于频繁，请稍后再试', 429);
 
-  const { config, template, password } = await emailResources(prisma, 'verification');
+  const { config, template, password } = await getEmailResources(prisma, 'verification');
   const code = String(randomInt(100000, 1000000));
   const rendered = renderEmailTemplate(template, { code, expiresMinutes: 10 });
   await sendSmtpEmail(config, password, { to: email, subject: rendered.subject, text: rendered.content });

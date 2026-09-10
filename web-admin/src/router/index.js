@@ -160,6 +160,12 @@ const routes = [
         meta: { title: '邮件设置', icon: 'MessageBox', group: 'system', allowedRoles: [0] }
       },
       {
+        path: 'upload-settings',
+        name: 'UploadSettings',
+        component: () => import('@/views/admin/UploadSettings.vue'),
+        meta: { title: '上传设置', icon: 'Upload', group: 'system', allowedRoles: [0] }
+      },
+      {
         path: 'robot-notifications',
         name: 'RobotNotifications',
         component: () => import('@/views/admin/RobotNotifications.vue'),

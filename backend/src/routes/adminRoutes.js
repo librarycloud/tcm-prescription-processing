@@ -45,6 +45,11 @@ import {
   updateEmailTemplateController,
 } from "../controllers/adminEmailController.js";
 import {
+  getUploadConfigController,
+  updateUploadConfigController,
+  getUploadStrategyController,
+} from "../controllers/uploadConfigController.js";
+import {
   createBatchController as createPlanBatchController,
   createController as createPlanController,
   calendarController as processingCalendarController,
@@ -502,6 +507,19 @@ export default async function adminRoutes(fastify) {
     { preHandler: verifySuperAdmin },
     testEmailController,
   );
+
+  fastify.get(
+    "/system/upload-config",
+    { preHandler: verifySuperAdmin },
+    getUploadConfigController
+  );
+  fastify.put(
+    "/system/upload-config",
+    { preHandler: verifySuperAdmin },
+    updateUploadConfigController
+  );
+  fastify.get("/upload/strategy", getUploadStrategyController);
+
   fastify.get("/print-templates", listPrintTemplatesController);
   fastify.post("/print-templates", createPrintTemplateController);
   fastify.put("/print-templates/:id", updatePrintTemplateController);

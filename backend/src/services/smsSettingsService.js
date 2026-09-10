@@ -32,20 +32,38 @@ function cleanText(value, maxLength, fieldName) {
   return text || null;
 }
 
-function publicConfig(item) {
+function parseSmsConfig(record, provider) {
+  const defaultVal = {
+    provider,
+    enabled: 0,
+    region: DEFAULT_REGIONS[provider],
+    accessKeyId: null,
+    secretEncrypted: null,
+    signName: null,
+    sdkAppId: null,
+    smsAccount: null
+  };
+  if (!record || !record.value) return defaultVal;
+  try {
+    return { ...defaultVal, ...JSON.parse(record.value) };
+  } catch (e) {
+    return defaultVal;
+  }
+}
+
+function publicConfig(config, record) {
   return {
-    id: item.id,
-    provider: item.provider,
-    providerName: PROVIDER_NAMES[item.provider],
-    enabled: item.enabled === 1,
-    accessKeyId: item.accessKeyId || '',
-    secretConfigured: Boolean(item.secretEncrypted),
-    signName: item.signName || '',
-    sdkAppId: item.sdkAppId || '',
-    smsAccount: item.smsAccount || '',
-    region: item.region || DEFAULT_REGIONS[item.provider],
-    updatedAt: item.updatedAt,
-    updatedBy: item.updatedBy
+    provider: config.provider,
+    providerName: PROVIDER_NAMES[config.provider],
+    enabled: config.enabled === 1,
+    accessKeyId: config.accessKeyId || '',
+    secretConfigured: Boolean(config.secretEncrypted),
+    signName: config.signName || '',
+    sdkAppId: config.sdkAppId || '',
+    smsAccount: config.smsAccount || '',
+    region: config.region || DEFAULT_REGIONS[config.provider],
+    updatedAt: record ? record.updatedAt : null,
+    updatedBy: config.updatedBy
   };
 }
 
@@ -58,14 +76,25 @@ function publicTemplate(item) {
 }
 
 export async function ensureSmsDefaults(prisma) {
-  await prisma.smsConfig.createMany({
-    data: SMS_PROVIDERS.map((provider) => ({
-      provider,
-      enabled: 0,
-      region: DEFAULT_REGIONS[provider]
-    })),
-    skipDuplicates: true
-  });
+  for (const provider of SMS_PROVIDERS) {
+    const itemKey = `sms_config_${provider}`;
+    const record = await prisma.systemConfig.findUnique({ where: { item: itemKey } });
+    if (!record) {
+      await prisma.systemConfig.create({
+        data: {
+          item: itemKey,
+          value: JSON.stringify({
+            provider,
+            enabled: 0,
+            region: DEFAULT_REGIONS[provider]
+          }),
+          class: 'sms',
+          type: 'json'
+        }
+      });
+    }
+  }
+
   await prisma.smsTemplate.createMany({
     data: SMS_PROVIDERS.flatMap((provider) =>
       [0, 1, 2].map((pickupMethod) => ({
@@ -84,12 +113,20 @@ export async function ensureSmsDefaults(prisma) {
 
 export async function getSmsSettings(prisma) {
   await ensureSmsDefaults(prisma);
-  const [configs, templates] = await Promise.all([
-    prisma.smsConfig.findMany({ orderBy: { id: 'asc' } }),
+  const [records, templates] = await Promise.all([
+    prisma.systemConfig.findMany({ where: { class: 'sms' }, orderBy: { id: 'asc' } }),
     prisma.smsTemplate.findMany({ orderBy: [{ provider: 'asc' }, { pickupMethod: 'asc' }] })
   ]);
+  
+  // Combine all providers matching the SMS_PROVIDERS array
+  const providers = SMS_PROVIDERS.map(provider => {
+    const record = records.find(r => r.item === `sms_config_${provider}`);
+    const config = parseSmsConfig(record, provider);
+    return publicConfig(config, record);
+  });
+
   return {
-    providers: configs.map(publicConfig),
+    providers,
     templates: templates.map(publicTemplate),
     templateSources: TEMPLATE_SOURCES
   };
@@ -110,7 +147,11 @@ function validateEnabledConfig(item) {
 export async function updateSmsConfig(prisma, adminId, providerValue, payload) {
   const provider = requireProvider(providerValue);
   await ensureSmsDefaults(prisma);
-  const current = await prisma.smsConfig.findUnique({ where: { provider } });
+  
+  const itemKey = `sms_config_${provider}`;
+  const record = await prisma.systemConfig.findUnique({ where: { item: itemKey } });
+  const current = parseSmsConfig(record, provider);
+  
   const data = { updatedBy: Number(adminId) };
   if (payload.accessKeyId !== undefined) {
     data.accessKeyId = cleanText(payload.accessKeyId, 255, 'AccessKey');
@@ -126,21 +167,36 @@ export async function updateSmsConfig(prisma, adminId, providerValue, payload) {
     data.smsAccount = cleanText(payload.smsAccount, 128, '短信账号');
   }
   if (payload.region !== undefined) data.region = cleanText(payload.region, 64, '地域');
-  if (payload.enabled !== undefined) data.enabled = payload.enabled ? 1 : 0;
 
   const merged = { ...current, ...data };
+
+  if (payload.enabled !== undefined) {
+    merged.enabled = payload.enabled ? 1 : 0;
+    if (merged.enabled === 1) {
+      const activeProviders = await prisma.systemConfig.findMany({ where: { class: 'sms' } });
+      for (const pRecord of activeProviders) {
+        if (pRecord.item !== itemKey) {
+          const pConfig = parseSmsConfig(pRecord, pRecord.item.replace('sms_config_', ''));
+          if (pConfig.enabled === 1) {
+            pConfig.enabled = 0;
+            await prisma.systemConfig.update({
+              where: { item: pRecord.item },
+              data: { value: JSON.stringify(pConfig) }
+            });
+          }
+        }
+      }
+    }
+  }
+
   if (merged.enabled === 1) validateEnabledConfig(merged);
 
-  const updated = await prisma.$transaction(async (tx) => {
-    if (merged.enabled === 1) {
-      await tx.smsConfig.updateMany({
-        where: { provider: { not: provider } },
-        data: { enabled: 0, updatedBy: Number(adminId) }
-      });
-    }
-    return tx.smsConfig.update({ where: { provider }, data });
+  const updatedRecord = await prisma.systemConfig.update({
+    where: { item: itemKey },
+    data: { value: JSON.stringify(merged) }
   });
-  return publicConfig(updated);
+  
+  return publicConfig(merged, updatedRecord);
 }
 
 export async function updateSmsTemplate(prisma, adminId, id, payload) {

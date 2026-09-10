@@ -264,21 +264,31 @@ export async function uploadPrescriptionAttachment(
   file,
 ) {
   const current = await getPrescription(prisma, actor, idValue);
-  const buffer = Buffer.from(file?.buffer || []);
-  if (!buffer.length) throw new AppError("请选择处方文件", 400);
-  if (buffer.length > PRESCRIPTION_ATTACHMENT_MAX_SIZE)
-    throw new AppError("处方文件不能超过 30MB", 400);
-
-  const mimeType = detectPrescriptionMimeType(buffer);
-  if (!mimeType) throw new AppError("仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件", 400);
+  
+  let finalStoragePath;
+  
+  // 兼容前端直传 OSS 模式：前端已经传完，只把路径通过 file.storagePath 发过来
+  if (file?.storagePath) {
+    finalStoragePath = file.storagePath;
+  } else {
+    // 兼容历史的 FormData 模式：Node.js 收到了文件流，负责存入本地
+    const buffer = Buffer.from(file?.buffer || []);
+    if (!buffer.length) throw new AppError("请选择处方文件", 400);
+    if (buffer.length > PRESCRIPTION_ATTACHMENT_MAX_SIZE)
+      throw new AppError("处方文件不能超过 30MB", 400);
+  
+    const mimeType = detectPrescriptionMimeType(buffer);
+    if (!mimeType) throw new AppError("仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件", 400);
+    
+    finalStoragePath = await saveUploadFile(buffer, {
+      category: "prescriptions",
+      mimeType,
+    });
+  }
 
   const previous = await prisma.prescriptionAttachment.findUnique({
     where: { prescriptionId: current.id },
     select: { storagePath: true },
-  });
-  const storagePath = await saveUploadFile(buffer, {
-    category: "prescriptions",
-    mimeType,
   });
   let attachment;
   try {
@@ -287,18 +297,18 @@ export async function uploadPrescriptionAttachment(
         where: { prescriptionId: current.id },
         update: {
           originalName: normalizeAttachmentName(file.filename),
-          mimeType,
-          fileSize: buffer.length,
-          storagePath,
+          mimeType: file.mimetype || 'application/octet-stream',
+          fileSize: file.buffer ? file.buffer.length : (file.size || 0),
+          storagePath: finalStoragePath,
           data: null,
           createdBy: Number(actor.id),
         },
         create: {
           prescriptionId: current.id,
           originalName: normalizeAttachmentName(file.filename),
-          mimeType,
-          fileSize: buffer.length,
-          storagePath,
+          mimeType: file.mimetype || 'application/octet-stream',
+          fileSize: file.buffer ? file.buffer.length : (file.size || 0),
+          storagePath: finalStoragePath,
           data: null,
           createdBy: Number(actor.id),
         },
