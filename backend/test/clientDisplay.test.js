@@ -19,6 +19,7 @@ test('client display service loads default config and saves updates', async () =
     },
     android: {
       displayName: '测试药房助手 Android',
+      releaseHubUrl: 'https://hub.example.com///',
       releaseHubAppId: 'tcm-admin'
     },
     announcement: '欢迎使用移动客户端'
@@ -27,6 +28,7 @@ test('client display service loads default config and saves updates', async () =
   assert.equal(updated.wechat.appName, '测试药房小程序');
   assert.equal(updated.wechat.appId, 'wx1234567890');
   assert.equal(updated.android.displayName, '测试药房助手 Android');
+  assert.equal(updated.android.releaseHubUrl, 'https://hub.example.com');
   assert.equal(updated.android.releaseHubAppId, 'tcm-admin');
   assert.equal(updated.announcement, '欢迎使用移动客户端');
 

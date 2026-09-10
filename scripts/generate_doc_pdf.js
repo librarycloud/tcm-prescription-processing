@@ -158,8 +158,7 @@ flowchart TD
 
 // Build Part 2: Extract from docs/使用说明.md (removing the top header to fit merged structure)
 let cleanSopMarkdown = sopContent
-  .replace(/^# 中药处方加工与取药管理系统操作使用手册（SOP）[\s\S]*?## 目录[\s\S]*?---\n/m, '')
-  .replace(/^## 1\./m, '## 1.') // keep headings
+  .replace(/^# 中药处方加工与取药管理系统操作使用手册（SOP）[\s\S]*?## 目录[\s\S]*?---\n/m, '');
 
 const fullCombinedMarkdown = `
 <div class="cover-page">

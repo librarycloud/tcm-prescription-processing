@@ -34,6 +34,24 @@ function getQrcodePath() {
   return path.join(getStorageDir(), QRCODE_FILE_NAME);
 }
 
+function stripTrailingSlashes(str) {
+  if (!str) return '';
+  let end = str.length;
+  while (end > 0 && str.charCodeAt(end - 1) === 47 /* '/' */) {
+    end--;
+  }
+  return str.slice(0, end);
+}
+
+function stripLeadingSlashes(str) {
+  if (!str) return '';
+  let start = 0;
+  while (start < str.length && str.charCodeAt(start) === 47 /* '/' */) {
+    start++;
+  }
+  return str.slice(start);
+}
+
 async function getRawConfig() {
   try {
     const raw = await readFile(getConfigPath(), 'utf-8');
@@ -127,7 +145,7 @@ export async function saveClientDisplayConfig(patch) {
         : (raw.wechat?.appSecret || '')
     },
     android: {
-      releaseHubUrl: String(patch.android?.releaseHubUrl ?? raw.android?.releaseHubUrl ?? '').trim().replace(/\/+$/, ''),
+      releaseHubUrl: stripTrailingSlashes(String(patch.android?.releaseHubUrl ?? raw.android?.releaseHubUrl ?? '').trim()),
       releaseHubAppId: String(patch.android?.releaseHubAppId ?? raw.android?.releaseHubAppId ?? '').trim(),
       customDownloadUrl: String(patch.android?.customDownloadUrl ?? raw.android?.customDownloadUrl ?? '').trim(),
       displayName: String(patch.android?.displayName ?? raw.android?.displayName ?? '').trim() || '药房助手 Android 版'
@@ -256,7 +274,7 @@ export async function getWechatQrcodeFilePath() {
  * 向 App Release Hub 拉取最新 Android 版本信息
  */
 export async function fetchReleaseHubVersion(hubUrl, appId) {
-  const resolvedHubUrl = (hubUrl || config.appReleaseHubUrl || '').replace(/\/+$/, '');
+  const resolvedHubUrl = stripTrailingSlashes(hubUrl || config.appReleaseHubUrl || '');
   const resolvedAppId = (appId || config.appReleaseHubAppId || '').trim();
 
   if (!resolvedHubUrl || !resolvedAppId) {
@@ -289,7 +307,7 @@ export async function fetchReleaseHubVersion(hubUrl, appId) {
       };
     }
 
-    const toAbs = (u) => (u && !/^https?:\/\//i.test(u) ? `${resolvedHubUrl}/${String(u).replace(/^\/+/, '')}` : u);
+    const toAbs = (u) => (u && !/^https?:\/\//i.test(u) ? `${resolvedHubUrl}/${stripLeadingSlashes(String(u))}` : u);
     const downloadUrl = toAbs(data.downloadUrl || data.apkUrl || data.fallbackApkUrl || data.fallbackUrl || '');
 
     return {
