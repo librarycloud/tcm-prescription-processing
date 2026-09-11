@@ -376,7 +376,7 @@ export async function completeDispensing(prisma, actor, id, file) {
     });
   } catch (error) {
     try {
-      await removeUploadFile(storagePath);
+      await removeUploadFile(finalStoragePath);
     } catch {
       // Preserve the database error; an orphaned file can be removed separately.
     }

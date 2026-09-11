@@ -61,6 +61,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
     ],
   };
   const prisma = {
+    $transaction: async (ops) => Promise.all(ops),
     e6PharmacyProduct: {
       findMany: async (args) => {
         calls.push({ type: "findMany", args });
@@ -98,6 +99,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
 test("E6 pharmacy expiry filter applies to products and inventory details", async () => {
   const calls = [];
   const prisma = {
+    $transaction: async (ops) => Promise.all(ops),
     e6PharmacyProduct: {
       findMany: async (args) => {
         calls.push({ type: "findMany", args });
@@ -135,6 +137,7 @@ test("E6 pharmacy incremental sync: moving location from 0101 to 0102 deletes 01
     { id: 1, storeId: 10, productId: 100, batchNo: "240101", locationName: "0101", quantity: "10.000", receivedAt: new Date() },
   ];
   const prisma = {
+    $transaction: async (ops) => Promise.all(ops),
     store: {
       findFirst: async () => ({ id: 10, code: "SZ001", e6Enabled: 1, e6ApiKeyHash: hash }),
     },
@@ -142,7 +145,7 @@ test("E6 pharmacy incremental sync: moving location from 0101 to 0102 deletes 01
       findMany: async () => [{ id: 100, productCode: "MED01" }],
     },
     e6PharmacyInventoryBatch: {
-      findMany: async ({ where }) => batches.filter((b) => b.storeId === where.storeId && b.productId === where.productId),
+      findMany: async ({ where }) => batches.filter((b) => b.storeId === where.storeId && ((where.productId.in && where.productId.in.includes(b.productId)) || b.productId === where.productId)),
       upsert: async ({ where, create, update }) => {
         const found = batches.find((b) => b.storeId === where.storeId_productId_batchNo_locationName.storeId && b.productId === where.storeId_productId_batchNo_locationName.productId && b.batchNo === where.storeId_productId_batchNo_locationName.batchNo && b.locationName === where.storeId_productId_batchNo_locationName.locationName);
         if (found) {
@@ -168,7 +171,7 @@ test("E6 pharmacy incremental sync: moving location from 0101 to 0102 deletes 01
       updateMany: async ({ where, data }) => {
         let count = 0;
         for (const b of batches) {
-          if (b.storeId === where.storeId && b.productId === where.productId) {
+          if (b.storeId === where.storeId && ((where.productId.in && where.productId.in.includes(b.productId)) || b.productId === where.productId)) {
             Object.assign(b, data);
             count++;
           }
@@ -203,6 +206,7 @@ test("E6 pharmacy incremental sync: product out of stock preserves location with
     { id: 1, storeId: 10, productId: 100, batchNo: "240101", locationName: "0102", quantity: "10.000", receivedAt: new Date() },
   ];
   const prisma = {
+    $transaction: async (ops) => Promise.all(ops),
     store: {
       findFirst: async () => ({ id: 10, code: "SZ001", e6Enabled: 1, e6ApiKeyHash: hash }),
     },
@@ -210,11 +214,11 @@ test("E6 pharmacy incremental sync: product out of stock preserves location with
       findMany: async () => [{ id: 100, productCode: "MED01" }],
     },
     e6PharmacyInventoryBatch: {
-      findMany: async ({ where }) => batches.filter((b) => b.storeId === where.storeId && b.productId === where.productId),
+      findMany: async ({ where }) => batches.filter((b) => b.storeId === where.storeId && ((where.productId.in && where.productId.in.includes(b.productId)) || b.productId === where.productId)),
       updateMany: async ({ where, data }) => {
         let count = 0;
         for (const b of batches) {
-          if (b.storeId === where.storeId && b.productId === where.productId) {
+          if (b.storeId === where.storeId && ((where.productId.in && where.productId.in.includes(b.productId)) || b.productId === where.productId)) {
             Object.assign(b, data);
             count++;
           }
@@ -267,6 +271,7 @@ test("E6 pharmacy incremental sync: new stock arrival cleans up previous 0-stock
     { id: 1, storeId: 10, productId: 100, batchNo: "240101", locationName: "0102", quantity: "0", receivedAt: new Date() },
   ];
   const prisma = {
+    $transaction: async (ops) => Promise.all(ops),
     store: {
       findFirst: async () => ({ id: 10, code: "SZ001", e6Enabled: 1, e6ApiKeyHash: hash }),
     },
@@ -274,7 +279,7 @@ test("E6 pharmacy incremental sync: new stock arrival cleans up previous 0-stock
       findMany: async () => [{ id: 100, productCode: "MED01" }],
     },
     e6PharmacyInventoryBatch: {
-      findMany: async ({ where }) => batches.filter((b) => b.storeId === where.storeId && b.productId === where.productId),
+      findMany: async ({ where }) => batches.filter((b) => b.storeId === where.storeId && ((where.productId.in && where.productId.in.includes(b.productId)) || b.productId === where.productId)),
       upsert: async ({ create }) => {
         const item = { id: 2, ...create };
         batches.push(item);
@@ -327,6 +332,7 @@ test("E6 pharmacy query returns 0-inventory product and location when searched b
     ],
   };
   const prisma = {
+    $transaction: async (ops) => Promise.all(ops),
     e6PharmacyProduct: {
       findMany: async (args) => {
         calls.push({ type: "findMany", args });
