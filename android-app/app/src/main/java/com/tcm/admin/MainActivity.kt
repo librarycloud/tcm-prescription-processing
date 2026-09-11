@@ -11,6 +11,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -329,10 +331,14 @@ private fun TcmAdminApp() {
         ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
                         NavHost(
-                navController = navController,
-                startDestination = if (session != null) Route.Inventory() else Route.Login,
-                modifier = Modifier.fillMaxSize()
-            ) {
+    navController = navController,
+    startDestination = if (session != null) Route.Inventory() else Route.Login,
+    modifier = Modifier.fillMaxSize(),
+    enterTransition = { EnterTransition.None },
+    exitTransition = { ExitTransition.None },
+    popEnterTransition = { EnterTransition.None },
+    popExitTransition = { ExitTransition.None }
+) {
                 composable<Route.Login> {
                     LoginScreen(loginLoading, loginError) { identifier, password ->
                         loginLoading = true
@@ -1061,7 +1067,7 @@ private fun DrawerItem(
                 }
             }
         },
-        icon = if (icon != null) { { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) } } else null,
+        icon = if (icon != null) { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) } } else null,
         selected = selected,
         onClick = onClick,
         shape = RoundedCornerShape(8.dp),
