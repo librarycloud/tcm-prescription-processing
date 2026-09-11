@@ -98,19 +98,31 @@ export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
   const normalized = items.map(normalizeProduct);
   let created = 0;
   let updated = 0;
+  
+  const productCodes = normalized.map((p) => p.productCode);
+  const existingProductsList = await prisma.e6PharmacyProduct.findMany({
+    where: { productCode: { in: productCodes } },
+    select: Object.fromEntries(PRODUCT_FIELDS.map((field) => [field, true])),
+  });
+  const existingMap = new Map(existingProductsList.map((p) => [p.productCode, p]));
+
+  const operations = [];
   for (const item of normalized) {
-    const existing = await prisma.e6PharmacyProduct.findUnique({
-      where: { productCode: item.productCode },
-      select: Object.fromEntries(PRODUCT_FIELDS.map((field) => [field, true])),
-    });
+    const existing = existingMap.get(item.productCode);
     if (!existing) {
-      await prisma.e6PharmacyProduct.create({ data: item });
+      operations.push(prisma.e6PharmacyProduct.create({ data: item }));
       created++;
     } else if (productChanged(existing, item)) {
-      await prisma.e6PharmacyProduct.update({ where: { productCode: item.productCode }, data: item });
+      operations.push(prisma.e6PharmacyProduct.update({ where: { productCode: item.productCode }, data: item }));
       updated++;
     }
   }
+
+  const chunkSize = 1000;
+  for (let i = 0; i < operations.length; i += chunkSize) {
+    await prisma.$transaction(operations.slice(i, i + chunkSize));
+  }
+
   return { received: normalized.length, created, updated };
 }
 
@@ -141,16 +153,26 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     batchesByProduct.get(productId).push(item);
   }
 
+  // Fetch all existing rows for these products in one query to avoid N+1 problem
+  const allProductIds = Array.from(batchesByProduct.keys());
+  const allExistingRows = await prisma.e6PharmacyInventoryBatch.findMany({
+    where: { storeId: store.id, productId: { in: allProductIds } },
+  });
+  const existingRowsMap = new Map();
+  for (const row of allExistingRows) {
+    if (!existingRowsMap.has(row.productId)) existingRowsMap.set(row.productId, []);
+    existingRowsMap.get(row.productId).push(row);
+  }
+
   const seen = new Set();
   let created = 0;
   let updated = 0;
   let deleted = 0;
+  const operations = [];
 
   for (const [productId, productBatches] of batchesByProduct) {
     const hasActiveStock = productBatches.some((item) => Number(item.quantity) > 0);
-    const existingRows = await prisma.e6PharmacyInventoryBatch.findMany({
-      where: { storeId: store.id, productId },
-    });
+    const existingRows = existingRowsMap.get(productId) || [];
     const incomingKeys = new Set(productBatches.map((item) => `${item.batchNo}\u0000${item.locationName}`));
 
     if (hasActiveStock) {
@@ -161,12 +183,12 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         const existing = existingRows.find((row) => row.batchNo === item.batchNo && row.locationName === item.locationName);
         if (Number(item.quantity) === 0) {
           if (existing) {
-            await prisma.e6PharmacyInventoryBatch.delete({ where: { id: existing.id } });
+            operations.push(prisma.e6PharmacyInventoryBatch.delete({ where: { id: existing.id } }));
             deleted++;
           }
           continue;
         }
-        await prisma.e6PharmacyInventoryBatch.upsert({
+        operations.push(prisma.e6PharmacyInventoryBatch.upsert({
           where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
           create: {
             storeId: store.id,
@@ -187,7 +209,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
             quantity: item.quantity,
             receivedAt: new Date(),
           },
-        });
+        }));
         if (existing) updated++;
         else created++;
       }
@@ -195,9 +217,9 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
       // 关键：删除数据库中存在但本次 E6 上传中已不存在的旧货位（如换货位前的 0101，或新货入库后清理历史 0 库存批次）
       const staleRows = existingRows.filter((row) => !incomingKeys.has(`${row.batchNo}\u0000${row.locationName}`));
       if (staleRows.length) {
-        await prisma.e6PharmacyInventoryBatch.deleteMany({
+        operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({
           where: { id: { in: staleRows.map((row) => row.id) } },
-        });
+        }));
         deleted += staleRows.length;
       }
     } else {
@@ -207,15 +229,15 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         seen.add(key);
       }
       if (existingRows.length) {
-        await prisma.e6PharmacyInventoryBatch.updateMany({
+        operations.push(prisma.e6PharmacyInventoryBatch.updateMany({
           where: { storeId: store.id, productId },
           data: { quantity: "0", receivedAt: new Date() },
-        });
+        }));
         updated += existingRows.length;
       } else {
         // 若之前无记录但上传了0数量批次，存入货位并将数量记为 0
         for (const item of productBatches) {
-          await prisma.e6PharmacyInventoryBatch.upsert({
+          operations.push(prisma.e6PharmacyInventoryBatch.upsert({
             where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
             create: {
               storeId: store.id,
@@ -229,7 +251,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
               receivedAt: new Date(),
             },
             update: { quantity: "0", receivedAt: new Date() },
-          });
+          }));
           created++;
         }
       }
@@ -239,11 +261,10 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   // 处理 clearProductCodes：商品总库存清零，不删除记录，将数量置为 0
   for (const productCode of clearProductCodes) {
     const productId = productMap.get(productCode);
-    const result = await prisma.e6PharmacyInventoryBatch.updateMany({
+    operations.push(prisma.e6PharmacyInventoryBatch.updateMany({
       where: { storeId: store.id, productId },
       data: { quantity: "0", receivedAt: new Date() },
-    });
-    updated += result.count || 0;
+    }));
   }
 
   if (payload?.fullSync === true && (fullSyncComplete || !fullSyncStartedAt)) {
@@ -268,14 +289,14 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
       }
     }
     if (removeIds.length) {
-      await prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } });
+      operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } }));
       deleted += removeIds.length;
     }
     if (setZeroIds.length) {
-      await prisma.e6PharmacyInventoryBatch.updateMany({
+      operations.push(prisma.e6PharmacyInventoryBatch.updateMany({
         where: { id: { in: setZeroIds } },
         data: { quantity: "0", receivedAt: new Date() },
-      });
+      }));
       updated += setZeroIds.length;
     }
   }
@@ -284,11 +305,17 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   if (productCodes.length) {
     const seenAt = new Date();
     for (const productCode of productCodes) {
-      await prisma.$executeRaw`
+      operations.push(prisma.$executeRaw`
         UPDATE e6_pharmacy_products
         SET last_inventory_seen_at = ${seenAt}
-        WHERE product_code = ${productCode}`;
+        WHERE product_code = ${productCode}`);
     }
   }
+  
+  const chunkSize = 1000;
+  for (let i = 0; i < operations.length; i += chunkSize) {
+    await prisma.$transaction(operations.slice(i, i + chunkSize));
+  }
+  
   return { received: normalized.length, created, updated, deleted, fullSync: payload?.fullSync === true };
 }
