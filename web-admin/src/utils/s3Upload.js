@@ -11,7 +11,7 @@ import { Upload } from '@aws-sdk/lib-storage';
  */
 export async function uploadToS3(file, category, onProgress) {
   // 1. 向后端获取直传策略和凭证
-  const strategy = await request.get('/upload/strategy', {
+  const strategy = await request.get('/admin/upload/strategy', {
     params: {
       category,
       filename: file.name

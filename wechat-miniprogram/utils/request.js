@@ -357,7 +357,7 @@ export async function uploadToS3(options) {
     
     // 1. 获取直传凭证
     const strategyRes = await request({
-      url: `/upload/strategy?category=${category}&filename=${encodeURIComponent(filename)}`,
+      url: `/admin/upload/strategy?category=${category}&filename=${encodeURIComponent(filename)}`,
       method: 'GET'
     });
     const strategy = strategyRes; // The actual data is unrwapped by request()

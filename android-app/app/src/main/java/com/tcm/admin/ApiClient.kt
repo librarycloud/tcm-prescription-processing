@@ -800,7 +800,7 @@ object ApiClient {
 
     private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default"): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         // 1. 尝试获取直传策略
-        val strategyRes = runCatching { request("/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}", "GET") }.getOrNull()
+        val strategyRes = runCatching { request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}", "GET") }.getOrNull()
         val strategyData = strategyRes?.optJSONObject("data")
         val presignedPost = strategyData?.optJSONObject("presignedPost")
         
