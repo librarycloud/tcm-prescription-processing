@@ -800,41 +800,36 @@ object ApiClient {
 
     private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default"): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         // 1. 尝试获取直传策略
-        val strategyRes = runCatching { request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}", "GET") }.getOrNull()
+        val strategyRes = runCatching { request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}&mimeType=${java.net.URLEncoder.encode(mimeType, "UTF-8")}", "GET") }.getOrNull()
         val strategyData = strategyRes?.optJSONObject("data")
-        val presignedPost = strategyData?.optJSONObject("presignedPost")
+        val uploadUrl = strategyData?.optString("uploadUrl")
         
-        if (presignedPost != null) {
-            // 使用 S3/OSS 直传
-            val url = presignedPost.optString("url")
-            val fields = presignedPost.optJSONObject("fields")
-            if (url.isNotEmpty() && fields != null) {
-                val s3BodyBuilder = MultipartBody.Builder().setType(MultipartBody.FORM)
-                fields.keys().forEach { key ->
-                    s3BodyBuilder.addFormDataPart(key, fields.optString(key))
-                }
-                s3BodyBuilder.addFormDataPart("file", filename, bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
+        if (!uploadUrl.isNullOrEmpty()) {
+            // 使用 S3/OSS PUT 直传 (兼容 SeaweedFS)
+            val s3Request = Request.Builder()
+                .url(uploadUrl)
+                .put(bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
+                .addHeader("Content-Type", mimeType)
+                .build()
                 
-                val s3Request = Request.Builder().url(url).post(s3BodyBuilder.build()).build()
-                val s3Response = client.newCall(s3Request).execute()
-                if (s3Response.isSuccessful) {
-                    // 直传成功，告知后端
-                    val notifyPayload = JSONObject().apply {
-                        put("storagePath", strategyData.optString("storagePath"))
-                        put("originalName", filename)
-                        put("mimeType", mimeType)
-                        put("filename", filename)
-                        put("size", bytes.size)
-                    }
-                    val backendPath = path.substringBefore('?')
-                    val notifyRes = runCatching { request(backendPath, "POST", notifyPayload) }.getOrNull()
-                    if (notifyRes != null && notifyRes.optInt("code", -1) == 0) {
-                        return@withContext notifyRes
-                    }
+            val s3Response = client.newCall(s3Request).execute()
+            if (s3Response.isSuccessful) {
+                // 直传成功，告知后端
+                val notifyPayload = JSONObject().apply {
+                    put("storagePath", strategyData.optString("storagePath"))
+                    put("originalName", filename)
+                    put("mimeType", mimeType)
+                    put("filename", filename)
+                    put("size", bytes.size)
+                }
+                val backendPath = path.substringBefore('?')
+                val notifyRes = runCatching { request(backendPath, "POST", notifyPayload) }.getOrNull()
+                if (notifyRes != null && notifyRes.optInt("code", -1) == 0) {
+                    return@withContext notifyRes
                 }
             }
         }
-        
+
         // 降级：如果后端没配置OSS，或者OSS上传失败，回退到老的文件上传模式
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)

@@ -264,7 +264,11 @@ export async function photoController(request, reply) {
   );
   if (photo.storagePath && !photo.data) {
     const url = await getFileDownloadUrl(request.server.prisma, photo.storagePath);
-    if (url) return reply.redirect(url);
+    if (url) {
+      return reply.redirect(url);
+    } else {
+      return reply.status(404).send({ message: "照片文件不在本地，且未正确配置云存储" });
+    }
   }
   return reply
     .header("Content-Type", photo.mimeType)
@@ -272,7 +276,6 @@ export async function photoController(request, reply) {
     .header("Cache-Control", "private, no-store")
     .send(photo.data);
 }
-
 export async function deletePhotoController(request, reply) {
   await deleteProcessingPhoto(
     request.server.prisma,

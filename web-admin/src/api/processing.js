@@ -1,3 +1,4 @@
+import { uploadToS3 } from '@/utils/s3Upload';
 import request from './request';
 export const getProcessingPlans = (params) => request.get('/admin/processing-plans', { params });
 export const getProcessingCalendar = (params) =>
@@ -5,10 +6,14 @@ export const getProcessingCalendar = (params) =>
 export const getProcessingWorkflow = (id) => request.get(`/admin/processing-plans/${id}/workflow`);
 export const getProcessingPhoto = (planId, photoId) =>
   request.get(`/admin/processing-plans/${planId}/photos/${photoId}`, { responseType: 'blob' });
-export const uploadProcessingPhoto = (planId, file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  return request.post(`/admin/processing-plans/${planId}/dispensing-complete`, formData);
+export const uploadProcessingPhoto = async (planId, file) => {
+  const storagePath = await uploadToS3(file, 'processing-photos');
+  return request.post(`/admin/processing-plans/${planId}/dispensing-complete`, {
+    storagePath,
+    filename: file.name,
+    mimetype: file.type,
+    size: file.size
+  });
 };
 export const deleteProcessingPhoto = (planId, photoId) =>
   request.delete(`/admin/processing-plans/${planId}/photos/${photoId}`);

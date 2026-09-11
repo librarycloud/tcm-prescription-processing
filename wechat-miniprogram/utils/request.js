@@ -354,26 +354,40 @@ export async function uploadToS3(options) {
   try {
     const category = options.category || 'default';
     const filename = options.name || 'file.jpg';
+    let mimeType = 'image/jpeg';
+    if (filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+    else if (filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
+    else if (filename.toLowerCase().endsWith('.gif')) mimeType = 'image/gif';
     
     // 1. 获取直传凭证
     const strategyRes = await request({
-      url: `/admin/upload/strategy?category=${category}&filename=${encodeURIComponent(filename)}`,
+      url: `/admin/upload/strategy?category=${category}&filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}`,
       method: 'GET'
     });
-    const strategy = strategyRes; // The actual data is unrwapped by request()
+    const strategy = strategyRes; 
     
-    if (!strategy || !strategy.presignedPost) {
-      // 降级: 如果后端没有配置 OSS，或者返回不正确，回退到老的文件上传模式
+    if (!strategy || !strategy.uploadUrl) {
       return uploadFile(options);
     }
     
-    // 2. 直接上传到 S3 / OSS
-    await new Promise((resolve, reject) => {
-      wx.uploadFile({
-        url: strategy.presignedPost.url,
+    // 2. 直接使用 PUT 上传到 S3 / OSS
+    const fs = wx.getFileSystemManager();
+    const fileData = await new Promise((resolve, reject) => {
+      fs.readFile({
         filePath: options.filePath,
-        name: 'file',
-        formData: strategy.presignedPost.fields,
+        success: (res) => resolve(res.data),
+        fail: reject
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      wx.request({
+        url: strategy.uploadUrl,
+        method: 'PUT',
+        data: fileData,
+        header: {
+          'Content-Type': mimeType
+        },
         success(res) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve();
@@ -385,25 +399,21 @@ export async function uploadToS3(options) {
       });
     });
     
-    // 3. 把 storagePath 通知给后端原来的业务接口
+    // 3. 把 storagePath 通知给后端
     const originalName = options.formData?.originalName || filename;
-    // Remove query params if any, because we will POST JSON
     const backendUrl = options.url.split('?')[0]; 
     
-    const notifyRes = await request({
+    return await request({
       url: backendUrl,
       method: 'POST',
       data: {
         storagePath: strategy.storagePath,
         originalName: originalName,
-        mimeType: 'image/jpeg', // MiniProgram files are usually images for these APIs
+        mimeType: mimeType,
         filename: originalName,
-        size: 0 // Size can be omitted or retrieved using FileSystemManager
+        size: fileData.byteLength || 0
       }
     });
-    
-    return notifyRes;
-    
   } catch (error) {
     console.error('S3 Upload Error:', error);
     wx.showToast({ title: '文件上传失败', icon: 'none' });

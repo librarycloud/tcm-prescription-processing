@@ -1,6 +1,5 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import crypto from "node:crypto";
 
 const CONFIG_ITEM_KEY = "oss_upload";
@@ -75,11 +74,22 @@ export async function generateUploadStrategy(prisma, category, filename, mimeTyp
   if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
     throw new Error("请先在系统设置中配置 S3/OSS 上传参数");
   }
+  
+  if (!/^[a-z][a-z0-9-]*$/.test(category)) {
+    throw new Error("无效的分类名称");
+  }
 
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
-  const extension = filename && filename.includes('.') ? filename.split('.').pop() : 'tmp';
+  
+  let extension = 'tmp';
+  if (filename && filename.includes('.')) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (/^[a-z0-9]{1,4}$/.test(ext)) {
+      extension = ext;
+    }
+  }
   const uuid = crypto.randomUUID();
   const storagePath = `${category}/${year}/${month}/${uuid}.${extension}`;
 
@@ -102,21 +112,13 @@ export async function generateUploadStrategy(prisma, category, filename, mimeTyp
   });
   
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
-  
-  const presignedPost = await createPresignedPost(s3, {
-    Bucket: config.bucket,
-    Key: storagePath,
-    Expires: 3600,
-  });
 
   return {
     endpoint: config.endpoint,
     region: config.region || "us-east-1",
     bucket: config.bucket,
-    accessKey: config.accessKey,
     storagePath,
     uploadUrl,
-    presignedPost,
     cdnDomain: config.cdnDomain,
   };
 }
