@@ -351,75 +351,7 @@ export function uploadFile(options) {
 }
 
 export async function uploadToS3(options) {
-  try {
-    const category = options.category || 'default';
-    const filename = options.name || 'file.jpg';
-    let mimeType = 'image/jpeg';
-    if (filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
-    else if (filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
-    else if (filename.toLowerCase().endsWith('.gif')) mimeType = 'image/gif';
-    
-    // 1. 获取直传凭证
-    const strategyRes = await request({
-      url: `/admin/upload/strategy?category=${category}&filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}`,
-      method: 'GET'
-    });
-    const strategy = strategyRes; 
-    
-    if (!strategy || !strategy.uploadUrl) {
-      return uploadFile(options);
-    }
-    
-    // 2. 微信小程序只支持 POST uploadFile，而 OSS 直传需要 PUT。
-    // 所以只能用 wx.request + ArrayBuffer 进行二进制传输。
-    const fs = wx.getFileSystemManager();
-    const fileData = await new Promise((resolve, reject) => {
-      fs.readFile({
-        filePath: options.filePath,
-        success: (res) => resolve(res.data),
-        fail: (err) => reject(new Error('读取本地文件失败: ' + (err.errMsg || JSON.stringify(err))))
-      });
-    });
-
-    await new Promise((resolve, reject) => {
-      wx.request({
-        url: strategy.uploadUrl,
-        method: 'PUT',
-        data: fileData,
-        header: {
-          'Content-Type': mimeType
-        },
-        success(res) {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve();
-          } else {
-            reject(new Error(`OSS直传失败: HTTP ${res.statusCode} - ${JSON.stringify(res.data || {})}`));
-          }
-        },
-        fail: (err) => {
-          reject(new Error('网络请求失败或域名未在合法域名列表中: ' + (err.errMsg || JSON.stringify(err))));
-        }
-      });
-    });
-    
-    // 3. 把 storagePath 通知给后端
-    const originalName = options.formData?.originalName || filename;
-    const backendUrl = options.url.split('?')[0]; 
-    
-    return await request({
-      url: backendUrl,
-      method: 'POST',
-      data: {
-        storagePath: strategy.storagePath,
-        originalName: originalName,
-        mimeType: mimeType,
-        filename: originalName,
-        size: fileData.byteLength || 0
-      }
-    });
-  } catch (error) {
-    console.error('S3 Upload Error:', error);
-    wx.showToast({ title: error.message || '文件上传失败', icon: 'none', duration: 3000 });
-    throw error;
-  }
+  // 微信小程序原生不支持 PUT 二进制流直传 S3（wx.request 会破坏 ArrayBuffer）
+  // 方案 A：降级为使用 wx.uploadFile 将文件 POST 到 Node 后端，由后端在内存中转直传 OSS。
+  return uploadFile(options);
 }

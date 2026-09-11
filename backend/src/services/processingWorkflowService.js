@@ -1,5 +1,5 @@
 import { AppError } from "../utils/appError.js";
-import { deleteOssFile } from "./uploadConfigService.js";
+import { deleteOssFile, uploadBufferToOss } from "./uploadConfigService.js";
 import { randomUUID } from "node:crypto";
 import { isSuperAdmin } from "../constants/roles.js";
 import { PLAN_STATUS, requiresEquipmentWorkflow } from "../constants/processing.js";
@@ -333,7 +333,14 @@ export async function completeDispensing(prisma, actor, id, file) {
     if (!mimeType) throw new AppError("仅支持 JPG、PNG 或 WEBP 图片", 400);
     fileSize = buffer.length;
 
-    finalStoragePath = await saveUploadFile(buffer, {
+    // 优先中转到 OSS
+    const ossPath = await uploadBufferToOss(prisma, buffer, {
+      category: "processing-photos",
+      mimeType,
+      filename: file.filename || "dispensing.jpg",
+    }).catch(() => null);
+
+    finalStoragePath = ossPath ?? await saveUploadFile(buffer, {
       category: "processing-photos",
       mimeType,
     });
