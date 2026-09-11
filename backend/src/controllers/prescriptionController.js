@@ -65,36 +65,38 @@ export async function uploadAttachmentController(request, reply) {
 }
 
 export async function attachmentController(request, reply) {
-  const attachment = await getPrescriptionAttachment(
-    request.server.prisma,
-    request.user,
-    request.params.id,
-  );
-  
-  if (attachment.storagePath && !attachment.data) {
-    let url;
-    try {
-      url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
-    } catch (e) {
-      console.error("getFileDownloadUrl error:", e);
-      require('fs').writeFileSync('/tmp/s3_error.log', e.stack);
-      throw e;
+  try {
+    const attachment = await getPrescriptionAttachment(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+    );
+    
+    if (attachment.storagePath && !attachment.data) {
+      let url;
+      try {
+        url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
+      } catch (e) {
+        return reply.status(500).send("getFileDownloadUrl Error: " + (e.stack || e.message));
+      }
+      if (url) {
+        return reply.redirect(302, url);
+      }
     }
-    if (url) {
-      return reply.redirect(302, url);
-    }
-  }
-  return reply
-    .header('Content-Type', attachment.mimeType)
-    .header(
-      'Content-Disposition',
-      `inline; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
-    )
-    .header('Content-Length', attachment.fileSize)
-    .header('Cache-Control', 'private, no-store')
-    .send(attachment.data);
-}
 
+    return reply
+      .header('Content-Type', attachment.mimeType)
+      .header(
+        'Content-Disposition',
+        `inline; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
+      )
+      .header('Content-Length', attachment.fileSize)
+      .header('Cache-Control', 'private, no-store')
+      .send(attachment.data);
+  } catch (err) {
+    return reply.status(500).send("Controller Error: " + (err.stack || err.message));
+  }
+}
 export async function deleteAttachmentController(request, reply) {
   return ok(
     reply,
