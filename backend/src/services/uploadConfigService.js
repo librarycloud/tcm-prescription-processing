@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import crypto from "node:crypto";
@@ -117,4 +117,34 @@ export async function generateUploadStrategy(prisma, category, filename) {
     presignedPost,
     cdnDomain: config.cdnDomain,
   };
+}
+
+
+export async function getFileDownloadUrl(prisma, storagePath) {
+  const config = await getUploadConfig(prisma);
+  if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
+    return null;
+  }
+  
+  if (config.cdnDomain) {
+    const baseUrl = config.cdnDomain.startsWith('http') ? config.cdnDomain : `https://${config.cdnDomain}`;
+    return `${baseUrl}/${storagePath}`;
+  }
+
+  const s3 = new S3Client({
+    region: config.region || "us-east-1",
+    endpoint: config.endpoint,
+    credentials: {
+      accessKeyId: config.accessKey,
+      secretAccessKey: config.secretKey,
+    },
+    forcePathStyle: true,
+  });
+  
+  const command = new GetObjectCommand({
+    Bucket: config.bucket,
+    Key: storagePath,
+  });
+  
+  return getSignedUrl(s3, command, { expiresIn: 3600 });
 }

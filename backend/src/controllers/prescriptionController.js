@@ -69,6 +69,18 @@ export async function attachmentController(request, reply) {
     request.user,
     request.params.id,
   );
+  
+  if (attachment.storagePath && !attachment.data) {
+    const url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
+    if (url) {
+      return reply.redirect(302, url);
+    }
+  }
+
+  if (attachment.storagePath && !attachment.data) {
+    const url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
+    if (url) return reply.redirect(302, url);
+  }
   return reply
     .header('Content-Type', attachment.mimeType)
     .header(

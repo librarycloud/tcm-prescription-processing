@@ -1,3 +1,4 @@
+import { getFileDownloadUrl } from "../services/uploadConfigService.js";
 import { ok } from "../utils/response.js";
 import {
   createProcessingPlan,
@@ -261,6 +262,10 @@ export async function photoController(request, reply) {
     request.params.id,
     request.params.photoId,
   );
+  if (photo.storagePath && !photo.data) {
+    const url = await getFileDownloadUrl(request.server.prisma, photo.storagePath);
+    if (url) return reply.redirect(302, url);
+  }
   return reply
     .header("Content-Type", photo.mimeType)
     .header("Content-Length", photo.fileSize)

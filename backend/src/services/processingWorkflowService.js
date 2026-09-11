@@ -403,7 +403,7 @@ export async function getProcessingPhoto(prisma, actor, planId, photoId) {
   try {
     return { ...metadata, data: await readUploadFile(storagePath) };
   } catch (error) {
-    if (error?.code === "ENOENT") throw new AppError("照片文件不存在", 404);
+    if (error?.code === "ENOENT") return { ...metadata, storagePath, data: null };
     throw error;
   }
 }

@@ -356,7 +356,7 @@ export async function getPrescriptionAttachment(prisma, actor, idValue) {
   try {
     return { ...metadata, data: await readUploadFile(storagePath) };
   } catch (error) {
-    if (error?.code === "ENOENT") throw new AppError("处方原件文件不存在", 404);
+    if (error?.code === "ENOENT") return { ...metadata, storagePath, data: null };
     throw error;
   }
 }
