@@ -264,7 +264,7 @@ export async function photoController(request, reply) {
   );
   if (photo.storagePath && !photo.data) {
     const url = await getFileDownloadUrl(request.server.prisma, photo.storagePath);
-    if (url) return reply.redirect(302, url);
+    if (url) return reply.redirect(url);
   }
   return reply
     .header("Content-Type", photo.mimeType)

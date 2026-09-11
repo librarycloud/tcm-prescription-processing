@@ -326,8 +326,8 @@ export async function uploadPrescriptionAttachment(
     });
   } catch (error) {
     try {
-      const del1 = await deleteOssFile(prisma, finalStoragePath);
-      if (!del1) await removeUploadFile(finalStoragePath);
+      await deleteOssFile((prisma, finalStoragePath));
+      await removeUploadFile((finalStoragePath));
     } catch {
       // Preserve the database error; an orphaned file can be removed separately.
     }
@@ -335,8 +335,8 @@ export async function uploadPrescriptionAttachment(
   }
   if (previous?.storagePath) {
     try {
-      const del2 = await deleteOssFile(prisma, previous.storagePath);
-      if (!del2) await removeUploadFile(previous.storagePath);
+      await deleteOssFile((prisma, previous.storagePath));
+      await removeUploadFile((previous.storagePath));
     } catch {
       // Keep the new attachment available even if removing its replaced file fails.
     }
@@ -385,8 +385,8 @@ export async function deletePrescriptionAttachment(prisma, actor, idValue) {
 
   if (attachment.storagePath) {
     try {
-      const deletedOnOss = await deleteOssFile(prisma, attachment.storagePath);
-      if (!deletedOnOss) await removeUploadFile(attachment.storagePath);
+      await deleteOssFile((prisma, attachment.storagePath));
+      await removeUploadFile((attachment.storagePath));
     } catch {
       // The database is authoritative; orphaned files can be cleaned separately.
     }

@@ -155,12 +155,12 @@ export async function getFileDownloadUrl(prisma, storagePath) {
 
 
 export async function deleteOssFile(prisma, storagePath) {
-  const config = await getUploadConfig(prisma);
-  if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
-    return false; // Not configured
-  }
-
   try {
+    const config = await getUploadConfig(prisma).catch(() => null);
+    if (!config || !config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
+      return false; // Not configured
+    }
+
     const s3 = new S3Client({
       region: config.region || "us-east-1",
       endpoint: config.endpoint,

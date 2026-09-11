@@ -377,8 +377,8 @@ export async function completeDispensing(prisma, actor, id, file) {
     });
   } catch (error) {
     try {
-      const del1 = await deleteOssFile(prisma, finalStoragePath);
-      if (!del1) await removeUploadFile(finalStoragePath);
+      await deleteOssFile((prisma, finalStoragePath));
+      await removeUploadFile((finalStoragePath));
     } catch {
       // Preserve the database error; an orphaned file can be removed separately.
     }
@@ -466,8 +466,8 @@ export async function deleteProcessingPhoto(prisma, actor, planId, photoId) {
   });
 
   try {
-    const deletedOnOss = await deleteOssFile(prisma, photo.storagePath);
-      if (!deletedOnOss) await removeUploadFile(photo.storagePath);
+    await deleteOssFile((prisma, photo.storagePath));
+      await removeUploadFile((photo.storagePath));
   } catch {
     // The database deletion is authoritative; orphan cleanup can run separately.
   }

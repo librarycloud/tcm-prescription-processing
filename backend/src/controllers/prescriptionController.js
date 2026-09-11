@@ -80,7 +80,7 @@ export async function attachmentController(request, reply) {
         return reply.status(500).send("getFileDownloadUrl Error: " + (e.stack || e.message));
       }
       if (url) {
-        return reply.redirect(302, url);
+        return reply.redirect(url);
       }
     }
 
