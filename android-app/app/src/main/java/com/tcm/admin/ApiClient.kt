@@ -812,8 +812,8 @@ object ApiClient {
                 .addHeader("Content-Type", mimeType)
                 .build()
                 
-            val s3Response = client.newCall(s3Request).execute()
-            if (s3Response.isSuccessful) {
+            val s3Response = runCatching { client.newCall(s3Request).execute() }.getOrNull()
+            if (s3Response != null && s3Response.isSuccessful) {
                 // 直传成功，告知后端
                 val notifyPayload = JSONObject().apply {
                     put("storagePath", strategyData.optString("storagePath"))
