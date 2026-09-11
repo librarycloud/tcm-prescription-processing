@@ -1,4 +1,5 @@
 import { AppError } from "../utils/appError.js";
+import { deleteOssFile } from "./uploadConfigService.js";
 import { isStoreStaff, isSuperAdmin } from "../constants/roles.js";
 import {
   DICTIONARY_TYPES,
@@ -325,7 +326,8 @@ export async function uploadPrescriptionAttachment(
     });
   } catch (error) {
     try {
-      await removeUploadFile(finalStoragePath);
+      const del1 = await deleteOssFile(prisma, finalStoragePath);
+      if (!del1) await removeUploadFile(finalStoragePath);
     } catch {
       // Preserve the database error; an orphaned file can be removed separately.
     }
@@ -333,7 +335,8 @@ export async function uploadPrescriptionAttachment(
   }
   if (previous?.storagePath) {
     try {
-      await removeUploadFile(previous.storagePath);
+      const del2 = await deleteOssFile(prisma, previous.storagePath);
+      if (!del2) await removeUploadFile(previous.storagePath);
     } catch {
       // Keep the new attachment available even if removing its replaced file fails.
     }
@@ -382,7 +385,8 @@ export async function deletePrescriptionAttachment(prisma, actor, idValue) {
 
   if (attachment.storagePath) {
     try {
-      await removeUploadFile(attachment.storagePath);
+      const deletedOnOss = await deleteOssFile(prisma, attachment.storagePath);
+      if (!deletedOnOss) await removeUploadFile(attachment.storagePath);
     } catch {
       // The database is authoritative; orphaned files can be cleaned separately.
     }

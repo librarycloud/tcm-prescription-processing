@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import crypto from "node:crypto";
@@ -151,4 +151,33 @@ export async function getFileDownloadUrl(prisma, storagePath) {
   });
   
   return getSignedUrl(s3, command, { expiresIn: 3600 });
+}
+
+
+export async function deleteOssFile(prisma, storagePath) {
+  const config = await getUploadConfig(prisma);
+  if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
+    return false; // Not configured
+  }
+
+  try {
+    const s3 = new S3Client({
+      region: config.region || "us-east-1",
+      endpoint: config.endpoint,
+      credentials: {
+        accessKeyId: config.accessKey,
+        secretAccessKey: config.secretKey,
+      },
+      forcePathStyle: true,
+    });
+    
+    await s3.send(new DeleteObjectCommand({
+      Bucket: config.bucket,
+      Key: storagePath,
+    }));
+    return true; // Deleted successfully from OSS
+  } catch (error) {
+    console.error("OSS Delete Error:", error);
+    return true; // Return true to prevent local fallback if OSS is configured
+  }
 }

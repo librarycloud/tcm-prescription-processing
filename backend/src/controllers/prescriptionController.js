@@ -1,4 +1,5 @@
 import { ok } from '../utils/response.js';
+import { getFileDownloadUrl } from '../services/uploadConfigService.js';
 import { AppError } from '../utils/appError.js';
 import {
   createPrescription,
@@ -75,11 +76,6 @@ export async function attachmentController(request, reply) {
     if (url) {
       return reply.redirect(302, url);
     }
-  }
-
-  if (attachment.storagePath && !attachment.data) {
-    const url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
-    if (url) return reply.redirect(302, url);
   }
   return reply
     .header('Content-Type', attachment.mimeType)

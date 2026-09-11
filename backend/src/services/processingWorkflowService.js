@@ -1,4 +1,5 @@
 import { AppError } from "../utils/appError.js";
+import { deleteOssFile } from "./uploadConfigService.js";
 import { randomUUID } from "node:crypto";
 import { isSuperAdmin } from "../constants/roles.js";
 import { PLAN_STATUS, requiresEquipmentWorkflow } from "../constants/processing.js";
@@ -376,7 +377,8 @@ export async function completeDispensing(prisma, actor, id, file) {
     });
   } catch (error) {
     try {
-      await removeUploadFile(finalStoragePath);
+      const del1 = await deleteOssFile(prisma, finalStoragePath);
+      if (!del1) await removeUploadFile(finalStoragePath);
     } catch {
       // Preserve the database error; an orphaned file can be removed separately.
     }
@@ -464,7 +466,8 @@ export async function deleteProcessingPhoto(prisma, actor, planId, photoId) {
   });
 
   try {
-    await removeUploadFile(photo.storagePath);
+    const deletedOnOss = await deleteOssFile(prisma, photo.storagePath);
+      if (!deletedOnOss) await removeUploadFile(photo.storagePath);
   } catch {
     // The database deletion is authoritative; orphan cleanup can run separately.
   }
