@@ -75,7 +75,7 @@ async function loadSettings() {
       secretKey: res.secretKey || '',
       cdnDomain: res.cdnDomain || ''
     };
-  } catch (err) {
+  } catch (err) { console.error(err);
     ElMessage.error('加载配置失败');
   } finally {
     loading.value = false;
@@ -88,7 +88,7 @@ async function saveConfig() {
     await request.put('/admin/system/upload-config', form.value);
     ElMessage.success('配置已保存');
     await loadSettings();
-  } catch (err) {
+  } catch (err) { console.error(err);
     ElMessage.error('保存失败');
   } finally {
     saving.value = false;
