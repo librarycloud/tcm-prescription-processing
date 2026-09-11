@@ -1067,7 +1067,7 @@ private fun DrawerItem(
                 }
             }
         },
-        icon = if (icon != null) { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) } } else null,
+        icon = if (icon != null) { { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) } } else null,
         selected = selected,
         onClick = onClick,
         shape = RoundedCornerShape(8.dp),

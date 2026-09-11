@@ -242,10 +242,14 @@ namespace E6Sync.Services
                 inventoryBatchCount++;
                 log.Info(string.Format("药店库存上传批次 {0}/{1}：{2} 条", index + 1, inventoryBatches.Count, inventoryBatches[index].Count));
             }
-            if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor)) config.Sync.LastPharmacyProductCursor = productSnapshot.Cursor;
-            if (!string.IsNullOrWhiteSpace(snapshot.Cursor)) config.Sync.LastPharmacyInventoryCursor = snapshot.Cursor;
-            if (!string.IsNullOrWhiteSpace(snapshot.LocationCursor)) config.Sync.LastPharmacyLocationCursor = snapshot.LocationCursor;
-            if (!string.IsNullOrWhiteSpace(snapshot.StockCursor)) config.Sync.LastPharmacyStockCursor = snapshot.StockCursor;
+            if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor))
+                config.Sync.LastPharmacyProductCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyProductCursor, productSnapshot.Cursor);
+            if (!string.IsNullOrWhiteSpace(snapshot.Cursor))
+                config.Sync.LastPharmacyInventoryCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyInventoryCursor, snapshot.Cursor);
+            if (!string.IsNullOrWhiteSpace(snapshot.LocationCursor))
+                config.Sync.LastPharmacyLocationCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyLocationCursor, snapshot.LocationCursor);
+            if (!string.IsNullOrWhiteSpace(snapshot.StockCursor))
+                config.Sync.LastPharmacyStockCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyStockCursor, snapshot.StockCursor);
             SaveConfig();
             log.Info(string.Format("药店同步完成：商品 {0}（{1} 批），库存批次 {2}（{3} 批）{4}", products.Count, productBatchCount, snapshot.Batches.Count, inventoryBatchCount, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
             return stats;

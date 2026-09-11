@@ -216,7 +216,7 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
 
         public E6PharmacyProductSnapshot QueryPharmacyProducts(string cursor)
         {
-            var result = new E6PharmacyProductSnapshot();
+            var result = new E6PharmacyProductSnapshot { Cursor = cursor ?? "" };
             var cursorBytes = DecodeCursor(cursor);
             var cursorClause = cursorBytes == null ? "" : " AND p.[_c_] > @cursor ";
             var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
@@ -249,7 +249,7 @@ WHERE ISNULL(p.[停用], 0) = 0
                             e6CreatedAt = ToIso(reader["创建日期"]),
                             e6ModifiedAt = ToIso(reader["修改日期"])
                         });
-                        result.Cursor = Convert.ToBase64String((byte[])reader["_c_"]);
+                        result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
                     }
                 }
             }
@@ -313,7 +313,12 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
 
         public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor, string locationCursor, string stockCursor)
         {
-            var result = new E6PharmacyInventorySnapshot();
+            var result = new E6PharmacyInventorySnapshot
+            {
+                Cursor = cursor ?? "",
+                LocationCursor = locationCursor ?? "",
+                StockCursor = stockCursor ?? ""
+            };
             var cursorBytes = DecodeCursor(cursor);
             var locationCursorBytes = DecodeCursor(locationCursor);
             var cursorClause = cursorBytes == null && locationCursorBytes == null ? "" : @" AND EXISTS (
@@ -364,6 +369,10 @@ WHERE i.[数量] >= 0
 
         private void QueryZeroPharmacyProducts(E6PharmacyInventorySnapshot result, string cursor)
         {
+            if (string.IsNullOrWhiteSpace(result.StockCursor) && !string.IsNullOrWhiteSpace(cursor))
+            {
+                result.StockCursor = cursor;
+            }
             var cursorBytes = DecodeCursor(cursor);
             var where = cursorBytes == null ? "" : "WHERE a0.[_c_] > @stockCursor";
             var sql = @"WITH ChangedRows AS (
@@ -418,18 +427,40 @@ ORDER BY c.[ts];";
             catch { return null; }
         }
 
-        private static string MaxCursor(string current, object value)
+        public static string MaxCursor(string current, string candidate)
         {
-            if (value == null || value == DBNull.Value) return current;
-            var candidate = (byte[])value;
-            if (string.IsNullOrWhiteSpace(current)) return Convert.ToBase64String(candidate);
-            var existing = Convert.FromBase64String(current);
-            for (var i = 0; i < candidate.Length; i++)
+            if (string.IsNullOrWhiteSpace(candidate)) return current ?? "";
+            if (string.IsNullOrWhiteSpace(current)) return candidate;
+            var cBytes = DecodeCursor(candidate);
+            var eBytes = DecodeCursor(current);
+            if (cBytes == null) return current;
+            if (eBytes == null) return candidate;
+            return CompareCursorBytes(cBytes, eBytes) >= 0 ? candidate : current;
+        }
+
+        public static string MaxCursor(string current, object value)
+        {
+            if (value == null || value == DBNull.Value) return current ?? "";
+            if (value is string candidateStr) return MaxCursor(current, candidateStr);
+            if (value is byte[] candidateBytes)
             {
-                if (candidate[i] == existing[i]) continue;
-                return candidate[i] > existing[i] ? Convert.ToBase64String(candidate) : current;
+                if (string.IsNullOrWhiteSpace(current)) return Convert.ToBase64String(candidateBytes);
+                var existingBytes = DecodeCursor(current);
+                if (existingBytes == null) return Convert.ToBase64String(candidateBytes);
+                return CompareCursorBytes(candidateBytes, existingBytes) >= 0 ? Convert.ToBase64String(candidateBytes) : current;
             }
-            return current;
+            return current ?? "";
+        }
+
+        private static int CompareCursorBytes(byte[] left, byte[] right)
+        {
+            var len = Math.Min(left.Length, right.Length);
+            for (var i = 0; i < len; i++)
+            {
+                if (left[i] != right[i])
+                    return left[i].CompareTo(right[i]);
+            }
+            return left.Length.CompareTo(right.Length);
         }
     }
 }
