@@ -72,7 +72,14 @@ export async function attachmentController(request, reply) {
   );
   
   if (attachment.storagePath && !attachment.data) {
-    const url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
+    let url;
+    try {
+      url = await getFileDownloadUrl(request.server.prisma, attachment.storagePath);
+    } catch (e) {
+      console.error("getFileDownloadUrl error:", e);
+      require('fs').writeFileSync('/tmp/s3_error.log', e.stack);
+      throw e;
+    }
     if (url) {
       return reply.redirect(302, url);
     }
