@@ -1,6 +1,5 @@
 import request from '@/api/request';
-import { S3Client } from '@aws-sdk/client-s3';
-import { Upload } from '@aws-sdk/lib-storage';
+import axios from 'axios';
 
 /**
  * 统一的大文件/小文件分片直传 OSS 函数
@@ -18,45 +17,44 @@ export async function uploadToS3(file, category, onProgress) {
     }
   });
 
-  if (!strategy.endpoint || !strategy.bucket || !strategy.accessKey) {
+  if (!strategy.uploadUrl && !strategy.presignedPost) {
     throw new Error('后台暂未配置有效的上传参数');
   }
 
-  // 2. 初始化 S3 客户端
-  const s3Client = new S3Client({
-    endpoint: strategy.endpoint.startsWith('http') ? strategy.endpoint : `https://${strategy.endpoint}`,
-    region: strategy.region || 'us-east-1',
-    credentials: {
-      accessKeyId: strategy.accessKey,
-      secretAccessKey: strategy.secretKey
-    },
-    forcePathStyle: true // 强制 PathStyle 以兼容 MinIO 等私有化存储
-  });
-
-  // 3. 构造智能上传任务 (支持超大文件自动分片和断点续传机制)
-  const parallelUploads3 = new Upload({
-    client: s3Client,
-    params: {
-      Bucket: strategy.bucket,
-      Key: strategy.storagePath,
-      Body: file,
-      ContentType: file.type || 'application/octet-stream'
-    },
-    // 分片大小 5MB
-    partSize: 5 * 1024 * 1024,
-    queueSize: 4 // 并发度
-  });
-
-  parallelUploads3.on('httpUploadProgress', (progress) => {
-    if (onProgress && progress.total) {
-      const percent = Math.round((progress.loaded / progress.total) * 100);
-      onProgress(percent);
+  // 2. 使用 Presigned POST 表单上传（兼容性最好）
+  if (strategy.presignedPost) {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(strategy.presignedPost.fields)) {
+      formData.append(key, value);
     }
-  });
+    formData.append('file', file);
+    
+    await axios.post(strategy.presignedPost.url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+          onProgress(percent);
+        }
+      }
+    });
+  } else {
+    // 回退到 PUT 上传
+    await axios.put(strategy.uploadUrl, file, {
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream'
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+          onProgress(percent);
+        }
+      }
+    });
+  }
 
-  // 4. 执行上传
-  await parallelUploads3.done();
-
-  // 5. 返回云端路径给调用方
+  // 3. 返回云端路径给调用方
   return strategy.storagePath;
 }
