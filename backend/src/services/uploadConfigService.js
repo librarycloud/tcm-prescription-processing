@@ -4,6 +4,36 @@ import crypto from "node:crypto";
 
 const CONFIG_ITEM_KEY = "oss_upload";
 
+const DEFAULT_CONFIG = {
+  activeProvider: "seaweedfs",
+  providers: {
+    seaweedfs: {
+      endpoint: "",
+      bucket: "",
+      accessKey: "",
+      secretKey: "",
+      region: "us-east-1",
+      cdnDomain: "",
+    },
+    aliyun: {
+      endpoint: "",
+      bucket: "",
+      accessKey: "",
+      secretKey: "",
+      region: "oss-cn-hangzhou",
+      cdnDomain: "",
+    },
+    tencent: {
+      endpoint: "",
+      bucket: "",
+      accessKey: "",
+      secretKey: "",
+      region: "ap-guangzhou",
+      cdnDomain: "",
+    }
+  }
+};
+
 export async function getUploadConfig(prisma) {
   let record = await prisma.systemConfig.findUnique({
     where: { item: CONFIG_ITEM_KEY },
@@ -13,26 +43,38 @@ export async function getUploadConfig(prisma) {
     record = await prisma.systemConfig.create({
       data: {
         item: CONFIG_ITEM_KEY,
-        value: JSON.stringify({
-          endpoint: "",
-          bucket: "",
-          accessKey: "",
-          secretKey: "",
-          region: "us-east-1",
-          cdnDomain: "",
-        }),
+        value: JSON.stringify(DEFAULT_CONFIG),
         class: "upload",
         isPublic: true,
         type: "json",
         mark: "对象存储配置",
       },
     });
+    return DEFAULT_CONFIG;
   }
   
   try {
-    return JSON.parse(record.value);
+    const parsed = JSON.parse(record.value);
+    // 兼容老版本配置
+    if (!parsed.activeProvider) {
+      return {
+        activeProvider: "seaweedfs",
+        providers: {
+          ...DEFAULT_CONFIG.providers,
+          seaweedfs: {
+            endpoint: parsed.endpoint || "",
+            bucket: parsed.bucket || "",
+            accessKey: parsed.accessKey || "",
+            secretKey: parsed.secretKey || "",
+            region: parsed.region || "us-east-1",
+            cdnDomain: parsed.cdnDomain || "",
+          }
+        }
+      };
+    }
+    return parsed;
   } catch (e) {
-    return {};
+    return DEFAULT_CONFIG;
   }
 }
 
@@ -40,25 +82,11 @@ export async function updateUploadConfig(prisma, data) {
   return prisma.systemConfig.upsert({
     where: { item: CONFIG_ITEM_KEY },
     update: {
-      value: JSON.stringify({
-        endpoint: data.endpoint || "",
-        bucket: data.bucket || "",
-        accessKey: data.accessKey || "",
-        secretKey: data.secretKey || "",
-        region: data.region || "us-east-1",
-        cdnDomain: data.cdnDomain || "",
-      }),
+      value: JSON.stringify(data),
     },
     create: {
       item: CONFIG_ITEM_KEY,
-      value: JSON.stringify({
-        endpoint: data.endpoint || "",
-        bucket: data.bucket || "",
-        accessKey: data.accessKey || "",
-        secretKey: data.secretKey || "",
-        region: data.region || "us-east-1",
-        cdnDomain: data.cdnDomain || "",
-      }),
+      value: JSON.stringify(data),
       class: "upload",
       isPublic: true,
       type: "json",
@@ -67,9 +95,17 @@ export async function updateUploadConfig(prisma, data) {
   });
 }
 
-// 统一的直传策略：直接向前端下发凭证信息，让前端自己决定是普通 PUT 还是 Multipart 续传
+// 辅助函数：获取当前启用的配置
+async function getActiveConfig(prisma) {
+  const fullConfig = await getUploadConfig(prisma);
+  const activeProvider = fullConfig.activeProvider || 'seaweedfs';
+  const providerConfig = fullConfig.providers?.[activeProvider] || {};
+  return { provider: activeProvider, config: providerConfig };
+}
+
+// 统一的直传策略
 export async function generateUploadStrategy(prisma, category, filename, mimeType = "application/octet-stream") {
-  const config = await getUploadConfig(prisma);
+  const { provider, config } = await getActiveConfig(prisma);
   
   if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
     throw new Error("请先在系统设置中配置 S3/OSS 上传参数");
@@ -100,7 +136,9 @@ export async function generateUploadStrategy(prisma, category, filename, mimeTyp
       accessKeyId: config.accessKey,
       secretAccessKey: config.secretKey,
     },
-    forcePathStyle: true,
+    // 阿里云和腾讯云通常不需要 forcePathStyle (使用虚拟托管样式 bucket.endpoint)
+    // SeaweedFS 和 MinIO 等自建系统通常需要
+    forcePathStyle: provider === 'seaweedfs',
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
   });
@@ -114,6 +152,7 @@ export async function generateUploadStrategy(prisma, category, filename, mimeTyp
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
 
   return {
+    provider,
     endpoint: config.endpoint,
     region: config.region || "us-east-1",
     bucket: config.bucket,
@@ -123,9 +162,8 @@ export async function generateUploadStrategy(prisma, category, filename, mimeTyp
   };
 }
 
-
 export async function getFileDownloadUrl(prisma, storagePath) {
-  const config = await getUploadConfig(prisma);
+  const { provider, config } = await getActiveConfig(prisma);
   if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
     return null;
   }
@@ -142,7 +180,7 @@ export async function getFileDownloadUrl(prisma, storagePath) {
       accessKeyId: config.accessKey,
       secretAccessKey: config.secretKey,
     },
-    forcePathStyle: true,
+    forcePathStyle: provider === 'seaweedfs',
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
   });
@@ -155,10 +193,53 @@ export async function getFileDownloadUrl(prisma, storagePath) {
   return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
+export async function uploadBufferToOss(prisma, buffer, { category, mimeType, filename }) {
+  const { provider, config } = await getActiveConfig(prisma).catch(() => ({ provider: null, config: null }));
+  if (!config || !config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
+    return null; // OSS not configured, caller falls back to local storage
+  }
+
+  if (!/^[a-z][a-z0-9-]*$/.test(category)) {
+    throw new Error("无效的分类名称");
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+
+  let extension = 'tmp';
+  if (filename && filename.includes('.')) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (/^[a-z0-9]{1,4}$/.test(ext)) extension = ext;
+  }
+  const uuid = crypto.randomUUID();
+  const storagePath = `${category}/${year}/${month}/${uuid}.${extension}`;
+
+  const s3 = new S3Client({
+    region: config.region || "us-east-1",
+    endpoint: config.endpoint,
+    credentials: {
+      accessKeyId: config.accessKey,
+      secretAccessKey: config.secretKey,
+    },
+    forcePathStyle: provider === 'seaweedfs',
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
+  });
+
+  await s3.send(new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: storagePath,
+    Body: buffer,
+    ContentType: mimeType,
+  }));
+
+  return storagePath;
+}
 
 export async function deleteOssFile(prisma, storagePath) {
   try {
-    const config = await getUploadConfig(prisma).catch(() => null);
+    const { provider, config } = await getActiveConfig(prisma).catch(() => ({ provider: null, config: null }));
     if (!config || !config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
       return false; // Not configured
     }
@@ -170,7 +251,7 @@ export async function deleteOssFile(prisma, storagePath) {
         accessKeyId: config.accessKey,
         secretAccessKey: config.secretKey,
       },
-      forcePathStyle: true,
+      forcePathStyle: provider === 'seaweedfs',
     });
     
     await s3.send(new DeleteObjectCommand({
