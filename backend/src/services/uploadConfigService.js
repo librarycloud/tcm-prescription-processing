@@ -91,6 +91,8 @@ export async function generateUploadStrategy(prisma, category, filename, mimeTyp
       secretAccessKey: config.secretKey,
     },
     forcePathStyle: true,
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   
   const command = new PutObjectCommand({
@@ -139,6 +141,8 @@ export async function getFileDownloadUrl(prisma, storagePath) {
       secretAccessKey: config.secretKey,
     },
     forcePathStyle: true,
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   
   const command = new GetObjectCommand({
