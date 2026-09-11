@@ -11,7 +11,7 @@
       <view class="muted">编码：{{product.productCode}}　条码：{{product.barcode || '-'}}</view>
       <view class="muted">规格：{{product.specification || '-'}}　单位：{{product.unit || '-'}}</view>
       <view class="muted">生产厂商：{{product.manufacturer || '-'}}</view>
-      <view class="inventory-total">总库存 <text>{{product.totalQuantityText}}</text> {{product.unit || ''}}　共 {{product.batchCount}} 个库存批次</view>
+      <view class="inventory-total">总库存 <text class="{{product.totalQuantity <= 0 ? 'zero-stock-color' : ''}}">{{product.totalQuantityText}}</text> {{product.unit || ''}}　共 {{product.batchCount}} 个库存批次</view>
     </view>
 
     <view class="section-title">库存批次与货位</view>
@@ -19,7 +19,7 @@
       <view wx:if="{{isSuperAdmin}}" class="inventory-row"><text>门店</text><text>{{item.store.name || '-'}}</text></view>
       <view class="inventory-row"><text>批号</text><text>{{item.batchNo || '-'}}</text></view>
       <view class="inventory-row location-row"><text>货位</text><text>{{item.locationName || '-'}}</text></view>
-      <view class="inventory-row strong"><text>库存数量</text><text>{{item.quantityText}} {{product.unit || ''}}</text></view>
+      <view class="inventory-row strong"><text>库存数量</text><text class="{{item.quantity <= 0 ? 'zero-stock-color' : ''}}">{{item.quantityText}} {{product.unit || ''}}</text></view>
       <view class="muted inventory-dates">生产：{{item.productionDateText}}　有效期：{{item.expiryDateText}}　入库：{{item.inboundDateText}}</view>
     </view>
     <t-empty wx:if="{{!product.inventories.length}}" description="该商品暂无库存记录" />

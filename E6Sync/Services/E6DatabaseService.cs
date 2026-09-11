@@ -325,8 +325,7 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
     SELECT 1
     FROM dbo.[AC货位商品帐] changed
     LEFT JOIN dbo.[DC货位] changedLocation ON changedLocation.[ID] = changed.[货位id]
-    WHERE changed.[商品id] = i.[商品id]
-      AND ISNULL(changed.[批号], '') = ISNULL(i.[批号], '')" +
+    WHERE changed.[商品id] = i.[商品id]" +
                 ((cursorBytes == null && locationCursorBytes == null) ? "" : " AND (" +
                     (cursorBytes == null ? "" : "changed.[_c_] > @cursor") +
                     (cursorBytes == null || locationCursorBytes == null ? "" : " OR ") +

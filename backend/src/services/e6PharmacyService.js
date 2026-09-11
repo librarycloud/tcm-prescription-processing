@@ -190,9 +190,11 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
       return date;
     })()
     : null;
+  const includeZero = Boolean(keyword || query.includeZero === true || query.includeZero === "true");
+  const storeFilter = scope.storeId ? { storeId: scope.storeId } : {};
   const inventoryWhere = {
-    quantity: { gt: 0 },
-    ...(scope.storeId ? { storeId: scope.storeId } : {}),
+    ...(includeZero ? {} : { quantity: { gt: 0 } }),
+    ...storeFilter,
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
   const where = {

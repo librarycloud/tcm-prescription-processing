@@ -93,7 +93,9 @@
                   <template #default="{ row: batch }">{{ dateText(batch.expiryDate) }}</template>
                 </el-table-column>
                 <el-table-column label="库存数量" width="120" align="right">
-                  <template #default="{ row: batch }">{{ quantityText(batch.quantity) }}</template>
+                  <template #default="{ row: batch }">
+                    <span :class="{ 'zero-stock-text': Number(batch.quantity || 0) <= 0 }">{{ quantityText(batch.quantity) }}</span>
+                  </template>
                 </el-table-column>
                 <el-table-column label="更新时间" min-width="170">
                   <template #default="{ row: batch }">{{ dateTimeText(batch.updatedAt) }}</template>
@@ -129,7 +131,9 @@
           <template #default="{ row }">{{ row.batchCount }}</template>
         </el-table-column>
         <el-table-column label="总库存" align="right">
-          <template #default="{ row }">{{ quantityText(row.totalQuantity) }}</template>
+          <template #default="{ row }">
+            <span :class="{ 'zero-stock-text': Number(row.totalQuantity || 0) <= 0 }">{{ quantityText(row.totalQuantity) }}</span>
+          </template>
         </el-table-column>
         <el-table-column prop="barcode" label="条形码" min-width="140">
           <template #default="{ row }">
@@ -436,6 +440,11 @@ onMounted(async () => {
 .batch-title {
   font-weight: 600;
   margin-bottom: 10px;
+}
+
+.zero-stock-text {
+  color: #f56c6c;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

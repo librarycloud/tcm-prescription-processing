@@ -356,7 +356,7 @@ object ApiClient {
     suspend fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
     suspend fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
     suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject =
-        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes).getJSONObject("data")
+        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes, "prescriptions").getJSONObject("data")
     suspend fun prescriptionAttachment(id: Int): ByteArray = requestBytes("/admin/prescriptions/$id/attachment")
     suspend fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
     suspend fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
@@ -395,7 +395,7 @@ object ApiClient {
     suspend fun createProcessingPlan(payload: JSONObject): JSONObject = request("/admin/processing-plans", "POST", payload).getJSONObject("data")
     suspend fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
     suspend fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
-    suspend fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes).getJSONObject("data")
+    suspend fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes, "processing-photos").getJSONObject("data")
     suspend fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
     suspend fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
     suspend fun processingPlanByScan(code: String): JSONObject? {
@@ -798,7 +798,44 @@ object ApiClient {
         }
     }
 
-    private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default"): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        // 1. 尝试获取直传策略
+        val strategyRes = runCatching { request("/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}", "GET") }.getOrNull()
+        val strategyData = strategyRes?.optJSONObject("data")
+        val presignedPost = strategyData?.optJSONObject("presignedPost")
+        
+        if (presignedPost != null) {
+            // 使用 S3/OSS 直传
+            val url = presignedPost.optString("url")
+            val fields = presignedPost.optJSONObject("fields")
+            if (url.isNotEmpty() && fields != null) {
+                val s3BodyBuilder = MultipartBody.Builder().setType(MultipartBody.FORM)
+                fields.keys().forEach { key ->
+                    s3BodyBuilder.addFormDataPart(key, fields.optString(key))
+                }
+                s3BodyBuilder.addFormDataPart("file", filename, bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
+                
+                val s3Request = Request.Builder().url(url).post(s3BodyBuilder.build()).build()
+                val s3Response = client.newCall(s3Request).execute()
+                if (s3Response.isSuccessful) {
+                    // 直传成功，告知后端
+                    val notifyPayload = JSONObject().apply {
+                        put("storagePath", strategyData.optString("storagePath"))
+                        put("originalName", filename)
+                        put("mimeType", mimeType)
+                        put("filename", filename)
+                        put("size", bytes.size)
+                    }
+                    val backendPath = path.substringBefore('?')
+                    val notifyRes = runCatching { request(backendPath, "POST", notifyPayload) }.getOrNull()
+                    if (notifyRes != null && notifyRes.optInt("code", -1) == 0) {
+                        return@withContext notifyRes
+                    }
+                }
+            }
+        }
+        
+        // 降级：如果后端没配置OSS，或者OSS上传失败，回退到老的文件上传模式
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(

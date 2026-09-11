@@ -13,3 +13,5 @@
 .inventory-row.location-row text:last-child { color: #0052d9; }
 .inventory-row.strong { font-size: 30rpx; font-weight: 600; }
 .inventory-dates { padding-top: 14rpx; border-top: 1rpx solid #eef0f5; line-height: 1.6; font-size: 24rpx; }
+.zero-stock-color { color: #e34d59 !important; }
+

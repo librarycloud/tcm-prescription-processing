@@ -1,4 +1,4 @@
-import { request, uploadFile } from '../utils/request';
+import { request, uploadFile, uploadToS3 } from '../utils/request';
 
 export function getStats(params = {}) {
   return request({ url: '/admin/stats', data: params });
@@ -40,9 +40,11 @@ export function deletePrescriptionAttachment(id) {
 }
 
 export function uploadPrescriptionAttachment(id, file) {
-  return uploadFile({
+  return uploadToS3({
     url: `/admin/prescriptions/${id}/attachment?originalName=${encodeURIComponent(file.originalName)}`,
     filePath: file.filePath,
+    name: file.originalName,
+    category: 'prescriptions',
     formData: { originalName: file.originalName }
   });
 }
@@ -122,9 +124,11 @@ export function getProcessingWorkflow(id) {
 }
 
 export function uploadDispensingPhoto(id, filePath) {
-  return uploadFile({
+  return uploadToS3({
     url: `/admin/processing-plans/${id}/dispensing-complete`,
-    filePath
+    filePath,
+    category: 'processing-photos',
+    name: 'photo.jpg'
   });
 }
 
