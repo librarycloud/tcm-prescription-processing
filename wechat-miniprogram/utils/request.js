@@ -370,13 +370,14 @@ export async function uploadToS3(options) {
       return uploadFile(options);
     }
     
-    // 2. 直接使用 PUT 上传到 S3 / OSS
+    // 2. 微信小程序只支持 POST uploadFile，而 OSS 直传需要 PUT。
+    // 所以只能用 wx.request + ArrayBuffer 进行二进制传输。
     const fs = wx.getFileSystemManager();
     const fileData = await new Promise((resolve, reject) => {
       fs.readFile({
         filePath: options.filePath,
         success: (res) => resolve(res.data),
-        fail: reject
+        fail: (err) => reject(new Error('读取本地文件失败: ' + (err.errMsg || JSON.stringify(err))))
       });
     });
 
@@ -392,10 +393,12 @@ export async function uploadToS3(options) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve();
           } else {
-            reject(new Error(`OSS上传失败: ${res.statusCode}`));
+            reject(new Error(`OSS直传失败: HTTP ${res.statusCode} - ${JSON.stringify(res.data || {})}`));
           }
         },
-        fail: reject
+        fail: (err) => {
+          reject(new Error('网络请求失败或域名未在合法域名列表中: ' + (err.errMsg || JSON.stringify(err))));
+        }
       });
     });
     
@@ -416,7 +419,7 @@ export async function uploadToS3(options) {
     });
   } catch (error) {
     console.error('S3 Upload Error:', error);
-    wx.showToast({ title: '文件上传失败', icon: 'none' });
+    wx.showToast({ title: error.message || '文件上传失败', icon: 'none', duration: 3000 });
     throw error;
   }
 }
