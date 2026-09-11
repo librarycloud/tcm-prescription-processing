@@ -69,7 +69,7 @@ export async function updateUploadConfig(prisma, data) {
 }
 
 // 统一的直传策略：直接向前端下发凭证信息，让前端自己决定是普通 PUT 还是 Multipart 续传
-export async function generateUploadStrategy(prisma, category, filename) {
+export async function generateUploadStrategy(prisma, category, filename, mimeType = "application/octet-stream") {
   const config = await getUploadConfig(prisma);
   
   if (!config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
@@ -96,6 +96,7 @@ export async function generateUploadStrategy(prisma, category, filename) {
   const command = new PutObjectCommand({
     Bucket: config.bucket,
     Key: storagePath,
+    ContentType: mimeType,
   });
   
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
@@ -111,7 +112,6 @@ export async function generateUploadStrategy(prisma, category, filename) {
     region: config.region || "us-east-1",
     bucket: config.bucket,
     accessKey: config.accessKey,
-    secretKey: config.secretKey,
     storagePath,
     uploadUrl,
     presignedPost,

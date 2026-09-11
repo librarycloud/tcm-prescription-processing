@@ -12,11 +12,12 @@ export async function updateUploadConfigController(request, reply) {
 }
 
 export async function getUploadStrategyController(request, reply) {
-  const { category = 'default', filename } = request.query;
+  const { category = 'default', filename, mimeType } = request.query;
   const strategy = await generateUploadStrategy(
     request.server.prisma,
     category,
-    filename
+    filename,
+    mimeType
   );
   return ok(reply, strategy);
 }
