@@ -441,27 +441,19 @@ internal fun AboutScreen(
                 if (isSynthesizing) {
                     LinearProgressIndicator(
                         progress = { (synthesizeProgress / 100f).coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Primary
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        color = Primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                     Spacer(Modifier.height(5.dp))
                     Text("正在合成新版本安装包... $synthesizeProgress%", color = Muted, fontSize = 12.sp)
                 } else if (isPatchDownloading) {
-                    val progressShape = RoundedCornerShape(50)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(progressShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth((downloadProgress / 100f).coerceIn(0f, 1f))
-                                .background(Primary),
-                        )
-                    }
+                    LinearProgressIndicator(
+                        progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        color = Primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                     Spacer(Modifier.height(5.dp))
                     Text(
                         "正在下载增量补丁 $downloadProgress%（${formatDownloadSize(downloadedBytes)} / ${formatDownloadSize(downloadTotalBytes)}）",
@@ -470,23 +462,18 @@ internal fun AboutScreen(
                     )
                 } else if (downloadId != null) {
                     if (downloadTotalBytes > 0L) {
-                        val progressShape = RoundedCornerShape(50)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(progressShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth((downloadProgress / 100f).coerceIn(0f, 1f))
-                                .background(Primary),
-                            )
-                        }
+                        LinearProgressIndicator(
+                            progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = Primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = Primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     }
                     Spacer(Modifier.height(5.dp))
                     Text(
