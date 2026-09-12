@@ -120,6 +120,14 @@ internal fun TransfersScreen(
         }
     }
 
+    val reloadRevision = rememberListReloadRevision("transfers")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            transfers.refresh()
+            viewModel.refreshStats(selectedStoreId)
+        }
+    }
+
     LaunchedEffect(selectedStoreId) {
         viewModel.refreshStats(selectedStoreId)
     }
@@ -684,7 +692,7 @@ internal fun TransferDetailScreen(
                                 saving = true
                                 scope.launch {
                                     runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(id, record.optInt("id")) } }
-                                        .onSuccess { saving = false; reload++ }
+                                        .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
                                         .onFailure { saving = false; error = it.message ?: "确认归还失败" }
                                 }
                             },
@@ -712,7 +720,7 @@ internal fun TransferDetailScreen(
                             saving = true
                             scope.launch {
                                 runCatching { withContext(Dispatchers.IO) { ApiClient.confirmOutbound(id) } }
-                                    .onSuccess { saving = false; reload++ }
+                                    .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
                                     .onFailure { saving = false; error = it.message ?: "确认调出失败" }
                             }
                         },
@@ -728,7 +736,7 @@ internal fun TransferDetailScreen(
                             saving = true
                             scope.launch {
                                 runCatching { withContext(Dispatchers.IO) { ApiClient.cancelTransfer(id, "安卓端取消") } }
-                                    .onSuccess { saving = false; onBack() }
+                                    .onSuccess { saving = false; invalidateRetainedList("transfers"); onBack() }
                                     .onFailure { saving = false; error = it.message ?: "取消调拨失败" }
                             }
                         },
@@ -782,7 +790,7 @@ internal fun TransferDetailScreen(
                                             .put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()))),
                                     )
                                 }
-                            }.onSuccess { saving = false; returnItem = null; reload++ }
+                            }.onSuccess { saving = false; returnItem = null; reload++; invalidateRetainedList("transfers") }
                                 .onFailure { saving = false; error = it.message ?: "提交归还失败" }
                         }
                     },

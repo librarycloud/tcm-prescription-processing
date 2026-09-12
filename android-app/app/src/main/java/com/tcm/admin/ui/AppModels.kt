@@ -59,6 +59,48 @@ internal fun packageItem(value: JSONObject): PackageItem {
     )
 }
 
+internal fun PackageItem.toJson(): JSONObject = JSONObject().apply {
+    put("id", id)
+    put("name", name)
+    put("customer", customer)
+    put("code", code)
+    put("status", status)
+    put("time", time)
+    put("phone", phone)
+    put("store", store)
+    put("method", method)
+    put("info", info)
+    put("statusCode", statusCode)
+    put("methodCode", methodCode)
+    put("expressTrackingNo", expressTrackingNo)
+    put("pickupQrContent", pickupQrContent)
+    put("createdAt", createdAt)
+    put("pickedAt", pickedAt)
+    put("creatorName", creatorName)
+    put("verifierName", verifierName)
+}
+
+internal fun packageItemFromJson(json: JSONObject): PackageItem = PackageItem(
+    name = json.optString("name", "包裹"),
+    customer = json.optString("customer", "客户"),
+    code = json.optString("code", ""),
+    status = json.optString("status", ""),
+    time = json.optString("time", "未领取"),
+    id = json.optInt("id", 0),
+    phone = json.optString("phone", "-"),
+    store = json.optString("store", ""),
+    method = json.optString("method", ""),
+    info = json.optString("info", ""),
+    statusCode = json.optInt("statusCode", 0),
+    methodCode = json.optInt("methodCode", 0),
+    expressTrackingNo = json.optString("expressTrackingNo", ""),
+    pickupQrContent = json.optString("pickupQrContent", ""),
+    createdAt = json.optString("createdAt", "-"),
+    pickedAt = json.optString("pickedAt", ""),
+    creatorName = json.optString("creatorName", "-"),
+    verifierName = json.optString("verifierName", ""),
+)
+
 enum class PrescriptionStatus(val code: Int) {
     IN_PROGRESS(0), COMPLETED(1), CANCELLED(2), UNKNOWN(-1)
 }

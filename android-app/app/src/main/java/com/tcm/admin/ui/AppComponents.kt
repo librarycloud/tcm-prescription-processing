@@ -107,12 +107,25 @@ internal fun <T> rememberRetainedListValue(
     }
 }
 
+@Composable
+internal fun rememberListReloadRevision(owner: String): Int {
+    val state = remember(owner) {
+        synchronized(retainedListValues) {
+            retainedListValues.getOrPut("$owner:reload") { mutableStateOf(0) }
+        }
+    }
+    return (state.value as? Int) ?: 0
+}
+
 internal fun invalidateRetainedList(owner: String) {
     synchronized(retainedListValues) {
         retainedListValues["$owner:loadedQueryKey"]?.value = null
         @Suppress("UNCHECKED_CAST")
-        (retainedListValues["$owner:reload"] as? MutableState<Int>)?.let { reloadState ->
+        val reloadState = retainedListValues["$owner:reload"] as? MutableState<Int>
+        if (reloadState != null) {
             reloadState.value = reloadState.value + 1
+        } else {
+            retainedListValues["$owner:reload"] = mutableStateOf(1)
         }
     }
 }

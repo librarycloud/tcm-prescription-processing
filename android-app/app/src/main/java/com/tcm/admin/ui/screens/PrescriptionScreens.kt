@@ -138,6 +138,13 @@ internal fun PrescriptionsScreen(
         viewModel.loadFilters()
     }
     
+    val reloadRevision = rememberListReloadRevision("prescriptions")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            items.refresh()
+        }
+    }
+    
     LaunchedEffect(stores) {
         if (!isSuperAdmin(user) && stores.size == 1 && selectedStoreId == null) {
             viewModel.updateFilters(newStoreId = stores.first().optInt("id"))

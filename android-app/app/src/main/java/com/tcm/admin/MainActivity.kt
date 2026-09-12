@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -232,10 +233,14 @@ private fun TcmAdminApp() {
 }
 
     fun switchTab(target: Route) {
-    navController.navigate(target) {
-        popUpTo(navController.graph.id) { inclusive = true }
+        navController.navigate(target) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
     }
-}
 
     fun checkForAppUpdateIfDue() {
         val lastCheckedAt = updatePreferences.getLong("last_update_check_at", 0L)
@@ -265,7 +270,7 @@ private fun TcmAdminApp() {
 
     val activity = LocalContext.current as? ComponentActivity
     var lastBackPressTime by remember { mutableStateOf(0L) }
-    BackHandler(enabled = currentDestination?.hasRoute<Route.Login>() == false) {
+    BackHandler(enabled = currentDestination?.hasRoute<Route.Login>() != true) {
     if (!navigateBack()) {
         val now = System.currentTimeMillis()
         if (now - lastBackPressTime < 2000L) {
@@ -383,7 +388,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.E6ImportConfirm> { entry ->
                     val route = entry.toRoute<Route.E6ImportConfirm>()
-                    val initial = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    val initial = rememberRouteParam(entry, route.argId) { JSONObject() }
                     DetailShell("确认导入并生成加工计划", onBack = { navigateBack() }) {
                         E6ImportConfirmScreen(
                             initial = initial,
@@ -522,7 +527,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.PrescriptionEdit> { entry ->
                     val route = entry.toRoute<Route.PrescriptionEdit>()
-                    val initial = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    val initial = rememberRouteParam(entry, route.argId) { JSONObject() }
                     DetailShell(
                         if (initial.has("id")) "编辑处方" else "新建处方",
                         onBack = { navigateBack() },
@@ -539,7 +544,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.ProcessingPlanForm> { entry ->
                     val route = entry.toRoute<Route.ProcessingPlanForm>()
-                    val initial = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    val initial = rememberRouteParam(entry, route.argId) { JSONObject() }
                     DetailShell(
                         if (initial.has("id")) "编辑加工计划" else "新建加工计划",
                         onBack = { navigateBack() },
@@ -556,7 +561,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.WorkflowOperation> { entry ->
                     val route = entry.toRoute<Route.WorkflowOperation>()
-                    val plan = RouteParams.peek(route.argId) as? JSONObject
+                    val plan = rememberRouteParam<JSONObject?>(entry, route.argId) { null }
                     if (plan == null) {
                         LaunchedEffect(Unit) { navigateBack() }
                     } else {
@@ -574,7 +579,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.PackageDetail> { entry ->
                     val route = entry.toRoute<Route.PackageDetail>()
-                    val item = RouteParams.peek(route.argId) as? PackageItem
+                    val item = rememberRouteParam<PackageItem?>(entry, route.argId) { null }
                     if (item == null) {
                         LaunchedEffect(Unit) { navigateBack() }
                     } else {
@@ -590,7 +595,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.PackageForm> { entry ->
                     val route = entry.toRoute<Route.PackageForm>()
-                    val initial = RouteParams.peek(route.argId) as? PackageItem
+                    val initial = rememberRouteParam<PackageItem?>(entry, route.argId) { null }
                     DetailShell(
                         if (initial != null) "编辑包裹" else "创建包裹",
                         onBack = { navigateBack() },
@@ -613,7 +618,7 @@ private fun TcmAdminApp() {
                 }
                 composable<Route.HerbLocationAssign> { entry ->
                     val route = entry.toRoute<Route.HerbLocationAssign>()
-                    val location = RouteParams.peek(route.argId) as? JSONObject ?: JSONObject()
+                    val location = rememberRouteParam(entry, route.argId) { JSONObject() }
                     DetailShell("配置货位", onBack = { navigateBack() }) {
                         HerbLocationAssignScreen(
                             location = location,
@@ -895,7 +900,7 @@ private fun MainShell(
                 Spacer(Modifier.height(8.dp))
 
                 DrawerItem("库存查询", current is Route.Inventory, Icons.Default.Inventory) {
-                    onNavigate(Route.Inventory())
+                    onSwitchTab(Route.Inventory())
                     scope.launch { drawerState.close() }
                 }
                 DrawerItem("处方管理", current is Route.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {

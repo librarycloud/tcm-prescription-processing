@@ -84,6 +84,13 @@ internal fun DifferencesScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    val reloadRevision = rememberListReloadRevision("differences")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            items.refresh()
+        }
+    }
+
     LaunchedEffect(registerVisible) {
         if (registerVisible) viewModel.loadRegisterProducts()
     }

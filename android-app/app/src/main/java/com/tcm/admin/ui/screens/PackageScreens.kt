@@ -151,6 +151,13 @@ internal fun PackagesScreen(
         }
     }
 
+    val reloadRevision = rememberListReloadRevision("packages")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            items.refresh()
+        }
+    }
+
     LaunchedEffect(showStore) {
         if (showStore) viewModel.loadStores()
     }

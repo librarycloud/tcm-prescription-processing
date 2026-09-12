@@ -97,6 +97,13 @@ internal fun StocktakingScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    val reloadRevision = rememberListReloadRevision("stocktaking")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            checks.refresh()
+        }
+    }
+
     LaunchedEffect(isSuperAdmin) {
         if (isSuperAdmin) viewModel.loadStores()
     }

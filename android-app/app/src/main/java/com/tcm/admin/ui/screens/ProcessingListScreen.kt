@@ -137,6 +137,15 @@ internal fun ProcessingScreenV2(
         }
     }
 
+    val reloadRevision = rememberListReloadRevision("processing")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            plansItems.refresh()
+            pickupItems.refresh()
+            viewModel.refreshStats(selectedStoreId)
+        }
+    }
+
     LaunchedEffect(selectedStoreId, activeView, pickupStatus, mode) {
         viewModel.refreshStats(selectedStoreId)
     }
