@@ -98,7 +98,7 @@ internal fun TransfersScreen(
     val transfers = viewModel.transfersFlow.collectAsLazyPagingItems()
 
     var createVisible by remember { mutableStateOf(false) }
-    var fromStoreId by remember { mutableStateOf("") }
+    var fromStoreId by remember { mutableStateOf(user?.optInt("storeId")?.takeIf { it > 0 }?.toString() ?: "") }
     var toStoreId by remember { mutableStateOf("") }
     var expectedReturnDate by remember { mutableStateOf(serverToday().plusDays(7).toString()) }
     var itemName by remember { mutableStateOf("") }
@@ -109,8 +109,8 @@ internal fun TransfersScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    LaunchedEffect(showStore) {
-        if (showStore) viewModel.loadStores()
+    LaunchedEffect(Unit) {
+        viewModel.loadStores()
     }
 
     LaunchedEffect(stores) {
@@ -493,6 +493,7 @@ internal fun TransfersScreen(
                         val payload = JSONObject()
                             .put("fromStoreId", fromStoreId.toInt())
                             .put("toStoreId", toStoreId.toInt())
+                            .put("transferDate", serverToday().toString())
                             .put("expectedReturnDate", expectedReturnDate)
                             .put("items", JSONArray().put(item))
 
