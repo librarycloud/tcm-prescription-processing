@@ -196,15 +196,18 @@ namespace E6Sync.Services
             if (!fullSync && (snapshot.Batches.Count > 0 || snapshot.ZeroProductCodes.Count > 0))
             {
                 var uploadedCodes = new HashSet<string>(products.ConvertAll(item => item.productCode ?? ""), StringComparer.OrdinalIgnoreCase);
+                var seenInventoryCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var inventoryCodes = new List<string>();
                 foreach (var batch in snapshot.Batches)
                 {
                     var code = (batch.productCode ?? "").Trim();
-                    if (!string.IsNullOrWhiteSpace(code) && !uploadedCodes.Contains(code)) inventoryCodes.Add(code);
+                    if (!string.IsNullOrWhiteSpace(code) && !uploadedCodes.Contains(code) && seenInventoryCodes.Add(code))
+                        inventoryCodes.Add(code);
                 }
                 foreach (var code in snapshot.ZeroProductCodes)
                 {
-                    if (!uploadedCodes.Contains(code)) inventoryCodes.Add(code);
+                    if (!uploadedCodes.Contains(code) && seenInventoryCodes.Add(code))
+                        inventoryCodes.Add(code);
                 }
                 if (inventoryCodes.Count > 0)
                 {

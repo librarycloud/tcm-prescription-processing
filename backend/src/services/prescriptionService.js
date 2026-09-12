@@ -1,5 +1,5 @@
 import { AppError } from "../utils/appError.js";
-import { deleteOssFile } from "./uploadConfigService.js";
+import { deleteOssFile, uploadBufferToOss } from "./uploadConfigService.js";
 import { isStoreStaff, isSuperAdmin } from "../constants/roles.js";
 import {
   DICTIONARY_TYPES,
@@ -272,7 +272,7 @@ export async function uploadPrescriptionAttachment(
   if (file?.storagePath) {
     finalStoragePath = file.storagePath;
   } else {
-    // 兼容历史的 FormData 模式：Node.js 收到了文件流，负责存入本地
+    // FormData 模式（小程序、Android 降级）：Node.js 收到文件流，优先中转到 OSS
     const buffer = Buffer.from(file?.buffer || []);
     if (!buffer.length) throw new AppError("请选择处方文件", 400);
     if (buffer.length > PRESCRIPTION_ATTACHMENT_MAX_SIZE)
@@ -281,7 +281,14 @@ export async function uploadPrescriptionAttachment(
     const mimeType = detectPrescriptionMimeType(buffer);
     if (!mimeType) throw new AppError("仅支持 JPG、PNG、GIF、WEBP、BMP 图片或 PDF 文件", 400);
     
-    finalStoragePath = await saveUploadFile(buffer, {
+    // 优先上传到 OSS（支持小程序等无法直接直传的客户端）
+    const ossPath = await uploadBufferToOss(prisma, buffer, {
+      category: "prescriptions",
+      mimeType,
+      filename: file.filename || "attachment.jpg",
+    }).catch(() => null);
+    
+    finalStoragePath = ossPath ?? await saveUploadFile(buffer, {
       category: "prescriptions",
       mimeType,
     });

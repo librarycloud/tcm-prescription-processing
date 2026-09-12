@@ -51,6 +51,7 @@ namespace E6Sync
         private bool isExiting;
         private DateTime nextSyncAt;
         private DateTime pharmacyNextSyncAt;
+        private DateTime lastLogDate = DateTime.Today;
 
         public MainForm()
         {
@@ -270,6 +271,15 @@ namespace E6Sync
 
         private async void Timer_Tick(object sender, EventArgs e)
         {
+            // 每天0点自动清空界面显示日志（文件日志不受影响）
+            var today = DateTime.Today;
+            if (today != lastLogDate)
+            {
+                lastLogDate = today;
+                logTextBox.Clear();
+                log.Info(string.Format("--- 界面日志已自动清空，新的一天：{0:yyyy-MM-dd} ---", today));
+            }
+
             if (syncService == null) return;
             var tasks = new List<Task>();
             if (automaticEnabled && !syncService.IsClinicBusy && DateTime.Now >= nextSyncAt) tasks.Add(RunAutomaticNowAsync());

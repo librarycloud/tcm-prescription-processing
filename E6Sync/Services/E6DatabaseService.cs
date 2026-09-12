@@ -227,6 +227,7 @@ WHERE ISNULL(p.[停用], 0) = 0
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
             {
+                command.CommandTimeout = 120; // 全量同步商品数据量大，设 2 分钟避免 timeout
                 if (cursorBytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = cursorBytes;
                 connection.Open();
                 using (var reader = command.ExecuteReader())
@@ -321,27 +322,45 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
             };
             var cursorBytes = DecodeCursor(cursor);
             var locationCursorBytes = DecodeCursor(locationCursor);
-            var cursorClause = cursorBytes == null && locationCursorBytes == null ? "" : @" AND EXISTS (
-    SELECT 1
-    FROM dbo.[AC货位商品帐] changed
-    LEFT JOIN dbo.[DC货位] changedLocation ON changedLocation.[ID] = changed.[货位id]
-    WHERE changed.[商品id] = i.[商品id]" +
-                ((cursorBytes == null && locationCursorBytes == null) ? "" : " AND (" +
-                    (cursorBytes == null ? "" : "changed.[_c_] > @cursor") +
-                    (cursorBytes == null || locationCursorBytes == null ? "" : " OR ") +
-                    (locationCursorBytes == null ? "" : "changedLocation.[_c_] > @locationCursor") + ")") + @") ";
+            var stockCursorBytes = DecodeCursor(stockCursor);
+
+            // 条件1：AC货位商品帐 本身变化 OR 货位名称变化（合并为一个子查询，性能更优）
+            var batchInnerConds = new List<string>();
+            if (cursorBytes != null) batchInnerConds.Add("changed.[_c_] > @cursor");
+            if (locationCursorBytes != null) batchInnerConds.Add("changedLocation.[_c_] > @locationCursor");
+
+            var outerConditions = new List<string>();
+            if (batchInnerConds.Count > 0)
+            {
+                var joinClause = locationCursorBytes != null
+                    ? " LEFT JOIN dbo.[DC货位] changedLocation ON changedLocation.[ID] = changed.[货位id]"
+                    : "";
+                outerConditions.Add(@"EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] changed"
+                    + joinClause
+                    + @" WHERE changed.[商品id] = i.[商品id] AND (" + string.Join(" OR ", batchInnerConds) + "))");
+            }
+
+            // 条件2：AC商品库存帐 总库存变化（捕获货位记录被物理删除的情况，此时无法通过 _c_ 感知货位变化）
+            if (stockCursorBytes != null)
+                outerConditions.Add(@"EXISTS (SELECT 1 FROM dbo.[AC商品库存帐] changedStock WHERE changedStock.[商品id] = i.[商品id] AND changedStock.[_c_] > @stockCursor)");
+
+            var cursorClause = outerConditions.Count > 0
+                ? " AND (" + string.Join(" OR ", outerConditions) + ") "
+                : "";
             var sql = @"SELECT p.[编号] AS [商品编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[_c_], l.[_c_] AS [货位_c_]
 FROM dbo.[AC货位商品帐] i
 LEFT JOIN dbo.[DC商品] p ON p.[ID] = i.[商品id]
 LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id]
-WHERE i.[数量] >= 0
+WHERE i.[数量] > 0
   AND ISNULL(p.[停用], 0) = 0
   AND ISNULL(p.[名称], '') <> '' " + cursorClause + "ORDER BY i.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
             {
+                command.CommandTimeout = 120; // 全量同步可能涉及大量数据，设 2 分钟避免 timeout
                 if (cursorBytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = cursorBytes;
                 if (locationCursorBytes != null) command.Parameters.Add("@locationCursor", SqlDbType.Binary, 8).Value = locationCursorBytes;
+                if (stockCursorBytes != null) command.Parameters.Add("@stockCursor", SqlDbType.Binary, 8).Value = stockCursorBytes;
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {

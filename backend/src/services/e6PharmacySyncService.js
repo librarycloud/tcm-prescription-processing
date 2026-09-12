@@ -98,7 +98,7 @@ export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
   const normalized = items.map(normalizeProduct);
   let created = 0;
   let updated = 0;
-  
+
   const productCodes = normalized.map((p) => p.productCode);
   const existingProductsList = await prisma.e6PharmacyProduct.findMany({
     where: { productCode: { in: productCodes } },
@@ -106,21 +106,24 @@ export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
   });
   const existingMap = new Map(existingProductsList.map((p) => [p.productCode, p]));
 
-  const operations = [];
+  const toCreate = [];
+  const toUpdate = [];
   for (const item of normalized) {
     const existing = existingMap.get(item.productCode);
-    if (!existing) {
-      operations.push(prisma.e6PharmacyProduct.create({ data: item }));
-      created++;
-    } else if (productChanged(existing, item)) {
-      operations.push(prisma.e6PharmacyProduct.update({ where: { productCode: item.productCode }, data: item }));
-      updated++;
-    }
+    if (!existing) { toCreate.push(item); created++; }
+    else if (productChanged(existing, item)) { toUpdate.push(item); updated++; }
   }
 
-  const chunkSize = 1000;
-  for (let i = 0; i < operations.length; i += chunkSize) {
-    await prisma.$transaction(operations.slice(i, i + chunkSize));
+  // 全部在同一事务内：有一个失败则全部回滚
+  if (toCreate.length || toUpdate.length) {
+    await prisma.$transaction(async (tx) => {
+      for (const item of toCreate) {
+        await tx.e6PharmacyProduct.create({ data: item });
+      }
+      for (const item of toUpdate) {
+        await tx.e6PharmacyProduct.update({ where: { productCode: item.productCode }, data: item });
+      }
+    }, { timeout: 60000 }); // 最多等 60 秒
   }
 
   return { received: normalized.length, created, updated };
@@ -174,174 +177,119 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   let created = 0;
   let updated = 0;
   let deleted = 0;
-  const operations = [];
+
+  // ── 阶段一：在事务外完成所有读操作（性能最优），计算出每个商品需要做什么 ──
+  const writes = []; // 存储描述型操作，在事务内执行
 
   for (const [productId, productBatches] of batchesByProduct) {
     const hasActiveStock = productBatches.some((item) => Number(item.quantity) > 0);
     const existingRows = existingRowsMap.get(productId) || [];
 
     if (hasActiveStock) {
-      // 场景 A：该商品存在非0库存：仅更新/创建有效货位，删除所有0货位（含过期未上报的）
-      const incomingKeys = new Set(productBatches.filter(i => Number(i.quantity) > 0).map(i => `${i.batchNo}\u0000${i.locationName}`));
-      
+      // 场景 A：商品有非0库存，以本次 >0 批次为准做全量对比
+      const incomingKeys = new Set(productBatches.map((item) => `${item.batchNo}\u0000${item.locationName}`));
+
       for (const item of productBatches) {
-        if (Number(item.quantity) === 0) continue; // 丢弃0库存的上传批次
-        const key = `${productId}\u0000${item.batchNo}\u0000${item.locationName}`;
-        seen.add(key);
-        operations.push(prisma.e6PharmacyInventoryBatch.upsert({
-          where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
-          create: {
-            storeId: store.id,
-            productId,
-            batchNo: item.batchNo,
-            productionDate: item.productionDate,
-            expiryDate: item.expiryDate,
-            inboundDate: item.inboundDate,
-            locationName: item.locationName,
-            quantity: item.quantity,
-            receivedAt: new Date(),
-          },
-          update: {
-            productionDate: item.productionDate,
-            expiryDate: item.expiryDate,
-            inboundDate: item.inboundDate,
-            locationName: item.locationName,
-            quantity: item.quantity,
-            receivedAt: new Date(),
-          },
-        }));
-        created++;
-      }
-      
-      // 删除所有既不在有效上传列表里的旧数据（包括曾经的非0变成未上报，或明确上报0的数据）
-      const staleRows = existingRows.filter((row) => !incomingKeys.has(`${row.batchNo}\u0000${row.locationName}`));
-      if (staleRows.length) {
-        operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({
-          where: { id: { in: staleRows.map((row) => row.id) } },
-        }));
-        deleted += staleRows.length;
-      }
-    } else {
-      // 场景 B：该商品所有库存均变为0（断货全清）：只保留最后一条批次记录，将数量置为 0，删除其它多余记录
-      for (const item of productBatches) {
-        const key = `${productId}\u0000${item.batchNo}\u0000${item.locationName}`;
-        seen.add(key); // 记录已见，防止被 fullSync 误杀
-      }
-      
-      let batchToKeep = null;
-      if (productBatches.length > 0) {
-        batchToKeep = { isIncoming: true, data: productBatches[productBatches.length - 1] };
-      } else if (existingRows.length > 0) {
-        existingRows.sort((a, b) => b.id - a.id);
-        batchToKeep = { isIncoming: false, data: existingRows[0] };
+        seen.add(`${productId}\u0000${item.batchNo}\u0000${item.locationName}`);
+        const existingRow = existingRows.find((row) => row.batchNo === item.batchNo && row.locationName === item.locationName);
+        writes.push({ type: "upsert", storeId: store.id, productId, item });
+        if (existingRow) updated++;
+        else created++;
       }
 
-      if (batchToKeep) {
-        if (batchToKeep.isIncoming) {
-          const item = batchToKeep.data;
-          operations.push(prisma.e6PharmacyInventoryBatch.upsert({
-            where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
-            create: {
-              storeId: store.id,
-              productId,
-              batchNo: item.batchNo,
-              productionDate: item.productionDate,
-              expiryDate: item.expiryDate,
-              inboundDate: item.inboundDate,
-              locationName: item.locationName,
-              quantity: "0",
-              receivedAt: new Date(),
-            },
-            update: { quantity: "0", receivedAt: new Date() },
-          }));
-          created++;
-          
-          // 删除除了刚才保留的这条以外的所有旧记录
-          const toDelete = existingRows.filter(r => r.batchNo !== item.batchNo || r.locationName !== item.locationName);
-          if (toDelete.length) {
-            operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: toDelete.map(r=>r.id) } } }));
-            deleted += toDelete.length;
-          }
-        } else {
-          operations.push(prisma.e6PharmacyInventoryBatch.update({
-            where: { id: batchToKeep.data.id },
-            data: { quantity: "0", receivedAt: new Date() }
-          }));
+      // 删除不在本次快照里的旧货位（换货位的旧记录、被 ERP 物理删除的批次）
+      const staleIds = existingRows.filter((row) => !incomingKeys.has(`${row.batchNo}\u0000${row.locationName}`)).map((row) => row.id);
+      if (staleIds.length) {
+        writes.push({ type: "deleteMany", ids: staleIds });
+        deleted += staleIds.length;
+      }
+    } else {
+      // 场景 B：商品全线断货（clearProductCodes 路径），保留最近一条货位记录置为 0
+      if (existingRows.length > 0) {
+        existingRows.sort((a, b) => b.id - a.id);
+        const keepRow = existingRows[0];
+        seen.add(`${productId}\u0000${keepRow.batchNo}\u0000${keepRow.locationName || ""}`);
+        if (Number(keepRow.quantity) !== 0) {
+          writes.push({ type: "updateOne", id: keepRow.id });
           updated++;
-          
-          const toDelete = existingRows.slice(1); // 已经过降序排列，第0条之后全删
-          if (toDelete.length) {
-            operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: toDelete.map(r=>r.id) } } }));
-            deleted += toDelete.length;
-          }
+        }
+        const toDeleteIds = existingRows.slice(1).map((r) => r.id);
+        if (toDeleteIds.length) {
+          writes.push({ type: "deleteMany", ids: toDeleteIds });
+          deleted += toDeleteIds.length;
         }
       }
     }
   }
 
+  // 全量同步：处理本次未出现的旧商品（在事务外 read，结果纳入 writes）
   if (payload?.fullSync === true && (fullSyncComplete || !fullSyncStartedAt)) {
     const existing = await prisma.e6PharmacyInventoryBatch.findMany({
       where: { storeId: store.id },
       select: { id: true, productId: true, batchNo: true, locationName: true, receivedAt: true, quantity: true },
     });
-    
-    // 按商品归拢所有“彻底未在本次全量同步中出现的旧记录”
-    const untouchedProductIds = new Set(allProductIds);
+    const touchedProductIds = new Set(allProductIds);
     const unseenByProduct = new Map();
-    
     for (const item of existing) {
       const isSeen = fullSyncStartedAt
         ? item.receivedAt >= fullSyncStartedAt
         : seen.has(`${item.productId}\u0000${item.batchNo}\u0000${item.locationName || ""}`);
-        
-      if (!isSeen && !untouchedProductIds.has(item.productId)) {
+      if (!isSeen && !touchedProductIds.has(item.productId)) {
         if (!unseenByProduct.has(item.productId)) unseenByProduct.set(item.productId, []);
         unseenByProduct.get(item.productId).push(item);
       }
     }
-    
-    const setZeroIds = [];
-    const removeIds = [];
-    
-    for (const [productId, rows] of unseenByProduct) {
-      // 彻底断货未上传的商品，仅保留最新的一条，置为0，其他全部删除
+    for (const [, rows] of unseenByProduct) {
       rows.sort((a, b) => b.id - a.id);
       if (Number(rows[0].quantity) > 0) {
-        setZeroIds.push(rows[0].id);
+        writes.push({ type: "updateOne", id: rows[0].id });
+        updated++;
       }
-      for (let i = 1; i < rows.length; i++) {
-        removeIds.push(rows[i].id);
+      const toDeleteIds = rows.slice(1).map((r) => r.id);
+      if (toDeleteIds.length) {
+        writes.push({ type: "deleteMany", ids: toDeleteIds });
+        deleted += toDeleteIds.length;
       }
-    }
-    
-    if (removeIds.length) {
-      operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } }));
-      deleted += removeIds.length;
-    }
-    if (setZeroIds.length) {
-      operations.push(prisma.e6PharmacyInventoryBatch.updateMany({
-        where: { id: { in: setZeroIds } },
-        data: { quantity: "0", receivedAt: new Date() },
-      }));
-      updated += setZeroIds.length;
     }
   }
 
-  // 仅记录库存同步时间，不触发商品表 updated_at（Prisma @updatedAt）。
-  if (productCodes.length) {
-    const seenAt = new Date();
-    for (const productCode of productCodes) {
-      operations.push(prisma.$executeRaw`
-        UPDATE e6_pharmacy_products
-        SET last_inventory_seen_at = ${seenAt}
-        WHERE product_code = ${productCode}`);
+  // ── 阶段二：单一事务执行所有写操作，失败则全部回滚 ──
+  if (writes.length === 0 && productCodes.length === 0) {
+    return { received: normalized.length, created, updated, deleted, fullSync: payload?.fullSync === true };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const w of writes) {
+      if (w.type === "upsert") {
+        const { item } = w;
+        await tx.e6PharmacyInventoryBatch.upsert({
+          where: { storeId_productId_batchNo_locationName: { storeId: w.storeId, productId: w.productId, batchNo: item.batchNo, locationName: item.locationName } },
+          create: {
+            storeId: w.storeId, productId: w.productId,
+            batchNo: item.batchNo, productionDate: item.productionDate,
+            expiryDate: item.expiryDate, inboundDate: item.inboundDate,
+            locationName: item.locationName, quantity: item.quantity, receivedAt: new Date(),
+          },
+          update: {
+            productionDate: item.productionDate, expiryDate: item.expiryDate,
+            inboundDate: item.inboundDate, quantity: item.quantity, receivedAt: new Date(),
+          },
+        });
+      } else if (w.type === "deleteMany") {
+        await tx.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: w.ids } } });
+      } else if (w.type === "updateOne") {
+        await tx.e6PharmacyInventoryBatch.update({ where: { id: w.id }, data: { quantity: "0", receivedAt: new Date() } });
+      }
     }
-  }
-  
-  const chunkSize = 1000;
-  for (let i = 0; i < operations.length; i += chunkSize) {
-    await prisma.$transaction(operations.slice(i, i + chunkSize));
-  }
-  
+
+    // 更新 last_inventory_seen_at（使用 tx 保持在同一事务内）
+    if (productCodes.length) {
+      const seenAt = new Date();
+      for (const productCode of productCodes) {
+        await tx.$executeRaw`UPDATE e6_pharmacy_products SET last_inventory_seen_at = ${seenAt} WHERE product_code = ${productCode}`;
+      }
+    }
+  }, { timeout: 120000 }); // 全量同步写入量大，最多等 2 分钟
+
   return { received: normalized.length, created, updated, deleted, fullSync: payload?.fullSync === true };
 }

@@ -698,7 +698,7 @@ async function handleAttachmentChange(uploadFile) {
         : `处方原件已压缩并上传（${formatFileSize(file.size)} → ${formatFileSize(preparedFile.size)}）`
     );
   } catch (error) {
-    if (error.imageCompressionFailed) ElMessage.error(error.message || '图片压缩失败');
+    if (error.imageCompressionFailed) ElMessage.error(error.message || '图片压缩失败'); else ElMessage.error(error.message || '上传失败');
   } finally {
     attachmentUploading.value = false;
     attachmentUploader.value?.clearFiles();
