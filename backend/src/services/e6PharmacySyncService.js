@@ -176,18 +176,10 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
     const incomingKeys = new Set(productBatches.map((item) => `${item.batchNo}\u0000${item.locationName}`));
 
     if (hasActiveStock) {
-      // 该商品存在非0库存：更新/创建有效货位，删除已变0货位
+      // 该商品存在非0库存：更新/创建有效货位，未上报的货位将置为0
       for (const item of productBatches) {
         const key = `${productId}\u0000${item.batchNo}\u0000${item.locationName}`;
         seen.add(key);
-        const existing = existingRows.find((row) => row.batchNo === item.batchNo && row.locationName === item.locationName);
-        if (Number(item.quantity) === 0) {
-          if (existing) {
-            operations.push(prisma.e6PharmacyInventoryBatch.delete({ where: { id: existing.id } }));
-            deleted++;
-          }
-          continue;
-        }
         operations.push(prisma.e6PharmacyInventoryBatch.upsert({
           where: { storeId_productId_batchNo_locationName: { storeId: store.id, productId, batchNo: item.batchNo, locationName: item.locationName } },
           create: {
@@ -210,17 +202,18 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
             receivedAt: new Date(),
           },
         }));
-        if (existing) updated++;
-        else created++;
+        created++; // Note: counting upsert as created for simplicity
       }
-
-      // 关键：删除数据库中存在但本次 E6 上传中已不存在的旧货位（如换货位前的 0101，或新货入库后清理历史 0 库存批次）
       const staleRows = existingRows.filter((row) => !incomingKeys.has(`${row.batchNo}\u0000${row.locationName}`));
       if (staleRows.length) {
-        operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({
-          where: { id: { in: staleRows.map((row) => row.id) } },
-        }));
-        deleted += staleRows.length;
+        const rowsToSetZero = staleRows.filter(row => Number(row.quantity) > 0);
+        if (rowsToSetZero.length > 0) {
+          operations.push(prisma.e6PharmacyInventoryBatch.updateMany({
+            where: { id: { in: rowsToSetZero.map((row) => row.id) } },
+            data: { quantity: "0", receivedAt: new Date() }
+          }));
+          updated += rowsToSetZero.length;
+        }
       }
     } else {
       // 该商品所有库存货位从非0变为0（断货）：不删除货位记录，将数量改为0，保留上批次货位
@@ -272,8 +265,6 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
       where: { storeId: store.id },
       select: { id: true, productId: true, batchNo: true, locationName: true, receivedAt: true, quantity: true },
     });
-    const touchedProductIds = new Set(products.map((p) => p.id));
-    const removeIds = [];
     const setZeroIds = [];
 
     for (const item of existing) {
@@ -281,17 +272,10 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         ? item.receivedAt >= fullSyncStartedAt
         : seen.has(`${item.productId}\u0000${item.batchNo}\u0000${item.locationName || ""}`);
       if (!isSeen) {
-        if (touchedProductIds.has(item.productId)) {
-          removeIds.push(item.id);
-        } else {
-          if (Number(item.quantity) > 0) setZeroIds.push(item.id);
-        }
+        if (Number(item.quantity) > 0) setZeroIds.push(item.id);
       }
     }
-    if (removeIds.length) {
-      operations.push(prisma.e6PharmacyInventoryBatch.deleteMany({ where: { id: { in: removeIds } } }));
-      deleted += removeIds.length;
-    }
+    
     if (setZeroIds.length) {
       operations.push(prisma.e6PharmacyInventoryBatch.updateMany({
         where: { id: { in: setZeroIds } },
