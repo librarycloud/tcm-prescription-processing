@@ -41,7 +41,12 @@
             :value="item.categoryCode"
           />
         </el-select>
-        <el-select v-model="query.expiryWithinMonths" placeholder="有效期小于" clearable @change="handleExpiryChange">
+        <el-select
+          v-model="query.expiryWithinMonths"
+          placeholder="有效期小于"
+          clearable
+          @change="handleExpiryChange"
+        >
           <el-option label="有效期小于1个月" :value="1" />
           <el-option label="有效期小于3个月" :value="3" />
           <el-option label="有效期小于6个月" :value="6" />
@@ -70,6 +75,7 @@
         row-key="id"
         border
         table-layout="auto"
+        @sort-change="handleSortChange"
         @row-click="toggleRow"
       >
         <template #empty><EmptyView description="暂无 E6 药店库存" /></template>
@@ -84,7 +90,9 @@
                 <el-table-column prop="batchNo" label="批号" min-width="140" />
                 <el-table-column prop="locationName" label="货位" min-width="140" />
                 <el-table-column label="生产日期" width="130">
-                  <template #default="{ row: batch }">{{ dateText(batch.productionDate) }}</template>
+                  <template #default="{ row: batch }">{{
+                    dateText(batch.productionDate)
+                  }}</template>
                 </el-table-column>
                 <el-table-column label="入库日期" width="130">
                   <template #default="{ row: batch }">{{ dateText(batch.inboundDate) }}</template>
@@ -94,7 +102,9 @@
                 </el-table-column>
                 <el-table-column label="库存数量" width="120" align="right">
                   <template #default="{ row: batch }">
-                    <span :class="{ 'zero-stock-text': Number(batch.quantity || 0) <= 0 }">{{ quantityText(batch.quantity) }}</span>
+                    <span :class="{ 'zero-stock-text': Number(batch.quantity || 0) <= 0 }">{{
+                      quantityText(batch.quantity)
+                    }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="更新时间" min-width="170">
@@ -104,16 +114,20 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="productCode" label="商品编号" min-width="130" />
-        <el-table-column prop="categoryName" label="分类" min-width="120">
+        <el-table-column prop="productCode" label="商品编号" min-width="130" sortable="custom" />
+        <el-table-column prop="categoryName" label="分类" min-width="120" sortable="custom">
           <template #default="{ row }">
-            <el-tooltip v-if="isLongCategory(row.categoryName)" :content="row.categoryName" placement="top">
+            <el-tooltip
+              v-if="isLongCategory(row.categoryName)"
+              :content="row.categoryName"
+              placement="top"
+            >
               <span>{{ shortCategory(row.categoryName) }}</span>
             </el-tooltip>
             <span v-else>{{ row.categoryName || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="商品名称" min-width="150">
+        <el-table-column prop="name" label="商品名称" min-width="150" sortable="custom">
           <template #default="{ row }">
             <el-tooltip v-if="isLongText(row.name)" :content="row.name" placement="top">
               <span>{{ shortText(row.name) }}</span>
@@ -124,20 +138,44 @@
         <el-table-column prop="unit" label="单位" min-width="80">
           <template #default="{ row }">{{ row.unit || '-' }}</template>
         </el-table-column>
-        <el-table-column label="零售价" min-width="100" align="center">
+        <el-table-column
+          prop="retailPrice"
+          label="零售价"
+          min-width="110"
+          align="center"
+          sortable="custom"
+        >
           <template #default="{ row }">¥ {{ Number(row.retailPrice || 0).toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="批号数" align="center">
+        <el-table-column
+          prop="batchCount"
+          label="批号数"
+          min-width="100"
+          align="center"
+          sortable="custom"
+        >
           <template #default="{ row }">{{ row.batchCount }}</template>
         </el-table-column>
-        <el-table-column label="总库存" align="right">
+        <el-table-column
+          prop="totalQuantity"
+          label="总库存"
+          min-width="110"
+          align="right"
+          sortable="custom"
+        >
           <template #default="{ row }">
-            <span :class="{ 'zero-stock-text': Number(row.totalQuantity || 0) <= 0 }">{{ quantityText(row.totalQuantity) }}</span>
+            <span :class="{ 'zero-stock-text': Number(row.totalQuantity || 0) <= 0 }">{{
+              quantityText(row.totalQuantity)
+            }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="barcode" label="条形码" min-width="140">
           <template #default="{ row }">
-            <el-tooltip v-if="isLongBarcode(row.barcode)" :content="String(row.barcode)" placement="top">
+            <el-tooltip
+              v-if="isLongBarcode(row.barcode)"
+              :content="String(row.barcode)"
+              placement="top"
+            >
               <span>{{ shortBarcode(row.barcode) }}</span>
             </el-tooltip>
             <span v-else>{{ row.barcode || '-' }}</span>
@@ -145,7 +183,11 @@
         </el-table-column>
         <el-table-column label="规格" width="98">
           <template #default="{ row }">
-            <el-tooltip v-if="isLongText(row.specification)" :content="row.specification" placement="top">
+            <el-tooltip
+              v-if="isLongText(row.specification)"
+              :content="row.specification"
+              placement="top"
+            >
               <span>{{ shortText(row.specification) }}</span>
             </el-tooltip>
             <span v-else>{{ row.specification || '-' }}</span>
@@ -156,13 +198,17 @@
         </el-table-column>
         <el-table-column label="生产厂商" min-width="150">
           <template #default="{ row }">
-            <el-tooltip v-if="isLongText(row.manufacturer)" :content="row.manufacturer" placement="top">
+            <el-tooltip
+              v-if="isLongText(row.manufacturer)"
+              :content="row.manufacturer"
+              placement="top"
+            >
               <span>{{ shortText(row.manufacturer) }}</span>
             </el-tooltip>
             <span v-else>{{ row.manufacturer || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="E6修改时间" min-width="170">
+        <el-table-column prop="e6ModifiedAt" label="E6修改时间" min-width="170" sortable="custom">
           <template #default="{ row }">{{ dateTimeText(row.e6ModifiedAt) }}</template>
         </el-table-column>
       </el-table>
@@ -195,13 +241,23 @@
       </el-upload>
       <div v-if="barcodeResult" class="barcode-result">
         <el-tag type="success" effect="plain">更新 {{ barcodeResult.updated }}</el-tag>
-        <el-tag type="info" effect="plain">已有条形码跳过 {{ barcodeResult.skippedExisting }}</el-tag>
+        <el-tag type="info" effect="plain"
+          >已有条形码跳过 {{ barcodeResult.skippedExisting }}</el-tag
+        >
         <el-tag type="warning" effect="plain">未找到商品 {{ barcodeResult.notFound }}</el-tag>
-        <el-tag v-if="barcodeResult.invalid" type="danger" effect="plain">无效行 {{ barcodeResult.invalid }}</el-tag>
+        <el-tag v-if="barcodeResult.invalid" type="danger" effect="plain"
+          >无效行 {{ barcodeResult.invalid }}</el-tag
+        >
       </div>
       <template #footer>
         <el-button @click="barcodeImportVisible = false">取消</el-button>
-        <el-button type="primary" :loading="barcodeImporting" :disabled="!barcodeFile" @click="submitBarcodeImport">开始上传</el-button>
+        <el-button
+          type="primary"
+          :loading="barcodeImporting"
+          :disabled="!barcodeFile"
+          @click="submitBarcodeImport"
+          >开始上传</el-button
+        >
       </template>
     </el-dialog>
   </div>
@@ -233,7 +289,15 @@ const barcodeImportVisible = ref(false);
 const barcodeImporting = ref(false);
 const barcodeFile = ref(null);
 const barcodeResult = ref(null);
-const query = reactive({ keyword: '', storeId: undefined, categoryCode: undefined, expiryWithinMonths: undefined, customExpiryMonths: 1 });
+const query = reactive({
+  keyword: '',
+  storeId: undefined,
+  categoryCode: undefined,
+  expiryWithinMonths: undefined,
+  customExpiryMonths: 1,
+  sortBy: undefined,
+  sortOrder: undefined
+});
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 
 function dateText(value) {
@@ -247,7 +311,9 @@ function dateTimeText(value) {
 
 function quantityText(value) {
   const number = Number(value || 0);
-  return Number.isInteger(number) ? String(number) : number.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+  return Number.isInteger(number)
+    ? String(number)
+    : number.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function isLongText(value) {
@@ -292,14 +358,18 @@ async function load() {
       storeId: query.storeId || undefined,
       categoryCode: query.categoryCode || undefined,
       expiryWithinMonths: expiryFilterValue(),
+      sortBy: query.sortBy || undefined,
+      sortOrder: query.sortOrder || undefined,
       page: pagination.page,
       pageSize: pagination.pageSize
     });
     list.value = data.list || [];
     Object.assign(pagination, data.pagination || {});
     const keyword = String(query.keyword || '').trim();
-    const exactMatches = list.value.filter((item) =>
-      String(item.productCode || '').trim() === keyword || String(item.barcode || '').trim() === keyword,
+    const exactMatches = list.value.filter(
+      (item) =>
+        String(item.productCode || '').trim() === keyword ||
+        String(item.barcode || '').trim() === keyword
     );
     if (exactMatches.length === 1) {
       await nextTick();
@@ -319,6 +389,18 @@ function handleExpiryChange(value) {
   if (value !== 'custom') search();
 }
 
+function handleSortChange({ prop, order }) {
+  if (!prop || !order) {
+    query.sortBy = undefined;
+    query.sortOrder = undefined;
+  } else {
+    query.sortBy = prop;
+    query.sortOrder = order === 'ascending' ? 'asc' : 'desc';
+  }
+  pagination.page = 1;
+  load();
+}
+
 function search() {
   pagination.page = 1;
   load();
@@ -330,6 +412,9 @@ function resetSearch() {
   query.categoryCode = undefined;
   query.expiryWithinMonths = undefined;
   query.customExpiryMonths = 1;
+  query.sortBy = undefined;
+  query.sortOrder = undefined;
+  tableRef.value?.clearSort();
   pagination.page = 1;
   load();
 }

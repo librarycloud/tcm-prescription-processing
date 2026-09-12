@@ -61,7 +61,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
     ],
   };
   const prisma = {
-    $transaction: async (ops) => Promise.all(ops),
+    $transaction: async (ops) => (typeof ops === "function" ? ops(prisma) : Promise.all(ops)),
     e6PharmacyProduct: {
       findMany: async (args) => {
         calls.push({ type: "findMany", args });
@@ -99,7 +99,7 @@ test("E6 pharmacy query scopes store admins and searches product fields", async 
 test("E6 pharmacy expiry filter applies to products and inventory details", async () => {
   const calls = [];
   const prisma = {
-    $transaction: async (ops) => Promise.all(ops),
+    $transaction: async (ops) => (typeof ops === "function" ? ops(prisma) : Promise.all(ops)),
     e6PharmacyProduct: {
       findMany: async (args) => {
         calls.push({ type: "findMany", args });
@@ -137,7 +137,7 @@ test("E6 pharmacy incremental sync: moving location from 0101 to 0102 deletes 01
     { id: 1, storeId: 10, productId: 100, batchNo: "240101", locationName: "0101", quantity: "10.000", receivedAt: new Date() },
   ];
   const prisma = {
-    $transaction: async (ops) => Promise.all(ops),
+    $transaction: async (ops) => (typeof ops === "function" ? ops(prisma) : Promise.all(ops)),
     store: {
       findFirst: async () => ({ id: 10, code: "SZ001", e6Enabled: 1, e6ApiKeyHash: hash }),
     },
@@ -206,7 +206,7 @@ test("E6 pharmacy incremental sync: product out of stock preserves location with
     { id: 1, storeId: 10, productId: 100, batchNo: "240101", locationName: "0102", quantity: "10.000", receivedAt: new Date() },
   ];
   const prisma = {
-    $transaction: async (ops) => Promise.all(ops),
+    $transaction: async (ops) => (typeof ops === "function" ? ops(prisma) : Promise.all(ops)),
     store: {
       findFirst: async () => ({ id: 10, code: "SZ001", e6Enabled: 1, e6ApiKeyHash: hash }),
     },
@@ -224,6 +224,11 @@ test("E6 pharmacy incremental sync: product out of stock preserves location with
           }
         }
         return { count };
+      },
+      update: async ({ where, data }) => {
+        const b = batches.find((x) => x.id === where.id);
+        if (b) Object.assign(b, data);
+        return b;
       },
       deleteMany: async () => {
         throw new Error("Should not delete when all stock becomes 0!");
@@ -271,7 +276,7 @@ test("E6 pharmacy incremental sync: new stock arrival cleans up previous 0-stock
     { id: 1, storeId: 10, productId: 100, batchNo: "240101", locationName: "0102", quantity: "0", receivedAt: new Date() },
   ];
   const prisma = {
-    $transaction: async (ops) => Promise.all(ops),
+    $transaction: async (ops) => (typeof ops === "function" ? ops(prisma) : Promise.all(ops)),
     store: {
       findFirst: async () => ({ id: 10, code: "SZ001", e6Enabled: 1, e6ApiKeyHash: hash }),
     },
@@ -332,7 +337,7 @@ test("E6 pharmacy query returns 0-inventory product and location when searched b
     ],
   };
   const prisma = {
-    $transaction: async (ops) => Promise.all(ops),
+    $transaction: async (ops) => (typeof ops === "function" ? ops(prisma) : Promise.all(ops)),
     e6PharmacyProduct: {
       findMany: async (args) => {
         calls.push({ type: "findMany", args });
@@ -353,4 +358,148 @@ test("E6 pharmacy query returns 0-inventory product and location when searched b
   assert.equal(result.list[0].totalQuantity, 0);
   assert.equal(result.list[0].inventories[0].locationName, "0102");
   assert.equal(result.list[0].inventories[0].quantity, 0);
+});
+
+test("E6 pharmacy query sorts by direct columns (retailPrice, e6ModifiedAt, name, productCode)", async () => {
+  const calls = [];
+  const prisma = {
+    e6PharmacyProduct: {
+      findMany: async (args) => {
+        calls.push(args);
+        return [];
+      },
+      count: async () => 0,
+    },
+  };
+
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "retailPrice", sortOrder: "desc" },
+  );
+  assert.deepEqual(calls[0].orderBy, [
+    { retailPrice: "desc" },
+    { productCode: "asc" },
+    { id: "asc" },
+  ]);
+
+  calls.length = 0;
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "e6ModifiedAt", sortOrder: "asc" },
+  );
+  assert.deepEqual(calls[0].orderBy, [
+    { e6ModifiedAt: "asc" },
+    { productCode: "asc" },
+    { id: "asc" },
+  ]);
+
+  calls.length = 0;
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "productCode", sortOrder: "desc" },
+  );
+  assert.deepEqual(calls[0].orderBy, [
+    { productCode: "desc" },
+    { id: "asc" },
+  ]);
+});
+
+test("E6 pharmacy query sorts by aggregate columns in-memory fallback (totalQuantity, batchCount, categoryName)", async () => {
+  const productA = {
+    id: 1,
+    productCode: "001",
+    name: "商品A",
+    category: "中成药",
+    categoryCode: "CAT1",
+    inventories: [
+      { id: 10, batchNo: "B1", quantity: "5.000" },
+      { id: 11, batchNo: "B2", quantity: "5.000" },
+    ],
+  };
+  const productB = {
+    id: 2,
+    productCode: "002",
+    name: "商品B",
+    category: "西药",
+    categoryCode: "CAT2",
+    inventories: [
+      { id: 20, batchNo: "B3", quantity: "20.000" },
+    ],
+  };
+
+  const prisma = {
+    e6PharmacyProduct: {
+      findMany: async () => [productA, productB],
+      count: async () => 2,
+    },
+    e6PharmacyCategoryMapping: {
+      findMany: async () => [
+        { categoryCode: "CAT1", categoryName: "中药" },
+        { categoryCode: "CAT2", categoryName: "西药" },
+      ],
+    },
+  };
+
+  // Sort by totalQuantity desc -> Product B (20) before Product A (10)
+  const resQtyDesc = await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "totalQuantity", sortOrder: "desc" },
+  );
+  assert.equal(resQtyDesc.list[0].id, 2);
+  assert.equal(resQtyDesc.list[1].id, 1);
+
+  // Sort by batchCount desc -> Product A (2 batches) before Product B (1 batch)
+  const resBatchDesc = await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "batchCount", sortOrder: "desc" },
+  );
+  assert.equal(resBatchDesc.list[0].id, 1);
+  assert.equal(resBatchDesc.list[1].id, 2);
+
+  // Sort by categoryName asc -> "西药" before "中药" (X before Z)
+  const resCatAsc = await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "categoryName", sortOrder: "asc" },
+  );
+  assert.equal(resCatAsc.list[0].categoryName, "西药");
+  assert.equal(resCatAsc.list[1].categoryName, "中药");
+});
+
+test("E6 pharmacy query executes $queryRaw when aggregate sort is used", async () => {
+  let rawSql = null;
+  const prisma = {
+    $queryRaw: async (sql) => {
+      rawSql = sql;
+      return [{ id: 2 }, { id: 1 }];
+    },
+    e6PharmacyProduct: {
+      findMany: async ({ where }) => {
+        if (where?.id?.in) {
+          return [
+            { id: 1, productCode: "001", name: "A", inventories: [] },
+            { id: 2, productCode: "002", name: "B", inventories: [] },
+          ];
+        }
+        return [];
+      },
+      count: async () => 2,
+    },
+  };
+
+  const res = await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { sortBy: "totalQuantity", sortOrder: "desc" },
+  );
+
+  assert.ok(rawSql);
+  assert.equal(res.list.length, 2);
+  assert.equal(res.list[0].id, 2);
+  assert.equal(res.list[1].id, 1);
 });

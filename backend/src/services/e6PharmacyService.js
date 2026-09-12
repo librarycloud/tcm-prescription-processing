@@ -1,6 +1,7 @@
 import { businessScope } from "./permissionService.js";
 import { toPositiveInt } from "../utils/validators.js";
 import ExcelJS from "exceljs";
+import { Prisma } from "@prisma/client";
 import { AppError } from "../utils/appError.js";
 
 const BARCODE_HEADERS = ["商品编号", "条形码"];
@@ -169,6 +170,40 @@ function normalizeProduct(product) {
   };
 }
 
+const SUPPORTED_SORT_FIELDS = new Set([
+  "retailPrice",
+  "batchCount",
+  "totalQuantity",
+  "productCode",
+  "categoryName",
+  "category",
+  "categoryCode",
+  "name",
+  "e6ModifiedAt",
+]);
+
+function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, includeZero }) {
+  const filters = [];
+  if (scope.storeId) {
+    filters.push(Prisma.sql`i.store_id = ${scope.storeId}`);
+  }
+  if (!includeZero) {
+    filters.push(Prisma.sql`i.quantity > 0`);
+  }
+  if (expiryBefore) {
+    filters.push(Prisma.sql`i.expiry_date < ${expiryBefore}`);
+  }
+  if (categoryCode) {
+    filters.push(Prisma.sql`p.category_code = ${categoryCode}`);
+  }
+  if (keyword) {
+    const escaped = keyword.replace(/[%_\\]/g, "\\$&");
+    const value = `%${escaped}%`;
+    filters.push(Prisma.sql`(p.product_code LIKE ${value} OR p.name LIKE ${value} OR p.barcode LIKE ${value})`);
+  }
+  return filters.length ? Prisma.join(filters, " AND ") : Prisma.sql`1=1`;
+}
+
 export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);
@@ -210,33 +245,149 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
     ];
   }
 
+  const sortByRaw = String(query.sortBy || "").trim();
+  const sortBy = SUPPORTED_SORT_FIELDS.has(sortByRaw) ? sortByRaw : null;
+  const sortOrder = String(query.sortOrder || "").toLowerCase() === "desc" ? "desc" : "asc";
+
   const categoryMappingQuery = prisma.e6PharmacyCategoryMapping?.findMany
     ? prisma.e6PharmacyCategoryMapping.findMany({ orderBy: [{ categoryCode: "asc" }] })
     : Promise.resolve([]);
-  const [list, total, categoryMappings] = await Promise.all([
-    prisma.e6PharmacyProduct.findMany({
-      where,
-      include: {
-        inventories: {
-          where: inventoryWhere,
-          include: { store: { select: { id: true, name: true, code: true } } },
-          orderBy: [{ expiryDate: "asc" }, { batchNo: "asc" }],
+
+  const isAggregateOrJoinedSort = sortBy && ["batchCount", "totalQuantity", "categoryName", "category", "categoryCode"].includes(sortBy);
+
+  let list = [];
+  let total = 0;
+  let categoryMappings = [];
+
+  if (isAggregateOrJoinedSort) {
+    if (typeof prisma.$queryRaw === "function") {
+      const offset = (page - 1) * pageSize;
+      const whereSql = buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, includeZero });
+      let orderSql;
+      if (sortBy === "batchCount") {
+        orderSql = sortOrder === "desc"
+          ? Prisma.sql`COUNT(i.id) DESC, p.product_code ASC, p.id ASC`
+          : Prisma.sql`COUNT(i.id) ASC, p.product_code ASC, p.id ASC`;
+      } else if (sortBy === "totalQuantity") {
+        orderSql = sortOrder === "desc"
+          ? Prisma.sql`COALESCE(SUM(i.quantity), 0) DESC, p.product_code ASC, p.id ASC`
+          : Prisma.sql`COALESCE(SUM(i.quantity), 0) ASC, p.product_code ASC, p.id ASC`;
+      } else {
+        orderSql = sortOrder === "desc"
+          ? Prisma.sql`COALESCE(m.category_name, p.category, '') DESC, p.product_code ASC, p.id ASC`
+          : Prisma.sql`COALESCE(m.category_name, p.category, '') ASC, p.product_code ASC, p.id ASC`;
+      }
+
+      let idRows;
+      [total, categoryMappings, idRows] = await Promise.all([
+        prisma.e6PharmacyProduct.count({ where }),
+        categoryMappingQuery,
+        prisma.$queryRaw(Prisma.sql`
+          SELECT p.id
+          FROM e6_pharmacy_products p
+          INNER JOIN e6_pharmacy_inventory_batches i ON i.product_id = p.id
+          LEFT JOIN e6_pharmacy_category_mappings m ON m.category_code = p.category_code
+          WHERE ${whereSql}
+          GROUP BY p.id, m.category_name, p.category, p.product_code
+          ORDER BY ${orderSql}
+          LIMIT ${pageSize} OFFSET ${offset}
+        `),
+      ]);
+
+      const pageIds = (idRows || []).map((row) => Number(row.id));
+      let rawProducts = [];
+      if (pageIds.length > 0) {
+        rawProducts = await prisma.e6PharmacyProduct.findMany({
+          where: { id: { in: pageIds } },
+          include: {
+            inventories: {
+              where: inventoryWhere,
+              include: { store: { select: { id: true, name: true, code: true } } },
+              orderBy: [{ expiryDate: "asc" }, { batchNo: "asc" }],
+            },
+          },
+        });
+      }
+      const productMap = new Map(rawProducts.map((p) => [p.id, p]));
+      list = pageIds.map((id) => productMap.get(id)).filter(Boolean);
+    } else {
+      let allProducts;
+      [allProducts, total, categoryMappings] = await Promise.all([
+        prisma.e6PharmacyProduct.findMany({
+          where,
+          include: {
+            inventories: {
+              where: inventoryWhere,
+              include: { store: { select: { id: true, name: true, code: true } } },
+              orderBy: [{ expiryDate: "asc" }, { batchNo: "asc" }],
+            },
+          },
+        }),
+        prisma.e6PharmacyProduct.count({ where }),
+        categoryMappingQuery,
+      ]);
+
+      const tempCategoryMap = new Map(categoryMappings.map((item) => [item.categoryCode, item.categoryName]));
+      const sorted = [...allProducts].sort((a, b) => {
+        if (sortBy === "batchCount") {
+          const countA = a.inventories?.length || 0;
+          const countB = b.inventories?.length || 0;
+          const diff = countA - countB;
+          if (diff !== 0) return sortOrder === "desc" ? -diff : diff;
+        } else if (sortBy === "totalQuantity") {
+          const qtyA = (a.inventories || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+          const qtyB = (b.inventories || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+          const diff = qtyA - qtyB;
+          if (diff !== 0) return sortOrder === "desc" ? -diff : diff;
+        } else {
+          const catA = tempCategoryMap.get(a.categoryCode) || a.category || "";
+          const catB = tempCategoryMap.get(b.categoryCode) || b.category || "";
+          const cmp = String(catA).localeCompare(String(catB), "zh-CN");
+          if (cmp !== 0) return sortOrder === "desc" ? -cmp : cmp;
+        }
+        return String(a.productCode || "").localeCompare(String(b.productCode || ""));
+      });
+      list = sorted.slice((page - 1) * pageSize, page * pageSize);
+    }
+  } else {
+    let orderBy;
+    if (sortBy === "retailPrice") {
+      orderBy = [{ retailPrice: sortOrder }, { productCode: "asc" }, { id: "asc" }];
+    } else if (sortBy === "productCode") {
+      orderBy = [{ productCode: sortOrder }, { id: "asc" }];
+    } else if (sortBy === "name") {
+      orderBy = [{ name: sortOrder }, { productCode: "asc" }, { id: "asc" }];
+    } else if (sortBy === "e6ModifiedAt") {
+      orderBy = [{ e6ModifiedAt: sortOrder }, { productCode: "asc" }, { id: "asc" }];
+    } else {
+      orderBy = [{ name: "asc" }, { productCode: "asc" }];
+    }
+
+    [list, total, categoryMappings] = await Promise.all([
+      prisma.e6PharmacyProduct.findMany({
+        where,
+        include: {
+          inventories: {
+            where: inventoryWhere,
+            include: { store: { select: { id: true, name: true, code: true } } },
+            orderBy: [{ expiryDate: "asc" }, { batchNo: "asc" }],
+          },
         },
-      },
-      orderBy: [{ name: "asc" }, { productCode: "asc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.e6PharmacyProduct.count({ where }),
-    categoryMappingQuery,
-  ]);
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.e6PharmacyProduct.count({ where }),
+      categoryMappingQuery,
+    ]);
+  }
 
   const categoryMap = new Map(categoryMappings.map((item) => [item.categoryCode, item.categoryName]));
 
   return {
     list: list.map((product) => ({
       ...normalizeProduct(product),
-      categoryName: categoryMap.get(product.categoryCode) || "-",
+      categoryName: categoryMap.get(product.categoryCode) || product.category || "-",
     })),
     pagination: {
       page,
