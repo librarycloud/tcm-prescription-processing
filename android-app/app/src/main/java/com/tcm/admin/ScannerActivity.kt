@@ -520,7 +520,7 @@ class ScannerActivity : ComponentActivity() {
             isFillViewport = true
         }
         val tv = TextView(this).apply {
-            text = "等待相机识别...\n将包含 9 位数字的 SKU 对准绿色方框"
+            text = "等待相机识别...\n将包含 9 位数字的商品编码对准绿色方框"
             setTextColor(0xFF00E676.toInt())
             textSize = 11f
             typeface = Typeface.MONOSPACE
@@ -775,7 +775,7 @@ class ScannerActivity : ComponentActivity() {
                                     val (candidate, isExplicit, debugLog) = extractSkuFromPaddleOcr(ocrRunResult, roiBitmap.height.toFloat())
 
                                     val formattedLog = if (candidate != null && isDebugLogOpen) {
-                                        debugLog.replace("✅ 命中 SKU: $candidate", "✅ 命中 SKU: $candidate (调试模式：已自动停止刷新，未填入搜索框)")
+                                        debugLog.replace("✅ 命中商品编码: $candidate", "✅ 命中商品编码: $candidate (调试模式：已自动停止刷新，未填入搜索框)")
                                     } else {
                                         debugLog
                                     }
@@ -783,7 +783,7 @@ class ScannerActivity : ComponentActivity() {
 
                                     val now = System.currentTimeMillis()
                                     val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(now))
-                                    val summary = if (candidate != null) "✅ SKU: $candidate" else "未匹配 (${ocrRunResult.results.size}段文字)"
+                                    val summary = if (candidate != null) "✅ 商品编码: $candidate" else "未匹配 (${ocrRunResult.results.size}段文字)"
                                     val rawText = ocrRunResult.results.joinToString(" ") { it.text }.trim()
                                     if (candidate != null || now - lastRecordedOcrTime > 400L || (rawText.isNotBlank() && rawText != lastLoggedOcrText)) {
                                         lastRecordedOcrTime = now
@@ -961,7 +961,7 @@ class ScannerActivity : ComponentActivity() {
             val hint = if (isRecognitionPaused) {
                 "⏸ 识别已暂停 (正在分析日志，点击继续恢复)"
             } else if (ocrEnabled) {
-                "将条形码、二维码或 SKU 数字对准框内\n(轻触屏幕可对焦)"
+                "将条形码、二维码或商品编码对准框内\n(轻触屏幕可对焦)"
             } else {
                 "将条形码或二维码放入框内即可自动扫描"
             }
@@ -1144,7 +1144,7 @@ class ScannerActivity : ComponentActivity() {
             }
 
             if (elements.isEmpty()) {
-                return OcrExtractionResult(null, false, "【框内文本】: 绿框内未包含任何文字\n(请将 SKU 移入绿框)")
+                return OcrExtractionResult(null, false, "【框内文本】: 绿框内未包含任何文字\n(请将商品编码移入绿框)")
             }
 
             val logicalRows = buildLogicalRows(elements)
@@ -1267,9 +1267,9 @@ class ScannerActivity : ComponentActivity() {
             sb.append("\n【提取结果】: ")
             if (finalSku != null) {
                 val tag = if (isExplicit) " [有前缀: 1帧即出]" else " [纯数字: 1帧即出]"
-                sb.append("✅ 命中 SKU: ").append(finalSku).append(tag)
+                sb.append("✅ 命中商品编码: ").append(finalSku).append(tag)
             } else {
-                sb.append("❌ 未检测到 9 位 SKU")
+                sb.append("❌ 未检测到 9 位商品编码")
             }
 
             return OcrExtractionResult(finalSku, isExplicit, sb.toString())
