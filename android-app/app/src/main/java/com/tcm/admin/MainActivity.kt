@@ -956,7 +956,6 @@ private fun MainShell(
                     onScan = {
                         scannerLauncher.launch(
                             Intent(context, ScannerActivity::class.java)
-                                .putExtra(ScannerActivity.EXTRA_ENABLE_SKU_OCR, true)
                         )
                     },
                 )
