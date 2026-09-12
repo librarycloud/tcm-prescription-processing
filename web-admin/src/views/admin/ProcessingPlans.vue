@@ -380,6 +380,14 @@
                   上传照片
                 </el-button>
               </el-upload>
+              <div v-if="detailPhotoUploading" class="upload-progress" aria-live="polite">
+                <el-progress
+                  :percentage="detailPhotoUploadProgress"
+                  :stroke-width="6"
+                  :show-text="false"
+                />
+                <span>{{ detailPhotoUploadProgress ? `上传中 ${detailPhotoUploadProgress}%` : '准备上传...' }}</span>
+              </div>
             </div>
           </div>
           <div v-if="detailPhotoUrls.length" class="workflow-photo-grid">
@@ -1885,6 +1893,7 @@ const detailPlan = ref(null);
 const detailLoading = ref(false);
 const detailPhotoUrls = ref([]);
 const detailPhotoUploading = ref(false);
+const detailPhotoUploadProgress = ref(0);
 const detailPhotoUploadRef = ref(null);
 const manualUsageVisible = ref(false);
 const manualUsageSaving = ref(false);
@@ -1966,15 +1975,19 @@ async function handleDetailPhotoUpload(uploadFile) {
     return;
   }
   detailPhotoUploading.value = true;
+  detailPhotoUploadProgress.value = 0;
   try {
     const preparedFile = await prepareDetailPhoto(file);
-    await uploadProcessingPhoto(detailPlan.value.id, preparedFile);
+    await uploadProcessingPhoto(detailPlan.value.id, preparedFile, (progress) => {
+      detailPhotoUploadProgress.value = progress;
+    });
     ElMessage.success('照片已上传');
     await loadDetailWorkflow(detailPlan.value.id);
   } catch (error) {
     if (error.photoPreparationFailed) ElMessage.error(error.message || '图片压缩失败');
   } finally {
     detailPhotoUploading.value = false;
+    detailPhotoUploadProgress.value = 0;
     detailPhotoUploadRef.value?.clearFiles();
   }
 }
@@ -3008,6 +3021,24 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+.upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 190px;
+  min-width: 150px;
+}
+.upload-progress :deep(.el-progress) {
+  flex: 1;
+  min-width: 80px;
+}
+.upload-progress > span {
+  flex: none;
+  color: var(--app-muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 .workflow-photo-grid {
   display: grid;

@@ -3,6 +3,7 @@ import axios from 'axios';
 
 export async function uploadToS3(file, category, onProgress) {
   const mimeType = file.type || 'application/octet-stream';
+  onProgress?.(0);
   
   const strategy = await request.get('/admin/upload/strategy', {
     params: {
@@ -24,12 +25,13 @@ export async function uploadToS3(file, category, onProgress) {
       'Content-Type': mimeType
     },
     onUploadProgress: (progressEvent) => {
-      if (onProgress && progressEvent.total) {
-        const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-        onProgress(percent);
-      }
+      const total = progressEvent.total || file.size;
+      if (!onProgress || !total) return;
+      const percent = Math.min(100, Math.round((progressEvent.loaded / total) * 100));
+      onProgress(percent);
     }
   });
 
+  onProgress?.(100);
   return strategy.storagePath;
 }

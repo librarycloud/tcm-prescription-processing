@@ -7,10 +7,10 @@ export const createPrescription = (data) => request.post('/admin/prescriptions',
 export const updatePrescription = (id, data) => request.put(`/admin/prescriptions/${id}`, data);
 export const deletePrescription = (id) => request.delete(`/admin/prescriptions/${id}`);
 
-export const uploadPrescriptionAttachment = async (id, file) => {
+export const uploadPrescriptionAttachment = async (id, file, onProgress) => {
   // 1. 直传文件到云端 (或本地 MinIO)，自带断点续传
   // file.size 如果太大，S3 分片上传会显示威力
-  const storagePath = await uploadToS3(file, 'prescriptions');
+  const storagePath = await uploadToS3(file, 'prescriptions', onProgress);
   
   // 2. 将结果上报给业务接口
   return request.post(`/admin/prescriptions/${id}/attachment`, {

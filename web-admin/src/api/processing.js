@@ -6,8 +6,8 @@ export const getProcessingCalendar = (params) =>
 export const getProcessingWorkflow = (id) => request.get(`/admin/processing-plans/${id}/workflow`);
 export const getProcessingPhoto = (planId, photoId) =>
   request.get(`/admin/processing-plans/${planId}/photos/${photoId}`, { responseType: 'blob' });
-export const uploadProcessingPhoto = async (planId, file) => {
-  const storagePath = await uploadToS3(file, 'processing-photos');
+export const uploadProcessingPhoto = async (planId, file, onProgress) => {
+  const storagePath = await uploadToS3(file, 'processing-photos', onProgress);
   return request.post(`/admin/processing-plans/${planId}/dispensing-complete`, {
     storagePath,
     filename: file.name,

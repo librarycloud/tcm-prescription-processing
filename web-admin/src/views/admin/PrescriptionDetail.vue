@@ -92,6 +92,14 @@
               {{ prescription?.attachment ? '重新上传' : '上传处方' }}
             </el-button>
           </el-upload>
+          <div v-if="attachmentUploading" class="upload-progress" aria-live="polite">
+            <el-progress
+              :percentage="attachmentUploadProgress"
+              :stroke-width="6"
+              :show-text="false"
+            />
+            <span>{{ attachmentUploadProgress ? `上传中 ${attachmentUploadProgress}%` : '准备上传...' }}</span>
+          </div>
         </div>
       </template>
       <div v-if="prescription?.attachment" class="attachment-summary">
@@ -542,6 +550,7 @@ const loading = ref(false);
 const saving = ref(false);
 const reordering = ref(false);
 const attachmentUploading = ref(false);
+const attachmentUploadProgress = ref(0);
 const attachmentDeleting = ref(false);
 const attachmentUploader = ref(null);
 const attachmentPreviewVisible = ref(false);
@@ -682,6 +691,7 @@ async function handleAttachmentChange(uploadFile) {
   }
 
   attachmentUploading.value = true;
+  attachmentUploadProgress.value = 0;
   try {
     const preparedFile = compressible
       ? await compressImageForUpload(file, {
@@ -690,7 +700,13 @@ async function handleAttachmentChange(uploadFile) {
           fallbackBaseName: '处方原件'
         })
       : file;
-    await uploadPrescriptionAttachment(props.id ?? route.params.id, preparedFile);
+    await uploadPrescriptionAttachment(
+      props.id ?? route.params.id,
+      preparedFile,
+      (progress) => {
+        attachmentUploadProgress.value = progress;
+      }
+    );
     await loadData();
     ElMessage.success(
       preparedFile === file
@@ -701,6 +717,7 @@ async function handleAttachmentChange(uploadFile) {
     if (error.imageCompressionFailed) ElMessage.error(error.message || '图片压缩失败'); else ElMessage.error(error.message || '上传失败');
   } finally {
     attachmentUploading.value = false;
+    attachmentUploadProgress.value = 0;
     attachmentUploader.value?.clearFiles();
   }
 }
@@ -957,6 +974,26 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 }
 
+.upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 190px;
+  min-width: 150px;
+}
+
+.upload-progress :deep(.el-progress) {
+  flex: 1;
+  min-width: 80px;
+}
+
+.upload-progress > span {
+  flex: none;
+  color: var(--app-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .header-note,
 .external-text {
   margin-left: 12px;
@@ -1094,6 +1131,10 @@ onBeforeUnmount(() => {
   .card-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .upload-progress {
+    width: 100%;
   }
 
   .attachment-summary {
