@@ -286,7 +286,7 @@ export async function uploadPrescriptionAttachment(
       category: "prescriptions",
       mimeType,
       filename: file.filename || "attachment.jpg",
-    }).catch(() => null);
+    });
     
     finalStoragePath = ossPath ?? await saveUploadFile(buffer, {
       category: "prescriptions",

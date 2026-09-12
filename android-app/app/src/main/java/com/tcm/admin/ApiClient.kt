@@ -1,14 +1,17 @@
 package com.tcm.admin
 
 import android.content.Context
+import android.util.Log
 import com.tcm.admin.util.DeviceUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okio.BufferedSink
 import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionPool
 import java.security.MessageDigest
@@ -18,12 +21,19 @@ import java.util.concurrent.ConcurrentHashMap
 data class AdminSession(val token: String, val user: JSONObject)
 
 object ApiClient {
+    private const val LOG_TAG = "TcmApiClient"
     var onUnauthorized: (() -> Unit)? = null
     private val client = OkHttpClient.Builder()
         .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
+    // Object-storage uploads can take longer than normal API requests on mobile networks.
+    private val uploadClient = client.newBuilder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.MINUTES)
+        .writeTimeout(5, TimeUnit.MINUTES)
         .build()
     private const val SESSION_PREFS = "admin_session"
     private const val TOKEN_KEY = "token"
@@ -43,6 +53,34 @@ object ApiClient {
     private var token: String? = null
     private var cacheContext: Context? = null
     private data class CacheEntry(val route: String, val savedAt: Long, val data: String)
+
+    private class ProgressRequestBody(
+        private val bytes: ByteArray,
+        private val mediaType: okhttp3.MediaType?,
+        private val onProgress: ((Int) -> Unit)?,
+    ) : RequestBody() {
+        override fun contentType() = mediaType
+        override fun contentLength() = bytes.size.toLong()
+
+        override fun writeTo(sink: BufferedSink) {
+            if (bytes.isEmpty()) {
+                onProgress?.invoke(100)
+                return
+            }
+            var offset = 0
+            var reported = -1
+            while (offset < bytes.size) {
+                val count = minOf(16 * 1024, bytes.size - offset)
+                sink.write(bytes, offset, count)
+                offset += count
+                val progress = (offset * 100L / bytes.size).toInt()
+                if (progress != reported) {
+                    reported = progress
+                    onProgress?.invoke(progress)
+                }
+            }
+        }
+    }
     private val memoryCache = object : LinkedHashMap<String, CacheEntry>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry>?): Boolean {
             return size > 64
@@ -355,8 +393,8 @@ object ApiClient {
     suspend fun createPrescription(payload: JSONObject): JSONObject = request("/admin/prescriptions", "POST", payload).getJSONObject("data")
     suspend fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
     suspend fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
-    suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject =
-        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes, "prescriptions").getJSONObject("data")
+    suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray, onProgress: ((Int) -> Unit)? = null): JSONObject =
+        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes, "prescriptions", onProgress).getJSONObject("data")
     suspend fun prescriptionAttachment(id: Int): ByteArray = requestBytes("/admin/prescriptions/$id/attachment")
     suspend fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
     suspend fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
@@ -395,7 +433,7 @@ object ApiClient {
     suspend fun createProcessingPlan(payload: JSONObject): JSONObject = request("/admin/processing-plans", "POST", payload).getJSONObject("data")
     suspend fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
     suspend fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
-    suspend fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes, "processing-photos").getJSONObject("data")
+    suspend fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray, onProgress: ((Int) -> Unit)? = null): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes, "processing-photos", onProgress).getJSONObject("data")
     suspend fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
     suspend fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
     suspend fun processingPlanByScan(code: String): JSONObject? {
@@ -798,9 +836,13 @@ object ApiClient {
         }
     }
 
-    private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default"): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default", onProgress: ((Int) -> Unit)? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         // 1. 尝试获取直传策略
-        val strategyRes = runCatching { request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}&mimeType=${java.net.URLEncoder.encode(mimeType, "UTF-8")}", "GET") }.getOrNull()
+        val strategyAttempt = runCatching {
+            request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}&mimeType=${java.net.URLEncoder.encode(mimeType, "UTF-8")}", "GET")
+        }
+        strategyAttempt.exceptionOrNull()?.let { Log.w(LOG_TAG, "OSS upload strategy unavailable", it) }
+        val strategyRes = strategyAttempt.getOrNull()
         val strategyData = strategyRes?.optJSONObject("data")
         val uploadUrl = strategyData?.optString("uploadUrl")
         
@@ -808,17 +850,21 @@ object ApiClient {
             // 使用 S3/OSS PUT 直传 (兼容 SeaweedFS)
             val s3Request = Request.Builder()
                 .url(uploadUrl)
-                .put(bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
+                .put(ProgressRequestBody(bytes, mimeType.toMediaTypeOrNull(), onProgress))
                 .addHeader("Content-Type", mimeType)
                 .build()
                 
-            val s3Response = runCatching { client.newCall(s3Request).execute() }.getOrNull()
+            val s3Attempt = runCatching { uploadClient.newCall(s3Request).execute() }
+            val s3Response = s3Attempt.getOrNull()
+            s3Attempt.exceptionOrNull()?.let { Log.w(LOG_TAG, "OSS direct upload failed", it) }
             if (s3Response != null && s3Response.isSuccessful) {
+                s3Response.close()
                 // 直传成功，告知后端
                 val notifyPayload = JSONObject().apply {
                     put("storagePath", strategyData.optString("storagePath"))
                     put("originalName", filename)
                     put("mimeType", mimeType)
+                    put("mimetype", mimeType)
                     put("filename", filename)
                     put("size", bytes.size)
                 }
@@ -827,16 +873,21 @@ object ApiClient {
                 if (notifyRes != null && notifyRes.optInt("code", -1) == 0) {
                     return@withContext notifyRes
                 }
+                Log.w(LOG_TAG, "OSS upload completed but backend notification failed")
             }
+            if (s3Response != null && !s3Response.isSuccessful) {
+                Log.w(LOG_TAG, "OSS direct upload returned HTTP ${s3Response.code}")
+            }
+            if (s3Response != null && !s3Response.isSuccessful) s3Response.close()
         }
 
-        // 降级：如果后端没配置OSS，或者OSS上传失败，回退到老的文件上传模式
+        // 降级：策略不可用或直传失败时交给后端中转；后端会继续尝试 OSS。
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
                 fieldName,
                 filename,
-                bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+                ProgressRequestBody(bytes, mimeType.toMediaTypeOrNull(), onProgress)
             )
             .build()
         
@@ -847,7 +898,7 @@ object ApiClient {
             
         applyAuthorizationHeader(requestBuilder)
         
-        val response = client.newCall(requestBuilder.build()).execute()
+        val response = uploadClient.newCall(requestBuilder.build()).execute()
         val responseBodyString = response.body?.string().orEmpty()
         val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
             val msg = if (response.code == 413) "文件过大，超出服务器限制 (413)" else "服务器响应格式错误"

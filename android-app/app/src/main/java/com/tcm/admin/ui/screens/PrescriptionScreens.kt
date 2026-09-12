@@ -376,6 +376,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0) }
     var deletePlan by remember { mutableStateOf<JSONObject?>(null) }
     var deleteAttachment by remember { mutableStateOf(false) }
     var viewingAttachment by remember { mutableStateOf(false) }
@@ -431,7 +432,14 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     val attachmentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) scope.launch {
             busy = true
-            runCatching { withContext(Dispatchers.IO) { uploadAttachment(context, id, uri) } }
+            uploadProgress = 0
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    uploadAttachment(context, id, uri) { progress ->
+                        scope.launch { uploadProgress = progress }
+                    }
+                }
+            }
                 .onSuccess { reload++ }.onFailure { error = it.message ?: "上传处方原件失败" }
             busy = false
         }
@@ -527,6 +535,20 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     }
                 }
                 Spacer(Modifier.height(8.dp))
+                if (busy) {
+                    LinearProgressIndicator(
+                        progress = { uploadProgress / 100f },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = Primary,
+                        trackColor = Primary.copy(alpha = 0.12f),
+                    )
+                    Text(
+                        if (uploadProgress > 0) "上传中 $uploadProgress%" else "准备上传...",
+                        color = Muted,
+                        fontSize = 11.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
                 if (attachment != null) {
                     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1187,7 +1209,7 @@ private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteA
     return original
 }
 
-private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri) {
+private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri, onProgress: (Int) -> Unit) {
     val cursor = context.contentResolver.query(uri, null, null, null, null)
     val name = cursor?.use {
         if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null
@@ -1201,7 +1223,7 @@ private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri:
         context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
     }
     val uploadMime = if (isImage && !mimeType.startsWith("image/")) "image/jpeg" else mimeType
-    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, uploadMime, bytes)
+    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, uploadMime, bytes, onProgress)
 }
 
 private fun attachmentSizeText(size: Long): String = when {

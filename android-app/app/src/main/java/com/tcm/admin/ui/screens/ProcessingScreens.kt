@@ -814,6 +814,8 @@ internal fun WorkflowOperationScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var occupyingPlanTarget by remember { mutableStateOf<JSONObject?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0) }
+    var uploadingPhoto by remember { mutableStateOf(false) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var previewPhotoId by remember { mutableStateOf(0) }
@@ -864,24 +866,32 @@ internal fun WorkflowOperationScreen(
 
     fun uploadDispensingPhoto(uri: Uri) {
         busy = true
+        uploadingPhoto = true
+        uploadProgress = 0
         scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                    val ext = when {
-                        mimeType.contains("png") -> "png"
-                        mimeType.contains("webp") -> "webp"
-                        else -> "jpg"
+            try {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                        val ext = when {
+                            mimeType.contains("png") -> "png"
+                            mimeType.contains("webp") -> "webp"
+                            else -> "jpg"
+                        }
+                        ApiClient.completeDispensing(
+                            plan.optInt("id"),
+                            "dispensing_${System.currentTimeMillis()}.$ext",
+                            mimeType,
+                            readProcessingPhoto(context, uri),
+                        ) { progress ->
+                            scope.launch { uploadProgress = progress }
+                        }
                     }
-                    ApiClient.completeDispensing(
-                        plan.optInt("id"),
-                        "dispensing_${System.currentTimeMillis()}.$ext",
-                        mimeType,
-                        readProcessingPhoto(context, uri),
-                    )
-                }
-            }.onSuccess { reload() }.onFailure { error = it.message ?: "照片上传失败" }
-            busy = false
+                }.onSuccess { reload() }.onFailure { error = it.message ?: "照片上传失败" }
+            } finally {
+                uploadingPhoto = false
+                busy = false
+            }
         }
     }
 
@@ -1288,6 +1298,20 @@ internal fun WorkflowOperationScreen(
             }
             Spacer(Modifier.height(6.dp))
             Text("称量调配完成后拍照或从相册上传留存凭证", color = Muted, fontSize = 12.sp)
+            if (uploadingPhoto) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { uploadProgress / 100f },
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    color = Primary,
+                    trackColor = Primary.copy(alpha = 0.12f),
+                )
+                Text(
+                    if (uploadProgress > 0) "上传中 $uploadProgress%" else "准备上传...",
+                    color = Muted,
+                    fontSize = 11.sp,
+                )
+            }
 
             if (photoCount > 0 && photos != null) {
                 Spacer(Modifier.height(10.dp))

@@ -194,7 +194,10 @@ export async function getFileDownloadUrl(prisma, storagePath) {
 }
 
 export async function uploadBufferToOss(prisma, buffer, { category, mimeType, filename }) {
-  const { provider, config } = await getActiveConfig(prisma).catch(() => ({ provider: null, config: null }));
+  // Test doubles from the legacy local-storage path do not expose systemConfig.
+  // In the real application, config lookup errors must not silently write locally.
+  if (!prisma?.systemConfig) return null;
+  const { provider, config } = await getActiveConfig(prisma);
   if (!config || !config.endpoint || !config.bucket || !config.accessKey || !config.secretKey) {
     return null; // OSS not configured, caller falls back to local storage
   }
@@ -227,12 +230,24 @@ export async function uploadBufferToOss(prisma, buffer, { category, mimeType, fi
     responseChecksumValidation: "WHEN_REQUIRED",
   });
 
-  await s3.send(new PutObjectCommand({
-    Bucket: config.bucket,
-    Key: storagePath,
-    Body: buffer,
-    ContentType: mimeType,
-  }));
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: storagePath,
+      Body: buffer,
+      ContentType: mimeType,
+    }));
+  } catch (error) {
+    // Keep the endpoint and provider visible for operations without exposing credentials.
+    console.error("OSS upload failed", {
+      provider,
+      endpoint: config.endpoint,
+      bucket: config.bucket,
+      storagePath,
+      error: error?.name || error?.message || error,
+    });
+    throw error;
+  }
 
   return storagePath;
 }

@@ -338,7 +338,7 @@ export async function completeDispensing(prisma, actor, id, file) {
       category: "processing-photos",
       mimeType,
       filename: file.filename || "dispensing.jpg",
-    }).catch(() => null);
+    });
 
     finalStoragePath = ossPath ?? await saveUploadFile(buffer, {
       category: "processing-photos",

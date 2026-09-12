@@ -238,7 +238,7 @@ export async function completeDispensingController(request, reply) {
     fileData = {
       storagePath: body.storagePath,
       filename: body.filename || 'dispensing.jpg',
-      mimetype: body.mimetype || 'image/jpeg',
+      mimetype: body.mimetype || body.mimeType || 'image/jpeg',
       size: body.size || 0,
     };
   }

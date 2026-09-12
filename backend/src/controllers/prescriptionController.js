@@ -47,7 +47,7 @@ export async function uploadAttachmentController(request, reply) {
     fileData = {
       storagePath: body.storagePath,
       filename: body.filename || request.query?.originalName || 'unknown.jpg',
-      mimetype: body.mimetype || 'image/jpeg',
+      mimetype: body.mimetype || body.mimeType || 'image/jpeg',
       size: body.size || 0,
     };
   }
