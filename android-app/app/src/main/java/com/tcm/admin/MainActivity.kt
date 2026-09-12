@@ -229,8 +229,11 @@ private fun TcmAdminApp() {
     }
 
     fun navigateBack(): Boolean {
-    return navController.popBackStack()
-}
+        if (navController.previousBackStackEntry != null) {
+            return navController.popBackStack()
+        }
+        return false
+    }
 
     fun switchTab(target: Route) {
         navController.navigate(target) {
@@ -269,17 +272,21 @@ private fun TcmAdminApp() {
     }
 
     val activity = LocalContext.current as? ComponentActivity
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var lastBackPressTime by remember { mutableStateOf(0L) }
     BackHandler(enabled = currentDestination?.hasRoute<Route.Login>() != true) {
-    if (!navigateBack()) {
-        val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 2000L) {
-            activity?.finish()
-        } else {
-            lastBackPressTime = now
-            Toast.makeText(appContext, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+        if (!navigateBack()) {
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressTime < 2000L) {
+                activity?.finish()
+            } else {
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                lastBackPressTime = now
+                Toast.makeText(appContext, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+            }
         }
-    }
     }
 
     val currentAccent = remember(themeAccentKey, customColorHex) {
