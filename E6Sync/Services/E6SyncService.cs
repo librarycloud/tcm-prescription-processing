@@ -191,7 +191,7 @@ namespace E6Sync.Services
                 stats.SuccessCount++;
                 productBatchCount++;
             }
-            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(DateTime.Today, fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor, fullSync ? "" : config.Sync.LastPharmacyStockCursor), cancellationToken).ConfigureAwait(false);
+            var snapshot = await Task.Run(() => database.QueryPharmacyInventory(fullSync ? "" : config.Sync.LastPharmacyInventoryCursor, fullSync ? "" : config.Sync.LastPharmacyLocationCursor, fullSync ? "" : config.Sync.LastPharmacyStockCursor), cancellationToken).ConfigureAwait(false);
             stats.QueryCount += snapshot.Batches.Count + snapshot.ZeroProductCodes.Count;
             if (!fullSync && (snapshot.Batches.Count > 0 || snapshot.ZeroProductCodes.Count > 0))
             {
@@ -233,7 +233,7 @@ namespace E6Sync.Services
                 throw new InvalidOperationException("药店货位库存查询为 0，已停止全量上传；请检查药店数据库和库存表");
             var fullSyncStartedAt = fullSync ? DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture) : null;
             var inventoryBatchCount = 0;
-            var inventoryBatches = SplitBatches(snapshot.Batches, 1000);
+            var inventoryBatches = SplitInventoryBatches(snapshot.Batches, 1000);
             if (inventoryBatches.Count == 0 && snapshot.ZeroProductCodes.Count > 0) inventoryBatches.Add(new List<E6PharmacyBatchUpload>());
             for (var index = 0; index < inventoryBatches.Count; index++)
             {
@@ -267,6 +267,26 @@ namespace E6Sync.Services
                 for (var index = offset; index < Math.Min(offset + size, items.Count); index++) batch.Add(items[index]);
                 result.Add(batch);
             }
+            return result;
+        }
+
+        private static List<List<E6PharmacyBatchUpload>> SplitInventoryBatches(IList<E6PharmacyBatchUpload> items, int size)
+        {
+            var grouped = items.GroupBy(i => (i.productCode ?? "").Trim()).ToList();
+            var result = new List<List<E6PharmacyBatchUpload>>();
+            var currentBatch = new List<E6PharmacyBatchUpload>();
+
+            foreach (var group in grouped)
+            {
+                var groupCount = group.Count();
+                if (currentBatch.Count + groupCount > size && currentBatch.Count > 0)
+                {
+                    result.Add(currentBatch);
+                    currentBatch = new List<E6PharmacyBatchUpload>();
+                }
+                currentBatch.AddRange(group);
+            }
+            if (currentBatch.Count > 0) result.Add(currentBatch);
             return result;
         }
 

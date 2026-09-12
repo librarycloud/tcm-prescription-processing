@@ -22,7 +22,7 @@ namespace E6Sync.Services
         {
             this.config = config;
             this.log = log;
-            client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
             client.DefaultRequestHeaders.ConnectionClose = true;
         }
 

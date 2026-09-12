@@ -232,11 +232,18 @@ WHERE ISNULL(p.[停用], 0) = 0
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {
+                    var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     while (reader.Read())
                     {
+                        var code = Convert.ToString(reader["编号"])?.Trim();
+                        if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                        {
+                            result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
+                            continue;
+                        }
                         result.Products.Add(new E6PharmacyProductUpload
                         {
-                            productCode = Convert.ToString(reader["编号"])?.Trim(),
+                            productCode = code,
                             name = Convert.ToString(reader["名称"])?.Trim(),
                             category = ToNullableText(reader["分类"]),
                             categoryCode = ToNullableText(reader["分类编号"]),
@@ -268,6 +275,7 @@ WHERE ISNULL(p.[停用], 0) = 0
                 if (!string.IsNullOrWhiteSpace(value) && seen.Add(value)) codes.Add(value);
             }
             const int chunkSize = 1000;
+            var codeSeenInResult = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var offset = 0; offset < codes.Count; offset += chunkSize)
             {
                 var count = Math.Min(chunkSize, codes.Count - offset);
@@ -285,18 +293,23 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
                     connection.Open();
                     using (var reader = command.ExecuteReader())
                     {
-                        while (reader.Read()) AddPharmacyProduct(result, reader);
+                        while (reader.Read())
+                        {
+                            var code = Convert.ToString(reader["编号"])?.Trim();
+                            if (string.IsNullOrWhiteSpace(code) || !codeSeenInResult.Add(code)) continue;
+                            AddPharmacyProduct(result, reader, code);
+                        }
                     }
                 }
             }
             return result;
         }
 
-        private static void AddPharmacyProduct(E6PharmacyProductSnapshot result, SqlDataReader reader)
+        private static void AddPharmacyProduct(E6PharmacyProductSnapshot result, SqlDataReader reader, string code)
         {
             result.Products.Add(new E6PharmacyProductUpload
             {
-                productCode = Convert.ToString(reader["编号"])?.Trim(),
+                productCode = code,
                 name = Convert.ToString(reader["名称"])?.Trim(),
                 category = ToNullableText(reader["分类"]),
                 categoryCode = ToNullableText(reader["分类编号"]),
@@ -312,14 +325,9 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
             });
         }
 
-        public E6PharmacyInventorySnapshot QueryPharmacyInventory(DateTime inventoryDate, string cursor, string locationCursor, string stockCursor)
+        public E6PharmacyInventorySnapshot QueryPharmacyInventory(string cursor, string locationCursor, string stockCursor)
         {
-            var result = new E6PharmacyInventorySnapshot
-            {
-                Cursor = cursor ?? "",
-                LocationCursor = locationCursor ?? "",
-                StockCursor = stockCursor ?? ""
-            };
+            var result = new E6PharmacyInventorySnapshot { Cursor = cursor ?? "", LocationCursor = locationCursor ?? "", StockCursor = stockCursor ?? "" };
             var cursorBytes = DecodeCursor(cursor);
             var locationCursorBytes = DecodeCursor(locationCursor);
             var stockCursorBytes = DecodeCursor(stockCursor);
