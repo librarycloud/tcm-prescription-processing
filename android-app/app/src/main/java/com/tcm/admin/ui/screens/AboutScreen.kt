@@ -109,6 +109,7 @@ internal fun AboutScreen(
     var isPatchDownloading by remember { mutableStateOf(false) }
     var isSynthesizing by remember { mutableStateOf(false) }
     var synthesizeProgress by remember { mutableStateOf(0) }
+    var fallbackVersion by remember { mutableStateOf<JSONObject?>(null) }
 
     suspend fun fetchLatest(): JSONObject? {
         checking = true
@@ -311,11 +312,10 @@ internal fun AboutScreen(
                     File(context.cacheDir, "update_patch.tmp").delete()
                     File(context.cacheDir, "update_pending.apk").delete()
                 }
-                // Fallback to full download
                 isPatchDownloading = false
                 isSynthesizing = false
-                downloadError = "增量更新未成功（${e.message}），正在自动为您转为全量更新..."
-                startFullDownload(version)
+                downloadError = "增量更新失败：${e.message}"
+                fallbackVersion = version
             }
         }
     }
@@ -528,7 +528,24 @@ internal fun AboutScreen(
                         }
                     }
                 }
-                downloadError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Danger, fontSize = 12.sp) }
+                downloadError?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = Danger, fontSize = 12.sp)
+                    fallbackVersion?.let { fbv ->
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                downloadError = null
+                                fallbackVersion = null
+                                startFullDownload(fbv)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = FieldShape,
+                        ) {
+                            Text("改为下载全量包")
+                        }
+                    }
+                }
 
                 // 更新说明：放置在更新按钮下方
                 val notes = latest?.optJSONArray("releaseNotes")
