@@ -64,6 +64,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -603,18 +604,13 @@ class ScannerActivity : ComponentActivity() {
         providerFuture.addListener({
             val provider = providerFuture.get()
             cameraProvider = provider
-            // Processing and package scans favor frame rate; SKU OCR needs the extra detail.
-            val resolutionStrategy = if (ocrEnabled) {
-                ResolutionStrategy(
-                    android.util.Size(1920, 1080),
-                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                )
-            } else {
-                ResolutionStrategy(
-                    android.util.Size(1280, 720),
-                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                )
-            }
+            // Keep enough pixel detail for QR modules and narrow barcodes. On the target
+            // devices, the 720p stream can remain visually sharp but still miss the decode;
+            // the 1080p stream matches the reliably-fast inventory scan path.
+            val resolutionStrategy = ResolutionStrategy(
+                android.util.Size(1920, 1080),
+                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+            )
             val resolutionSelector = ResolutionSelector.Builder()
                 .setResolutionStrategy(resolutionStrategy)
                 .build()
@@ -867,6 +863,24 @@ class ScannerActivity : ComponentActivity() {
                 }
             provider.unbindAll()
             currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            // Kick off one center focus pass as soon as the preview is bound. The capture
+            // request keeps continuous AF enabled, while the short auto-cancel prevents the
+            // scanner from getting stuck on the initial focus target when the working distance
+            // changes.
+            currentCamera?.let { cam ->
+                previewView.post {
+                    if (delivered.get()) return@post
+                    val factory = previewView.meteringPointFactory
+                    val centerPoint = factory.createPoint(previewView.width / 2f, previewView.height / 2f)
+                    val action = FocusMeteringAction.Builder(
+                        centerPoint,
+                        FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+                    )
+                        .setAutoCancelDuration(1, TimeUnit.SECONDS)
+                        .build()
+                    cam.cameraControl.startFocusAndMetering(action)
+                }
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
