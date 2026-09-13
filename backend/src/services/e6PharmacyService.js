@@ -182,12 +182,12 @@ const SUPPORTED_SORT_FIELDS = new Set([
   "e6ModifiedAt",
 ]);
 
-function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, includeZero }) {
+function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, stockStatus }) {
   const filters = [];
   if (scope.storeId) {
     filters.push(Prisma.sql`i.store_id = ${scope.storeId}`);
   }
-  if (!includeZero) {
+  if (stockStatus === "nonZero") {
     filters.push(Prisma.sql`i.quantity > 0`);
   }
   if (expiryBefore) {
@@ -225,15 +225,62 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
       return date;
     })()
     : null;
-  const includeZero = Boolean(keyword || query.includeZero === true || query.includeZero === "true");
+
+  const stockStatusRaw = String(query.stockStatus || "").trim().toLowerCase();
+  let stockStatus;
+  if (["zero", "0", "outofstock"].includes(stockStatusRaw)) {
+    stockStatus = "zero";
+  } else if (["nonzero", "1", "instock", "positive"].includes(stockStatusRaw)) {
+    stockStatus = "nonZero";
+  } else if (["all", "allstock"].includes(stockStatusRaw)) {
+    stockStatus = "all";
+  } else {
+    // If stockStatus is not explicitly specified:
+    if (query.includeZero === true || query.includeZero === "true") {
+      stockStatus = "all";
+    } else if (query.includeZero === false || query.includeZero === "false") {
+      stockStatus = "nonZero";
+    } else if (keyword) {
+      stockStatus = "all";
+    } else {
+      stockStatus = "nonZero";
+    }
+  }
+
   const storeFilter = scope.storeId ? { storeId: scope.storeId } : {};
+  const positiveBatchWhere = {
+    quantity: { gt: 0 },
+    ...storeFilter,
+    ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
+  };
+  const storeBatchWhere = {
+    ...storeFilter,
+    ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
+  };
+
+  let inventoryCondition;
+  if (stockStatus === "zero") {
+    inventoryCondition = {
+      some: storeBatchWhere,
+      none: positiveBatchWhere,
+    };
+  } else if (stockStatus === "nonZero") {
+    inventoryCondition = {
+      some: positiveBatchWhere,
+    };
+  } else {
+    inventoryCondition = {
+      some: storeBatchWhere,
+    };
+  }
+
   const inventoryWhere = {
-    ...(includeZero ? {} : { quantity: { gt: 0 } }),
+    ...(stockStatus === "nonZero" ? { quantity: { gt: 0 } } : {}),
     ...storeFilter,
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
   const where = {
-    inventories: { some: inventoryWhere },
+    inventories: inventoryCondition,
     ...(categoryCode ? { categoryCode } : {}),
   };
 
@@ -262,7 +309,10 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   if (isAggregateOrJoinedSort) {
     if (typeof prisma.$queryRaw === "function") {
       const offset = (page - 1) * pageSize;
-      const whereSql = buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, includeZero });
+      const whereSql = buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, stockStatus });
+      const havingSql = stockStatus === "zero"
+        ? Prisma.sql`HAVING MAX(i.quantity) <= 0`
+        : Prisma.empty;
       let orderSql;
       if (sortBy === "batchCount") {
         orderSql = sortOrder === "desc"
@@ -289,6 +339,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
           LEFT JOIN e6_pharmacy_category_mappings m ON m.category_code = p.category_code
           WHERE ${whereSql}
           GROUP BY p.id, m.category_name, p.category, p.product_code
+          ${havingSql}
           ORDER BY ${orderSql}
           LIMIT ${pageSize} OFFSET ${offset}
         `),

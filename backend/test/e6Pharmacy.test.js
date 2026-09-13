@@ -503,3 +503,77 @@ test("E6 pharmacy query executes $queryRaw when aggregate sort is used", async (
   assert.equal(res.list[0].id, 2);
   assert.equal(res.list[1].id, 1);
 });
+
+test("E6 pharmacy query filters by stockStatus (zero, nonZero, all)", async () => {
+  const calls = [];
+  const prisma = {
+    e6PharmacyProduct: {
+      findMany: async (args) => {
+        calls.push(args);
+        return [];
+      },
+      count: async () => 0,
+    },
+  };
+
+  // 1. stockStatus = "zero"
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { storeId: 3, stockStatus: "zero" },
+  );
+  const zeroArgs = calls[0];
+  assert.equal(zeroArgs.where.inventories.some.storeId, 3);
+  assert.equal(zeroArgs.where.inventories.some.quantity, undefined);
+  assert.equal(zeroArgs.where.inventories.none.storeId, 3);
+  assert.equal(zeroArgs.where.inventories.none.quantity.gt, 0);
+  assert.equal(zeroArgs.include.inventories.where.quantity, undefined);
+
+  // 2. stockStatus = "nonZero"
+  calls.length = 0;
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { storeId: 3, stockStatus: "nonZero" },
+  );
+  const nonZeroArgs = calls[0];
+  assert.equal(nonZeroArgs.where.inventories.some.storeId, 3);
+  assert.equal(nonZeroArgs.where.inventories.some.quantity.gt, 0);
+  assert.equal(nonZeroArgs.where.inventories.none, undefined);
+  assert.equal(nonZeroArgs.include.inventories.where.quantity.gt, 0);
+
+  // 3. stockStatus = "all"
+  calls.length = 0;
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { storeId: 3, stockStatus: "all" },
+  );
+  const allArgs = calls[0];
+  assert.equal(allArgs.where.inventories.some.storeId, 3);
+  assert.equal(allArgs.where.inventories.some.quantity, undefined);
+  assert.equal(allArgs.where.inventories.none, undefined);
+  assert.equal(allArgs.include.inventories.where.quantity, undefined);
+});
+
+test("E6 pharmacy query includes HAVING MAX(i.quantity) <= 0 in $queryRaw when stockStatus is zero", async () => {
+  let capturedSqlString = "";
+  const prisma = {
+    $queryRaw: async (sql) => {
+      capturedSqlString = sql.text || (sql.strings ? sql.strings.join("?") : String(sql));
+      return [];
+    },
+    e6PharmacyProduct: {
+      findMany: async () => [],
+      count: async () => 0,
+    },
+  };
+
+  await listE6PharmacyProducts(
+    prisma,
+    { id: 1, role: 0 },
+    { stockStatus: "zero", sortBy: "totalQuantity" },
+  );
+
+  assert.ok(capturedSqlString.includes("HAVING MAX(i.quantity) <= 0"));
+});

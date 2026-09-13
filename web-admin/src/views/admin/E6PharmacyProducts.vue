@@ -41,6 +41,11 @@
             :value="item.categoryCode"
           />
         </el-select>
+        <el-select v-model="query.stockStatus" clearable placeholder="全部库存" @change="search">
+          <el-option label="全部库存" value="all" />
+          <el-option label="非0库存" value="nonZero" />
+          <el-option label="0库存" value="zero" />
+        </el-select>
         <el-select
           v-model="query.expiryWithinMonths"
           placeholder="有效期小于"
@@ -293,6 +298,7 @@ const query = reactive({
   keyword: '',
   storeId: undefined,
   categoryCode: undefined,
+  stockStatus: undefined,
   expiryWithinMonths: undefined,
   customExpiryMonths: 1,
   sortBy: undefined,
@@ -357,6 +363,7 @@ async function load() {
       keyword: query.keyword || undefined,
       storeId: query.storeId || undefined,
       categoryCode: query.categoryCode || undefined,
+      stockStatus: query.stockStatus || 'all',
       expiryWithinMonths: expiryFilterValue(),
       sortBy: query.sortBy || undefined,
       sortOrder: query.sortOrder || undefined,
@@ -410,6 +417,7 @@ function resetSearch() {
   query.keyword = '';
   query.storeId = undefined;
   query.categoryCode = undefined;
+  query.stockStatus = undefined;
   query.expiryWithinMonths = undefined;
   query.customExpiryMonths = 1;
   query.sortBy = undefined;
