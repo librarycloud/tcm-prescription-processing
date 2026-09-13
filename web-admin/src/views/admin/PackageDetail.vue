@@ -64,6 +64,7 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Printer } from '@element-plus/icons-vue';

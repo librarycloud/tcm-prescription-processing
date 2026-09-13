@@ -10,7 +10,6 @@ import { ElMessage } from 'element-plus';
 export function useTable(apiFunc, defaultQuery = {}, options = {}) {
   const list = ref([]);
   const loading = ref(false);
-  const total = ref(0);
   
   const query = reactive({ ...defaultQuery });
   
@@ -87,7 +86,7 @@ export function useTable(apiFunc, defaultQuery = {}, options = {}) {
   if (options.autoWatch !== false) {
     watch(
       () => [pagination.page, pagination.pageSize],
-      ([newPage, newPageSize], [oldPage, oldPageSize]) => {
+      ([newPage, newPageSize], [, oldPageSize]) => {
         if (newPageSize !== oldPageSize && newPage !== 1) {
           pagination.page = 1;
           return;

@@ -196,6 +196,7 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { CircleCheck, Plus, Printer, Refresh } from '@element-plus/icons-vue';

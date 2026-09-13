@@ -157,6 +157,7 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
 import { onMounted, reactive, ref } from 'vue';
 import { Plus, Printer, Refresh, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';

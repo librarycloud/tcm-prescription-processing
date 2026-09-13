@@ -359,6 +359,7 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Delete, Plus, Refresh } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';

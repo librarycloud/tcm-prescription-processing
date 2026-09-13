@@ -289,6 +289,7 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Plus, Printer, Search } from '@element-plus/icons-vue';

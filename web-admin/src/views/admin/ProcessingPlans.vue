@@ -1232,6 +1232,8 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
+import { ElButton, ElInputNumber, ElTable, ElTableColumn, ElTag, ElTooltip } from "element-plus";
 import {
   computed,
   defineComponent,

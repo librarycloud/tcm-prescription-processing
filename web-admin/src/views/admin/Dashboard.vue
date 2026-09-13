@@ -223,6 +223,7 @@
 </template>
 
 <script setup>
+import { defineAsyncComponent } from "vue";
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Calendar, Printer, Refresh } from '@element-plus/icons-vue';
