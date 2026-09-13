@@ -73,6 +73,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -523,31 +527,42 @@ internal fun InventoryScreen(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("总库存：", color = RegularText, fontSize = 13.sp, modifier = Modifier.alignByBaseline())
                             Text(
-                                text = quantityText(totalQuantity),
-                                color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.alignByBaseline()
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                text = unit,
-                                color = RegularText,
-                                fontSize = 13.sp,
-                                modifier = Modifier.alignByBaseline()
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append("总库存：")
+                                    }
+                                    withStyle(SpanStyle(
+                                        color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )) {
+                                        append(quantityText(totalQuantity))
+                                    }
+                                    append(" ")
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append(unit)
+                                    }
+                                }
                             )
                             Spacer(Modifier.weight(1f))
-                            Text("共 ", color = RegularText, fontSize = 13.sp, modifier = Modifier.alignByBaseline())
                             Text(
-                                text = "${product.optInt("batchCount", inventories.length())}",
-                                color = PrimaryDark,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.alignByBaseline()
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append("共 ")
+                                    }
+                                    withStyle(SpanStyle(
+                                        color = PrimaryDark,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )) {
+                                        append("${product.optInt("batchCount", inventories.length())}")
+                                    }
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append(" 个库存批次")
+                                    }
+                                }
                             )
-                            Text(" 个库存批次", color = RegularText, fontSize = 13.sp, modifier = Modifier.alignByBaseline())
                         }
                     }
                 }
@@ -619,22 +634,21 @@ internal fun InventoryScreen(
                                 }
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = quantityText(qty),
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (qty <= 0.0) Danger else PrimaryDark,
-                                        fontSize = 15.sp,
-                                        modifier = Modifier.alignByBaseline()
-                                    )
-                                    Spacer(Modifier.width(2.dp))
-                                    Text(
-                                        text = unit,
-                                        color = RegularText,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.alignByBaseline()
-                                    )
-                                }
+                                Text(
+                                    text = buildAnnotatedString {
+                                        withStyle(SpanStyle(
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (qty <= 0.0) Danger else PrimaryDark,
+                                            fontSize = 15.sp
+                                        )) {
+                                            append(quantityText(qty))
+                                        }
+                                        append(" ")
+                                        withStyle(SpanStyle(color = RegularText, fontSize = 12.sp)) {
+                                            append(unit)
+                                        }
+                                    }
+                                )
                                 if (expiringSoon) {
                                     Text(
                                         text = "即将过期",
