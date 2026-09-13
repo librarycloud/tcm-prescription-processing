@@ -12,6 +12,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
+import android.hardware.camera2.CaptureRequest
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
@@ -41,6 +42,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.lifecycle.ProcessCameraProvider
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -48,6 +50,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.paddle.ocr.EngineConfig
@@ -79,7 +82,22 @@ private fun scannerBoxRect(width: Float, height: Float, ocrEnabled: Boolean = fa
 class ScannerActivity : ComponentActivity() {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val delivered = AtomicBoolean(false)
-    private val scanner = BarcodeScanning.getClient()
+    private val scanner = BarcodeScanning.getClient(
+        BarcodeScannerOptions.Builder()
+            .setBarcodeFormats(
+                Barcode.FORMAT_QR_CODE,
+                Barcode.FORMAT_CODE_128,
+                Barcode.FORMAT_CODE_39,
+                Barcode.FORMAT_CODE_93,
+                Barcode.FORMAT_EAN_13,
+                Barcode.FORMAT_EAN_8,
+                Barcode.FORMAT_UPC_A,
+                Barcode.FORMAT_UPC_E,
+                Barcode.FORMAT_ITF,
+                Barcode.FORMAT_DATA_MATRIX
+            )
+            .build()
+    )
     private var ocrEnabled = false
     @Volatile
     private var paddleOcr: PaddleOCR? = null
@@ -585,23 +603,38 @@ class ScannerActivity : ComponentActivity() {
         providerFuture.addListener({
             val provider = providerFuture.get()
             cameraProvider = provider
-            val resolutionSelector = ResolutionSelector.Builder()
-                .setResolutionStrategy(
-                    ResolutionStrategy(
-                        android.util.Size(1920, 1080),
-                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                    )
+            // Processing and package scans favor frame rate; SKU OCR needs the extra detail.
+            val resolutionStrategy = if (ocrEnabled) {
+                ResolutionStrategy(
+                    android.util.Size(1920, 1080),
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                 )
+            } else {
+                ResolutionStrategy(
+                    android.util.Size(1280, 720),
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                )
+            }
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setResolutionStrategy(resolutionStrategy)
                 .build()
 
-            val preview = Preview.Builder()
+            val previewBuilder = Preview.Builder()
                 .setResolutionSelector(resolutionSelector)
-                .build()
-                .also { it.surfaceProvider = previewView.surfaceProvider }
-            val analysis = ImageAnalysis.Builder()
+            Camera2Interop.Extender(previewBuilder).setCaptureRequestOption(
+                CaptureRequest.CONTROL_AF_MODE,
+                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
+            )
+            val preview = previewBuilder.build().also { it.surfaceProvider = previewView.surfaceProvider }
+
+            val analysisBuilder = ImageAnalysis.Builder()
                 .setResolutionSelector(resolutionSelector)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
+            Camera2Interop.Extender(analysisBuilder).setCaptureRequestOption(
+                CaptureRequest.CONTROL_AF_MODE,
+                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
+            )
+            val analysis = analysisBuilder.build()
             analysis.setAnalyzer(cameraExecutor) { proxy ->
                 val mediaImage = proxy.image
                 if (mediaImage == null || delivered.get() || isRecognitionPaused) {
@@ -834,16 +867,6 @@ class ScannerActivity : ComponentActivity() {
                 }
             provider.unbindAll()
             currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-            currentCamera?.let { cam ->
-                previewView.post {
-                    val factory = previewView.meteringPointFactory
-                    val centerPoint = factory.createPoint(previewView.width / 2f, previewView.height / 2f)
-                    val action = FocusMeteringAction.Builder(centerPoint, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
-                        .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
-                        .build()
-                    cam.cameraControl.startFocusAndMetering(action)
-                }
-            }
         }, ContextCompat.getMainExecutor(this))
     }
 
