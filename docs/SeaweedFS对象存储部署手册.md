@@ -9,19 +9,21 @@
 ## 1. 架构与安全模型
 
 ```mermaid
-graph TD
-    Client[外部客户端 / Web-Admin / 微信小程序] -->|HTTPS 443 (SSL加密)| Nginx[Nginx 反向代理]
-    Client -.->|HTTP 80 访问| Redirect[301 自动跳转 HTTPS]
+flowchart TD
+    Client["外部客户端 / Web-Admin / 微信小程序"] -->|"HTTPS 443 (SSL加密)"| Nginx["Nginx 反向代理"]
+    Client -.->|"HTTP 80 访问"| Redirect["301 自动跳转 HTTPS"]
     Redirect --> Nginx
     
-    subgraph Host[服务器内部 Localhost (安全隔离)]
-        Nginx -->|S3 API 代理| S3[SeaweedFS S3 接口 :8333]
-        Nginx -->|Web 管理界面 代理 (带密码)| Filer[Filer 文件管理器 :8888]
-        S3 --> Master[Master 主控 :9333]
-        S3 --> Volume[Volume 存储卷 :8085]
+    subgraph Host["服务器内部 Localhost (安全隔离)"]
+        Nginx -->|"S3 API 代理 (:8333)"| S3["SeaweedFS S3 接口"]
+        Nginx -->|"综合管理后台 代理"| WebPan["Web 管理后台 (pan.域名)"]
+        WebPan --> Filer["Filer 网页网盘 (/) :8888"]
+        WebPan --> MasterUI["Master 集群监控 (/master/) :9333"]
+        S3 --> Master["Master 主控 :9333"]
+        S3 --> Volume["Volume 存储卷 :8085"]
         Filer --> Master
         Filer --> Volume
-        Volume --> Disk[(本地硬盘 /data/seaweedfs)]
+        Volume --> Disk[("本地硬盘 /data/seaweedfs")]
     end
 ```
 
@@ -175,22 +177,38 @@ sudo systemctl status seaweedfs
        }
    }
 
-   # 2. Filer Web 网页文件管理器 (管理员使用)
-   server {
-       listen 80;
-       server_name pan.yourdomain.com;
+    # 2. 综合管理后台：Filer 网页文件网盘 + Master 集群监控
+    server {
+        listen 80;
+        server_name pan.yourdomain.com;
 
-       location / {
-           auth_basic "SeaweedFS Private Storage";
-           auth_basic_user_file /etc/nginx/.seaweedfs_htpasswd;
+        # 统一密码保护（输入一次密码，网盘和集群监控均可访问）
+        auth_basic "SeaweedFS Admin Panel";
+        auth_basic_user_file /etc/nginx/.seaweedfs_htpasswd;
 
-           proxy_pass http://127.0.0.1:8888;
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       }
-   }
-   ```
+        # 2.1 Master 集群状态监控仪表盘 (访问: http://pan.yourdomain.com/master/)
+        location /master/ {
+            proxy_pass http://127.0.0.1:9333/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # 2.2 Filer 网页文件管理器 (访问根路径: http://pan.yourdomain.com/)
+        location / {
+            proxy_pass http://127.0.0.1:8888;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    ```
+
+> [!CAUTION]
+> **切勿反代 8085 (Volume 卷存储端口)**：
+> 8085 是底层的磁盘数据分块读写端口，为追求极致吞吐默认不对底层读写指令做复杂鉴权。所有业务数据均由 S3（8333）与 Filer（8888）在服务器内部自动向 8085 存取，**绝对不可将 8085 端口通过 Nginx 对外开放**，保持其在 `127.0.0.1` 本地回环即可保证最高安全性。
 
 3. **测试并重新加载 Nginx**：
    ```bash
