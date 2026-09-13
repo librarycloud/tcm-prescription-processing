@@ -523,31 +523,31 @@ internal fun InventoryScreen(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("总库存：", color = RegularText, fontSize = 13.sp)
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(
-                                    text = quantityText(totalQuantity),
-                                    color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Spacer(Modifier.width(2.dp))
-                                Text(
-                                    text = unit,
-                                    color = RegularText,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(bottom = 1.dp)
-                                )
-                            }
+                            Text("总库存：", color = RegularText, fontSize = 13.sp, modifier = Modifier.alignByBaseline())
+                            Text(
+                                text = quantityText(totalQuantity),
+                                color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.alignByBaseline()
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = unit,
+                                color = RegularText,
+                                fontSize = 13.sp,
+                                modifier = Modifier.alignByBaseline()
+                            )
                             Spacer(Modifier.weight(1f))
-                            Text("共 ", color = RegularText, fontSize = 13.sp)
+                            Text("共 ", color = RegularText, fontSize = 13.sp, modifier = Modifier.alignByBaseline())
                             Text(
                                 text = "${product.optInt("batchCount", inventories.length())}",
                                 color = PrimaryDark,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
+                                modifier = Modifier.alignByBaseline()
                             )
-                            Text(" 个库存批次", color = RegularText, fontSize = 13.sp)
+                            Text(" 个库存批次", color = RegularText, fontSize = 13.sp, modifier = Modifier.alignByBaseline())
                         }
                     }
                 }
@@ -619,19 +619,20 @@ internal fun InventoryScreen(
                                 }
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Row(verticalAlignment = Alignment.Bottom) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = quantityText(qty),
                                         fontWeight = FontWeight.Bold,
                                         color = if (qty <= 0.0) Danger else PrimaryDark,
                                         fontSize = 15.sp,
+                                        modifier = Modifier.alignByBaseline()
                                     )
                                     Spacer(Modifier.width(2.dp))
                                     Text(
                                         text = unit,
                                         color = RegularText,
                                         fontSize = 12.sp,
-                                        modifier = Modifier.padding(bottom = 1.dp)
+                                        modifier = Modifier.alignByBaseline()
                                     )
                                 }
                                 if (expiringSoon) {

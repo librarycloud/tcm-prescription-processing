@@ -857,7 +857,14 @@ class ScannerActivity : ComponentActivity() {
                         } else {
                             ocrInFlight.set(false)
                         }
-                    } else {
+                    } else if (isOcrActive) {
+                        // Only release the OCR task-slot when OCR was actually expected for
+                        // this frame (isOcrActive=true, pendingTasks=2). When ocrEnabled=false
+                        // pendingTasks=1 and the single taskFinished() belongs to the barcode
+                        // scanner's addOnCompleteListener — calling it here too would close the
+                        // proxy before ML Kit finishes reading the MediaImage, corrupting the
+                        // image data and forcing multi-frame retries (the root cause of slow
+                        // scanning in processing / global-scan mode).
                         taskFinished()
                     }
                 }
