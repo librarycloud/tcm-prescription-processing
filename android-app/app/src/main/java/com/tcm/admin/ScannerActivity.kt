@@ -628,7 +628,7 @@ class ScannerActivity : ComponentActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             Camera2Interop.Extender(analysisBuilder).setCaptureRequestOption(
                 CaptureRequest.CONTROL_AF_MODE,
-                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
+                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO,
             )
             val analysis = analysisBuilder.build()
             analysis.setAnalyzer(cameraExecutor) { proxy ->
@@ -875,17 +875,26 @@ class ScannerActivity : ComponentActivity() {
             // scanner from getting stuck on the initial focus target when the working distance
             // changes.
             currentCamera?.let { cam ->
-                previewView.post {
-                    if (delivered.get()) return@post
+                fun focusCenter() {
+                    if (delivered.get() || previewView.width <= 0 || previewView.height <= 0) return
                     val factory = previewView.meteringPointFactory
                     val centerPoint = factory.createPoint(previewView.width / 2f, previewView.height / 2f)
                     val action = FocusMeteringAction.Builder(
                         centerPoint,
                         FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
                     )
-                        .setAutoCancelDuration(1, TimeUnit.SECONDS)
+                        .setAutoCancelDuration(2, TimeUnit.SECONDS)
                         .build()
                     cam.cameraControl.startFocusAndMetering(action)
+                }
+
+                // Wait until PreviewView has real dimensions, then trigger a second pass
+                // after the lens has had time to leave its startup position. This avoids the
+                // common case where the first focus request is sent against a 0x0 view while
+                // the camera is still binding.
+                previewView.post {
+                    focusCenter()
+                    previewView.postDelayed({ focusCenter() }, 700L)
                 }
             }
         }, ContextCompat.getMainExecutor(this))
