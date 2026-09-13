@@ -128,7 +128,6 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { Download, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { getProductStores } from '@/api/productDifference';
 import { getE6PharmacyCategoryMappings } from '@/api/e6Pharmacy';

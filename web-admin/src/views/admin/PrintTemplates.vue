@@ -360,10 +360,9 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import { Delete, Plus, Refresh } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
-import PrintLabel from '@/components/PrintLabel.vue';
+const PrintLabel = defineAsyncComponent(() => import('@/components/PrintLabel.vue'));
 import {
   createPrintTemplate,
   deletePrintTemplate,

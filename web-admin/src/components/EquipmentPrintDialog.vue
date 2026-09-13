@@ -41,7 +41,6 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus';
 import { Printer } from '@element-plus/icons-vue';
 import PrintLabel from '@/components/PrintLabel.vue';
 import printLabelCss from '@/styles/print-label.css?raw';

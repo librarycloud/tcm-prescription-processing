@@ -32,7 +32,6 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref } from 'vue';
 import { Camera } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { normalizeExpressTrackingNo } from '@/utils/expressTracking';
 
 defineProps({

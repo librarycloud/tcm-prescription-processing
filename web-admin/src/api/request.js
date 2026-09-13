@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
 import { clearAppStorage } from '@/utils/storage';
 import { getToken } from '@/utils/token';
 import router from '@/router';

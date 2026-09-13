@@ -69,7 +69,6 @@
 
 <script setup>
 import { reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import avatar from '@/assets/avatar.svg';
 import { updateProfile } from '@/api/user';
 import { useUserStore } from '@/stores/user';

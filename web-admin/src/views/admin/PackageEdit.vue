@@ -92,7 +92,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import StatusTag from '@/components/StatusTag.vue';
 import { getAdminPackageDetail, updatePackage } from '@/api/package';
 import { isValidPhone } from '@/utils/phone';

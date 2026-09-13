@@ -291,15 +291,13 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import { Plus, Printer, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import PrescriptionDetail from './PrescriptionDetail.vue';
-import PackageDetail from './PackageDetail.vue';
-import PackageEdit from './PackageEdit.vue';
-import Verify from './Verify.vue';
+const PackageDetail = defineAsyncComponent(() => import('./PackageDetail.vue'));
+const PackageEdit = defineAsyncComponent(() => import('./PackageEdit.vue'));
+const Verify = defineAsyncComponent(() => import('./Verify.vue'));
 import {
   createPrescription,
   deletePrescription,

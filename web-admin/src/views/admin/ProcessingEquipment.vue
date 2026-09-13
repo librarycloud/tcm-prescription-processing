@@ -158,11 +158,10 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Printer, Refresh, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
-import EquipmentPrintDialog from '@/components/EquipmentPrintDialog.vue';
+const EquipmentPrintDialog = defineAsyncComponent(() => import('@/components/EquipmentPrintDialog.vue'));
 import {
   createProcessingEquipment,
   deleteProcessingEquipment,

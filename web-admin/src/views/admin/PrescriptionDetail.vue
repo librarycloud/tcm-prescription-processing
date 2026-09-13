@@ -487,8 +487,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import {
   ArrowDown,
   ArrowUp,

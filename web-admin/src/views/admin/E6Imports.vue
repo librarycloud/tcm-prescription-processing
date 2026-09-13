@@ -430,11 +430,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Printer, Refresh, Search } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
-import ProcessingPrintDialog from '@/components/ProcessingPrintDialog.vue';
+const ProcessingPrintDialog = defineAsyncComponent(() => import('@/components/ProcessingPrintDialog.vue'));
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
 import {
   confirmE6Import,

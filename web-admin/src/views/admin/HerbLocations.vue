@@ -256,7 +256,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { Close, Delete, Download, Edit, Location, Plus, Search, Upload, UploadFilled } from '@element-plus/icons-vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import { pinyin } from 'pinyin-pro';
 import {
   downloadHerbLocationMoveTemplate,

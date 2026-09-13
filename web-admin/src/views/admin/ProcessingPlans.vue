@@ -1245,13 +1245,6 @@ import {
   withDirectives
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElButton } from 'element-plus/es/components/button/index.mjs';
-import { ElInputNumber } from 'element-plus/es/components/input-number/index.mjs';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
-import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index.mjs';
-import { ElTag } from 'element-plus/es/components/tag/index.mjs';
-import { ElTooltip } from 'element-plus/es/components/tooltip/index.mjs';
 import {
   Delete,
   Plus,
@@ -1262,14 +1255,14 @@ import {
   Upload
 } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
-import ProcessingPrintDialog from '@/components/ProcessingPrintDialog.vue';
+const ProcessingPrintDialog = defineAsyncComponent(() => import('@/components/ProcessingPrintDialog.vue'));
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
 import Pagination from '@/components/Pagination.vue';
 import StatisticCard from '@/components/StatisticCard.vue';
 import ReadyPickup from '@/views/admin/ReadyPickup.vue';
-import PackageDetail from '@/views/admin/PackageDetail.vue';
-import PackageEdit from '@/views/admin/PackageEdit.vue';
-import Verify from '@/views/admin/Verify.vue';
+const PackageDetail = defineAsyncComponent(() => import('@/views/admin/PackageDetail.vue'));
+const PackageEdit = defineAsyncComponent(() => import('@/views/admin/PackageEdit.vue'));
+const Verify = defineAsyncComponent(() => import('@/views/admin/Verify.vue'));
 import { getStats } from '@/api/package';
 import { getPrescriptions } from '@/api/prescription';
 import { getStores } from '@/api/store';

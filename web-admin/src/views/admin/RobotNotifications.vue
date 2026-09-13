@@ -318,7 +318,6 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Refresh, RefreshLeft, Search } from '@element-plus/icons-vue';
 import Pagination from '@/components/Pagination.vue';
 import { getStores } from '@/api/store';

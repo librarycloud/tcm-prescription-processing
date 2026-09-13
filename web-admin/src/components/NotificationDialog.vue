@@ -114,7 +114,6 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { getPackageNotifications, sendPackageNotification } from '@/api/notification';
 import { formatDate } from '@/utils/date';
 import { formatPickupCode, isPicked, pickupMethodText } from '@/utils/status';

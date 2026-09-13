@@ -270,7 +270,6 @@
 
 <script setup>
 import { nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { Download, Refresh, Search, Upload, UploadFilled } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
 import EmptyView from '@/components/EmptyView.vue';

@@ -69,7 +69,6 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { Printer } from '@element-plus/icons-vue';
 import PrintLabel from '@/components/PrintLabel.vue';
 import UsageMethodInput from '@/components/UsageMethodInput.vue';

@@ -186,7 +186,6 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { Delete, Plus, Promotion, Refresh } from '@element-plus/icons-vue';
 import {
   getSmsSettings,

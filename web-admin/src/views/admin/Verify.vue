@@ -128,7 +128,6 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { Camera } from '@element-plus/icons-vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import QRCodeCard from '@/components/QRCodeCard.vue';

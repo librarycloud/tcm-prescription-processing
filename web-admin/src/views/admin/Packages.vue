@@ -198,19 +198,18 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { CircleCheck, Plus, Printer, Refresh } from '@element-plus/icons-vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyView from '@/components/EmptyView.vue';
-import NotificationDialog from '@/components/NotificationDialog.vue';
+const NotificationDialog = defineAsyncComponent(() => import('@/components/NotificationDialog.vue'));
 import NotificationStatus from '@/components/NotificationStatus.vue';
 import Pagination from '@/components/Pagination.vue';
 import SearchBar from '@/components/SearchBar.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import PackageAdd from './PackageAdd.vue';
-import PackageDetail from './PackageDetail.vue';
-import PackageEdit from './PackageEdit.vue';
-import Verify from './Verify.vue';
+const PackageDetail = defineAsyncComponent(() => import('./PackageDetail.vue'));
+const PackageEdit = defineAsyncComponent(() => import('./PackageEdit.vue'));
+const Verify = defineAsyncComponent(() => import('./Verify.vue'));
 import { deletePackage, getAdminPackages } from '@/api/package';
 import { formatDate } from '@/utils/date';
 import { maskPhone } from '@/utils/phone';

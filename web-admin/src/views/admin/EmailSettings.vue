@@ -71,7 +71,6 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { Promotion, Refresh } from '@element-plus/icons-vue';
 import { getEmailSettings, sendEmailTest, updateEmailConfig, updateEmailTemplate } from '@/api/email';
 

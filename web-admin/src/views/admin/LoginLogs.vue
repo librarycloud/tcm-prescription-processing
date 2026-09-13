@@ -92,18 +92,40 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { onMounted, ref } from 'vue';
 import { Refresh, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { getLoginLogs } from '@/api/loginLog';
 import { formatDate } from '@/utils/date';
+import { useTable } from '@/utils/useTable';
 
-const loading = ref(false);
-const list = ref([]);
 const dateRange = ref([]);
-const filters = reactive({ keyword: '', success: '', loginType: '' });
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
+
+const {
+  list,
+  loading,
+  query: filters,
+  pagination,
+  getList,
+  search: handleSearch,
+  reset: baseReset
+} = useTable(
+  async (params) => {
+    return await getLoginLogs({
+      ...params,
+      startDate: dateRange.value?.[0] || '',
+      endDate: dateRange.value?.[1] || ''
+    });
+  },
+  { keyword: '', success: '', loginType: '' },
+  { pageSize: 20 }
+);
+
+const handleReset = () => {
+  dateRange.value = [];
+  baseReset();
+};
 
 function loginTypeText(value) {
   return {
@@ -120,42 +142,7 @@ function locationText(location) {
   return [...new Set(parts)].join(' ') || '-';
 }
 
-async function loadData() {
-  loading.value = true;
-  try {
-    const data = await getLoginLogs({
-      ...filters,
-      startDate: dateRange.value?.[0] || '',
-      endDate: dateRange.value?.[1] || '',
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadData();
-}
-
-function handleReset() {
-  filters.keyword = '';
-  filters.success = '';
-  filters.loginType = '';
-  dateRange.value = [];
-  handleSearch();
-}
-
-watch(
-  () => [pagination.page, pagination.pageSize],
-  () => loadData()
-);
-
-onMounted(loadData);
+onMounted(getList);
 </script>
 
 <style scoped>

@@ -542,8 +542,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import { Delete, Plus, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';

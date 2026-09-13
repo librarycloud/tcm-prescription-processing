@@ -109,7 +109,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { createPackage } from '@/api/package';
 import { isValidPhone } from '@/utils/phone';
 import { PICKUP_METHOD_OPTIONS } from '@/utils/status';

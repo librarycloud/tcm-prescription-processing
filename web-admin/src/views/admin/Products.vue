@@ -242,8 +242,6 @@
 
 <script setup>
 import { nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import {
   Download,
   Edit,

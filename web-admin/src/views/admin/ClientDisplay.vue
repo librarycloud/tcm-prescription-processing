@@ -235,7 +235,6 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus';
 import QRCode from 'qrcode';
 import {
   Bell,

@@ -263,8 +263,6 @@
 
 <script setup>
 import { nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
 import { CopyDocument, Key, Plus, Refresh, Search } from '@element-plus/icons-vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyView from '@/components/EmptyView.vue';
