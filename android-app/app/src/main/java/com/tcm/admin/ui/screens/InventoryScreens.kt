@@ -188,7 +188,7 @@ internal fun InventoryScreen(
     }
 
     // Auto navigate to product detail if exactly one item matches
-    LaunchedEffect(products.loadState.refresh, products.itemCount) {
+    LaunchedEffect(products.loadState.refresh, products.itemCount, hasAutoNavigated) {
         val refreshState = products.loadState.refresh
         if (refreshState is LoadState.Loading) {
             hasAutoNavigated = false
@@ -524,12 +524,21 @@ internal fun InventoryScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("总库存：", color = RegularText, fontSize = 13.sp)
-                            Text(
-                                text = "${quantityText(totalQuantity)} $unit",
-                                color = PrimaryDark,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    text = quantityText(totalQuantity),
+                                    color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Spacer(Modifier.width(2.dp))
+                                Text(
+                                    text = unit,
+                                    color = RegularText,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(bottom = 1.dp)
+                                )
+                            }
                             Spacer(Modifier.weight(1f))
                             Text("共 ", color = RegularText, fontSize = 13.sp)
                             Text(
@@ -589,17 +598,10 @@ internal fun InventoryScreen(
                                 Spacer(Modifier.height(4.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = if (location.isNotBlank()) {
-                                        Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(PrimarySoft)
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    } else Modifier,
                                 ) {
                                     Text(
                                         text = "货位：",
-                                        color = if (location.isNotBlank()) PrimaryDark else Muted,
-                                        fontWeight = FontWeight.Bold,
+                                        color = RegularText,
                                         fontSize = 14.sp,
                                     )
                                     Text(
@@ -607,16 +609,31 @@ internal fun InventoryScreen(
                                         color = if (location.isNotBlank()) PrimaryDark else Muted,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 16.sp,
+                                        modifier = if (location.isNotBlank()) {
+                                            Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(PrimarySoft)
+                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        } else Modifier
                                     )
                                 }
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "${quantityText(qty)} $unit",
-                                    fontWeight = FontWeight.Bold,
-                                    color = PrimaryDark,
-                                    fontSize = 15.sp,
-                                )
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(
+                                        text = quantityText(qty),
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (qty <= 0.0) Danger else PrimaryDark,
+                                        fontSize = 15.sp,
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                    Text(
+                                        text = unit,
+                                        color = RegularText,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(bottom = 1.dp)
+                                    )
+                                }
                                 if (expiringSoon) {
                                     Text(
                                         text = "即将过期",
