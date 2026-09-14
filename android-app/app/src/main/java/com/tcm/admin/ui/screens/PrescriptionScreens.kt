@@ -45,6 +45,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -248,7 +249,7 @@ internal fun PrescriptionsScreen(
         } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
             item(key = "empty") {
                 Spacer(Modifier.height(32.dp))
-                AppEmptyState(if (keyword.isNotBlank()) "没有找到包含 “$keyword” 的处方" else "暂无处方")
+                AppEmptyState(if (keyword.isNotBlank()) "没有找到包含 “$keyword” 的处方" else "暂无处方", icon = Icons.Rounded.MedicalServices)
             }
         }
 
@@ -267,7 +268,12 @@ internal fun PrescriptionsScreen(
                     AppCard(modifier = Modifier.padding(bottom = 12.dp), onClick = { onNavigate(Route.PrescriptionDetail(item.optInt("id"))) }) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(item.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.MedicalServices, null, Modifier.size(16.dp), tint = Primary)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(item.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
+                                }
+                                Spacer(Modifier.height(2.dp))
                                 Text(item.displayField("prescriptionNo"), color = Muted, fontSize = 12.sp)
                             }
                             StatusPill(prescriptionStatusLabel(item.optInt("status")))
@@ -450,7 +456,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
             .onSuccess { detail = it }.onFailure { error = it.message ?: "加载处方详情失败" }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        if (detail == null && error == null) AppEmptyState("正在加载处方详情...")
+        if (detail == null && error == null) AppEmptyState("正在加载处方详情...", icon = Icons.Rounded.HourglassEmpty)
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
         detail?.let { p ->
             val plans = p.optJSONArray("plans") ?: JSONArray()

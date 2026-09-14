@@ -1,6 +1,8 @@
 package com.tcm.admin
 
 import android.widget.Toast
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -149,11 +151,11 @@ internal fun DifferencesScreen(
 
             if (items.loadState.refresh is LoadState.Loading && items.itemCount == 0) {
                 item(key = "loading") {
-                    AppEmptyState("加载中...")
+                    AppEmptyState("加载中...", icon = Icons.Rounded.HourglassEmpty)
                 }
             } else if (items.itemCount == 0 && items.loadState.refresh !is LoadState.Error && items.loadState.refresh !is LoadState.Loading) {
                 item(key = "empty") {
-                    AppEmptyState(if (tab == "current") "暂无未销账差异" else "暂无差异流水记录")
+                    AppEmptyState(if (tab == "current") "暂无未销账差异" else "暂无差异流水记录", icon = Icons.Rounded.ReceiptLong)
                 }
             }
 

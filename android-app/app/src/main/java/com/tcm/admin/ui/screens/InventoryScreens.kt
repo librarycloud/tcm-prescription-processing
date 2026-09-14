@@ -37,6 +37,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Inventory2
@@ -574,7 +575,7 @@ internal fun InventoryScreen(
 
             if (inventories.length() == 0) {
                 item(key = "empty_batches") {
-                    AppEmptyState("该商品暂无库存批次")
+                    AppEmptyState("该商品暂无库存批次", icon = Icons.Rounded.Inventory)
                 }
             } else {
                 items(inventories.length(), key = { idx ->
@@ -768,6 +769,8 @@ internal fun InventoryScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.Top,
                                     ) {
+                                        Icon(Icons.Rounded.MedicalInformation, null, Modifier.size(16.dp), tint = Primary, modifier = Modifier.padding(top = 2.dp))
+                                        Spacer(Modifier.width(6.dp))
                                         HighlightedText(
                                             text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
                                             highlight = query,

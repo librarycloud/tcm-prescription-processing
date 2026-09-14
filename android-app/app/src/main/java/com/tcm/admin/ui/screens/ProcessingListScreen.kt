@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
@@ -445,7 +446,7 @@ internal fun ProcessingScreenV2(
                         }
                     } else if (plansItems.itemCount == 0 && currentRefreshState !is LoadState.Error && currentRefreshState !is LoadState.Loading) {
                         item(key = "empty_plans") {
-                            AppEmptyState("暂无加工计划")
+                            AppEmptyState("暂无加工计划", icon = Icons.Rounded.BuildCircle)
                         }
                     }
 
@@ -480,6 +481,8 @@ internal fun ProcessingScreenV2(
                                 ) {
                                     Column(Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Rounded.BuildCircle, null, Modifier.size(16.dp), tint = Primary)
+                                            Spacer(Modifier.width(6.dp))
                                             Text(
                                                 text = "$customerName · ${processType?.displayField("name", "加工") ?: "加工"}",
                                                 fontWeight = FontWeight.Bold,
@@ -660,7 +663,7 @@ internal fun ProcessingScreenV2(
                         }
                     } else if (pickupItems.itemCount == 0 && currentRefreshState !is LoadState.Error && currentRefreshState !is LoadState.Loading) {
                         item(key = "empty_pickup") {
-                            AppEmptyState(if (pickupStatus == 0) "暂无待领取的药材" else "暂无已领取记录")
+                            AppEmptyState(if (pickupStatus == 0) "暂无待领取的药材" else "暂无已领取记录", icon = Icons.Rounded.LocalMall)
                         }
                     }
 

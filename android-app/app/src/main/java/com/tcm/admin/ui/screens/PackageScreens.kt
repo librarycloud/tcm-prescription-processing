@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.IconButton
@@ -252,7 +253,7 @@ internal fun PackagesScreen(
                 }
             } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
                 item(key = "empty") {
-                    AppEmptyState("暂无匹配包裹")
+                    AppEmptyState("暂无匹配包裹", icon = Icons.Rounded.Inventory2)
                 }
             }
 
@@ -301,13 +302,7 @@ internal fun PackageSummaryCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = item.name,
-                modifier = Modifier.weight(1f),
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = Ink,
-            )
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Inventory2, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink) }
             Spacer(Modifier.width(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 StatusPill(text = item.method)

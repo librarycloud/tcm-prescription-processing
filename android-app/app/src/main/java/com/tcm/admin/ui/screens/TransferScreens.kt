@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Search
@@ -280,11 +281,11 @@ internal fun TransfersScreen(
 
             if (transfers.loadState.refresh is LoadState.Loading && transfers.itemCount == 0) {
                 item(key = "loading") {
-                    AppEmptyState("加载中...")
+                    AppEmptyState("加载中...", icon = Icons.Rounded.HourglassEmpty)
                 }
             } else if (transfers.itemCount == 0 && transfers.loadState.refresh !is LoadState.Error && transfers.loadState.refresh !is LoadState.Loading) {
                 item(key = "empty") {
-                    AppEmptyState("暂无调拨单")
+                    AppEmptyState("暂无调拨单", icon = Icons.Rounded.Transform)
                 }
             }
 
@@ -305,12 +306,7 @@ internal fun TransfersScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                text = transfer.displayField("transferNo"),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = Ink,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Transform, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = transfer.displayField("transferNo"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) }
                             StatusPill(
                                 text = if (isOverdue) "已逾期" else transferStatusLabel(status, outboundStatus),
                             )
@@ -553,7 +549,7 @@ internal fun TransferDetailScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (error == null) AppEmptyState("正在加载调拨详情...")
+            if (error == null) AppEmptyState("正在加载调拨详情...", icon = Icons.Rounded.HourglassEmpty)
             else ErrorStateView(message = error!!, onRetry = { reload++ })
         }
         return
@@ -663,7 +659,7 @@ internal fun TransferDetailScreen(
         SectionHeader("归还记录")
         Spacer(Modifier.height(8.dp))
         if (records.length() == 0) {
-            AppCard { AppEmptyState("暂无归还记录") }
+            AppCard { AppEmptyState("暂无归还记录", icon = Icons.Rounded.History) }
         } else {
             (0 until records.length()).forEach { index ->
                 val record = records.getJSONObject(index)

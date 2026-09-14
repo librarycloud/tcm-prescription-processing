@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -230,7 +231,7 @@ internal fun HerbsScreen(
 
         if (data == null && error == null) {
             item(key = "loading") {
-                AppEmptyState("加载斗谱数据中...")
+                AppEmptyState("加载斗谱数据中...", icon = Icons.Rounded.HourglassEmpty)
             }
         }
         if (error != null) {
@@ -244,7 +245,7 @@ internal fun HerbsScreen(
             val units = root.optJSONArray("units") ?: JSONArray()
             if (units.length() == 0) {
                 item(key = "empty") {
-                    AppEmptyState("未找到匹配的货位数据")
+                    AppEmptyState("未找到匹配的货位数据", icon = Icons.Rounded.SearchOff)
                 }
             } else {
                 items(units.length(), key = { idx ->

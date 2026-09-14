@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -178,11 +179,11 @@ internal fun StocktakingScreen(
 
             if (checks.loadState.refresh is LoadState.Loading && checks.itemCount == 0) {
                 item(key = "loading") {
-                    AppEmptyState("加载盘点列表中...")
+                    AppEmptyState("加载盘点列表中...", icon = Icons.Rounded.HourglassEmpty)
                 }
             } else if (checks.itemCount == 0 && checks.loadState.refresh !is LoadState.Error && checks.loadState.refresh !is LoadState.Loading) {
                 item(key = "empty") {
-                    AppEmptyState("暂无盘点单记录")
+                    AppEmptyState("暂无盘点单记录", icon = Icons.Rounded.FactCheck)
                 }
             }
 
@@ -205,12 +206,7 @@ internal fun StocktakingScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                text = check.displayField("checkNo", check.displayField("id")),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = Ink,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.FactCheck, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = check.displayField("checkNo", check.displayField("id")), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) }
                             StatusPill(text = goodsCheckStatus(status))
                         }
 
@@ -360,7 +356,7 @@ internal fun StocktakingDetailScreen(
             .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
-        if (check == null && error == null) AppEmptyState("加载盘点明细中...")
+        if (check == null && error == null) AppEmptyState("加载盘点明细中...", icon = Icons.Rounded.HourglassEmpty)
         if (error != null) ErrorStateView(message = error!!, onRetry = { reload++ })
 
         check?.let { selected ->
@@ -765,7 +761,7 @@ internal fun StocktakingEntryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    AppEmptyState("未找到与 \"$keyword\" 匹配的盘点商品")
+                    AppEmptyState("未找到与 \"$keyword\" 匹配的盘点商品", icon = Icons.Rounded.SearchOff)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(
