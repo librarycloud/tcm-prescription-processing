@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -183,7 +184,7 @@ internal fun StocktakingScreen(
                 }
             } else if (checks.itemCount == 0 && checks.loadState.refresh !is LoadState.Error && checks.loadState.refresh !is LoadState.Loading) {
                 item(key = "empty") {
-                    AppEmptyState("暂无盘点单记录", icon = Icons.Rounded.FactCheck)
+                    AppEmptyState("暂无盘点单记录", icon = Icons.AutoMirrored.Rounded.FactCheck)
                 }
             }
 
@@ -206,7 +207,7 @@ internal fun StocktakingScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.FactCheck, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = check.displayField("checkNo", check.displayField("id")), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) }
+                            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.AutoMirrored.Rounded.FactCheck, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = check.displayField("checkNo", check.displayField("id")), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) }
                             StatusPill(text = goodsCheckStatus(status))
                         }
 
