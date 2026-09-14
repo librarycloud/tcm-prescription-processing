@@ -678,7 +678,7 @@ class ScannerActivity : ComponentActivity() {
                         if (validBarcodes.isEmpty()) return@addOnSuccessListener
 
                         val targetBarcode = if (ocrEnabled) {
-                            // In Inventory & TopBar SKU scan mode: strictly restrict to scanning frame
+                            // In Inventory & Stocktaking SKU scan mode: strictly restrict to scanning frame
                             val inBox = validBarcodes.filter { b ->
                                 val box = b.boundingBox
                                 box != null && isInsideScanBox(RectF(box), imgScanBox)
@@ -693,7 +693,7 @@ class ScannerActivity : ComponentActivity() {
                                 dx * dx + dy * dy
                             } ?: inBox.firstOrNull()
                         } else {
-                            // General scan mode (packages, processing, stocktaking, etc.): original full-screen fast detection
+                            // General scan mode (packages, processing, etc.): original full-screen fast detection
                             validBarcodes.firstOrNull()
                         }
 

@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -66,7 +67,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -613,6 +618,9 @@ internal fun StocktakingEntryScreen(
     var lastSearchedTerm by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     fun selectCandidate(candidate: JSONObject) {
         selectedItem = candidate
@@ -666,6 +674,13 @@ internal fun StocktakingEntryScreen(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            keyboardController?.hide()
+            focusManager.clearFocus(force = false)
+            selectedItem = null
+            addingBatch = false
+            batchNo = ""
+            value = ""
             keyword = scanned
             selectedProductGroup = null
             candidates = emptyList()
@@ -726,7 +741,12 @@ internal fun StocktakingEntryScreen(
                 },
                 placeholder = "搜索商品名称、编码或条码",
                 onSearch = ::manualSearch,
-                onScan = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                onScan = {
+                    scannerLauncher.launch(
+                        Intent(context, ScannerActivity::class.java)
+                            .putExtra(ScannerActivity.EXTRA_ENABLE_SKU_OCR, true),
+                    )
+                },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -741,7 +761,42 @@ internal fun StocktakingEntryScreen(
             }
             if (!loading && candidates.isEmpty() && keyword.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
-                AppEmptyState("暂无匹配的盘点商品")
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    AppEmptyState("未找到与 \"$keyword\" 匹配的盘点商品")
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                scannerLauncher.launch(
+                                    Intent(context, ScannerActivity::class.java)
+                                        .putExtra(ScannerActivity.EXTRA_ENABLE_SKU_OCR, true),
+                                )
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("重新扫描", fontSize = 13.sp)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                keyword = ""
+                                lastSearchedTerm = ""
+                                candidates = emptyList()
+                                selectedProductGroup = null
+                                error = null
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("清空搜索", fontSize = 13.sp)
+                        }
+                    }
+                }
             }
             if (candidates.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
