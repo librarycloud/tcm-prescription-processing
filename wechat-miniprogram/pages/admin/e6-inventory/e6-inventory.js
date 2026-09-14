@@ -1,6 +1,6 @@
-import { safeScanCode } from '../../../utils/scanner';
+import { safeScanCode } from '../utils/scanner';
 import { getE6PharmacyProducts, getStores } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { onAdminTabChange } from '../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 

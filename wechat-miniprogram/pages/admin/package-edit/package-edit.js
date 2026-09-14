@@ -1,4 +1,4 @@
-import { safeScanCode } from '../../../utils/scanner';
+import { safeScanCode } from '../utils/scanner';
 import { getPackageDetail, updatePackage } from '../../../api/admin';
 import { normalizeExpressTrackingNo, PICKUP_METHOD_OPTIONS, pickupMethodText } from '../../../utils/format';
 

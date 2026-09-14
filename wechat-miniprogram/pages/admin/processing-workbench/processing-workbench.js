@@ -1,4 +1,4 @@
-import { safeScanCode } from '../../../utils/scanner';
+import { safeScanCode } from '../utils/scanner';
 import {
   delayProcessingPlan,
   deleteProcessingPlan,
@@ -12,7 +12,7 @@ import {
   transitionProcessingPlan
 } from '../../../api/admin';
 import { formatDate, formatPickupCode, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { onAdminTabChange } from '../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 

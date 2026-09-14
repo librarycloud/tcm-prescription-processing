@@ -1,4 +1,4 @@
-import { safeScanCode } from '../../../utils/scanner';
+import { safeScanCode } from '../utils/scanner';
 import {
   addInitialGoodsCheckCount,
   createGoodsCheck,

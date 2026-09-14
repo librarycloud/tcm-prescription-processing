@@ -12,7 +12,7 @@ import { loadRefData, setRefDataUserRole } from '../../../utils/reference';
 import {
   choosePrescriptionAttachment,
   formatAttachmentSize
-} from '../../../utils/prescription-attachment';
+} from '../utils/prescription-attachment';
 
 const EXTERNAL_OPTIONS = [
   { label: '本方', value: false },

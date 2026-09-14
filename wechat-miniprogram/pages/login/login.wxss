@@ -19,42 +19,47 @@
   color: #86909c;
 }
 
-.mode-tabs {
-  display: flex;
-  gap: 16rpx;
-  margin-bottom: 24rpx;
-}
-
-.hint {
-  color: #4e5969;
-  line-height: 1.7;
-}
-
 .login-action {
   margin-top: 32rpx;
 }
 
-.bind-methods {
-  display: flex;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
+.wechat-login-section {
+  margin-top: 48rpx;
+  margin-bottom: 24rpx;
 }
 
-.password-field {
-  position: relative;
-}
-
-.password-eye {
-  position: absolute;
-  right: 20rpx;
-  bottom: 24rpx;
-  z-index: 1;
+.wechat-divider {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34rpx;
-  height: 34rpx;
+  margin-bottom: 28rpx;
+}
+
+.wechat-divider .line {
+  flex: 1;
+  height: 1rpx;
+  background: #e5e6eb;
+}
+
+.wechat-divider .text {
+  padding: 0 24rpx;
+  font-size: 24rpx;
   color: #86909c;
+}
+
+.btn-wechat {
+  background: #07c160 !important;
+  border-color: #07c160 !important;
+  color: #ffffff !important;
+  font-size: 30rpx !important;
+  font-weight: 500 !important;
+  border-radius: 16rpx !important;
+  box-shadow: 0 6rpx 20rpx rgba(7, 193, 96, 0.2) !important;
+}
+
+.btn-wechat:active {
+  background: #06ad56 !important;
+  opacity: 0.9 !important;
 }
 
 .agreement {

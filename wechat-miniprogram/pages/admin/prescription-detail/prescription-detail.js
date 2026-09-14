@@ -10,7 +10,7 @@ import { formatDate, formatPickupCode } from '../../../utils/format';
 import {
   choosePrescriptionAttachment,
   formatAttachmentSize
-} from '../../../utils/prescription-attachment';
+} from '../utils/prescription-attachment';
 import { copyToClipboard } from '../../../utils/wechat';
 
 

@@ -5,6 +5,6 @@
     "t-button": "tdesign-miniprogram/button/button",
     "t-input": "tdesign-miniprogram/input/input",
     "t-icon": "tdesign-miniprogram/icon/icon",
-    "t-radio": "tdesign-miniprogram/radio/radio"
+    "t-checkbox": "tdesign-miniprogram/checkbox/checkbox"
   }
 }

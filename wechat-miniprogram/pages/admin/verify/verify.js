@@ -1,4 +1,4 @@
-import { safeScanCode } from '../../../utils/scanner';
+import { safeScanCode } from '../utils/scanner';
 import { getPackageByPickupCode, verifyPackage } from '../../../api/admin';
 import {
   formatDate,

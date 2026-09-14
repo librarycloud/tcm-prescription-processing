@@ -1,6 +1,6 @@
 import { getPackages, getStores } from '../../../api/admin';
 import { formatDate, formatPickupCode, maskPhone, pickupMethodText, statusText, statusTheme } from '../../../utils/format';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { onAdminTabChange } from '../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 

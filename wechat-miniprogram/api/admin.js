@@ -382,3 +382,12 @@ export function addInitialGoodsCheckCount(id, data) {
 export function recountGoodsCheckItem(id, data) {
   return request({ url: `/admin/yd-goods-check/items/${id}/recount`, method: 'PUT', data });
 }
+
+export function getProfile() {
+  return request({ url: '/user/me' });
+}
+
+export function updateProfile(data) {
+  return request({ url: '/user/me', method: 'PUT', data });
+}
+

@@ -815,6 +815,14 @@ private fun MainShell(
     val navBackStack by navController.currentBackStackEntryAsState()
     val dest = navBackStack?.destination
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    
+    // Fix: Prevent the drawer from staying open when we navigate back to this screen
+    // after having previously navigated away from it via a drawer menu click.
+    LaunchedEffect(Unit) {
+        if (drawerState.isOpen) {
+            drawerState.snapTo(DrawerValue.Closed)
+        }
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val drawerWidth = 280.dp

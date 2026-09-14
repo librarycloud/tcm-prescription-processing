@@ -1,8 +1,19 @@
-import { getProfile, updateProfile } from '../../../api/user';
+import { getProfile, updateProfile } from '../../../api/admin';
 import { bindWechat, rebindWechat } from '../../../api/auth';
 import { clearSession, getToken, getUser, setSession } from '../../../utils/auth';
-import { getAppInfo } from '../../../utils/app-info';
 import { getWechatLoginCode } from '../../../utils/wechat';
+
+const DEFAULT_VERSION = '1.0.0';
+const UPLOAD_DATE = '2026-08-08';
+
+function getAppInfo() {
+  let version = DEFAULT_VERSION;
+  try {
+    const accountInfo = wx.getAccountInfoSync();
+    version = accountInfo?.miniProgram?.version || DEFAULT_VERSION;
+  } catch (error) {}
+  return { version, uploadDate: UPLOAD_DATE };
+}
 
 Page({
   data: {

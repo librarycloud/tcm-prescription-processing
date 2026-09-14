@@ -1,4 +1,4 @@
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { onAdminTabChange } from '../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 
 Page({

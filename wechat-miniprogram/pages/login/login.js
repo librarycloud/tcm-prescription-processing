@@ -1,23 +1,15 @@
-import { bindWechat, bindWechatByPickupCode, login, userLogin, wechatLogin } from '../../api/auth';
+import { login, wechatLogin, bindWechat } from '../../api/auth';
 import { getToken, getUser, redirectByRole, setSession } from '../../utils/auth';
 import { getWechatLoginCode } from '../../utils/wechat';
-import { formatPickupCode, normalizePickupCode } from '../../utils/format';
 
 Page({
   data: {
-    mode: 'wechat',
-    requiresBind: false,
-    bindToken: '',
-    bindMethod: 'password',
-    identifier: '',
-    phone: '',
-    password: '',
-    pickupCode: '',
-    passwordVisible: false,
     adminIdentifier: '',
     adminPassword: '',
-    agreeProtocol: true,
-    loading: false
+    agreeProtocol: false,
+    loading: false,
+    loadingWechat: false,
+    pendingBind: false
   },
 
   onLoad() {
@@ -26,35 +18,6 @@ Page({
     if (token && user) {
       redirectByRole(user);
     }
-  },
-
-  switchWechat() {
-    this.setData({ mode: 'wechat' });
-  },
-
-  switchAdmin() {
-    this.setData({ mode: 'admin' });
-  },
-
-  onPhoneChange(e) {
-    const field = this.data.bindMethod === 'pickup' ? 'phone' : 'identifier';
-    this.setData({ [field]: e.detail.value });
-  },
-
-  onPasswordChange(e) {
-    this.setData({ password: e.detail.value });
-  },
-
-  onPickupCodeChange(e) {
-    this.setData({ pickupCode: formatPickupCode(e.detail.value) });
-  },
-
-  switchBindMethod(e) {
-    this.setData({ bindMethod: e.currentTarget.dataset.method });
-  },
-
-  togglePasswordVisible() {
-    this.setData({ passwordVisible: !this.data.passwordVisible });
   },
 
   onAdminPhoneChange(e) {
@@ -67,12 +30,12 @@ Page({
 
   onProtocolChange(e) {
     const detail = e.detail || {};
-    const checked = typeof detail === 'object' ? detail.checked || detail.value === 'agree' : detail;
+    const checked = detail.checked !== undefined ? detail.checked : detail;
     this.setData({ agreeProtocol: Boolean(checked) });
   },
 
   selectProtocol() {
-    this.setData({ agreeProtocol: true });
+    this.setData({ agreeProtocol: !this.data.agreeProtocol });
   },
 
   goService() {
@@ -91,80 +54,60 @@ Page({
 
   async submitWechat() {
     if (!this.ensureProtocol()) return;
-    this.setData({ loading: true });
+    this.setData({ loadingWechat: true });
     try {
       const code = await getWechatLoginCode();
       const data = await wechatLogin(code);
+      
       if (data.requiresBind) {
-        this.setData({ requiresBind: true, bindToken: data.bindToken, password: '', pickupCode: '', phone: '', identifier: '' });
-        wx.showToast({ title: '请选择绑定方式', icon: 'none' });
+        this.setData({ pendingBind: true });
+        wx.showModal({
+          title: '绑定微信',
+          content: '首次使用微信登录，请先在上方输入账号密码完成登录，系统将自动为您绑定微信。',
+          showCancel: false,
+          confirmText: '我知道了'
+        });
         return;
       }
+      
       setSession(data);
       redirectByRole(data.user);
+    } catch (e) {
+      wx.showToast({ title: e.message || '微信登录失败', icon: 'none' });
     } finally {
-      this.setData({ loading: false });
-    }
-  },
-
-  async submitBind() {
-    if (!this.ensureProtocol()) return;
-    if (this.data.bindMethod === 'pickup' && !this.data.phone) {
-      wx.showToast({ title: '请输入手机号', icon: 'none' });
-      return;
-    }
-
-    this.setData({ loading: true });
-    try {
-      if (this.data.bindMethod === 'pickup') {
-        const pickupCode = normalizePickupCode(this.data.pickupCode);
-        if (!/^\d{6}$/.test(pickupCode)) {
-          wx.showToast({ title: '请输入6位数字取货码', icon: 'none' });
-          return;
-        }
-        const data = await bindWechatByPickupCode({
-          bindToken: this.data.bindToken,
-          phone: this.data.phone,
-          pickupCode
-        });
-        setSession(data);
-        redirectByRole(data.user);
-        return;
-      }
-      if (!this.data.password) {
-        wx.showToast({ title: '请输入密码', icon: 'none' });
-        return;
-      }
-      const account = await userLogin({
-        identifier: this.data.identifier,
-        password: this.data.password
-      });
-      setSession(account);
-      const code = await getWechatLoginCode();
-      const data = await bindWechat(code);
-      const session = { token: account.token, user: data.user };
-      setSession(session);
-      redirectByRole(session.user);
-    } finally {
-      this.setData({ loading: false, passwordVisible: false });
+      this.setData({ loadingWechat: false });
     }
   },
 
   async submitAdmin() {
     if (!this.ensureProtocol()) return;
     if (!this.data.adminIdentifier || !this.data.adminPassword) {
-      wx.showToast({ title: '请输入管理员账号和密码', icon: 'none' });
+      wx.showToast({ title: '请输入账号和密码', icon: 'none' });
       return;
     }
 
     this.setData({ loading: true });
     try {
-      const data = await login({
+      const account = await login({
         identifier: this.data.adminIdentifier,
         password: this.data.adminPassword
       });
-      setSession(data);
-      redirectByRole(data.user);
+      setSession(account);
+
+      if (this.data.pendingBind) {
+        try {
+          const code = await getWechatLoginCode();
+          const bindData = await bindWechat(code);
+          setSession({ token: account.token, user: bindData.user });
+          wx.showToast({ title: '微信绑定成功', icon: 'success' });
+        } catch (e) {
+          console.warn('Auto bind wechat failed:', e);
+        }
+      }
+
+      setTimeout(() => redirectByRole(account.user), 500);
+    } catch (e) {
+      wx.showToast({ title: e.message || '登录失败', icon: 'none' });
     } finally {
       this.setData({ loading: false });
     }

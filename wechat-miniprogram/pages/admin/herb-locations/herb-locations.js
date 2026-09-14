@@ -6,7 +6,7 @@ import {
   updateHerb,
   updateHerbLocationAssignment
 } from '../../../api/admin';
-import { onAdminTabChange } from '../../../utils/admin-tabbar';
+import { onAdminTabChange } from '../utils/admin-tabbar';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
 
