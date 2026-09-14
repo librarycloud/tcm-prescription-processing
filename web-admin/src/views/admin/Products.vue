@@ -254,6 +254,7 @@ import {
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { useUserStore } from '@/stores/user';
+import { useTable } from '@/utils/useTable';
 import {
   createProduct,
   downloadProductImportTemplate,
@@ -266,13 +267,28 @@ import {
 
 const userStore = useUserStore();
 const stores = ref([]);
-const list = ref([]);
-const loading = ref(false);
 const saving = ref(false);
 const productVisible = ref(false);
 const formRef = ref(null);
-const query = reactive({ storeId: '', keyword: '', status: '' });
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadProducts,
+  search,
+  reset: resetSearch
+} = useTable(
+  async (params) => {
+    return await getProducts({
+      ...params,
+      includeDisabled: params.status === '' ? '1' : undefined
+    });
+  },
+  { storeId: '', keyword: '', status: '' },
+  { pageSize: 20 }
+);
 const form = reactive({
   id: null,
   storeId: null,
@@ -313,32 +329,6 @@ function diffClass(value) {
 
 function priceText(value) {
   return Number(value || 0).toFixed(2);
-}
-
-async function loadProducts() {
-  loading.value = true;
-  try {
-    const data = await getProducts({
-      ...query,
-      includeDisabled: query.status === '' ? '1' : undefined,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function search() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadProducts();
-}
-
-function resetSearch() {
-  Object.assign(query, { storeId: '', keyword: '', status: '' });
-  search();
 }
 
 function resetForm() {
@@ -458,7 +448,7 @@ async function confirmImport() {
   }
 }
 
-watch(() => [pagination.page, pagination.pageSize], loadProducts);
+
 watch(overwriteDifference, () => {
   preview.value = null;
 });

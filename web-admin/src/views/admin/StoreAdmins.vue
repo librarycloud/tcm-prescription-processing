@@ -191,7 +191,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { Plus, Refresh, Search } from '@element-plus/icons-vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyView from '@/components/EmptyView.vue';
@@ -208,10 +208,10 @@ import { formatDate } from '@/utils/date';
 import { isValidPhone, maskPhone } from '@/utils/phone';
 import { ROLES } from '@/utils/permission';
 import { useUserStore } from '@/stores/user';
+import { useTable } from '@/utils/useTable';
 
 const userStore = useUserStore();
 const formRef = ref(null);
-const loading = ref(false);
 const saving = ref(false);
 const deleting = ref(false);
 const dialogVisible = ref(false);
@@ -219,10 +219,7 @@ const deleteVisible = ref(false);
 const editingId = ref(null);
 const selectedAdmin = ref(null);
 const selectedUserPhone = ref('');
-const list = ref([]);
 const stores = ref([]);
-const query = reactive({ keyword: '', storeId: '', status: '' });
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({
   userId: null,
   phone: '',
@@ -237,6 +234,22 @@ const form = reactive({
 });
 const dialogTitle = computed(() =>
   editingId.value ? '编辑门店账号' : form.userId ? '设置门店账号权限' : '新增门店账号'
+);
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    return await getStoreAdmins(params);
+  },
+  { keyword: '', storeId: '', status: '' },
+  { pageSize: 10 }
 );
 
 const rules = {
@@ -294,21 +307,6 @@ async function loadStores() {
   }
   const store = userStore.user?.store;
   stores.value = store ? [store] : [];
-}
-
-async function loadData() {
-  loading.value = true;
-  try {
-    const data = await getStoreAdmins({
-      ...query,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
 }
 
 function resetForm() {
@@ -450,17 +448,6 @@ async function handleDelete() {
   }
 }
 
-function handleSearch() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadData();
-}
-
-function handleReset() {
-  Object.assign(query, { keyword: '', storeId: '', status: '' });
-  handleSearch();
-}
-
-watch(() => [pagination.page, pagination.pageSize], loadData);
 onMounted(() => Promise.all([loadStores(), loadData()]));
 </script>
 

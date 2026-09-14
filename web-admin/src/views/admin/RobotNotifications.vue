@@ -165,11 +165,9 @@
           </el-table-column>
         </el-table>
         <Pagination
-          v-model:page="logQuery.page"
-          v-model:page-size="logQuery.pageSize"
-          :total="logTotal"
-          @update:page="loadLogs"
-          @update:page-size="searchLogs"
+          v-model:page="logPagination.page"
+          v-model:page-size="logPagination.pageSize"
+          :total="logPagination.total"
         />
       </el-tab-pane>
     </el-tabs>
@@ -336,11 +334,11 @@ import {
 import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
 import { ROBOT_DELIVERY_STATUS } from '@/constants/robotNotification';
+import { useTable } from '@/utils/useTable';
 
 const userStore = useUserStore();
 const activeTab = ref('robots');
 const loading = ref(false);
-const logsLoading = ref(false);
 const robots = ref([]);
 const stores = ref([]);
 const eventDefinitions = ref([]);
@@ -395,8 +393,6 @@ const testing = ref(false);
 const templateInput = ref(null);
 const testRobotTarget = ref(null);
 const testEventCode = ref('PACKAGE_CREATED');
-const logs = ref([]);
-const logTotal = ref(0);
 const logDetail = ref(null);
 const scopeOptions = [
   { label: '总部', value: 'HEADQUARTERS' },
@@ -429,7 +425,21 @@ const eventForm = reactive({
   templateContent: '',
   variables: []
 });
-const logQuery = reactive({ page: 1, pageSize: 20, robotId: null, eventCode: '', status: '' });
+
+const {
+  list: logs,
+  loading: logsLoading,
+  query: logQuery,
+  pagination: logPagination,
+  getList: loadLogs,
+  search: searchLogs
+} = useTable(
+  async (params) => {
+    return await getRobotLogs(params);
+  },
+  { robotId: null, eventCode: '', status: '' },
+  { pageSize: 20 }
+);
 
 function platformName(value) {
   return { wecom: '企业微信', dingtalk: '钉钉', feishu: '飞书' }[value] || value;
@@ -467,20 +477,6 @@ async function loadStores() {
     const data = await getStores({ page: 1, pageSize: 100, status: 1 });
     stores.value = data.list || [];
   }
-}
-async function loadLogs() {
-  logsLoading.value = true;
-  try {
-    const data = await getRobotLogs(logQuery);
-    logs.value = data.list || [];
-    logTotal.value = data.pagination?.total || 0;
-  } finally {
-    logsLoading.value = false;
-  }
-}
-function searchLogs() {
-  logQuery.page = 1;
-  loadLogs();
 }
 function handleTabChange(name) {
   if (name === 'logs') loadLogs();

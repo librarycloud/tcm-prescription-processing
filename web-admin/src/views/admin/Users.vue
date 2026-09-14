@@ -18,7 +18,7 @@
     <el-card shadow="never">
       <el-form class="search-form" @submit.prevent="handleSearch">
         <el-input
-          v-model.trim="keyword"
+          v-model.trim="query.keyword"
           clearable
           placeholder="搜索姓名、昵称、手机号、邮箱或备注"
           @keyup.enter="handleSearch"
@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { nextTick, onMounted, reactive, ref } from 'vue';
 import { Plus, Refresh, Search } from '@element-plus/icons-vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyView from '@/components/EmptyView.vue';
@@ -173,19 +173,16 @@ import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
 import { isValidPhone, maskPhone } from '@/utils/phone';
 import { ROLES } from '@/utils/permission';
+import { useTable } from '@/utils/useTable';
 
 const userStore = useUserStore();
 const formRef = ref(null);
-const loading = ref(false);
 const saving = ref(false);
 const deleting = ref(false);
 const editVisible = ref(false);
 const deleteVisible = ref(false);
-const keyword = ref('');
-const list = ref([]);
 const selectedUser = ref(null);
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({
   nickname: '',
   username: '',
@@ -196,6 +193,22 @@ const form = reactive({
   password: '',
   confirmPassword: ''
 });
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    return await getAdminUsers(params);
+  },
+  { keyword: '' },
+  { pageSize: 10 }
+);
 
 const rules = {
   username: [{
@@ -279,31 +292,6 @@ function roleTagType(role) {
   );
 }
 
-async function loadData() {
-  loading.value = true;
-  try {
-    const data = await getAdminUsers({
-      keyword: keyword.value,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadData();
-}
-
-function handleReset() {
-  keyword.value = '';
-  handleSearch();
-}
-
 function openEdit(row) {
   selectedUser.value = row;
   form.nickname = row.nickname || '';
@@ -379,11 +367,6 @@ async function handleDelete() {
     deleting.value = false;
   }
 }
-
-watch(
-  () => [pagination.page, pagination.pageSize],
-  () => loadData()
-);
 
 onMounted(loadData);
 </script>

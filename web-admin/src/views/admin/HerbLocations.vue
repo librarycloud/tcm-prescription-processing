@@ -272,7 +272,6 @@ import {
 import { useUserStore } from '@/stores/user';
 
 const userStore = useUserStore();
-const loading = ref(false);
 const saving = ref(false);
 const stores = ref([]);
 const storeId = ref(null);
@@ -558,21 +557,19 @@ function selectExistingHerb(id) {
   if (herb) Object.assign(assignmentForm.value, { name: herb.name, code: herb.code || '', specification: herb.specification || '' });
 }
 
-async function loadData() {
-  if (!storeId.value) return;
-  loading.value = true;
-  try {
-    const data = await getHerbLocations(storeId.value);
-    currentStore.value = data.store;
-    layout.value = normalizeLayout(data.layout);
-    locations.value = data.locations || [];
-    herbs.value = data.herbs || [];
-    if (!unitNumbers.value.includes(selectedUnit.value)) selectedUnit.value = unitNumbers.value[0] || 1;
-    if (selectedLocation.value) selectedLocation.value = locationMap.value.get(selectedLocation.value.code) || null;
-  } finally {
-    loading.value = false;
-  }
-}
+import { useTable } from '@/utils/useTable';
+
+const { loading, getList: loadData } = useTable(async () => {
+  if (!storeId.value) return [];
+  const data = await getHerbLocations(storeId.value);
+  currentStore.value = data.store;
+  layout.value = normalizeLayout(data.layout);
+  locations.value = data.locations || [];
+  herbs.value = data.herbs || [];
+  if (!unitNumbers.value.includes(selectedUnit.value)) selectedUnit.value = unitNumbers.value[0] || 1;
+  if (selectedLocation.value) selectedLocation.value = locationMap.value.get(selectedLocation.value.code) || null;
+  return [];
+});
 
 async function saveAssignment() {
   const form = assignmentForm.value;

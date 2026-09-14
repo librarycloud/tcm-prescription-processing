@@ -262,7 +262,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { nextTick, onMounted, reactive, ref } from 'vue';
 import { CopyDocument, Key, Plus, Refresh, Search } from '@element-plus/icons-vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyView from '@/components/EmptyView.vue';
@@ -283,10 +283,10 @@ import {
 } from '@/api/e6Integration';
 import { getDoctors } from '@/api/processing';
 import { useUserStore } from '@/stores/user';
+import { useTable } from '@/utils/useTable';
 
 const userStore = useUserStore();
 const formRef = ref(null);
-const loading = ref(false);
 const saving = ref(false);
 const deleting = ref(false);
 const dialogVisible = ref(false);
@@ -309,9 +309,6 @@ const operatorMappingSaving = ref(false);
 const e6OperatorMappings = ref([]);
 const e6Doctors = ref([]);
 const newApiKey = ref('');
-const list = ref([]);
-const query = reactive({ keyword: '', status: '' });
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({ name: '', code: '', address: '', phone: '', status: 1 });
 const e6Config = reactive({ enabled: 0, hasApiKey: false, apiKeyHint: '', lastUsedAt: null });
 const mappingForm = reactive({ id: null, e6DoctorCode: '', doctorId: '', status: 1 });
@@ -323,6 +320,28 @@ const layoutForm = reactive({
   bigCabinetUnitCount: 5,
   bigCabinetLayerCount: 3
 });
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    if (userStore.isStoreAdmin) {
+      const data = await getHerbLocationLayout();
+      const items = data?.store ? [{ ...data.store, ...data.layout }] : [];
+      return { list: items, pagination: { total: items.length } };
+    }
+    return await getStores(params);
+  },
+  { keyword: '', status: '' },
+  { pageSize: 10 }
+);
+
 const rules = {
   name: [{ required: true, message: '请输入门店名称', trigger: 'blur' }],
   code: [
@@ -330,23 +349,6 @@ const rules = {
     { pattern: /^[A-Za-z0-9_-]{2,50}$/, message: '仅支持字母、数字、横线和下划线', trigger: 'blur' }
   ]
 };
-
-async function loadData() {
-  loading.value = true;
-  try {
-    if (userStore.isStoreAdmin) {
-      const data = await getHerbLocationLayout();
-      list.value = data?.store ? [{ ...data.store, ...data.layout }] : [];
-      pagination.total = list.value.length;
-      return;
-    }
-    const data = await getStores({ ...query, page: pagination.page, pageSize: pagination.pageSize });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
 
 function resetForm() {
   Object.assign(form, { name: '', code: '', address: '', phone: '', status: 1 });
@@ -636,17 +638,6 @@ async function handleDelete() {
   }
 }
 
-function handleSearch() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadData();
-}
-
-function handleReset() {
-  Object.assign(query, { keyword: '', status: '' });
-  handleSearch();
-}
-
-watch(() => [pagination.page, pagination.pageSize], loadData);
 onMounted(loadData);
 </script>
 

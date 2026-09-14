@@ -568,6 +568,8 @@ import {
   updateStoreTransferReturn
 } from '@/api/storeTransfer';
 
+import { useTable } from '@/utils/useTable';
+
 const statusOptions = Object.freeze([
   { label: '借出中', value: TRANSFER_STATUS.BORROWING },
   { label: '部分归还', value: TRANSFER_STATUS.PART_RETURNED },
@@ -578,7 +580,6 @@ const statusOptions = Object.freeze([
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const loading = ref(false);
 const detailLoading = ref(false);
 const saving = ref(false);
 const drawerVisible = ref(false);
@@ -589,13 +590,32 @@ const expectedDateVisible = ref(false);
 const drawerMode = ref('detail');
 const detail = ref(null);
 const stores = ref([]);
-const list = ref([]);
 const dateRange = ref([]);
 const expectedDate = ref('');
 const createFormRef = ref(null);
-const query = reactive({ keyword: '', status: '', storeId: '', pending: '', overdue: '' });
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const stats = reactive({ borrowing: 0, partReturned: 0, pending: 0, overdue: 0 });
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadList,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    const data = await getStoreTransfers({
+      ...params,
+      startDate: dateRange.value?.[0] || undefined,
+      endDate: dateRange.value?.[1] || undefined
+    });
+    return data;
+  },
+  { keyword: '', status: '', storeId: '', pending: '', overdue: '' },
+  { pageSize: 10 }
+);
+
 const createForm = reactive({});
 const returnForm = reactive({ returnDate: '', remark: '', items: [] });
 const createRules = {
@@ -678,27 +698,10 @@ function itemSummary(row) {
   return names.length > 2 ? `${names.slice(0, 2).join('、')} 等` : names.join('、') || '-';
 }
 
-async function loadList() {
-  loading.value = true;
-  try {
-    const data = await getStoreTransfers({
-      ...query,
-      startDate: dateRange.value?.[0] || undefined,
-      endDate: dateRange.value?.[1] || undefined,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
 async function loadStats() {
   Object.assign(
     stats,
-    (await getStoreTransferStats({ storeId: query.storeId || undefined })) || {}
+    (await getStoreTransferStats({ storeId: query.value.storeId || undefined })) || {}
   );
 }
 
@@ -707,44 +710,43 @@ async function reload() {
 }
 
 function search() {
-  pagination.page = 1;
-  if (query.status) {
-    query.pending = '';
-    query.overdue = '';
+  if (query.value.status) {
+    query.value.pending = '';
+    query.value.overdue = '';
   }
-  reload();
+  handleSearch();
+  loadStats();
 }
 
 function resetSearch() {
-  Object.assign(query, { keyword: '', status: '', storeId: '', pending: '', overdue: '' });
+  handleReset();
   dateRange.value = [];
-  pagination.page = 1;
   router.replace({ query: {} });
-  reload();
+  loadStats();
 }
 
 function applyStatus(status) {
-  query.status = status;
-  query.pending = '';
-  query.overdue = '';
-  pagination.page = 1;
-  loadList();
+  query.value.status = status;
+  query.value.pending = '';
+  query.value.overdue = '';
+  handleSearch();
+  loadStats();
 }
 
 function applyPending() {
-  query.status = '';
-  query.pending = '1';
-  query.overdue = '';
-  pagination.page = 1;
-  loadList();
+  query.value.status = '';
+  query.value.pending = '1';
+  query.value.overdue = '';
+  handleSearch();
+  loadStats();
 }
 
 function applyOverdue() {
-  query.status = '';
-  query.pending = '';
-  query.overdue = '1';
-  pagination.page = 1;
-  loadList();
+  query.value.status = '';
+  query.value.pending = '';
+  query.value.overdue = '1';
+  handleSearch();
+  loadStats();
 }
 
 function openCreate() {
@@ -986,7 +988,6 @@ async function cancelTransfer() {
   await reload();
 }
 
-watch(() => [pagination.page, pagination.pageSize], loadList);
 watch(
   () => createForm.fromStoreId,
   () => {
@@ -1004,11 +1005,11 @@ onMounted(async () => {
   stores.value = (await getTransferStores()) || [];
   const routeStatus = Number(route.query.status);
   if (route.query.status !== undefined && Object.values(TRANSFER_STATUS).includes(routeStatus)) {
-    query.status = routeStatus;
+    query.value.status = routeStatus;
   }
-  if (route.query.pending === '1') query.pending = '1';
-  if (route.query.overdue === '1') query.overdue = '1';
-  if (userStore.isSuperAdmin && route.query.storeId) query.storeId = Number(route.query.storeId);
+  if (route.query.pending === '1') query.value.pending = '1';
+  if (route.query.overdue === '1') query.value.overdue = '1';
+  if (userStore.isSuperAdmin && route.query.storeId) query.value.storeId = Number(route.query.storeId);
   resetCreateForm();
   await reload();
 });

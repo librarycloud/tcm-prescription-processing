@@ -81,55 +81,48 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { onMounted, ref } from 'vue';
 import { Refresh, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { getOperationLogs } from '@/api/operationLog';
 import { getStores } from '@/api/store';
 import { formatDate } from '@/utils/date';
+import { useTable } from '@/utils/useTable';
 
-const loading = ref(false);
-const list = ref([]);
 const stores = ref([]);
 const dateRange = ref([]);
-const filters = reactive({ storeId: '', actorId: undefined, module: '', action: '' });
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
+
+const {
+  list,
+  loading,
+  query: filters,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset
+} = useTable(
+  async (params) => {
+    return await getOperationLogs({
+      ...params,
+      startDate: dateRange.value?.[0] || '',
+      endDate: dateRange.value?.[1] || ''
+    });
+  },
+  { storeId: '', actorId: undefined, module: '', action: '' },
+  { pageSize: 20 }
+);
 
 async function loadStores() {
   const data = await getStores({ page: 1, pageSize: 100, status: 1 });
   stores.value = data?.list || [];
 }
 
-async function loadData() {
-  loading.value = true;
-  try {
-    const data = await getOperationLogs({
-      ...filters,
-      startDate: dateRange.value?.[0] || '',
-      endDate: dateRange.value?.[1] || '',
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadData();
-}
-
 function handleReset() {
-  Object.assign(filters, { storeId: '', actorId: undefined, module: '', action: '' });
   dateRange.value = [];
-  handleSearch();
+  reset();
 }
 
-watch(() => [pagination.page, pagination.pageSize], loadData);
 onMounted(() => Promise.all([loadStores(), loadData()]));
 </script>
 

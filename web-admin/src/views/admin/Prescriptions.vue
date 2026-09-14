@@ -290,8 +290,9 @@
 
 <script setup>
 import { defineAsyncComponent } from "vue";
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { useTable } from '@/utils/useTable';
 import { Plus, Printer, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
@@ -331,12 +332,26 @@ const packageDrawerId = ref(null);
 const packageDrawerCode = ref('');
 const packageDetailRef = ref(null);
 const formRef = ref(null);
-const list = ref([]);
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: load,
+  search,
+  reset: resetSearch
+} = useTable(
+  async (params) => {
+    return await getPrescriptions(params);
+  },
+  { keyword: '', status: '', doctorId: '', storeId: '' },
+  { pageSize: 10 }
+);
+
 const doctors = ref([]);
 const sources = ref([]);
 const stores = ref([]);
-const query = reactive({ keyword: '', status: '', doctorId: '', storeId: '' });
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const form = reactive({});
 const rules = {
   storeId: [{ required: true, message: '请选择所属门店', trigger: 'change' }],
@@ -389,31 +404,6 @@ function statusText(status) {
 
 function statusType(status) {
   return ['info', 'success', 'danger'][Number(status)] || 'info';
-}
-
-async function load() {
-  loading.value = true;
-  try {
-    const data = await getPrescriptions({
-      ...query,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function search() {
-  pagination.page = 1;
-  load();
-}
-
-function resetSearch() {
-  Object.assign(query, { keyword: '', status: '', doctorId: '', storeId: '' });
-  search();
 }
 
 function openCreate() {
@@ -511,7 +501,6 @@ async function remove(row) {
   await load();
 }
 
-watch(() => [pagination.page, pagination.pageSize], load);
 onMounted(async () => {
   const tasks = [getDoctors(), getDictionaries('PrescriptionSource')];
   if (userStore.isSuperAdmin) tasks.push(getStores({ page: 1, pageSize: 100, status: 1 }));

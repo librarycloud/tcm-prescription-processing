@@ -285,25 +285,12 @@ import { formatDateSeconds } from '@/utils/date';
 
 const userStore = useUserStore();
 const tableRef = ref();
-const loading = ref(false);
-const list = ref([]);
 const stores = ref([]);
 const categoryMappings = ref([]);
 const barcodeImportVisible = ref(false);
 const barcodeImporting = ref(false);
 const barcodeFile = ref(null);
 const barcodeResult = ref(null);
-const query = reactive({
-  keyword: '',
-  storeId: undefined,
-  categoryCode: undefined,
-  stockStatus: undefined,
-  expiryWithinMonths: undefined,
-  customExpiryMonths: 1,
-  sortBy: undefined,
-  sortOrder: undefined
-});
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 
 function dateText(value) {
   if (!value) return '-';
@@ -355,35 +342,61 @@ async function loadCategoryMappings() {
   categoryMappings.value = await getE6PharmacyCategoryMappings();
 }
 
-async function load() {
-  loading.value = true;
-  try {
+import { useTable } from '@/utils/useTable';
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: load,
+  search,
+  reset: baseReset
+} = useTable(
+  async (params) => {
     const data = await getE6PharmacyProducts({
-      keyword: query.keyword || undefined,
-      storeId: query.storeId || undefined,
-      categoryCode: query.categoryCode || undefined,
-      stockStatus: query.stockStatus || 'all',
+      keyword: params.keyword || undefined,
+      storeId: params.storeId || undefined,
+      categoryCode: params.categoryCode || undefined,
+      stockStatus: params.stockStatus || 'all',
       expiryWithinMonths: expiryFilterValue(),
-      sortBy: query.sortBy || undefined,
-      sortOrder: query.sortOrder || undefined,
-      page: pagination.page,
-      pageSize: pagination.pageSize
+      sortBy: params.sortBy || undefined,
+      sortOrder: params.sortOrder || undefined,
+      page: params.page,
+      pageSize: params.pageSize
     });
-    list.value = data.list || [];
-    Object.assign(pagination, data.pagination || {});
-    const keyword = String(query.keyword || '').trim();
-    const exactMatches = list.value.filter(
-      (item) =>
-        String(item.productCode || '').trim() === keyword ||
-        String(item.barcode || '').trim() === keyword
-    );
-    if (exactMatches.length === 1) {
-      await nextTick();
-      tableRef.value?.toggleRowExpansion(exactMatches[0], true);
+    return data;
+  },
+  {
+    keyword: '',
+    storeId: undefined,
+    categoryCode: undefined,
+    stockStatus: undefined,
+    expiryWithinMonths: undefined,
+    customExpiryMonths: 1,
+    sortBy: undefined,
+    sortOrder: undefined
+  },
+  {
+    pageSize: 20,
+    afterFetch: async (data) => {
+      const keyword = String(query.keyword || '').trim();
+      const exactMatches = (data?.list || []).filter(
+        (item) =>
+          String(item.productCode || '').trim() === keyword ||
+          String(item.barcode || '').trim() === keyword
+      );
+      if (exactMatches.length === 1) {
+        await nextTick();
+        tableRef.value?.toggleRowExpansion(exactMatches[0], true);
+      }
     }
-  } finally {
-    loading.value = false;
   }
+);
+
+function resetSearch() {
+  baseReset();
+  tableRef.value?.clearSort();
 }
 
 function expiryFilterValue() {
@@ -403,25 +416,6 @@ function handleSortChange({ prop, order }) {
     query.sortBy = prop;
     query.sortOrder = order === 'ascending' ? 'asc' : 'desc';
   }
-  pagination.page = 1;
-  load();
-}
-
-function search() {
-  pagination.page = 1;
-  load();
-}
-
-function resetSearch() {
-  query.keyword = '';
-  query.storeId = undefined;
-  query.categoryCode = undefined;
-  query.stockStatus = undefined;
-  query.expiryWithinMonths = undefined;
-  query.customExpiryMonths = 1;
-  query.sortBy = undefined;
-  query.sortOrder = undefined;
-  tableRef.value?.clearSort();
   pagination.page = 1;
   load();
 }
@@ -467,8 +461,6 @@ async function submitBarcodeImport() {
     barcodeImporting.value = false;
   }
 }
-
-watch(() => [pagination.page, pagination.pageSize], load);
 
 onMounted(async () => {
   await loadStores();

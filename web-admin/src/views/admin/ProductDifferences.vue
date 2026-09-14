@@ -459,6 +459,7 @@ import {
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { useUserStore } from '@/stores/user';
+import { useTable } from '@/utils/useTable';
 import {
   getProductDiffLogs,
   getProductDiffStats,
@@ -474,16 +475,50 @@ const userStore = useUserStore();
 const activeTab = ref('current');
 const stores = ref([]);
 const stats = reactive({ total: 0, more: 0, less: 0 });
-const currentList = ref([]);
-const currentLoading = ref(false);
 const includeBalanced = ref(false);
-const currentQuery = reactive({ storeId: '', keyword: '', direction: '' });
-const currentPagination = reactive({ page: 1, pageSize: 20, total: 0 });
-const logs = ref([]);
-const logsLoading = ref(false);
-const logQuery = reactive({ storeId: '', keyword: '', operationType: '', productId: '' });
 const logDateRange = ref([]);
-const logPagination = reactive({ page: 1, pageSize: 20, total: 0 });
+
+const {
+  list: currentList,
+  loading: currentLoading,
+  query: currentQuery,
+  pagination: currentPagination,
+  getList: loadCurrent,
+  search: searchCurrent,
+  reset: baseResetCurrent
+} = useTable(
+  async (params) => {
+    Object.assign(stats, await getProductDiffStats({ storeId: params.storeId || undefined }));
+    return await getProducts({
+      ...params,
+      includeDisabled: '1',
+      onlyDifference: includeBalanced.value ? undefined : '1'
+    });
+  },
+  { storeId: '', keyword: '', direction: '' },
+  { pageSize: 20 }
+);
+
+const {
+  list: logs,
+  loading: logsLoading,
+  query: logQuery,
+  pagination: logPagination,
+  getList: loadLogs,
+  search: searchLogs,
+  reset: baseResetLogs
+} = useTable(
+  async (params) => {
+    return await getProductDiffLogs({
+      ...params,
+      startDate: logDateRange.value?.[0] || undefined,
+      endDate: logDateRange.value?.[1] || undefined
+    });
+  },
+  { storeId: '', keyword: '', operationType: '', productId: '' },
+  { pageSize: 20 }
+);
+
 const saving = ref(false);
 
 const operationOptions = [
@@ -548,53 +583,9 @@ function operatorName(user) {
   return user?.name || user?.nickname || user?.phone || '-';
 }
 
-async function loadCurrent() {
-  currentLoading.value = true;
-  try {
-    const data = await getProducts({
-      ...currentQuery,
-      includeDisabled: '1',
-      onlyDifference: includeBalanced.value ? undefined : '1',
-      page: currentPagination.page,
-      pageSize: currentPagination.pageSize
-    });
-    currentList.value = data?.list || [];
-    currentPagination.total = data?.pagination?.total || 0;
-  } finally {
-    currentLoading.value = false;
-  }
-}
-
-async function loadStats() {
-  Object.assign(stats, await getProductDiffStats({ storeId: currentQuery.storeId || undefined }));
-}
-
-async function loadLogs() {
-  logsLoading.value = true;
-  try {
-    const data = await getProductDiffLogs({
-      ...logQuery,
-      startDate: logDateRange.value?.[0] || undefined,
-      endDate: logDateRange.value?.[1] || undefined,
-      page: logPagination.page,
-      pageSize: logPagination.pageSize
-    });
-    logs.value = data?.list || [];
-    logPagination.total = data?.pagination?.total || 0;
-  } finally {
-    logsLoading.value = false;
-  }
-}
-
-function searchCurrent() {
-  if (currentPagination.page !== 1) currentPagination.page = 1;
-  else Promise.all([loadCurrent(), loadStats()]);
-}
-
 function resetCurrent() {
-  Object.assign(currentQuery, { storeId: '', keyword: '', direction: '' });
   includeBalanced.value = false;
-  searchCurrent();
+  baseResetCurrent();
 }
 
 function setDirection(direction) {
@@ -607,15 +598,9 @@ function storeFilterChanged() {
   searchCurrent();
 }
 
-function searchLogs() {
-  if (logPagination.page !== 1) logPagination.page = 1;
-  else loadLogs();
-}
-
 function resetLogs() {
-  Object.assign(logQuery, { storeId: '', keyword: '', operationType: '', productId: '' });
   logDateRange.value = [];
-  searchLogs();
+  baseResetLogs();
 }
 
 function toggleDifferenceView() {
@@ -627,12 +612,11 @@ function toggleDifferenceView() {
       keyword: '',
       operationType: ''
     });
-    logPagination.page = 1;
-    loadLogs();
+    searchLogs();
     return;
   }
   activeTab.value = 'current';
-  Promise.all([loadCurrent(), loadStats()]);
+  loadCurrent();
 }
 
 function showProductLogs(row) {
@@ -643,8 +627,7 @@ function showProductLogs(row) {
     keyword: '',
     operationType: ''
   });
-  logPagination.page = 1;
-  loadLogs();
+  searchLogs();
 }
 
 const registerVisible = ref(false);
@@ -760,7 +743,6 @@ async function saveRegister() {
     registerVisible.value = false;
     await Promise.all([
       loadCurrent(),
-      loadStats(),
       ...(activeTab.value === 'logs' ? [loadLogs()] : [])
     ]);
   } finally {
@@ -842,11 +824,10 @@ async function reverseLog(row) {
   await Promise.all([loadLogs(), loadCurrent(), loadStats()]);
 }
 
-watch(() => [currentPagination.page, currentPagination.pageSize], loadCurrent);
-watch(() => [logPagination.page, logPagination.pageSize], loadLogs);
+
 onMounted(async () => {
   stores.value = await getProductStores();
-  await Promise.all([loadCurrent(), loadStats()]);
+  await loadCurrent();
 });
 </script>
 

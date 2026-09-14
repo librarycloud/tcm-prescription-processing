@@ -84,10 +84,9 @@
     </el-table>
 
     <Pagination
-      v-model:page="query.page"
-      v-model:page-size="query.pageSize"
-      :total="total"
-      @change="load"
+      v-model:page="pagination.page"
+      v-model:page-size="pagination.pageSize"
+      :total="pagination.total"
     />
 
     <el-dialog
@@ -171,19 +170,33 @@ import {
 } from '@/api/processingEquipment';
 import { getStores } from '@/api/store';
 import { useUserStore } from '@/stores/user';
+import { useTable } from '@/utils/useTable';
 
 const userStore = useUserStore();
-const loading = ref(false);
 const saving = ref(false);
-const list = ref([]);
-const total = ref(0);
 const stores = ref([]);
 const typeOptions = ref([
   { value: 'SOAK_BUCKET', label: '浸泡桶' },
   { value: 'DECOCTION_POT', label: '煎药机' },
   { value: 'PACKAGING_MACHINE', label: '包装机' }
 ]);
-const query = reactive({ page: 1, pageSize: 20, keyword: '', type: '', status: '', storeId: '' });
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: load,
+  search
+} = useTable(
+  async (params) => {
+    const data = await getProcessingEquipment(params);
+    if (data.types?.length) typeOptions.value = data.types;
+    return data;
+  },
+  { keyword: '', type: '', status: '', storeId: '' },
+  { pageSize: 20 }
+);
 const formVisible = ref(false);
 const printVisible = ref(false);
 const printingEquipment = ref(null);
@@ -217,21 +230,6 @@ function statusType(status) {
   return { 0: 'info', 1: 'success', 2: 'warning' }[Number(status)] || 'info';
 }
 
-async function load() {
-  loading.value = true;
-  try {
-    const data = await getProcessingEquipment(query);
-    list.value = data.list || [];
-    total.value = data.pagination?.total || 0;
-    if (data.types?.length) typeOptions.value = data.types;
-  } finally {
-    loading.value = false;
-  }
-}
-function search() {
-  query.page = 1;
-  load();
-}
 function openForm(row = null) {
   Object.assign(form, {
     id: row?.id || null,

@@ -458,7 +458,6 @@ import { datePlusDays, splitDoseBatches } from '@/utils/processingBatches';
 
 const userStore = useUserStore();
 const router = useRouter();
-const loading = ref(false);
 const confirming = ref(false);
 const detailVisible = ref(false);
 const confirmVisible = ref(false);
@@ -467,7 +466,6 @@ const planPrintLoading = ref(false);
 const planPrintInfo = ref(null);
 const planPrintType = ref('PROCESSING');
 const confirmFormRef = ref(null);
-const list = ref([]);
 const stores = ref([]);
 const processTypes = ref([]);
 const doctors = ref([]);
@@ -488,8 +486,6 @@ const pickupOptions = [
   { label: '跑腿', value: 1 },
   { label: '快递', value: 2 }
 ];
-const query = reactive({ keyword: '', orderDate: todayText(), storeId: '', status: '', cashierName: '' });
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const confirmForm = reactive({
   customerName: '',
   phone: '',
@@ -669,20 +665,23 @@ function handleSelectionChange(rows) {
   selectedRows.value = rows;
 }
 
-async function loadData() {
-  loading.value = true;
-  try {
-    const data = await getE6Imports({
-      ...query,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
+import { useTable } from '@/utils/useTable';
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    return await getE6Imports(params);
+  },
+  { keyword: '', orderDate: todayText(), storeId: '', status: '', cashierName: '' },
+  { pageSize: 20 }
+);
 
 async function loadReferences() {
   const requests = [getDictionaries('ProcessType'), getDoctors()];
@@ -703,15 +702,6 @@ async function loadOperatorOptions() {
     value: name,
     label: mappedNames.get(name) || name
   }));
-}
-
-function handleSearch() {
-  if (pagination.page !== 1) pagination.page = 1;
-  else loadData();
-}
-function handleReset() {
-  Object.assign(query, { keyword: '', orderDate: todayText(), storeId: '', status: '', cashierName: '' });
-  handleSearch();
 }
 function handleShowAll() {
   query.orderDate = '';
@@ -859,7 +849,6 @@ async function handleReject(row) {
   await loadData();
 }
 
-watch(() => [pagination.page, pagination.pageSize], loadData);
 watch(() => query.storeId, async () => {
   query.cashierName = '';
   await loadOperatorOptions();

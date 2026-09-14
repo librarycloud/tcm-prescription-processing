@@ -1310,6 +1310,7 @@ import {
   pickupMethodTagType,
   pickupMethodText
 } from '@/utils/status';
+import { useTable } from '@/utils/useTable';
 
 const statuses = PROCESSING_STATUS_OPTIONS;
 const statusMap = Object.fromEntries(statuses.map((item) => [item.value, item.label]));
@@ -1868,14 +1869,12 @@ const listViews = [
   'all'
 ];
 const activeView = ref(listViews.includes(route.query.view) ? route.query.view : 'today-all');
-const loading = ref(false);
 const calendarLoading = ref(false);
 const prescriptionLoading = ref(false);
 const finishDialogVisible = ref(false);
 const finishingPlan = ref(null);
 const finishing = ref(false);
 const saving = ref(false);
-const list = ref([]);
 const calendarList = ref([]);
 const prescriptions = ref([]);
 const processTypes = ref([]);
@@ -1935,7 +1934,28 @@ const calendarDate = ref(new Date());
 const calendarCounts = ref({});
 const noticePreset = ref('today');
 const noticeDate = ref('');
-const query = reactive({ keyword: '', status: '', processTypeId: '', doctorId: '', storeId: '' });
+
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: load,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    const data = await getProcessingPlans({
+      ...(activeView.value === 'all' ? params : { storeId: currentStoreId(), page: params.page, pageSize: params.pageSize }),
+      view: activeView.value
+    });
+    await nextTick();
+    bindDragRows();
+    return data;
+  },
+  { keyword: '', status: '', processTypeId: '', doctorId: '', storeId: '' },
+  { pageSize: 20 }
+);
 
 function releaseDetailPhotos() {
   detailPhotoUrls.value.forEach((item) => URL.revokeObjectURL(item.url));
@@ -2054,7 +2074,6 @@ async function submitManualUsage() {
 watch(detailVisible, (visible) => {
   if (!visible) releaseDetailPhotos();
 });
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
 const stats = reactive({
   waitingCount: 0,
   overdueCount: 0,
@@ -2136,7 +2155,7 @@ const canEditQueue = computed(
   () =>
     mode.value === 'list' &&
     activeView.value === 'today-waiting' &&
-    (!userStore.isSuperAdmin || Boolean(query.storeId))
+    (!userStore.isSuperAdmin || Boolean(query.value.storeId))
 );
 const scheduleDialogTitle = '修改计划开工 / 延期';
 const pickupDrawerTitle = computed(() => {
@@ -2182,7 +2201,7 @@ function monthText(value) {
   return dateText(value).slice(0, 7);
 }
 function currentStoreId() {
-  return userStore.isSuperAdmin ? query.storeId || undefined : undefined;
+  return userStore.isSuperAdmin ? query.value.storeId || undefined : undefined;
 }
 function notifyTypeText(value) {
   return notifyTypes.value.find((item) => item.value === value)?.label || value || '不提醒';
@@ -2336,23 +2355,6 @@ function copyPreviousBatch(index) {
 async function loadStats() {
   Object.assign(stats, await getStats({ storeId: currentStoreId() }));
 }
-async function load() {
-  loading.value = true;
-  try {
-    const data = await getProcessingPlans({
-      ...(activeView.value === 'all' ? query : { storeId: currentStoreId() }),
-      view: activeView.value,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = data?.list || [];
-    pagination.total = data?.pagination?.total || 0;
-    await nextTick();
-    bindDragRows();
-  } finally {
-    loading.value = false;
-  }
-}
 async function loadCalendar() {
   calendarCounts.value = await getProcessingCalendar({
     month: monthText(calendarDate.value),
@@ -2382,21 +2384,20 @@ async function reloadAll() {
 function changeMode(value) {
   router.replace({ query: value === 'list' ? {} : { mode: value } });
   if (value === 'calendar') loadCalendar();
-  if (value === 'list') load();
+  if (value === 'list') handleSearch();
 }
 function selectView(view) {
   mode.value = 'list';
   activeView.value = view;
-  pagination.page = 1;
-  load();
+  handleSearch();
 }
 function search() {
-  pagination.page = 1;
-  reloadAll();
+  handleSearch();
+  loadStats();
 }
 function resetFilters() {
-  Object.assign(query, { keyword: '', status: '', processTypeId: '', doctorId: '', storeId: '' });
-  search();
+  handleReset();
+  loadStats();
 }
 
 function resetForm() {
@@ -2946,7 +2947,7 @@ function bindDragRows() {
   });
 }
 
-watch(() => [pagination.page, pagination.pageSize], load);
+
 watch(calendarDate, (current, previous) => {
   monthText(current) === monthText(previous) ? loadCalendarDay() : loadCalendar();
 });
@@ -2964,7 +2965,7 @@ onMounted(async () => {
   doctors.value = doctorData || [];
   sources.value = sourceData || [];
   stores.value = storeData?.list || [];
-  if (userStore.isSuperAdmin && route.query.storeId) query.storeId = Number(route.query.storeId);
+  if (userStore.isSuperAdmin && route.query.storeId) query.value.storeId = Number(route.query.storeId);
   const mappedNotifyTypes = (notifyData || []).map((item) => ({
     label: item.name,
     value: item.id,

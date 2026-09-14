@@ -135,9 +135,31 @@ import { addInitialCount, createGoodsCheck, deleteGoodsCheck, exportGoodsCheck, 
 import EmptyView from '@/components/EmptyView.vue';
 import Pagination from '@/components/Pagination.vue';
 import { formatDateSeconds } from '@/utils/date';
+import { useTable } from '@/utils/useTable';
 
-const userStore = useUserStore(); const stores = ref([]); const categoryMappings = ref([]); const checks = ref([]); const items = ref([]); const selectedCheck = ref(null); const selectedReviewRows = ref([]); const checksLoading = ref(false); const itemsLoading = ref(false);
-const checkQuery = reactive({ storeId: undefined, status: undefined }); const checkPagination = reactive({ page: 1, pageSize: 20, total: 0 }); const itemQuery = reactive({ keyword: '', locationName: '', checkStatus: undefined, locationStatus: undefined }); const itemPagination = reactive({ page: 1, pageSize: 50, total: 0 });
+const userStore = useUserStore(); const stores = ref([]); const categoryMappings = ref([]); const items = ref([]); const selectedCheck = ref(null); const selectedReviewRows = ref([]); const itemsLoading = ref(false);
+const itemQuery = reactive({ keyword: '', locationName: '', checkStatus: undefined, locationStatus: undefined }); const itemPagination = reactive({ page: 1, pageSize: 50, total: 0 });
+
+const {
+  list: checks,
+  loading: checksLoading,
+  query: checkQuery,
+  pagination: checkPagination,
+  getList: loadChecks,
+  reset: resetChecks
+} = useTable(
+  async (params) => {
+    const data = await getGoodsChecks(params);
+    if (selectedCheck.value) {
+      const fresh = (data.list || []).find((x) => x.id === selectedCheck.value.id);
+      if (fresh) selectedCheck.value = fresh;
+    }
+    return data;
+  },
+  { storeId: undefined, status: undefined },
+  { pageSize: 20 }
+);
+
 const planDialog = ref(false); const editingCheck = ref(null); const createForm = reactive({ storeId: undefined, checkName: '', checkType: 1, categoryCodes: [] }); const countDialog = ref(false); const countForm = reactive({ mode: 'initial', id: null, product: null, batchNo: '', location: '', manualBatch: false, editing: false, systemQty: 0, qty: 0 }); const locationDialog = ref(false); const locationForm = reactive({ id: null, systemLocationName: '', location: '' }); const candidateDialog = ref(false); const candidateProductTableRef = ref(); const candidateInventoryTableRef = ref(); const candidates = ref([]); const selectedCandidateProduct = ref(null); const candidateKeyword = ref(''); const candidateSearched = ref(false); const candidateLoading = ref(false);
 const candidateProducts = computed(() => {
   const products = new Map();
@@ -193,8 +215,7 @@ const isLongText = (value) => Array.from(String(value || '')).length > 12;
 const shortText = (value) => `${Array.from(String(value || '')).slice(0, 12).join('')}…`;
 async function loadStores() { if (userStore.isSuperAdmin) stores.value = await getProductStores(); else createForm.storeId = userStore.user?.storeId; }
 async function loadCategoryMappings() { categoryMappings.value = await getE6PharmacyCategoryMappings(); }
-async function loadChecks() { checksLoading.value = true; try { const data = await getGoodsChecks({ ...checkQuery, page: checkPagination.page, pageSize: checkPagination.pageSize }); checks.value = data.list || []; Object.assign(checkPagination, data.pagination || {}); if (selectedCheck.value) { const fresh = checks.value.find((x) => x.id === selectedCheck.value.id); if (fresh) selectedCheck.value = fresh; } } finally { checksLoading.value = false; } }
-function resetChecks() { checkQuery.storeId = undefined; checkQuery.status = undefined; checkPagination.page = 1; loadChecks(); }
+
 async function selectCheck(row) { selectedCheck.value = row; selectedReviewRows.value = []; itemPagination.page = 1; await loadItems(); }
 async function loadItems() { if (!selectedCheck.value) return; itemsLoading.value = true; selectedReviewRows.value = []; try { const data = await getGoodsCheckItems(selectedCheck.value.id, { ...itemQuery, page: itemPagination.page, pageSize: itemPagination.pageSize }); items.value = data.list || []; Object.assign(itemPagination, data.pagination || {}); } finally { itemsLoading.value = false; } }
 function openCreate() { editingCheck.value = null; Object.assign(createForm, { storeId: userStore.isSuperAdmin ? undefined : userStore.user?.storeId, checkName: '', checkType: 1, categoryCodes: [] }); planDialog.value = true; }
@@ -223,7 +244,7 @@ async function batchReview() {
 }
 async function finish() { await ElMessageBox.confirm('结束后将不能继续盘点，是否继续？', '结束盘点', { type: 'warning' }); await finishGoodsCheck(selectedCheck.value.id); await loadChecks(); selectedCheck.value = { ...selectedCheck.value, status: 2 }; ElMessage.success('盘点已结束'); }
 async function download(type) { const blob = await exportGoodsCheck(selectedCheck.value.id, type); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${selectedCheck.value.checkName}-${type}.xlsx`; link.click(); URL.revokeObjectURL(url); }
-watch(() => [checkPagination.page, checkPagination.pageSize], loadChecks); watch(() => [itemPagination.page, itemPagination.pageSize], loadItems); onMounted(async () => { await Promise.all([loadStores(), loadCategoryMappings()]); await loadChecks(); });
+watch(() => [itemPagination.page, itemPagination.pageSize], loadItems); onMounted(async () => { await Promise.all([loadStores(), loadCategoryMappings()]); await loadChecks(); });
 </script>
 
 <style scoped>

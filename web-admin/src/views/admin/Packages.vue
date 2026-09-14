@@ -218,9 +218,10 @@ import { formatPickupCode, isPicked, PACKAGE_STATUS, pickupMethodTagType, pickup
 import { getStores } from '@/api/store';
 import { useUserStore } from '@/stores/user';
 
+import { useTable } from '@/utils/useTable';
+
 const route = useRoute();
 const userStore = useUserStore();
-const loading = ref(false);
 const deleteLoading = ref(false);
 const deleteDialogVisible = ref(false);
 const notificationDialogVisible = ref(false);
@@ -231,58 +232,37 @@ const packageDrawerMode = ref('detail');
 const selectedPackageId = ref(null);
 const selectedPackageCode = ref('');
 const packageDetailRef = ref(null);
-const list = ref([]);
 const stores = ref([]);
 
-const query = ref({
-  keyword: '',
-  storeId: '',
-  status: '',
-  dateScope: '',
-  sortBy: 'createdAt',
-  sortOrder: 'desc'
-});
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  total: 0
-});
-
-async function loadData() {
-  loading.value = true;
-  try {
-    const data = await getAdminPackages({
-      ...query.value,
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    });
-    list.value = (data?.list || []).map((item) => ({
-      ...item,
-      pickupCode: formatPickupCode(item.pickupCode)
-    }));
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  pagination.page = 1;
-  loadData();
-}
-
-function handleReset() {
-  query.value = {
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset: handleReset
+} = useTable(
+  async (params) => {
+    const data = await getAdminPackages(params);
+    return {
+      ...data,
+      list: (data?.list || []).map((item) => ({
+        ...item,
+        pickupCode: formatPickupCode(item.pickupCode)
+      }))
+    };
+  },
+  {
     keyword: '',
     storeId: '',
     status: '',
     dateScope: '',
     sortBy: 'createdAt',
     sortOrder: 'desc'
-  };
-  handleSearch();
-}
+  },
+  { pageSize: 10 }
+);
 
 function handleSortChange({ prop, order }) {
   if (!prop) return;
@@ -349,11 +329,6 @@ async function handleDelete() {
     deleteLoading.value = false;
   }
 }
-
-watch(
-  () => [pagination.page, pagination.pageSize],
-  () => loadData()
-);
 
 onMounted(async () => {
   if (userStore.isSuperAdmin) {

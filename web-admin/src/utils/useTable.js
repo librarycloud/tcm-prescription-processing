@@ -1,4 +1,4 @@
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 
 /**
@@ -38,7 +38,7 @@ export function useTable(apiFunc, defaultQuery = {}, options = {}) {
       // Handle standard list/total format
       if (res && res.list !== undefined) {
         list.value = res.list;
-        pagination.total = res.total || 0;
+        pagination.total = res.pagination?.total || res.total || 0;
       } else if (Array.isArray(res)) {
         list.value = res;
         pagination.total = res.length;
@@ -102,7 +102,7 @@ export function useTable(apiFunc, defaultQuery = {}, options = {}) {
     loading,
     query,
     pagination,
-    total: pagination.total,
+    total: computed(() => pagination.total),
     getList,
     search,
     reset,

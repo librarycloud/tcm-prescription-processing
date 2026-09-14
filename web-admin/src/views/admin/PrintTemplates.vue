@@ -363,6 +363,7 @@ import { defineAsyncComponent } from "vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Delete, Plus, Refresh } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
+import { useTable } from '@/utils/useTable';
 const PrintLabel = defineAsyncComponent(() => import('@/components/PrintLabel.vue'));
 import {
   createPrintTemplate,
@@ -387,7 +388,6 @@ import { getStores } from '@/api/store';
 import { useUserStore } from '@/stores/user';
 import { DEFAULT_USAGE_METHOD } from '@/utils/usageMethod';
 
-const loading = ref(false);
 const saving = ref(false);
 const editorVisible = ref(false);
 const editingId = ref(null);
@@ -395,10 +395,23 @@ const formRef = ref(null);
 const typeFilter = ref('');
 const storeId = ref('');
 const stores = ref([]);
-const templates = ref([]);
 const templateTypes = ref([]);
 const fieldDefinitions = ref({});
 const fontOptions = ref([...PRINT_FONT_OPTIONS]);
+
+const { list: templates, loading, getList: loadTemplates } = useTable(
+  async () => {
+    const data = await getPrintTemplates({
+      all: '1',
+      ...(typeFilter.value ? { type: typeFilter.value } : {}),
+      ...(storeId.value ? { storeId: storeId.value } : {})
+    });
+    templateTypes.value = data?.types || [];
+    fieldDefinitions.value = data?.fields || {};
+    fontOptions.value = data?.fonts?.length ? data.fonts : [...PRINT_FONT_OPTIONS];
+    return { list: data?.templates || [] };
+  }
+);
 const form = ref(null);
 const qrDataUrl = ref('');
 const previewCanvasRef = ref(null);
@@ -684,22 +697,7 @@ function normalizeForm(template) {
   return source;
 }
 
-async function loadTemplates() {
-  loading.value = true;
-  try {
-    const data = await getPrintTemplates({
-      all: '1',
-      ...(typeFilter.value ? { type: typeFilter.value } : {}),
-      ...(storeId.value ? { storeId: storeId.value } : {})
-    });
-    templates.value = data?.templates || [];
-    templateTypes.value = data?.types || [];
-    fieldDefinitions.value = data?.fields || {};
-    fontOptions.value = data?.fonts?.length ? data.fonts : [...PRINT_FONT_OPTIONS];
-  } finally {
-    loading.value = false;
-  }
-}
+// loadTemplates is now provided by useTable
 
 function openCreate() {
   const type = templateTypes.value[0]?.value || DEFAULT_PICKUP_TEMPLATE.templateType;

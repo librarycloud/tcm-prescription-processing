@@ -171,11 +171,9 @@
         </el-table-column>
       </el-table>
       <Pagination
-        :page="packagePagination.page"
-        :page-size="packagePagination.pageSize"
+        v-model:page="packagePagination.page"
+        v-model:page-size="packagePagination.pageSize"
         :total="packagePagination.total"
-        @update:page="changePackagePage"
-        @update:page-size="changePackagePageSize"
       />
     </el-card>
     <el-drawer v-model="packageDrawerVisible" size="min(720px, 96vw)" destroy-on-close>
@@ -241,9 +239,9 @@ import { formatPickupCode, PACKAGE_STATUS } from '@/utils/status';
 import { useUserStore } from '@/stores/user';
 import { getStores } from '@/api/store';
 import { getStoreTransferStats } from '@/api/storeTransfer';
+import { useTable } from '@/utils/useTable';
 
 const loading = ref(false);
-const packageLoading = ref(false);
 const packageDrawerVisible = ref(false);
 const packageDrawerMode = ref('detail');
 const packageDrawerId = ref(null);
@@ -253,8 +251,32 @@ const router = useRouter();
 const userStore = useUserStore();
 const selectedStoreId = ref('');
 const stores = ref([]);
-const packageList = ref([]);
-const packagePagination = reactive({ page: 1, pageSize: 10, total: 0 });
+
+const {
+  list: packageList,
+  loading: packageLoading,
+  pagination: packagePagination,
+  getList: loadPackages
+} = useTable(
+  async (params) => {
+    const data = await getAdminPackages({
+      ...params,
+      storeId: selectedStoreId.value || undefined,
+      dateScope: 'dashboard',
+      sortBy: 'createdAt',
+      sortOrder: 'desc'
+    });
+    if (data && data.list) {
+      data.list = data.list.map((item) => ({
+        ...item,
+        pickupCode: formatPickupCode(item.pickupCode)
+      }));
+    }
+    return data;
+  },
+  {},
+  { pageSize: 10 }
+);
 
 const stats = reactive({
   pendingCount: 0,
@@ -292,27 +314,6 @@ function packageCategory(row) {
 function packageCategoryType(row) {
   if (Number(row.status) === PACKAGE_STATUS.PICKED) return 'success';
   return isToday(row.createdAt) ? 'warning' : 'danger';
-}
-
-async function loadPackages() {
-  packageLoading.value = true;
-  try {
-    const data = await getAdminPackages({
-      storeId: selectedStoreId.value || undefined,
-      dateScope: 'dashboard',
-      page: packagePagination.page,
-      pageSize: packagePagination.pageSize,
-      sortBy: 'createdAt',
-      sortOrder: 'desc'
-    });
-    packageList.value = (data?.list || []).map((item) => ({
-      ...item,
-      pickupCode: formatPickupCode(item.pickupCode)
-    }));
-    packagePagination.total = data?.pagination?.total || 0;
-  } finally {
-    packageLoading.value = false;
-  }
 }
 
 async function loadData() {
@@ -383,17 +384,6 @@ function handlePackageDrawerVerified() {
 function handleStoreChange() {
   packagePagination.page = 1;
   loadData();
-}
-
-function changePackagePage(page) {
-  packagePagination.page = page;
-  loadPackages();
-}
-
-function changePackagePageSize(pageSize) {
-  packagePagination.page = 1;
-  packagePagination.pageSize = pageSize;
-  loadPackages();
 }
 
 onMounted(async () => {

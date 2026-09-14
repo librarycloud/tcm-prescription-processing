@@ -144,6 +144,7 @@ import { getStores } from '@/api/store';
 import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
 import { formatPickupCode, isPicked } from '@/utils/status';
+import { useTable } from '@/utils/useTable';
 
 const router = useRouter();
 const props = defineProps({
@@ -154,44 +155,36 @@ const props = defineProps({
 });
 const emit = defineEmits(['detail', 'verify']);
 const userStore = useUserStore();
-const loading = ref(false);
 const qrVisible = ref(false);
 const selectedPackage = ref(null);
-const list = ref([]);
 const stores = ref([]);
-const query = reactive({ keyword: '', storeId: '' });
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 
-async function loadData() {
-  loading.value = true;
-  try {
+const {
+  list,
+  loading,
+  query,
+  pagination,
+  getList: loadData,
+  search: handleSearch,
+  reset: resetSearch
+} = useTable(
+  async (params) => {
     const data = await getAdminPackages({
-      ...query,
+      ...params,
       source: 'processing',
-      dateScope: 'pickup-workbench',
-      page: pagination.page,
-      pageSize: pagination.pageSize
+      dateScope: 'pickup-workbench'
     });
-    list.value = (data?.list || []).map((item) => ({
-      ...item,
-      pickupCode: formatPickupCode(item.pickupCode)
-    }));
-    pagination.total = data?.pagination?.total || 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  pagination.page = 1;
-  loadData();
-}
-
-function resetSearch() {
-  query.keyword = '';
-  query.storeId = '';
-  handleSearch();
-}
+    if (data && data.list) {
+      data.list = data.list.map((item) => ({
+        ...item,
+        pickupCode: formatPickupCode(item.pickupCode)
+      }));
+    }
+    return data;
+  },
+  { keyword: '', storeId: '' },
+  { pageSize: 10 }
+);
 
 function showQrCode(row) {
   selectedPackage.value = row;
@@ -218,11 +211,6 @@ function isOverdue(row) {
     createdAt.getDate() !== today.getDate()
   );
 }
-
-watch(
-  () => [pagination.page, pagination.pageSize],
-  () => loadData()
-);
 
 onMounted(async () => {
   if (userStore.isSuperAdmin) {
