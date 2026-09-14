@@ -6,6 +6,7 @@ import {
   getStores
 } from '../../../api/admin';
 import { getUser } from '../../../utils/auth';
+import { loadRefData, setRefDataUserRole } from '../../../utils/reference';
 import { PICKUP_METHOD_OPTIONS } from '../../../utils/format';
 
 const MODE_OPTIONS = [
@@ -124,7 +125,9 @@ Page({
   async onLoad() {
     const user = getUser();
     this.user = user;
-    this.setData({ isSuperAdmin: Number(user.role) === 0 });
+    const isSuperAdmin = Number(user.role) === 0;
+    setRefDataUserRole(isSuperAdmin);
+    this.setData({ isSuperAdmin });
     wx.setNavigationBarTitle({ title: '新建加工计划' });
     await this.loadOptions();
 
@@ -134,24 +137,19 @@ Page({
   },
 
   async loadOptions() {
-    const tasks = [
-      getDictionaries('ProcessType'),
-      getDictionaries('NotifyType'),
-      getDoctors(),
-      getDictionaries('PrescriptionSource')
-    ];
-    if (this.data.isSuperAdmin) tasks.push(getStores({ page: 1, pageSize: 100, status: 1 }));
-    const [processTypes, notifyTypes, doctors, sources, stores] = await Promise.all(tasks);
-    const normalizedNotifyTypes = (notifyTypes || []).length
-      ? [...notifyTypes].sort((left, right) => (left.code === 'NONE' ? -1 : right.code === 'NONE' ? 1 : 0))
+    const keys = ['processTypes', 'notifyTypes', 'doctors', 'sources'];
+    if (this.data.isSuperAdmin) keys.push('stores');
+    const ref = await loadRefData(keys);
+    const normalizedNotifyTypes = (ref.notifyTypes || []).length
+      ? [...ref.notifyTypes].sort((left, right) => (left.code === 'NONE' ? -1 : right.code === 'NONE' ? 1 : 0))
       : [];
     const defaultNotifyType = normalizedNotifyTypes.find((item) => item.code === 'NONE');
     this.setData({
-      processTypes: processTypes || [],
+      processTypes: ref.processTypes || [],
       notifyTypes: normalizedNotifyTypes,
-      doctors: doctors || [],
-      sources: sources || [],
-      stores: stores?.list || [],
+      doctors: ref.doctors || [],
+      sources: ref.sources || [],
+      stores: ref.stores || [],
       plans: this.data.plans.map((plan) =>
         plan.notifyType === null ? { ...plan, notifyType: defaultNotifyType?.id ?? null, notifyTypeName: defaultNotifyType?.name || '不提醒' } : plan
       )

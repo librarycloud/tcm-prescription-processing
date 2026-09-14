@@ -275,9 +275,10 @@ Page({
     const currentLen = this.data.filteredLocations.length;
     if (currentLen >= this._allFilteredLocations.length) return;
     const nextChunk = this._allFilteredLocations.slice(currentLen, currentLen + 30);
-    this.setData({
-      filteredLocations: this.data.filteredLocations.concat(nextChunk)
-    });
+    const start = this.data.filteredLocations.length;
+    const patch = {};
+    nextChunk.forEach((item, i) => { patch[`filteredLocations[${start + i}]`] = item; });
+    this.setData(patch);
   },
 
   onKeywordChange(e) { this.setData({ keyword: e.detail.value }, this.applyFilter); },

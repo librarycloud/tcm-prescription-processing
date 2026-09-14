@@ -35,7 +35,7 @@ export function getDomain(url) {
     return 'reference';
   }
   if (route.startsWith('/admin/prescriptions')) return 'prescriptions';
-  if (route.startsWith('/admin/packages') || route.startsWith('/user/packages')) return 'packages';
+  if (route.startsWith('/admin/packages')) return 'packages';
   if (route.startsWith('/admin/processing-plans')) return 'processing';
   if (route.startsWith('/admin/store-transfers')) return 'transfers';
   if (route.startsWith('/admin/herb-locations')) return 'herb-locations';
@@ -76,9 +76,6 @@ function cacheTtl(url) {
       route === '/admin/product-differences/logs' || route === '/admin/products' ||
       route === '/admin/e6-pharmacy/products' || route === '/admin/yd-goods-check') {
     return OPERATION_CACHE_TTL;
-  }
-  if (route === '/user/packages' || route.startsWith('/user/packages/')) {
-    return USER_PACKAGE_CACHE_TTL;
   }
   if (route.startsWith('/admin/prescriptions/') ||
       route.startsWith('/admin/processing-plans/') ||

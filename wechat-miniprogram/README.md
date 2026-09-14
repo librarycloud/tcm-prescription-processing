@@ -17,7 +17,7 @@ flowchart TD
     Login[登录页 pages/login/login] --> RoleCheck{服务端下发角色 role}
     
     RoleCheck --"role === 0, 2, 3 (管理员/店长/员工)"--> StaffPortal[管理端工作台 pages/admin/*]
-    RoleCheck --"role === 1 (普通就诊顾客)"--> UserPortal[顾客自提门户 pages/user/*]
+    
     
     subgraph StaffPortal[药房员工 / 管理员移动工作台]
         AdminDash[数据大盘看板]
@@ -56,11 +56,6 @@ flowchart TD
 | `pages/admin/product-differences/` | 库存差异台账 | 移动端报损/报溢快速登记与撤回。 |
 | `pages/admin/store-transfers/` | 门店调拨 | 跨店借还药材确认与接收打卡。 |
 
-### 2.2 顾客端 (`pages/user/*`)
-
-| 页面路径 | 页面名称 | 核心功能与交互 |
-|---|---|---|
-| `pages/user/packages/` | 我的包裹 | 简洁的时间流设计，一览名下所有中药处方代煎代配进度。 |
 | `pages/user/package-detail/` | 取药凭证详情 | 超大字体展示 **6 位防伪提货码**，并利用 `qrcode-2d` 组件生成可被扫码枪识别的高清二维码。 |
 | `pages/user/profile/` | 个人中心 | 用户信息查看与退出登录。 |
 

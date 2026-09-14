@@ -50,15 +50,9 @@
   justify-content: flex-end;
 }
 
-.item-title {
-  margin-bottom: 8rpx;
-  font-size: 32rpx;
-  font-weight: 600;
-}
-
 .package-tags {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   flex: 0 0 auto;
   gap: 10rpx;
 }
@@ -66,7 +60,6 @@
 .item-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20rpx;
 }
 
 .list-footer {

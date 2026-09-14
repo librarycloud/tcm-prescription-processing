@@ -1,16 +1,16 @@
 <view class="page">
   <view class="app-card" wx:if="{{user.role === 2 || user.role === 3}}">当前门店：{{stats.store.name || user.store.name || '-'}}</view>
-  <view class="section-heading">
+  <view class="section-title">
     <text>加工概况</text>
   </view>
   <view class="processing-stats">
-    <view class="processing-stat" wx:for="{{processingCards}}" wx:key="key" data-view="{{item.view}}" hover-class="processing-stat-active" bind:tap="goProcessingView">
-      <view class="processing-value">{{item.value}}</view>
-      <view class="muted">{{item.label}}</view>
+    <view class="app-card processing-stat" wx:for="{{processingCards}}" wx:key="key" data-view="{{item.view}}" hover-class="processing-stat-active" bind:tap="goProcessingView">
+      <view class="processing-value text-primary">{{item.value}}</view>
+      <view class="text-caption" style="margin-top: 4rpx;">{{item.label}}</view>
     </view>
   </view>
 
-  <view class="section-heading">
+  <view class="section-title">
     <text>包裹概况</text>
   </view>
   <view class="stats">
@@ -25,12 +25,12 @@
       hover-class="{{item.disabled ? 'none' : 'stat-card-active'}}"
       bind:tap="goPackageList"
     >
-      <view class="stat-value">{{item.value}}</view>
-      <view class="muted">{{item.label}}</view>
+      <view class="stat-value text-primary">{{item.value}}</view>
+      <view class="text-caption" style="margin-top: 4rpx;">{{item.label}}</view>
     </view>
   </view>
 
-  <view class="section-heading">
+  <view class="section-title">
     <text>业务管理</text>
   </view>
   <view class="section-actions business-actions">

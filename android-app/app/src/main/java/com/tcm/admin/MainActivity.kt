@@ -19,6 +19,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -375,12 +377,12 @@ private fun TcmAdminApp() {
                 }
 
                 composable<Route.Prescriptions> {
-                    MainShell(it.toRoute<Route.Prescriptions>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = prescriptionsListState) {
+                    MainShell(it.toRoute<Route.Prescriptions>(), navController, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = prescriptionsListState) {
                         PrescriptionsScreen(user = session?.user, onNavigate = ::navigateTo, listState = prescriptionsListState)
                     }
                 }
                 composable<Route.E6Imports> {
-                    MainShell(it.toRoute<Route.E6Imports>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = e6ImportsListState.lazyListState) {
+                    MainShell(it.toRoute<Route.E6Imports>(), navController, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = e6ImportsListState.lazyListState) {
                         E6ImportsScreen(user = session?.user, onNavigate = ::navigateTo, listState = e6ImportsListState)
                     }
                 }
@@ -414,22 +416,22 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.Processing> {
-                    MainShell(it.toRoute<Route.Processing>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = processingListState) {
+                    MainShell(it.toRoute<Route.Processing>(), navController, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = processingListState) {
                         ProcessingScreenV2(user = session?.user, onNavigate = ::navigateTo, listState = processingListState)
                     }
                 }
                 composable<Route.Packages> {
-                    MainShell(it.toRoute<Route.Packages>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
+                    MainShell(it.toRoute<Route.Packages>(), navController, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = packagesListState) {
                         PackagesScreen(user = session?.user, onNavigate = ::navigateTo, listState = packagesListState)
                     }
                 }
                 composable<Route.Herbs> {
-                    MainShell(it.toRoute<Route.Herbs>(), ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = herbsListState.lazyListState) {
+                    MainShell(it.toRoute<Route.Herbs>(), navController, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = herbsListState.lazyListState) {
                         HerbsScreen(user = session?.user, onNavigate = ::navigateTo, listState = herbsListState)
                     }
                 }
                 composable<Route.Profile> {
-                    MainShell(it.toRoute<Route.Profile>(), ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
+                    MainShell(it.toRoute<Route.Profile>(), navController, ::switchTab, ::navigateTo, hasAppUpdate, profileScrollState) {
                         ProfileScreen(
                             user = session?.user,
                             onOpenDetails = { navigateTo(Route.ProfileDetail) },
@@ -515,7 +517,7 @@ private fun TcmAdminApp() {
 
                 composable<Route.Inventory> { entry ->
                     val route = entry.toRoute<Route.Inventory>()
-                    MainShell(route, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = inventoryListState) {
+                    MainShell(route, navController, ::switchTab, ::navigateTo, hasAppUpdate, lazyListState = inventoryListState) {
                         InventoryScreen(
                             user = session?.user,
                             initialQuery = route.initialQuery,
@@ -799,7 +801,8 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainShell(
-    current: Route,
+    @Suppress("UNUSED_PARAMETER") current: Route,
+    navController: NavController,
     onSwitchTab: (Route) -> Unit,
     onNavigate: (Route) -> Unit,
     showUpdateBadge: Boolean,
@@ -807,6 +810,10 @@ private fun MainShell(
     lazyListState: LazyListState? = null,
     content: @Composable () -> Unit,
 ) {
+    // Always derive the active route from the NavController's live backstack so that
+    // both the Drawer and BottomNav stay in sync regardless of which screen called us.
+    val navBackStack by navController.currentBackStackEntryAsState()
+    val dest = navBackStack?.destination
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -908,49 +915,49 @@ private fun MainShell(
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = CardBorderColor)
                 Spacer(Modifier.height(8.dp))
 
-                DrawerItem("库存查询", current is Route.Inventory, Icons.Default.Inventory) {
+                DrawerItem("库存查询", dest?.hasRoute<Route.Inventory>() == true, Icons.Default.Inventory) {
                     onSwitchTab(Route.Inventory())
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("处方管理", current is Route.Prescriptions, Icons.AutoMirrored.Filled.Assignment) {
+                DrawerItem("处方管理", dest?.hasRoute<Route.Prescriptions>() == true, Icons.AutoMirrored.Filled.Assignment) {
                     onSwitchTab(Route.Prescriptions)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("E6诊所处方导入", current is Route.E6Imports, Icons.Default.CloudDownload) {
+                DrawerItem("E6诊所处方导入", dest?.hasRoute<Route.E6Imports>() == true, Icons.Default.CloudDownload) {
                     onSwitchTab(Route.E6Imports)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("加工管理", current is Route.Processing, Icons.Default.Sync) {
+                DrawerItem("加工管理", dest?.hasRoute<Route.Processing>() == true, Icons.Default.Sync) {
                     onSwitchTab(Route.Processing)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("包裹管理", current is Route.Packages, Icons.Default.AssignmentTurnedIn) {
+                DrawerItem("包裹管理", dest?.hasRoute<Route.Packages>() == true, Icons.Default.AssignmentTurnedIn) {
                     onSwitchTab(Route.Packages)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("斗谱管理", current is Route.Herbs, Icons.Default.GridView) {
+                DrawerItem("斗谱管理", dest?.hasRoute<Route.Herbs>() == true, Icons.Default.GridView) {
                     onSwitchTab(Route.Herbs)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
-                DrawerItem("商品盘点", false, Icons.AutoMirrored.Filled.CompareArrows) {
+                DrawerItem("商品盘点", dest?.hasRoute<Route.Stocktaking>() == true, Icons.AutoMirrored.Filled.CompareArrows) {
                     onNavigate(Route.Stocktaking)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("库存差异", false, Icons.Default.Tune) {
+                DrawerItem("库存差异", dest?.hasRoute<Route.Differences>() == true, Icons.Default.Tune) {
                     onNavigate(Route.Differences)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("门店调拨", false, Icons.Default.SwapHoriz) {
+                DrawerItem("门店调拨", dest?.hasRoute<Route.Transfers>() == true, Icons.Default.SwapHoriz) {
                     onNavigate(Route.Transfers)
                     scope.launch { drawerState.close() }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp, horizontal = 16.dp), color = CardBorderColor)
-                DrawerItem("我的", current is Route.Profile, Icons.Default.AccountCircle) {
+                DrawerItem("我的", dest?.hasRoute<Route.Profile>() == true, Icons.Default.AccountCircle) {
                     onSwitchTab(Route.Profile)
                     scope.launch { drawerState.close() }
                 }
-                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", current is Route.About, Icons.Default.SystemUpdate, showBadge = showUpdateBadge) {
+                DrawerItem("检查新版本（${BuildConfig.VERSION_NAME}）", dest?.hasRoute<Route.About>() == true, Icons.Default.SystemUpdate, showBadge = showUpdateBadge) {
                     onNavigate(Route.About)
                     scope.launch { drawerState.close() }
                 }
@@ -971,7 +978,7 @@ private fun MainShell(
             },
             bottomBar = {
                 BottomNav(
-                    current = current,
+                    dest = dest,
                     onSwitchTab = onSwitchTab,
                     onReselect = {
                         scope.launch {
@@ -1162,7 +1169,7 @@ private fun AppTopBar(title: String, onMenu: () -> Unit, onScan: () -> Unit) {
 
 @Composable
 private fun BottomNav(
-    current: Route,
+    dest: NavDestination?,
     onSwitchTab: (Route) -> Unit,
     onReselect: () -> Unit,
 ) {
@@ -1193,11 +1200,11 @@ private fun BottomNav(
             ) {
                 items.forEach { (target, pair) ->
                     val isSelected = when (target) {
-                        is Route.Inventory -> current is Route.Inventory
-                        is Route.Herbs -> current is Route.Herbs
-                        is Route.Processing -> current is Route.Processing
-                        is Route.Packages -> current is Route.Packages
-                        is Route.Profile -> current is Route.Profile
+                        is Route.Inventory -> dest?.hasRoute<Route.Inventory>() == true
+                        is Route.Herbs -> dest?.hasRoute<Route.Herbs>() == true
+                        is Route.Processing -> dest?.hasRoute<Route.Processing>() == true
+                        is Route.Packages -> dest?.hasRoute<Route.Packages>() == true
+                        is Route.Profile -> dest?.hasRoute<Route.Profile>() == true
                         else -> false
                     }
                     val iconScale by animateFloatAsState(

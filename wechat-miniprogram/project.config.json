@@ -39,7 +39,7 @@
     "postcss": true,
     "minified": true,
     "coverView": true,
-    "lazyloadPlaceholderEnable": false,
+    "lazyloadPlaceholderEnable": true,
     "preloadBackgroundData": false,
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,

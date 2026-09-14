@@ -1,3 +1,5 @@
+import { invalidateRefData } from './reference';
+
 const CACHE_PREFIX = 'api-cache:';
 
 function clearCachedResponses() {
@@ -27,18 +29,20 @@ export function clearSession() {
   wx.removeStorageSync('token');
   wx.removeStorageSync('user');
   clearCachedResponses();
+  invalidateRefData(); // 清除内存中的参考数据缓存
 }
 
 export function redirectByRole(user) {
   const role = Number(user?.role);
-  if (![0, 1, 2, 3].includes(role)) {
+  if (![0, 2, 3].includes(role)) {
     clearSession();
-    wx.reLaunch({ url: '/pages/login/login' });
+    wx.showToast({ title: '仅限工作人员登录', icon: 'none' });
+    setTimeout(() => {
+      wx.reLaunch({ url: '/pages/login/login' });
+    }, 1500);
     return;
   }
 
-  const url = role === 0 || role === 2 || role === 3
-    ? '/pages/admin/e6-inventory/e6-inventory'
-    : '/pages/user/packages/packages';
+  const url = '/pages/admin/e6-inventory/e6-inventory';
   wx.reLaunch({ url });
 }

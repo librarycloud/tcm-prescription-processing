@@ -374,8 +374,11 @@ Page({
     const result = await new Promise((resolve) => wx.showModal({ title: '确认调出', content: `确认调出 ${detail.transferNo} 吗？`, success: resolve }));
     if (!result.confirm) return;
     this.setData({ saving: true });
-    try { this.setData({ detail: decorateDetail(await confirmStoreTransferOutbound(detail.id)) }); await this.reload(); }
-    finally { this.setData({ saving: false }); }
+    try {
+      const updated = await confirmStoreTransferOutbound(detail.id);
+      this.setData({ detail: decorateDetail(updated) });
+      await this.reload();
+    } finally { this.setData({ saving: false }); }
   },
 
   openReturn() {

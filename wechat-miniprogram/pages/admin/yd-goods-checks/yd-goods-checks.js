@@ -123,6 +123,10 @@ Page({
     saving: false
   },
 
+  onHide() {
+    clearTimeout(candidateSearchTimer);
+  },
+
   onUnload() {
     clearTimeout(candidateSearchTimer);
     candidateRequestId += 1;

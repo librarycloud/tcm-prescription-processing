@@ -68,6 +68,10 @@ Page({
     selectedProduct: null
   },
 
+  onHide() {
+    clearTimeout(searchTimer);
+  },
+
   onUnload() {
     clearTimeout(searchTimer);
     searchRequestId += 1;

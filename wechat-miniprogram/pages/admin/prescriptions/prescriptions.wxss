@@ -41,7 +41,18 @@
 }
 
 .prescription-card {
-  border-left: 6rpx solid #0052d9;
+  position: relative;
+  overflow: hidden;
+}
+
+.prescription-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8rpx;
+  background: #0052d9;
 }
 
 .card-main {
@@ -49,14 +60,11 @@
 }
 
 .prescription-no {
-  color: #0052d9;
-  font-size: 30rpx;
-  font-weight: 700;
+  /* Using global .text-h2 and .text-primary */
 }
 
 .customer-name {
-  margin-top: 8rpx;
-  font-weight: 600;
+  /* Using global .text-h2 */
 }
 
 .meta-grid {

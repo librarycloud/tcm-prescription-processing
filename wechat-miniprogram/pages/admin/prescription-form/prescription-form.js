@@ -8,6 +8,7 @@ import {
   updatePrescription
 } from '../../../api/admin';
 import { getUser } from '../../../utils/auth';
+import { loadRefData, setRefDataUserRole } from '../../../utils/reference';
 import {
   choosePrescriptionAttachment,
   formatAttachmentSize
@@ -67,11 +68,13 @@ Page({
 
   async onLoad(options) {
     const user = getUser();
+    const isSuperAdmin = Number(user.role) === 0;
     const isEdit = Boolean(options.id);
+    setRefDataUserRole(isSuperAdmin);
     this.setData({
       id: options.id || null,
       isEdit,
-      isSuperAdmin: Number(user.role) === 0
+      isSuperAdmin
     });
     wx.setNavigationBarTitle({ title: isEdit ? '编辑处方' : '新建处方' });
     await this.loadOptions();
@@ -79,14 +82,13 @@ Page({
   },
 
   async loadOptions() {
-    const tasks = [getDoctors(), getDictionaries('PrescriptionSource')];
-    if (this.data.isSuperAdmin)
-      tasks.push(getStores({ page: 1, pageSize: 100, status: 1 }));
-    const [doctors, sources, stores] = await Promise.all(tasks);
+    const keys = ['doctors', 'sources'];
+    if (this.data.isSuperAdmin) keys.push('stores');
+    const ref = await loadRefData(keys);
     this.setData({
-      doctors: doctors || [],
-      sources: sources || [],
-      stores: stores?.list || []
+      doctors: ref.doctors || [],
+      sources: ref.sources || [],
+      stores: ref.stores || []
     });
   },
 

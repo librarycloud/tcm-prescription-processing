@@ -132,11 +132,10 @@ Page({
         pageSize: this.data.pageSize
       });
       const newItems = (data.list || []).map((item) => decoratePrescription(item, this.data.isStoreStaff));
-      this.setData({
-        list: this.data.list.concat(newItems),
-        page: nextPage,
-        pages: data.pagination?.pages || 1
-      });
+      const start = this.data.list.length;
+      const patch = { page: nextPage, pages: data.pagination?.pages || 1 };
+      newItems.forEach((item, i) => { patch[`list[${start + i}]`] = item; });
+      this.setData(patch);
     } finally {
       this.setData({ loadingMore: false });
     }
