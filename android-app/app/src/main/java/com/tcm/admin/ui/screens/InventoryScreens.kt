@@ -769,7 +769,7 @@ internal fun InventoryScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.Top,
                                     ) {
-                                        Icon(Icons.Rounded.MedicalInformation, null, Modifier.size(16.dp), tint = Primary, modifier = Modifier.padding(top = 2.dp))
+                                        Icon(Icons.Rounded.MedicalInformation, null, modifier = Modifier.size(16.dp).padding(top = 2.dp), tint = Primary)
                                         Spacer(Modifier.width(6.dp))
                                         HighlightedText(
                                             text = "${product.displayField("productCode")} · ${product.displayField("name", "商品")}",
