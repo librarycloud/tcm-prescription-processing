@@ -443,7 +443,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ArrowLeft,
@@ -797,7 +797,7 @@ async function saveWriteOff() {
     await writeOffProductDifference(writeOffForm);
     ElMessage.success('销账成功');
     writeOffVisible.value = false;
-    await Promise.all([loadCurrent(), loadStats()]);
+    await loadCurrent();
   } finally {
     saving.value = false;
   }
@@ -821,7 +821,7 @@ async function reverseLog(row) {
     reason: result.value
   });
   ElMessage.success('流水已冲销');
-  await Promise.all([loadLogs(), loadCurrent(), loadStats()]);
+  await Promise.all([loadLogs(), loadCurrent()]);
 }
 
 
