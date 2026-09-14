@@ -321,7 +321,6 @@ const statusOptions = Object.freeze([
 ]);
 const route = useRoute();
 const userStore = useUserStore();
-const loading = ref(false);
 const saving = ref(false);
 const formVisible = ref(false);
 const detailDrawerVisible = ref(false);
