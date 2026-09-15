@@ -863,12 +863,12 @@ class ScannerActivity : ComponentActivity() {
                         } else {
                             ocrInFlight.set(false)
                         }
-                    }
                 } else if (isOcrActive) {
                     // OCR was skipped before bitmap extraction (throttle, engine unavailable,
                     // or another frame is already in flight).
                     taskFinished()
                 }
+            }
             provider.unbindAll()
             currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
             // Kick off one center focus pass as soon as the preview is bound. The capture
