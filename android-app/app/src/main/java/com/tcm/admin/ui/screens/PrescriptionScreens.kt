@@ -56,6 +56,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -244,6 +245,8 @@ internal fun PrescriptionsScreen(
                     modifier = Modifier.fillMaxWidth().height(2.dp),
                     color = Primary,
                     trackColor = Primary.copy(alpha = 0.12f),
+                    strokeCap = StrokeCap.Round,
+                    gapSize = 0.dp,
                 )
             }
         } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
@@ -543,10 +546,13 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                 Spacer(Modifier.height(8.dp))
                 if (busy) {
                     LinearProgressIndicator(
-                        progress = { uploadProgress / 100f },
+                        progress = { (uploadProgress / 100f).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
                         color = Primary,
                         trackColor = Primary.copy(alpha = 0.12f),
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                        drawStopIndicator = {},
                     )
                     Text(
                         if (uploadProgress > 0) "上传中 $uploadProgress%" else "准备上传...",

@@ -77,12 +77,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1301,10 +1301,13 @@ internal fun WorkflowOperationScreen(
             if (uploadingPhoto) {
                 Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { uploadProgress / 100f },
+                    progress = { (uploadProgress / 100f).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(4.dp),
                     color = Primary,
                     trackColor = Primary.copy(alpha = 0.12f),
+                    strokeCap = StrokeCap.Round,
+                    gapSize = 0.dp,
+                    drawStopIndicator = {},
                 )
                 Text(
                     if (uploadProgress > 0) "上传中 $uploadProgress%" else "准备上传...",

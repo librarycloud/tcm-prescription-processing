@@ -58,6 +58,7 @@ import com.paddle.ocr.PaddleOCR
 import com.paddle.ocr.PaddleOCRConfig
 import com.paddle.ocr.model.OCRRunResult
 import com.paddle.ocr.util.OpenCVUtils
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -926,8 +927,8 @@ class ScannerActivity : ComponentActivity() {
         scanner.close()
         val ocr = paddleOcr
         paddleOcr = null
-        lifecycleScope.launch(Dispatchers.IO) {
-            ocr?.release()
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { ocr?.release() }
         }
         cameraExecutor.shutdown()
         debugLogTextView = null

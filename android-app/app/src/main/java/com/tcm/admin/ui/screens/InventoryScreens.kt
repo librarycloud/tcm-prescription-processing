@@ -49,6 +49,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -375,6 +376,8 @@ internal fun InventoryScreen(
                         modifier = Modifier.fillMaxWidth().height(2.dp),
                         color = Primary,
                         trackColor = Primary.copy(alpha = 0.12f),
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
                     )
                     Spacer(Modifier.height(8.dp))
                 }

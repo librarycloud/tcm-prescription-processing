@@ -50,7 +50,9 @@ object ApiClient {
     private const val INVENTORY_CACHE_TTL = 5 * 60 * 1000L
     private const val OPERATION_CACHE_TTL = 30 * 1000L
     private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
+    @Volatile
     private var token: String? = null
+    @Volatile
     private var cacheContext: Context? = null
     private data class CacheEntry(val route: String, val savedAt: Long, val data: String)
 
@@ -307,7 +309,7 @@ object ApiClient {
         versionCode: Int? = BuildConfig.VERSION_CODE,
         deviceId: String? = null,
         context: Context? = null,
-    ): JSONObject {
+    ): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val currentVersionCode = versionCode ?: BuildConfig.VERSION_CODE
         val resolvedDeviceId = deviceId?.trim()?.ifBlank { null }
             ?: (context ?: cacheContext)?.let { DeviceUtils.getDeviceId(it) }
@@ -347,7 +349,7 @@ object ApiClient {
             if (json.optInt("code", -1) != 0) {
                 throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
             }
-            return json.getJSONObject("data")
+            return@withContext json.getJSONObject("data")
         }
         val backendUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/app/version/android$query"
         val requestBuilder = Request.Builder()
@@ -365,7 +367,7 @@ object ApiClient {
         if (json.optInt("code", -1) != 0) {
             throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
         }
-        return json.getJSONObject("data")
+        json.getJSONObject("data")
     }
     suspend fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
         val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)

@@ -53,6 +53,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -234,10 +235,13 @@ internal fun StocktakingScreen(
                         Spacer(Modifier.height(10.dp))
 
                         LinearProgressIndicator(
-                            progress = { progress },
+                            progress = { progress.coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().height(6.dp),
                             color = Primary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            strokeCap = StrokeCap.Round,
+                            gapSize = 0.dp,
+                            drawStopIndicator = {},
                         )
                     }
                 }
@@ -750,7 +754,13 @@ internal fun StocktakingEntryScreen(
         if (selectedItem == null && selectedProductGroup == null) {
             if (loading) {
                 Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = Primary,
+                    trackColor = Primary.copy(alpha = 0.12f),
+                    strokeCap = StrokeCap.Round,
+                    gapSize = 0.dp,
+                )
             }
             error?.let {
                 Spacer(Modifier.height(8.dp))
