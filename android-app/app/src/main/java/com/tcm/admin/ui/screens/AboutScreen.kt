@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -447,7 +448,10 @@ internal fun AboutScreen(
                         progress = { (synthesizeProgress / 100f).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(6.dp),
                         color = Primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                        drawStopIndicator = {},
                     )
                     Spacer(Modifier.height(5.dp))
                     Text("正在合成新版本安装包... $synthesizeProgress%", color = Muted, fontSize = 12.sp)
@@ -456,7 +460,10 @@ internal fun AboutScreen(
                         progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(6.dp),
                         color = Primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                        drawStopIndicator = {},
                     )
                     Spacer(Modifier.height(5.dp))
                     Text(
@@ -470,13 +477,18 @@ internal fun AboutScreen(
                             progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().height(6.dp),
                             color = Primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            strokeCap = StrokeCap.Round,
+                            gapSize = 0.dp,
+                            drawStopIndicator = {},
                         )
                     } else {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth().height(6.dp),
                             color = Primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            strokeCap = StrokeCap.Round,
+                            gapSize = 0.dp,
                         )
                     }
                     Spacer(Modifier.height(5.dp))
