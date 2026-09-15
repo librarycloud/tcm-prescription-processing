@@ -93,6 +93,14 @@ object ApiClient {
         return File(context.cacheDir, "api_response_cache").apply { if (!exists()) mkdirs() }
     }
 
+    private fun sessionFingerprint(): String {
+        val current = sanitizeToken(token) ?: return "anonymous"
+        return MessageDigest.getInstance("SHA-256")
+            .digest(current.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+            .take(24)
+    }
+
     // Use short TTLs for operational data and a longer TTL for stable references.
     private fun cacheTtlMillis(path: String): Long? {
         val route = path.substringBefore('?')
@@ -225,15 +233,18 @@ object ApiClient {
         clearE6ImportCache(context)
         clearResponseCache(context)
         clearProcessingPhotoCache(context)
-        val cleanToken = sanitizeToken(session.token) ?: session.token
-        token = cleanToken
-        
-        runCatching {
+        val cleanToken = sanitizeToken(session.token)
+            ?: throw IllegalArgumentException("登录凭证格式无效")
+        try {
             getSessionPrefs(context).edit()
                 .putString(TOKEN_KEY, encodeSecret(cleanToken))
                 .putString(USER_KEY, encodeSecret(session.user.toString()))
                 .apply()
+        } catch (failure: Throwable) {
+            token = null
+            throw IllegalStateException("无法保存登录状态", failure)
         }
+        token = cleanToken
     }
 
     fun loadSession(context: Context): AdminSession? {
@@ -244,15 +255,19 @@ object ApiClient {
         if (oldPrefs.contains(TOKEN_KEY) || oldPrefs.contains(USER_KEY)) {
             val oldRawToken = oldPrefs.getString(TOKEN_KEY, null)
             val oldRawUser = oldPrefs.getString(USER_KEY, null)
-            if (oldRawToken != null && oldRawUser != null) {
+            val migrated = if (oldRawToken != null && oldRawUser != null) {
                 runCatching {
                     getSessionPrefs(context).edit()
                         .putString(TOKEN_KEY, oldRawToken)
                         .putString(USER_KEY, oldRawUser)
                         .apply()
-                }
+                    true
+                }.getOrDefault(false)
+            } else false
+            // Do not destroy the legacy session until the encrypted copy succeeds.
+            if (migrated) {
+                oldPrefs.edit().clear().apply()
             }
-            oldPrefs.edit().clear().apply()
         }
 
         val preferences = runCatching { getSessionPrefs(context) }.getOrNull() ?: return null
@@ -291,13 +306,15 @@ object ApiClient {
     suspend fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
-        val receivedToken = sanitizeToken(result.getString("token")) ?: result.getString("token")
+        val receivedToken = sanitizeToken(result.getString("token"))
+            ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
         return AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
     }
 
     suspend fun updateMe(payload: JSONObject): AdminSession {
         val data = request("/user/me", "PUT", payload).getJSONObject("data")
-        val newToken = sanitizeToken(data.getString("token")) ?: data.getString("token")
+        val newToken = sanitizeToken(data.getString("token"))
+            ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
         val newUser = data.getJSONObject("user")
         return AdminSession(newToken, newUser).also { token = it.token }
     }
@@ -341,15 +358,16 @@ object ApiClient {
                 requestBuilder.header("x-device-id", resolvedDeviceId)
             }
             val request = requestBuilder.get().build()
-            val response = client.newCall(request).execute()
-            val responseBodyString = response.body?.string().orEmpty()
-            val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
-                JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+            return@withContext client.newCall(request).execute().use { response ->
+                val responseBodyString = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                    JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+                }
+                if (json.optInt("code", -1) != 0) {
+                    throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
+                }
+                json.getJSONObject("data")
             }
-            if (json.optInt("code", -1) != 0) {
-                throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
-            }
-            return@withContext json.getJSONObject("data")
         }
         val backendUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/app/version/android$query"
         val requestBuilder = Request.Builder()
@@ -359,15 +377,16 @@ object ApiClient {
             requestBuilder.header("x-device-id", resolvedDeviceId)
         }
         applyAuthorizationHeader(requestBuilder)
-        val response = client.newCall(requestBuilder.get().build()).execute()
-        val responseBodyString = response.body?.string().orEmpty()
-        val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
-            JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+        client.newCall(requestBuilder.get().build()).execute().use { response ->
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+            }
+            if (json.optInt("code", -1) != 0) {
+                throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            }
+            json.getJSONObject("data")
         }
-        if (json.optInt("code", -1) != 0) {
-            throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
-        }
-        json.getJSONObject("data")
     }
     suspend fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
         val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)
@@ -606,7 +625,11 @@ object ApiClient {
             .edit()
             .putString(
                 E6_IMPORT_CACHE_KEY,
-                JSONObject().put("savedAt", System.currentTimeMillis()).put("data", data).toString(),
+                JSONObject()
+                    .put("savedAt", System.currentTimeMillis())
+                    .put("session", sessionFingerprint())
+                    .put("data", data)
+                    .toString(),
             )
             .apply()
     }
@@ -616,6 +639,7 @@ object ApiClient {
             ?.let { runCatching { JSONObject(it) }.getOrNull() }
             ?: return null
         val savedAt = cached.optLong("savedAt", 0L)
+        if (cached.optString("session") != sessionFingerprint()) return null
         val data = cached.optJSONObject("data")
         if (data == null || savedAt <= 0L || System.currentTimeMillis() - savedAt > E6_CACHE_TTL) {
             preferences.edit().remove(E6_IMPORT_CACHE_KEY).apply()
@@ -840,15 +864,26 @@ object ApiClient {
 
     private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default", onProgress: ((Int) -> Unit)? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         // 1. 尝试获取直传策略
-        val strategyAttempt = runCatching {
-            request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}&mimeType=${java.net.URLEncoder.encode(mimeType, "UTF-8")}", "GET")
+        val strategyAttempt = try {
+            Result.success(request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}&mimeType=${java.net.URLEncoder.encode(mimeType, "UTF-8")}", "GET"))
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Log.w(LOG_TAG, "OSS upload strategy unavailable", failure)
+            Result.failure(failure)
         }
         strategyAttempt.exceptionOrNull()?.let { Log.w(LOG_TAG, "OSS upload strategy unavailable", it) }
         val strategyRes = strategyAttempt.getOrNull()
         val strategyData = strategyRes?.optJSONObject("data")
         val uploadUrl = strategyData?.optString("uploadUrl")
         
-        if (!uploadUrl.isNullOrEmpty()) {
+        val directUploadAllowed = !uploadUrl.isNullOrEmpty() &&
+            (uploadUrl.startsWith("https://", ignoreCase = true) ||
+                (BuildConfig.DEBUG && uploadUrl.startsWith("http://", ignoreCase = true)))
+        if (!uploadUrl.isNullOrEmpty() && !directUploadAllowed) {
+            Log.w(LOG_TAG, "Ignoring non-HTTPS OSS upload URL in release build")
+        }
+        if (directUploadAllowed) {
             // 使用 S3/OSS PUT 直传 (兼容 SeaweedFS)
             val s3Request = Request.Builder()
                 .url(uploadUrl)
@@ -856,7 +891,14 @@ object ApiClient {
                 .addHeader("Content-Type", mimeType)
                 .build()
                 
-            val s3Attempt = runCatching { uploadClient.newCall(s3Request).execute() }
+            val s3Attempt = try {
+                Result.success(uploadClient.newCall(s3Request).execute())
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                Log.w(LOG_TAG, "OSS direct upload failed", failure)
+                Result.failure(failure)
+            }
             val s3Response = s3Attempt.getOrNull()
             s3Attempt.exceptionOrNull()?.let { Log.w(LOG_TAG, "OSS direct upload failed", it) }
             if (s3Response != null && s3Response.isSuccessful) {
@@ -871,7 +913,13 @@ object ApiClient {
                     put("size", bytes.size)
                 }
                 val backendPath = path.substringBefore('?')
-                val notifyRes = runCatching { request(backendPath, "POST", notifyPayload) }.getOrNull()
+                val notifyRes = try {
+                    request(backendPath, "POST", notifyPayload)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    null
+                }
                 if (notifyRes != null && notifyRes.optInt("code", -1) == 0) {
                     return@withContext notifyRes
                 }
@@ -900,19 +948,20 @@ object ApiClient {
             
         applyAuthorizationHeader(requestBuilder)
         
-        val response = uploadClient.newCall(requestBuilder.build()).execute()
-        val responseBodyString = response.body?.string().orEmpty()
-        val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
-            val msg = if (response.code == 413) "文件过大，超出服务器限制 (413)" else "服务器响应格式错误"
-            JSONObject().put("code", -1).put("message", msg)
+        uploadClient.newCall(requestBuilder.build()).execute().use { response ->
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                val msg = if (response.code == 413) "文件过大，超出服务器限制 (413)" else "服务器响应格式错误"
+                JSONObject().put("code", -1).put("message", msg)
+            }
+            if (response.code == 401) {
+                token = null
+                onUnauthorized?.invoke()
+            }
+            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            invalidateCacheForMutation(path)
+            json
         }
-        if (response.code == 401) {
-            token = null
-            onUnauthorized?.invoke()
-        }
-        if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
-        invalidateCacheForMutation(path)
-        json
     }
 
     open class ApiException(
@@ -966,17 +1015,18 @@ object ApiClient {
             else -> requestBuilder.method(method, requestBody)
         }
 
-        val response = client.newCall(requestBuilder.build()).execute()
-        val responseBodyString = response.body?.string().orEmpty()
-        val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
-        if (response.code == 401) {
-            token = null
-            onUnauthorized?.invoke()
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
+            if (response.code == 401) {
+                token = null
+                onUnauthorized?.invoke()
+            }
+            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            if (normalizedMethod != "GET") invalidateCacheForMutation(path)
+            else if (cacheTtl != null) cacheResponse(path, json.toString())
+            json
         }
-        if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
-        if (normalizedMethod != "GET") invalidateCacheForMutation(path)
-        else if (cacheTtl != null) cacheResponse(path, json.toString())
-        json
     }
 
     private fun cacheResponse(path: String, value: String) {
@@ -1025,7 +1075,7 @@ object ApiClient {
         val prefix = sanitizePrefix(route)
         val hash = MessageDigest
             .getInstance("SHA-256")
-            .digest(path.toByteArray())
+            .digest((sessionFingerprint() + "\u0000" + path).toByteArray())
             .joinToString("") { byte -> "%02x".format(byte) }
         return if (prefix.isNotBlank()) "${prefix}__${hash}" else hash
     }
@@ -1035,12 +1085,13 @@ object ApiClient {
             .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
             .header("Accept", "image/*")
         applyAuthorizationHeader(requestBuilder)
-        val response = client.newCall(requestBuilder.get().build()).execute()
-        if (!response.isSuccessful) {
-            val message = response.body?.string().orEmpty()
-            val json = runCatching { JSONObject(message) }.getOrNull()
-            throw IllegalStateException(json?.optString("message")?.takeIf { it.isNotBlank() } ?: "照片加载失败")
+        client.newCall(requestBuilder.get().build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                val message = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(message) }.getOrNull()
+                throw IllegalStateException(json?.optString("message")?.takeIf { it.isNotBlank() } ?: "照片加载失败")
+            }
+            response.body?.bytes() ?: throw IllegalStateException("照片内容为空")
         }
-        response.body?.bytes() ?: throw IllegalStateException("照片内容为空")
     }
 }

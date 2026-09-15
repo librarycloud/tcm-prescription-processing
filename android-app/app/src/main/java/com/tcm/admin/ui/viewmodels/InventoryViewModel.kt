@@ -51,7 +51,7 @@ internal class InventoryViewModel @Inject constructor(
         }.onSuccess { storeValues ->
             stores.value = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
             storesLoaded.value = true
-        }
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
     }
 }
 

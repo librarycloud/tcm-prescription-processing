@@ -57,13 +57,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -118,6 +118,9 @@ private fun FakeQr(value: String) {
     }
     val bitmap = bitmapState.value
     if (bitmap != null) {
+        DisposableEffect(bitmap) {
+            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+        }
         Image(bitmap = bitmap.asImageBitmap(), contentDescription = "取货二维码", modifier = Modifier.size(140.dp))
     } else {
         Box(Modifier.size(140.dp).background(Color.White, RoundedCornerShape(8.dp)))

@@ -72,6 +72,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +110,7 @@ import java.time.OffsetDateTime
 import java.time.LocalDate
 
 private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
+private const val MAX_SOURCE_PHOTO_BYTES = 25 * 1024 * 1024
 private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
 
 private suspend fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap = withContext(Dispatchers.IO) {
@@ -141,6 +143,12 @@ internal fun todayAllStat(stats: JSONObject?): String {
 }
 
 private fun readProcessingPhoto(context: android.content.Context, uri: Uri): ByteArray {
+    val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+        if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
+    }
+    if (reportedSize != null && reportedSize > MAX_SOURCE_PHOTO_BYTES) {
+        throw IllegalStateException("照片过大，请选择 25MB 以内的照片")
+    }
     val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         ?: throw IllegalStateException("无法读取照片")
     if (original.size <= MAX_PROCESSING_PHOTO_BYTES) return original
@@ -887,7 +895,10 @@ internal fun WorkflowOperationScreen(
                             scope.launch { uploadProgress = progress }
                         }
                     }
-                }.onSuccess { reload() }.onFailure { error = it.message ?: "照片上传失败" }
+                }.onSuccess { reload() }.onFailure {
+                    rethrowCancellation(it)
+                    error = it.message ?: "照片上传失败"
+                }
             } finally {
                 uploadingPhoto = false
                 busy = false
@@ -1896,6 +1907,9 @@ internal fun WorkflowOperationScreen(
 
     // Full-screen photo preview with pinch-to-zoom.
     previewBitmap?.let { bitmap ->
+        DisposableEffect(bitmap) {
+            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+        }
         var previewScale by remember(previewPhotoId) { mutableStateOf(1f) }
         var previewOffsetX by remember(previewPhotoId) { mutableStateOf(0f) }
         var previewOffsetY by remember(previewPhotoId) { mutableStateOf(0f) }

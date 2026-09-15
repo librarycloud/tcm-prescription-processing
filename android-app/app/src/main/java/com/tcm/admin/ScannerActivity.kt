@@ -128,11 +128,6 @@ class ScannerActivity : ComponentActivity() {
     )
 
     private val ocrInFlight = AtomicBoolean(false)
-    // Per-frame barcode hit flag: reset at the start of each frame so the current frame's OCR
-    // can be short-circuited as soon as ML Kit finds a valid barcode in the *same* frame.
-    // Being an Activity-level field also allows future frames to fast-exit before ML Kit fires
-    // if the result has already been delivered.
-    private val isBarcodeHitInFrame = AtomicBoolean(false)
     @Volatile
     private var lastOcrExecutionTime = 0L
     // Use AtomicInteger so reads on cameraExecutor and writes on Dispatchers.Default are
@@ -141,6 +136,7 @@ class ScannerActivity : ComponentActivity() {
 
     private lateinit var previewView: PreviewView
     private var overlayView: ScannerOverlayView? = null
+    private var delayedFocusRunnable: Runnable? = null
 
     private fun updateDebugLogUi() {
         val logTv = debugLogTextView ?: return
@@ -603,7 +599,14 @@ class ScannerActivity : ComponentActivity() {
     private fun startCamera() {
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
-            val provider = providerFuture.get()
+            if (isFinishing || isDestroyed) return@addListener
+            val provider = try {
+                providerFuture.get()
+            } catch (failure: Throwable) {
+                Log.e(TAG, "Failed to initialize camera provider", failure)
+                return@addListener
+            }
+            if (isFinishing || isDestroyed) return@addListener
             cameraProvider = provider
             // Keep enough pixel detail for QR modules and narrow barcodes. On the target
             // devices, the 720p stream can remain visually sharp but still miss the decode;
@@ -640,8 +643,8 @@ class ScannerActivity : ComponentActivity() {
                 }
                 val image = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
                 val isOcrActive = ocrEnabled && !delivered.get()
-                // Reset per-frame barcode flag at the start of each frame
-                isBarcodeHitInFrame.set(false)
+                // Keep this flag scoped to the frame; ML Kit callbacks are asynchronous.
+                val barcodeHitInFrame = AtomicBoolean(false)
                 val pendingTasks = AtomicInteger(if (isOcrActive) 2 else 1)
                 val taskFinished = {
                     if (pendingTasks.decrementAndGet() <= 0) {
@@ -702,7 +705,7 @@ class ScannerActivity : ComponentActivity() {
                             targetBarcode?.let { barcode ->
                                 val value = barcode.rawValue
                                 if (!value.isNullOrBlank()) {
-                                    isBarcodeHitInFrame.set(true)
+                                    barcodeHitInFrame.set(true)
                                     if (BuildConfig.DEBUG && isDebugLogOpen) {
                                         isRecognitionPaused = true
                                         viewingHistoryIndex = -1
@@ -733,7 +736,7 @@ class ScannerActivity : ComponentActivity() {
                     else -> 0L // 发现目标文字：满速识别，零延迟响应
                 }
                 val canRunOcr = isOcrActive &&
-                    !isBarcodeHitInFrame.get() &&
+                    !barcodeHitInFrame.get() &&
                     !delivered.get() &&
                     (nowTime - lastOcrExecutionTime >= adaptiveThrottleMs)
 
@@ -779,7 +782,7 @@ class ScannerActivity : ComponentActivity() {
                     if (roiBitmap != null && ocr != null) {
                         lifecycleScope.launch(Dispatchers.Default) {
                             try {
-                                if (delivered.get() || isBarcodeHitInFrame.get() || isRecognitionPaused) {
+                                if (delivered.get() || barcodeHitInFrame.get() || isRecognitionPaused) {
                                     return@launch
                                 }
                                 val sharpness = com.paddle.ocr.util.BitmapUtils.calculateSharpness(roiBitmap)
@@ -846,6 +849,8 @@ class ScannerActivity : ComponentActivity() {
                                             handleCandidateDetected(candidate, isExplicit = isExplicit)
                                         }
                                     }
+                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                    throw cancelled
                                 } catch (t: Throwable) {
                                     Log.w(TAG, "PP-OCRv6 recognition failed", t)
                                     latestOcrDebugLog = "❌ PP-OCRv6 推理异常: ${t.message}"
@@ -858,16 +863,11 @@ class ScannerActivity : ComponentActivity() {
                         } else {
                             ocrInFlight.set(false)
                         }
-                    } else if (isOcrActive) {
-                        // Only release the OCR task-slot when OCR was actually expected for
-                        // this frame (isOcrActive=true, pendingTasks=2). When ocrEnabled=false
-                        // pendingTasks=1 and the single taskFinished() belongs to the barcode
-                        // scanner's addOnCompleteListener — calling it here too would close the
-                        // proxy before ML Kit finishes reading the MediaImage, corrupting the
-                        // image data and forcing multi-frame retries (the root cause of slow
-                        // scanning in processing / global-scan mode).
-                        taskFinished()
                     }
+                } else if (isOcrActive) {
+                    // OCR was skipped before bitmap extraction (throttle, engine unavailable,
+                    // or another frame is already in flight).
+                    taskFinished()
                 }
             provider.unbindAll()
             currentCamera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
@@ -894,8 +894,12 @@ class ScannerActivity : ComponentActivity() {
                 // common case where the first focus request is sent against a 0x0 view while
                 // the camera is still binding.
                 previewView.post {
+                    if (isFinishing || isDestroyed) return@post
                     focusCenter()
-                    previewView.postDelayed({ focusCenter() }, 700L)
+                    delayedFocusRunnable = Runnable {
+                        if (!isFinishing && !isDestroyed) focusCenter()
+                    }
+                    previewView.postDelayed(delayedFocusRunnable, 700L)
                 }
             }
         }, ContextCompat.getMainExecutor(this))
@@ -923,6 +927,8 @@ class ScannerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        delayedFocusRunnable?.let { previewView.removeCallbacks(it) }
+        delayedFocusRunnable = null
         cameraProvider?.unbindAll()
         scanner.close()
         val ocr = paddleOcr
@@ -930,7 +936,7 @@ class ScannerActivity : ComponentActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { ocr?.release() }
         }
-        cameraExecutor.shutdown()
+        cameraExecutor.shutdownNow()
         debugLogTextView = null
         debugHistoryTextView = null
         debugPauseBtn = null

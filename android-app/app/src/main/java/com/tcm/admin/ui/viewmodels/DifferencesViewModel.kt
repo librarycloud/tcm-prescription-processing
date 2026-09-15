@@ -44,6 +44,6 @@ internal class DifferencesViewModel @Inject constructor(
         }.onSuccess { values ->
             registerProducts.value = (0 until values.length()).map { values.getJSONObject(it) }
             registerProductsLoaded.value = true
-        }
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
     }
 }

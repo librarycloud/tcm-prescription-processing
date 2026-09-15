@@ -28,7 +28,7 @@ internal class StocktakingPagingSource(
             LoadResult.Page(
                 data = items,
                 prevKey = if (page == 1) null else page - 1,
-                nextKey = if (items.isEmpty() || items.size < params.loadSize) null else page + 1,
+                nextKey = if (items.isEmpty() || items.size < 20) null else page + 1,
             )
         } catch (e: Exception) {
             LoadResult.Error(e)

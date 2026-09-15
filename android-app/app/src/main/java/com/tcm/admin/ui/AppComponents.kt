@@ -91,7 +91,9 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-private val retainedListValues = mutableMapOf<String, MutableState<Any?>>()
+private val retainedListValues = object : LinkedHashMap<String, MutableState<Any?>>(256, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MutableState<Any?>>?): Boolean = size > 256
+}
 
 @Composable
 internal fun <T> rememberRetainedListValue(

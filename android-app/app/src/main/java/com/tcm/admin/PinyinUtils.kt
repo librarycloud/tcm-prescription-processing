@@ -7,7 +7,9 @@ private val hanToLatin by lazy {
 }
 
 private val charPinyinCache = java.util.concurrent.ConcurrentHashMap<Char, Char>()
-private val stringPinyinCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+private val stringPinyinCache = object : java.util.LinkedHashMap<String, String>(256, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 256
+}
 
 private fun isHanCharacter(value: Char): Boolean =
     value.code in 0x3400..0x4DBF || value.code in 0x4E00..0x9FFF
@@ -24,11 +26,11 @@ private fun pinyinInitial(value: Char): Char? {
 }
 
 internal fun pinyinInitials(value: String): String {
-    stringPinyinCache[value]?.let { return it }
+    synchronized(stringPinyinCache) { stringPinyinCache[value]?.let { return it } }
     val result = buildString {
         value.forEach { character -> pinyinInitial(character)?.let(::append) }
     }
-    stringPinyinCache[value] = result
+    synchronized(stringPinyinCache) { stringPinyinCache[value] = result }
     return result
 }
 

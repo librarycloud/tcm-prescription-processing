@@ -62,7 +62,7 @@ class PrescriptionViewModel @Inject constructor(
             doctors.value = (0 until doctorValues.length()).map { doctorValues.getJSONObject(it) }
             stores.value = (0 until storeValues.length()).map { storeValues.getJSONObject(it) }
             filtersLoaded.value = true
-        }
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
     }
 
     suspend fun deletePrescription(id: Int) {

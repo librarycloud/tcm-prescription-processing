@@ -105,6 +105,7 @@ internal fun AboutScreen(
     var downloadError by remember { mutableStateOf<String?>(null) }
     var downloadVersionName by remember { mutableStateOf("") }
     var downloadFileName by remember { mutableStateOf("") }
+    var downloadSha256 by remember { mutableStateOf("") }
 
     // Incremental update state
     var isPatchDownloading by remember { mutableStateOf(false) }
@@ -132,6 +133,7 @@ internal fun AboutScreen(
                 .putString(CACHED_UPDATE, result.toString())
                 .apply()
         }.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
             error = it.message ?: "检查更新失败"
         }.getOrNull()
         checking = false
@@ -162,6 +164,10 @@ internal fun AboutScreen(
             rawUrl
         } else {
             updateBase + "/" + rawUrl.trimStart('/')
+        }
+        if (!BuildConfig.DEBUG && !url.startsWith("https://", ignoreCase = true)) {
+            downloadError = "生产环境只允许通过 HTTPS 下载更新"
+            return
         }
         runCatching {
             val versionCode = version.optInt("versionCode", 0).coerceAtLeast(0)
@@ -194,6 +200,7 @@ internal fun AboutScreen(
             downloadedUri = null
             downloadError = null
             downloadVersionName = versionName
+            downloadSha256 = version.displayField("sha256", "").trim().lowercase()
             downloadProgress = 0
             downloadedBytes = 0L
             downloadTotalBytes = version.optLong("fallbackApkSize", 0L).takeIf { it > 0 }
@@ -214,6 +221,10 @@ internal fun AboutScreen(
             rawPatchUrl
         } else {
             updateBase + "/" + rawPatchUrl.trimStart('/')
+        }
+        if (!BuildConfig.DEBUG && !patchUrl.startsWith("https://", ignoreCase = true)) {
+            downloadError = "生产环境只允许通过 HTTPS 下载增量补丁"
+            return
         }
         val patchSha256 = version.displayField("patchSha256", "").lowercase()
         val targetApkSha256 = version.displayField("targetApkSha256", "").lowercase()
@@ -250,26 +261,30 @@ internal fun AboutScreen(
                         requestMethod = "GET"
                         connect()
                     }
-                    if (conn.responseCode !in 200..299) {
-                        throw IOException("下载增量补丁失败，HTTP ${conn.responseCode}")
-                    }
-                    val totalLen = conn.contentLengthLong.takeIf { it > 0 } ?: patchSize
-                    if (totalLen > 0) downloadTotalBytes = totalLen
+                    try {
+                        if (conn.responseCode !in 200..299) {
+                            throw IOException("下载增量补丁失败，HTTP ${conn.responseCode}")
+                        }
+                        val totalLen = conn.contentLengthLong.takeIf { it > 0 } ?: patchSize
+                        if (totalLen > 0) downloadTotalBytes = totalLen
 
-                    conn.inputStream.use { input ->
-                        FileOutputStream(patchFile).use { output ->
-                            val buf = ByteArray(8192)
-                            var read: Int
-                            var count = 0L
-                            while (input.read(buf).also { read = it } != -1) {
-                                output.write(buf, 0, read)
-                                count += read
-                                downloadedBytes = count
-                                if (totalLen > 0) {
-                                    downloadProgress = ((count * 100L) / totalLen).toInt().coerceIn(0, 100)
+                        conn.inputStream.use { input ->
+                            FileOutputStream(patchFile).use { output ->
+                                val buf = ByteArray(8192)
+                                var read: Int
+                                var count = 0L
+                                while (input.read(buf).also { read = it } != -1) {
+                                    output.write(buf, 0, read)
+                                    count += read
+                                    downloadedBytes = count
+                                    if (totalLen > 0) {
+                                        downloadProgress = ((count * 100L) / totalLen).toInt().coerceIn(0, 100)
+                                    }
                                 }
                             }
                         }
+                    } finally {
+                        conn.disconnect()
                     }
                 }
 
@@ -311,6 +326,8 @@ internal fun AboutScreen(
                 downloadProgress = 100
                 downloadedUri = Uri.fromFile(synthesizedApk)
 
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 runCatching {
                     patchFile.delete()
@@ -357,6 +374,15 @@ internal fun AboutScreen(
                     downloadProgress = 100
                     val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                     val targetFile = if (destDir != null && downloadFileName.isNotBlank()) File(destDir, downloadFileName) else null
+                    if (targetFile != null && downloadSha256.isNotBlank()) {
+                        val actualSha256 = withContext(Dispatchers.IO) { BsPatch.computeSha256(targetFile) }.lowercase()
+                        if (actualSha256 != downloadSha256) {
+                            targetFile.delete()
+                            downloadError = "下载的安装包校验失败，请重新下载"
+                            downloadId = null
+                            break
+                        }
+                    }
                     downloadedUri = if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
                         runCatching {
                             androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", targetFile)
@@ -620,10 +646,19 @@ private fun installDownloaded(context: Context, uri: Uri) {
     val installUri = runCatching {
         if (uri.scheme == "file") {
             val file = File(uri.path ?: "")
+            if (!file.exists() || file.length() <= 0L) throw IOException("安装包文件不存在")
             runCatching { file.setReadable(true, false) }
             androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         } else uri
-    }.getOrDefault(uri)
+    }.getOrElse {
+        android.widget.Toast.makeText(context, it.message ?: "无法打开安装包", android.widget.Toast.LENGTH_LONG).show()
+        return
+    }
+
+    if (installUri.scheme == "file") {
+        android.widget.Toast.makeText(context, "安装包路径不受支持，请重新下载", android.widget.Toast.LENGTH_LONG).show()
+        return
+    }
 
     context.startActivity(Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(installUri, "application/vnd.android.package-archive")

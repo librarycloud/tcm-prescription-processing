@@ -69,12 +69,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -432,6 +432,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     previewBitmap = bmp
                 }
             }.onFailure {
+                rethrowCancellation(it)
                 error = it.message ?: "打开处方原件失败"
             }
             viewingAttachment = false
@@ -449,7 +450,10 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     }
                 }
             }
-                .onSuccess { reload++ }.onFailure { error = it.message ?: "上传处方原件失败" }
+                .onSuccess { reload++ }.onFailure {
+                    rethrowCancellation(it)
+                    error = it.message ?: "上传处方原件失败"
+                }
             busy = false
         }
     }
@@ -906,6 +910,9 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     ) }
 
     previewBitmap?.let { bitmap ->
+        DisposableEffect(bitmap) {
+            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+        }
         Dialog(
             onDismissRequest = { previewBitmap = null },
             properties = DialogProperties(
@@ -1156,6 +1163,12 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
 }
 
 private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteArray {
+    val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+        if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
+    }
+    if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
+        throw IllegalStateException("处方文件过大，请选择 25MB 以内的图片")
+    }
     val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         ?: throw IllegalStateException("无法读取处方文件")
     if (original.size <= 2 * 1024 * 1024) return original
@@ -1232,6 +1245,12 @@ private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri:
     val bytes = if (isImage) {
         compressPrescriptionImageIfNeeded(context, uri)
     } else {
+        val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+            if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
+        }
+        if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
+            throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
+        }
         context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
     }
     val uploadMime = if (isImage && !mimeType.startsWith("image/")) "image/jpeg" else mimeType
