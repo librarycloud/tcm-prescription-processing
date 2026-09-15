@@ -232,11 +232,13 @@ internal fun AboutScreen(
 
         scope.launch {
             try {
+                val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
                 val patchFile = File(context.cacheDir, "update_patch.tmp")
-                val synthesizedApk = File(context.cacheDir, "update_pending.apk")
+                val synthesizedApk = File(destDir, "update_pending.apk")
                 runCatching {
                     if (patchFile.exists()) patchFile.delete()
                     if (synthesizedApk.exists()) synthesizedApk.delete()
+                    File(context.cacheDir, "update_pending.apk").delete()
                 }
 
                 // 1. Download patch
@@ -303,6 +305,7 @@ internal fun AboutScreen(
                 }
 
                 // 3. Success
+                runCatching { synthesizedApk.setReadable(true, false) }
                 isSynthesizing = false
                 downloadProgress = 100
                 downloadedUri = Uri.fromFile(synthesizedApk)
@@ -310,6 +313,7 @@ internal fun AboutScreen(
             } catch (e: Exception) {
                 runCatching {
                     File(context.cacheDir, "update_patch.tmp").delete()
+                    synthesizedApk.delete()
                     File(context.cacheDir, "update_pending.apk").delete()
                 }
                 isPatchDownloading = false
@@ -604,6 +608,7 @@ private fun installDownloaded(context: Context, uri: Uri) {
     val installUri = runCatching {
         if (uri.scheme == "file") {
             val file = File(uri.path ?: "")
+            runCatching { file.setReadable(true, false) }
             androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         } else uri
     }.getOrDefault(uri)

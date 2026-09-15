@@ -69,69 +69,74 @@ object BsPatch {
             val extraBytes = patchIn.readBytes()
 
             RandomAccessFile(oldFile, "r").use { oldRaf ->
-                BufferedOutputStream(FileOutputStream(newFile)).use { newOut ->
-                    BZip2CompressorInputStream(ByteArrayInputStream(ctrlBytes)).use { ctrlStream ->
-                        BZip2CompressorInputStream(ByteArrayInputStream(diffBytes)).use { diffStream ->
-                            BZip2CompressorInputStream(ByteArrayInputStream(extraBytes)).use { extraStream ->
-                                var newPos = 0L
-                                val oldBuf = ByteArray(8192)
-                                val diffBuf = ByteArray(8192)
-                                val extraBuf = ByteArray(8192)
+                FileOutputStream(newFile).use { fos ->
+                    BufferedOutputStream(fos).use { newOut ->
+                        BZip2CompressorInputStream(ByteArrayInputStream(ctrlBytes)).use { ctrlStream ->
+                            BZip2CompressorInputStream(ByteArrayInputStream(diffBytes)).use { diffStream ->
+                                BZip2CompressorInputStream(ByteArrayInputStream(extraBytes)).use { extraStream ->
+                                    var newPos = 0L
+                                    val oldBuf = ByteArray(8192)
+                                    val diffBuf = ByteArray(8192)
+                                    val extraBuf = ByteArray(8192)
 
-                                while (newPos < newSize) {
-                                    val diffLen = readOffT(ctrlStream)
-                                    val extraLen = readOffT(ctrlStream)
-                                    val seekOld = readOffT(ctrlStream)
+                                    while (newPos < newSize) {
+                                        val diffLen = readOffT(ctrlStream)
+                                        val extraLen = readOffT(ctrlStream)
+                                        val seekOld = readOffT(ctrlStream)
 
-                                    if (diffLen < 0 || extraLen < 0) {
-                                        throw IOException("Corrupt patch: negative control lengths")
-                                    }
-                                    if (newPos + diffLen + extraLen > newSize) {
-                                        throw IOException("Corrupt patch: size exceeds expected newSize")
-                                    }
-
-                                    // 1. Add diff block to old file bytes
-                                    var diffRemaining = diffLen
-                                    while (diffRemaining > 0) {
-                                        val toRead = minOf(diffRemaining, oldBuf.size.toLong()).toInt()
-                                        val oldRead = oldRaf.read(oldBuf, 0, toRead)
-                                        if (oldRead < toRead) {
-                                            throw EOFException("Unexpected end of old APK while reading diff block")
+                                        if (diffLen < 0 || extraLen < 0) {
+                                            throw IOException("Corrupt patch: negative control lengths")
+                                        }
+                                        if (newPos + diffLen + extraLen > newSize) {
+                                            throw IOException("Corrupt patch: size exceeds expected newSize")
                                         }
 
-                                        readFully(diffStream, diffBuf, toRead)
-                                        for (i in 0 until toRead) {
-                                            diffBuf[i] = (oldBuf[i] + diffBuf[i]).toByte()
+                                        // 1. Add diff block to old file bytes
+                                        var diffRemaining = diffLen
+                                        while (diffRemaining > 0) {
+                                            val toRead = minOf(diffRemaining, oldBuf.size.toLong()).toInt()
+                                            val oldRead = oldRaf.read(oldBuf, 0, toRead)
+                                            if (oldRead < toRead) {
+                                                throw EOFException("Unexpected end of old APK while reading diff block")
+                                            }
+
+                                            readFully(diffStream, diffBuf, toRead)
+                                            for (i in 0 until toRead) {
+                                                diffBuf[i] = (oldBuf[i] + diffBuf[i]).toByte()
+                                            }
+                                            newOut.write(diffBuf, 0, toRead)
+                                            diffRemaining -= toRead
                                         }
-                                        newOut.write(diffBuf, 0, toRead)
-                                        diffRemaining -= toRead
-                                    }
-                                    newPos += diffLen
+                                        newPos += diffLen
 
-                                    // 2. Copy extra block
-                                    var extraRemaining = extraLen
-                                    while (extraRemaining > 0) {
-                                        val toRead = minOf(extraRemaining, extraBuf.size.toLong()).toInt()
-                                        readFully(extraStream, extraBuf, toRead)
-                                        newOut.write(extraBuf, 0, toRead)
-                                        extraRemaining -= toRead
-                                    }
-                                    newPos += extraLen
+                                        // 2. Copy extra block
+                                        var extraRemaining = extraLen
+                                        while (extraRemaining > 0) {
+                                            val toRead = minOf(extraRemaining, extraBuf.size.toLong()).toInt()
+                                            readFully(extraStream, extraBuf, toRead)
+                                            newOut.write(extraBuf, 0, toRead)
+                                            extraRemaining -= toRead
+                                        }
+                                        newPos += extraLen
 
-                                    // 3. Seek old file
-                                    val currentOldPos = oldRaf.filePointer
-                                    oldRaf.seek(currentOldPos + seekOld)
+                                        // 3. Seek old file
+                                        val currentOldPos = oldRaf.filePointer
+                                        oldRaf.seek(currentOldPos + seekOld)
 
-                                    if (newSize > 0) {
-                                        val progress = ((newPos * 100) / newSize).toInt().coerceIn(0, 100)
-                                        onProgress?.invoke(progress)
+                                        if (newSize > 0) {
+                                            val progress = ((newPos * 100) / newSize).toInt().coerceIn(0, 100)
+                                            onProgress?.invoke(progress)
+                                        }
                                     }
+                                    newOut.flush()
                                 }
                             }
                         }
                     }
+                    runCatching { fos.fd.sync() }
                 }
             }
+            runCatching { newFile.setReadable(true, false) }
         }
     }
 
