@@ -232,10 +232,10 @@ internal fun AboutScreen(
         downloadTotalBytes = patchSize
 
         scope.launch {
+            val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
+            val patchFile = File(context.cacheDir, "update_patch.tmp")
+            val synthesizedApk = File(destDir, "update_pending.apk")
             try {
-                val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
-                val patchFile = File(context.cacheDir, "update_patch.tmp")
-                val synthesizedApk = File(destDir, "update_pending.apk")
                 runCatching {
                     if (patchFile.exists()) patchFile.delete()
                     if (synthesizedApk.exists()) synthesizedApk.delete()
@@ -313,7 +313,7 @@ internal fun AboutScreen(
 
             } catch (e: Exception) {
                 runCatching {
-                    File(context.cacheDir, "update_patch.tmp").delete()
+                    patchFile.delete()
                     synthesizedApk.delete()
                     File(context.cacheDir, "update_pending.apk").delete()
                 }
