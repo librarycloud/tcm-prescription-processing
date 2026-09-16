@@ -7,11 +7,12 @@ import { config } from '../config.js';
  * 自动代理到独立的 app-release-hub，无需本地处理或存储文件。
  */
 export default async function appRoutes(fastify) {
-  // 1. 检查更新接口代理
-  fastify.get('/version/android', async (request, reply) => {
+  // 1. 检查更新接口代理（支持 /version/:platform 如 android、ios）
+  fastify.get('/version/:platform', async (request, reply) => {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate').header('Pragma', 'no-cache');
     const hubUrl = config.appReleaseHubUrl;
     const appId = config.appReleaseHubAppId;
+    const platform = request.params.platform || 'android';
 
     if (!hubUrl || !appId) {
       // 未配置 Hub 地址或 App ID 时返回无更新，优雅兜底，避免老手机弹出 404 错误
@@ -25,8 +26,8 @@ export default async function appRoutes(fastify) {
 
     try {
       const parsedUrl = new URL(request.url, 'http://localhost');
-      const hubTarget = new URL(`${hubUrl}/api/apps/${appId}/version/android`);
-      // 传递所有已有 query 参数（如 versionCode, deviceId, channel 等）
+      const hubTarget = new URL(`${hubUrl}/api/apps/${appId}/version/${platform}`);
+      // 传递所有已有 query 参数（如 versionCode, deviceId, deviceModel, osVersion 等）
       parsedUrl.searchParams.forEach((val, key) => {
         hubTarget.searchParams.set(key, val);
       });
@@ -34,11 +35,23 @@ export default async function appRoutes(fastify) {
       if (deviceIdHeader && !hubTarget.searchParams.has('deviceId')) {
         hubTarget.searchParams.set('deviceId', deviceIdHeader);
       }
+      const deviceModelHeader = request.headers['x-device-model'];
+      if (deviceModelHeader && !hubTarget.searchParams.has('deviceModel')) {
+        hubTarget.searchParams.set('deviceModel', deviceModelHeader);
+      }
+      const osVersionHeader = request.headers['x-os-version'];
+      if (osVersionHeader && !hubTarget.searchParams.has('osVersion')) {
+        hubTarget.searchParams.set('osVersion', osVersionHeader);
+      }
+
       const headers = { Accept: 'application/json' };
       const resolvedDeviceId = deviceIdHeader || hubTarget.searchParams.get('deviceId');
-      if (resolvedDeviceId) {
-        headers['x-device-id'] = resolvedDeviceId;
-      }
+      if (resolvedDeviceId) headers['x-device-id'] = resolvedDeviceId;
+      const resolvedDeviceModel = deviceModelHeader || hubTarget.searchParams.get('deviceModel');
+      if (resolvedDeviceModel) headers['x-device-model'] = resolvedDeviceModel;
+      const resolvedOsVersion = osVersionHeader || hubTarget.searchParams.get('osVersion');
+      if (resolvedOsVersion) headers['x-os-version'] = resolvedOsVersion;
+
       const res = await fetch(hubTarget.toString(), {
         headers,
         signal: AbortSignal.timeout(10000),
