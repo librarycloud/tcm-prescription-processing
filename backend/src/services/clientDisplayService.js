@@ -19,6 +19,7 @@ const DEFAULT_CONFIG = {
     customDownloadUrl: '',
     displayName: '药房助手 Android 版'
   },
+  serverUrl: '',
   announcement: ''
 };
 
@@ -83,6 +84,7 @@ export async function getClientDisplayConfig() {
       ...DEFAULT_CONFIG.android,
       ...(raw.android || {})
     },
+    serverUrl: raw.serverUrl || '',
     announcement: raw.announcement || ''
   };
 }
@@ -150,6 +152,7 @@ export async function saveClientDisplayConfig(patch) {
       customDownloadUrl: String(patch.android?.customDownloadUrl ?? raw.android?.customDownloadUrl ?? '').trim(),
       displayName: String(patch.android?.displayName ?? raw.android?.displayName ?? '').trim() || '药房助手 Android 版'
     },
+    serverUrl: stripTrailingSlashes(String(patch.serverUrl ?? raw.serverUrl ?? '').trim()),
     announcement: String(patch.announcement ?? raw.announcement ?? '').trim()
   };
 
@@ -363,6 +366,7 @@ export async function getClientDisplayInfo() {
       hubConnected: hubVersion.connected,
       hubMessage: hubVersion.message || ''
     },
+    serverUrl: conf.serverUrl || '',
     announcement: conf.announcement
   };
 }

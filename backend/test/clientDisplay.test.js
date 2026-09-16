@@ -22,6 +22,7 @@ test('client display service loads default config and saves updates', async () =
       releaseHubUrl: 'https://hub.example.com///',
       releaseHubAppId: 'tcm-admin'
     },
+    serverUrl: 'https://api.tcm.example.com///',
     announcement: '欢迎使用移动客户端'
   });
 
@@ -30,6 +31,7 @@ test('client display service loads default config and saves updates', async () =
   assert.equal(updated.android.displayName, '测试药房助手 Android');
   assert.equal(updated.android.releaseHubUrl, 'https://hub.example.com');
   assert.equal(updated.android.releaseHubAppId, 'tcm-admin');
+  assert.equal(updated.serverUrl, 'https://api.tcm.example.com');
   assert.equal(updated.announcement, '欢迎使用移动客户端');
 
   // Verify saveWechatQrcode with a valid 1x1 PNG (67 bytes)
@@ -43,5 +45,6 @@ test('client display service loads default config and saves updates', async () =
   const info = await getClientDisplayInfo();
   assert.equal(info.wechat.appName, '测试药房小程序');
   assert.ok(info.wechat.qrcodeUrl?.startsWith('data:image/png;base64,'));
+  assert.equal(info.serverUrl, 'https://api.tcm.example.com');
   assert.equal(info.announcement, '欢迎使用移动客户端');
 });

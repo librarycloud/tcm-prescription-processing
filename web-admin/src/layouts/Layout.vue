@@ -88,19 +88,25 @@
                 <el-dropdown-item command="theme-light">
                   <span class="theme-item">
                     <span>🌞 亮色</span>
-                    <el-icon v-if="themeStore.themeMode === 'light'" class="theme-check"><Check /></el-icon>
+                    <el-icon v-if="themeStore.themeMode === 'light'" class="theme-check"
+                      ><Check
+                    /></el-icon>
                   </span>
                 </el-dropdown-item>
                 <el-dropdown-item command="theme-dark">
                   <span class="theme-item">
                     <span>🌙 暗色</span>
-                    <el-icon v-if="themeStore.themeMode === 'dark'" class="theme-check"><Check /></el-icon>
+                    <el-icon v-if="themeStore.themeMode === 'dark'" class="theme-check"
+                      ><Check
+                    /></el-icon>
                   </span>
                 </el-dropdown-item>
                 <el-dropdown-item command="theme-system">
                   <span class="theme-item">
                     <span>🖥 跟随系统</span>
-                    <el-icon v-if="themeStore.themeMode === 'system'" class="theme-check"><Check /></el-icon>
+                    <el-icon v-if="themeStore.themeMode === 'system'" class="theme-check"
+                      ><Check
+                    /></el-icon>
                   </span>
                 </el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
@@ -119,7 +125,7 @@
     <el-dialog
       v-model="clientDisplayVisible"
       title="移动端接入与下载"
-      width="700px"
+      width="920px"
       append-to-body
       destroy-on-close
       class="client-modal"
@@ -149,14 +155,12 @@
                 fit="contain"
                 :preview-src-list="[clientInfo.wechat.qrcodeUrl]"
               />
-              <el-empty
-                v-else
-                description="暂未上传小程序码"
-                :image-size="80"
-              />
+              <el-empty v-else description="暂未上传小程序码" :image-size="80" />
             </div>
             <p class="qr-hint">微信扫一扫即可快速使用</p>
-            <p v-if="clientInfo?.wechat?.appId" class="qr-subhint">AppID: {{ clientInfo.wechat.appId }}</p>
+            <p v-if="clientInfo?.wechat?.appId" class="qr-subhint">
+              AppID: {{ clientInfo.wechat.appId }}
+            </p>
           </div>
 
           <!-- 分割线 -->
@@ -165,7 +169,9 @@
           <!-- Android APK 卡片 -->
           <div class="client-col">
             <div class="col-header">
-              <span class="col-title">{{ clientInfo?.android?.displayName || 'Android 客户端' }}</span>
+              <span class="col-title">{{
+                clientInfo?.android?.displayName || 'Android 客户端'
+              }}</span>
               <el-tag v-if="clientInfo?.android?.versionName" size="small" type="primary">
                 v{{ clientInfo.android.versionName }}
               </el-tag>
@@ -199,13 +205,58 @@
 
             <div v-if="clientInfo?.android?.size" class="apk-meta">
               <span>大小：{{ formatApkSize(clientInfo.android.size) }}</span>
-              <span v-if="clientInfo.android.publishedAt">发布日期：{{ clientInfo.android.publishedAt }}</span>
+              <span v-if="clientInfo.android.publishedAt"
+                >发布日期：{{ clientInfo.android.publishedAt }}</span
+              >
             </div>
 
             <div v-if="clientInfo?.android?.releaseNotes?.length" class="modal-notes-box">
               <div class="notes-caption">最新版本更新说明：</div>
               <ul class="notes-items">
                 <li v-for="(item, i) in clientInfo.android.releaseNotes" :key="i">{{ item }}</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 分割线 -->
+          <div class="col-divider" />
+
+          <!-- App 服务器配置导入卡片 -->
+          <div class="client-col">
+            <div class="col-header">
+              <span class="col-title">App 服务器配置</span>
+              <el-tag size="small" type="warning">一键导入</el-tag>
+            </div>
+            <div class="qr-container">
+              <img
+                v-if="serverConfigQrDataUrl"
+                :src="serverConfigQrDataUrl"
+                class="modal-qr-img"
+                alt="App服务器配置二维码"
+              />
+              <el-empty
+                v-else-if="!modalDeepLink"
+                description="未配置服务器地址"
+                :image-size="80"
+              />
+              <div v-else class="qr-loading">生成二维码中...</div>
+            </div>
+            <p class="qr-hint">手机相机扫码一键配置 App</p>
+            <p class="qr-subhint text-ellipsis" :title="effectiveModalServerUrl">
+              {{ effectiveModalServerUrl }}
+            </p>
+
+            <div class="apk-actions">
+              <el-button type="primary" plain :icon="CopyDocument" @click="copyModalDeepLink">
+                复制导入专属链接
+              </el-button>
+            </div>
+
+            <div class="modal-notes-box">
+              <div class="notes-caption">扫码与导入说明：</div>
+              <ul class="notes-items">
+                <li>手机系统相机对准二维码即可弹出打开 App 提示</li>
+                <li>亦可通过微信/短信发送专属链接，点击自动完成配置</li>
               </ul>
             </div>
           </div>
@@ -228,6 +279,7 @@ import {
   Check,
   CircleCheck,
   Collection,
+  CopyDocument,
   DataAnalysis,
   Document,
   DocumentChecked,
@@ -253,7 +305,7 @@ import {
 } from '@element-plus/icons-vue';
 import QRCode from 'qrcode';
 import avatar from '@/assets/avatar.svg';
-import { useThemeStore } from "@/stores/theme";
+import { useThemeStore } from '@/stores/theme';
 import { useUserStore } from '@/stores/user';
 import { logout as logoutApi } from '@/api/login';
 import { getClientDisplayInfo } from '@/api/clientDisplay';
@@ -422,6 +474,40 @@ const clientDisplayVisible = ref(false);
 const clientInfoLoading = ref(false);
 const clientInfo = ref(null);
 const androidQrDataUrl = ref('');
+const serverConfigQrDataUrl = ref('');
+
+const effectiveModalServerUrl = computed(() => {
+  return (
+    clientInfo.value?.serverUrl || (typeof window !== 'undefined' ? window.location.origin : '')
+  );
+});
+
+const modalDeepLink = computed(() => {
+  return effectiveModalServerUrl.value
+    ? `tcmadmin://config?server=${effectiveModalServerUrl.value}`
+    : '';
+});
+
+async function copyModalDeepLink() {
+  if (!modalDeepLink.value) return;
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(modalDeepLink.value);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = modalDeepLink.value;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    ElMessage.success('App 服务器配置链接已复制到剪贴板！');
+  } catch {
+    ElMessage.error('复制失败，请手动选择复制');
+  }
+}
 
 async function openClientDisplayModal() {
   clientDisplayVisible.value = true;
@@ -437,6 +523,16 @@ async function openClientDisplayModal() {
       });
     } else {
       androidQrDataUrl.value = '';
+    }
+
+    if (modalDeepLink.value) {
+      serverConfigQrDataUrl.value = await QRCode.toDataURL(modalDeepLink.value, {
+        width: 160,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+    } else {
+      serverConfigQrDataUrl.value = '';
     }
   } catch (err) {
     console.error('Failed to load client display info', err);
@@ -742,6 +838,24 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--el-text-color-regular);
   line-height: 1.5;
+}
+
+.text-ellipsis {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .client-columns {
+    flex-direction: column;
+  }
+  .col-divider {
+    width: 100%;
+    height: 1px;
+    margin: 8px 0;
+  }
 }
 
 .content {
