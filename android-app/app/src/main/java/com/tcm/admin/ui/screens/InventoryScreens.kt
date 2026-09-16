@@ -514,7 +514,6 @@ internal fun InventoryScreen(
                     )
                 }
             }
-        }
     }
 }
 }

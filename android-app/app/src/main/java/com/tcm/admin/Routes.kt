@@ -25,6 +25,7 @@ internal sealed class Route {
     @Serializable object ThemeAppearance : Route()
     @Serializable object About : Route()
     @Serializable data class Inventory(val initialQuery: String = "", val scanRequestId: Long = 0L) : Route()
+    @Serializable data class InventoryDetail(val argId: String) : Route()
     @Serializable object Stocktaking : Route()
     @Serializable data class StocktakingDetail(val checkId: Int) : Route()
     @Serializable data class StocktakingEntry(val checkId: Int, val argId: String = "") : Route()
