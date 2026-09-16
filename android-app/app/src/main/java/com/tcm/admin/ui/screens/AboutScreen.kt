@@ -618,6 +618,7 @@ internal fun AboutScreen(
                         targetVersion = latest?.optString("versionName", "") ?: "",
                         hasUpdate = hasUpdate,
                     )
+                }
             }
         }
         
