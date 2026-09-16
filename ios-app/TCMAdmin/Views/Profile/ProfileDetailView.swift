@@ -13,6 +13,7 @@ public struct ProfileDetailView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showSuccessToast = false
+    @State private var showLogoutConfirm = false
     
     public init() {}
     
@@ -82,6 +83,28 @@ public struct ProfileDetailView: View {
                 .cornerRadius(10)
                 .disabled(isSaving)
                 .padding(.top, 16)
+                
+                // Logout Button
+                Button(action: {
+                    showLogoutConfirm = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: (15) * ThemeManager.shared.fontScale))
+                        Text("退出登录")
+                            .font(.system(size: (16) * ThemeManager.shared.fontScale, weight: .medium))
+                    }
+                    .foregroundColor(.danger)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.surface)
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.cardBorder, lineWidth: 1)
+                    )
+                }
+                .padding(.top, 4)
             }
             .padding(16)
         }
@@ -103,6 +126,12 @@ public struct ProfileDetailView: View {
                     dismiss()
                 }
             )
+        }
+        .confirmationDialog("确定要退出当前账号吗？", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+            Button("退出登录", role: .destructive) {
+                session.clearSession()
+            }
+            Button("取消", role: .cancel) {}
         }
     }
     

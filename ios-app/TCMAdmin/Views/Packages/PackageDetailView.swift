@@ -456,7 +456,7 @@ public struct PackageVerifyView: View {
                             if !pkg.phone.isEmpty {
                                 InfoRowItem(label: "联系电话", value: maskPhone(pkg.phone))
                             }
-                            InfoRowItem(label: "取货单号", value: pkg.code)
+                            InfoRowItem(label: "取货单号", value: pkg.code.formattedPickupCode)
                             InfoRowItem(label: "核销时间", value: "刚刚")
                         }
                     }
@@ -584,7 +584,7 @@ public struct PackageDetailView: View {
                                     .cornerRadius(8)
                                     .shadow(color: Color.black.opacity(0.04), radius: 4)
                                 
-                                Text("取货码：\(pkg.code)")
+                                Text("取货码：\(pkg.code.formattedPickupCode)")
                                     .font(.system(size: (22) * ThemeManager.shared.fontScale, weight: .bold))
                                     .foregroundColor(.appPrimaryDark)
                                 

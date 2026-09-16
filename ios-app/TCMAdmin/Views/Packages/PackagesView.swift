@@ -173,7 +173,7 @@ public struct PackagesView: View {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text("取货码").font(.system(size: (11) * ThemeManager.shared.fontScale)).foregroundColor(.muted)
-                                            Text(pkg.code).font(.system(size: (18) * ThemeManager.shared.fontScale, weight: .bold)).foregroundColor(.appPrimaryDark)
+                                            Text(pkg.code.formattedPickupCode).font(.system(size: (18) * ThemeManager.shared.fontScale, weight: .bold)).foregroundColor(.appPrimaryDark)
                                         }
                                         Spacer()
                                         VStack(alignment: .trailing, spacing: 4) {

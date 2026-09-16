@@ -1283,3 +1283,11 @@ public struct WorkflowDetailModel: Codable , Equatable {
         self.workflowExceptions = try? c.decodeIfPresent([WorkflowExceptionItem].self, forKey: .workflowExceptions)
     }
 }
+
+extension String {
+    public var formattedPickupCode: String {
+        guard self.count == 6 else { return self }
+        let idx = self.index(self.startIndex, offsetBy: 3)
+        return "\(self[..<idx])-\(self[idx...])"
+    }
+}

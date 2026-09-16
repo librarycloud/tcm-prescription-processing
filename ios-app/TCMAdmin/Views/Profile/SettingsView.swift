@@ -54,25 +54,6 @@ public struct SettingsView: View {
                         ProfileRow(icon: "lock.shield.fill", title: "安全与隐私") {}
                     }
                 }
-                
-                Spacer().frame(height: 16)
-                
-                // Logout Button
-                Button(action: {
-                    session.clearSession()
-                }) {
-                    Text("退出当前账号")
-                        .font(.system(size: (16) * ThemeManager.shared.fontScale, weight: .medium))
-                        .foregroundColor(.danger)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.surface)
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.cardBorder, lineWidth: 1)
-                        )
-                }
             }
             .padding(16)
         }

@@ -943,7 +943,7 @@ public struct PrescriptionDetailView: View {
             }
             
             if let pCode = plan.package?.code, !pCode.isEmpty, pCode != "-" {
-                Text("取货码：\(pCode)")
+                Text("取货码：\(pCode.formattedPickupCode)")
                     .font(.system(size: (12) * ThemeManager.shared.fontScale, weight: .semibold))
                     .foregroundColor(.appPrimary)
             }

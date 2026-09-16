@@ -1764,7 +1764,7 @@ internal fun ProfileDetailScreen(
     if (editVisible) {
         AlertDialog(
             onDismissRequest = { if (!saving) editVisible = false },
-            title = { Text("编辑资料", fontWeight = FontWeight.Bold) },
+            title = { Text("个人资料", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(nickname, { nickname = it }, Modifier.fillMaxWidth(), label = { Text("姓名或昵称") }, singleLine = true, shape = FieldShape)
@@ -1798,9 +1798,24 @@ internal fun ProfileDetailScreen(
                             saving = false
                         }
                     },
-                ) { Text(if (saving) "保存中" else "保存") }
+                ) { Text(if (saving) "保存中" else "保存修改") }
             },
-            dismissButton = { TextButton(onClick = { editVisible = false }, enabled = !saving) { Text("取消") } },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            editVisible = false
+                            onLogout()
+                        },
+                        enabled = !saving
+                    ) {
+                        Text("退出登录", color = Danger)
+                    }
+                    TextButton(onClick = { editVisible = false }, enabled = !saving) {
+                        Text("取消")
+                    }
+                }
+            },
         )
     }
 }
