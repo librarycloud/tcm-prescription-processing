@@ -99,9 +99,9 @@ ios-app/TCMAdmin/
 | `IOS_BUILD_CERTIFICATE_BASE64` | 是 | 苹果发布证书（`.p12`）的 Base64 编码。终端生成命令：`base64 -i distribution.p12 \| pbcopy` |
 | `IOS_P12_PASSWORD` | 是 | 导出 `.p12` 时设置的证书安全密码 |
 | `IOS_PROVISION_PROFILE_BASE64` | 是 | 苹果描述文件（`.mobileprovision`）的 Base64 编码。终端生成命令：`base64 -i App.mobileprovision \| pbcopy` |
-| `RELEASE_HUB_URL` | 否 | App Release Hub 根域名（例如 `https://release.example.com`，也可在 Actions 变量中设置） |
-| `RELEASE_HUB_API_KEY` | 否 | Release Hub 服务端鉴权 API Key（与 Android 保持一致） |
-| `RELEASE_HUB_APP_ID` | 否 | App ID，默认填 `tcm-admin` |
+| `RELEASE_HUB_URL` | 否 | App Release Hub 根域名（例如 `https://release.example.com`，也可在 Actions 变量中设置，与 Android 通用） |
+| `RELEASE_HUB_API_KEY` | 否 | Release Hub 服务端鉴权 API Key（与 Android 端通用） |
+| `RELEASE_HUB_IOS_APP_ID` | 否 | iOS 专属 App ID（避免与 Android 的 `RELEASE_HUB_APP_ID` 冲突，默认 `tcm-admin-ios`） |
 
 ### 2. 触发方式
 

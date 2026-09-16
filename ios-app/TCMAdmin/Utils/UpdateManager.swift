@@ -30,7 +30,7 @@ public class UpdateManager: ObservableObject {
         }
     }
     
-    public let appId = "tcm-admin"
+    public let appId = "tcm-admin-ios"
     public let platform = "ios"
     
     @Published public var isChecking = false
