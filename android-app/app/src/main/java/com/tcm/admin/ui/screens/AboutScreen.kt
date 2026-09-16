@@ -626,9 +626,8 @@ internal fun AboutScreen(
         
         var webUrlToShow by remember { mutableStateOf<String?>(null) }
         
-        Spacer(Modifier.height(24.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -646,7 +645,6 @@ internal fun AboutScreen(
                 modifier = Modifier.clickable { webUrlToShow = "https://yourdomain.com/agreement.html" }.padding(8.dp)
             )
         }
-        Spacer(Modifier.height(24.dp))
 
         if (webUrlToShow != null) {
             androidx.compose.ui.window.Dialog(
