@@ -240,6 +240,30 @@
         </div>
       </el-card>
 
+      <!-- 卡片: iOS App TestFlight -->
+      <el-card shadow="never" class="config-card">
+        <template #header>
+          <div class="card-title-row">
+            <div class="card-title">
+              <el-icon><Cellphone /></el-icon>
+              <span>iOS App (TestFlight)</span>
+            </div>
+          </div>
+        </template>
+
+        <el-form label-position="top">
+          <el-form-item label="客户端显示名称">
+            <el-input v-model.trim="form.ios.displayName" placeholder="例如：药房助手 iOS 版" />
+          </el-form-item>
+          <el-form-item label="TestFlight 公开链接">
+            <el-input
+              v-model.trim="form.ios.testflightUrl"
+              placeholder="例如：https://testflight.apple.com/join/xxxx"
+            />
+          </el-form-item>
+        </el-form>
+      </el-card>
+
       <!-- 卡片 3: App 后端地址与一键导入配置 (Deep Link & 二维码) -->
       <el-card shadow="never" class="config-card full-width">
         <template #header>
