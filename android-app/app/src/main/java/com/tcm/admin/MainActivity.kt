@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -748,6 +749,15 @@ private fun TcmAdminApp() {
 
 @Composable
 private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, String) -> Unit) {
+    val context = LocalContext.current
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
+            val uri = android.net.Uri.parse(value)
+            val importResult = ApiClient.importServerConfig(context, uri)
+            Toast.makeText(context, importResult.second, Toast.LENGTH_LONG).show()
+        }
+    }
 
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -859,6 +869,40 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                 }
             }
         }
+
+        Spacer(Modifier.height(36.dp))
+
+        // 服务器配置快速入口
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable {
+                scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+            },
+            shape = CardShape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Settings, contentDescription = null, tint = Primary, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("服务器配置", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Ink)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(baseUrl, fontSize = 12.sp, color = Muted, maxLines = 1)
+                }
+                Icon(
+                    Icons.Default.QrCodeScanner,
+                    contentDescription = "Scan config",
+                    tint = Primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
     }
 }
 
@@ -900,6 +944,12 @@ private fun MainShell(
                 scanResolving = true
                 try {
                     when {
+                        // 0. 服务器配置扫描 (tcmadmin://config?server=... 或 http://.../app-config?server=...)
+                        value.contains("server=") && (value.startsWith("tcmadmin://") || value.startsWith("tcm://") || value.contains("/app-config")) -> {
+                            val uri = android.net.Uri.parse(value)
+                            val importResult = withContext(Dispatchers.IO) { ApiClient.importServerConfig(context, uri) }
+                            Toast.makeText(context, importResult.second, Toast.LENGTH_LONG).show()
+                        }
                         // 1. 取货码核销 (TCM:PICKUP:1:...)
                         value.startsWith("TCM:PICKUP:1:") -> {
                             onNavigate(Route.PackageVerify(value))
