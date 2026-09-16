@@ -1633,6 +1633,7 @@ internal fun ProfileDetailScreen(
     }
     val isSuperAdmin = user?.optInt("role", -1) == 0
     var editVisible by remember { mutableStateOf(false) }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
     var nickname by remember(user?.toString()) { mutableStateOf(user?.displayField("nickname", "").orEmpty()) }
     var username by remember(user?.toString()) { mutableStateOf(user?.displayField("username", "").orEmpty()) }
     var phone by remember(user?.toString()) { mutableStateOf(user?.displayField("phone", "").orEmpty()) }
@@ -1749,7 +1750,7 @@ internal fun ProfileDetailScreen(
         Spacer(Modifier.height(16.dp))
 
         OutlinedButton(
-            onClick = onLogout,
+            onClick = { showLogoutConfirm = true },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = FieldShape,
             border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f)),
@@ -1761,10 +1762,34 @@ internal fun ProfileDetailScreen(
         }
     }
 
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text("退出登录", fontWeight = FontWeight.Bold) },
+            text = { Text("确定要退出当前账号吗？", fontSize = 14.sp, color = Muted) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLogoutConfirm = false
+                        onLogout()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Danger)
+                ) {
+                    Text("退出登录", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     if (editVisible) {
         AlertDialog(
             onDismissRequest = { if (!saving) editVisible = false },
-            title = { Text("编辑资料", fontWeight = FontWeight.Bold) },
+            title = { Text("个人资料", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(nickname, { nickname = it }, Modifier.fillMaxWidth(), label = { Text("姓名或昵称") }, singleLine = true, shape = FieldShape)
@@ -1798,9 +1823,24 @@ internal fun ProfileDetailScreen(
                             saving = false
                         }
                     },
-                ) { Text(if (saving) "保存中" else "保存") }
+                ) { Text(if (saving) "保存中" else "保存修改") }
             },
-            dismissButton = { TextButton(onClick = { editVisible = false }, enabled = !saving) { Text("取消") } },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            editVisible = false
+                            showLogoutConfirm = true
+                        },
+                        enabled = !saving
+                    ) {
+                        Text("退出登录", color = Danger)
+                    }
+                    TextButton(onClick = { editVisible = false }, enabled = !saving) {
+                        Text("取消")
+                    }
+                }
+            },
         )
     }
 }
