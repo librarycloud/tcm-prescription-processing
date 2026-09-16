@@ -710,6 +710,25 @@ private fun TcmAdminApp() {
                             user = session?.user,
                             scrollState = stocktakingDetailScrollState,
                             refreshKey = stocktakingDetailRevision,
+                            onNavigate = ::navigateTo,
+                        )
+                    }
+                }
+                composable<Route.StocktakingEntry> { entry ->
+                    val route = entry.toRoute<Route.StocktakingEntry>()
+                    val initialItem = rememberRouteParam(entry, route.argId) { JSONObject() }
+                    val isEdit = initialItem.length() > 0
+                    DetailShell(if (isEdit) "盘点明细修改" else "盘点录入", onBack = { navigateBack() }) {
+                        StocktakingEntryScreen(
+                            checkId = route.checkId,
+                            user = session?.user,
+                            initialItem = if (isEdit) initialItem else null,
+                            onModeChanged = {},
+                            onDismiss = { navigateBack() },
+                            onSaved = { 
+                                stocktakingDetailRevision++
+                                navigateBack()
+                            }
                         )
                     }
                 }

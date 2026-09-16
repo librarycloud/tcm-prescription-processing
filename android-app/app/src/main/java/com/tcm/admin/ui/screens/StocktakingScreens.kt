@@ -315,6 +315,7 @@ internal fun StocktakingDetailScreen(
     user: JSONObject? = null,
     scrollState: ScrollState,
     refreshKey: Int,
+    onNavigate: (Route) -> Unit,
 ) {
     val detailOwner = "stocktaking-detail-$checkId"
     var check by rememberRetainedListValue(detailOwner, "check") { null as JSONObject? }
@@ -323,8 +324,7 @@ internal fun StocktakingDetailScreen(
     var itemFilter by rememberRetainedListValue(detailOwner, "filter") { "all" }
     var itemPage by rememberRetainedListValue(detailOwner, "page") { 1 }
     var itemPages by rememberRetainedListValue(detailOwner, "pages") { 1 }
-    var entryItem by remember { mutableStateOf<JSONObject?>(null) }
-    var entryMode by remember { mutableStateOf(false) }
+
     val isStoreStaff = user?.optInt("role", -1) == 3
 
     LaunchedEffect(checkId, refreshKey, reload, itemPage, itemFilter) {
@@ -415,24 +415,20 @@ internal fun StocktakingDetailScreen(
             }
 
             Spacer(Modifier.height(14.dp))
-            StocktakingEntryScreen(
-                checkId = checkId,
-                user = user,
-                initialItem = entryItem,
-                onModeChanged = { active -> entryMode = active || entryItem != null },
-                onDismiss = {
-                    entryItem = null
-                    entryMode = false
-                },
-                onSaved = {
-                    val editingExistingItem = entryItem != null
-                    entryItem = null
-                    if (editingExistingItem) entryMode = false
-                    reload++
-                },
-            )
-
-            if (!entryMode) {
+            
+            Button(
+                onClick = { onNavigate(Route.StocktakingEntry(checkId, RouteParams.put(JSONObject()))) },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("盘点录入", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(16.dp))
+            
+            if (true) {
                 Spacer(Modifier.height(16.dp))
 
                 SectionHeader(
@@ -541,8 +537,7 @@ internal fun StocktakingDetailScreen(
                             if (actionLabel != null) {
                                 Button(
                                     onClick = {
-                                        entryItem = item
-                                        entryMode = true
+                                        onNavigate(Route.StocktakingEntry(checkId, RouteParams.put(item)))
                                     },
                                     shape = FieldShape,
                                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -721,7 +716,7 @@ internal fun StocktakingEntryScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
