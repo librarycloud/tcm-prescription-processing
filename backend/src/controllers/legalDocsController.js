@@ -1,3 +1,5 @@
+import { ok } from "../utils/response.js";
+
 // 获取所有法律文档配置 (后台或公开使用)
 export const getLegalDocsController = async (request, reply) => {
   const configs = await request.server.prisma.systemConfig.findMany({
@@ -15,7 +17,7 @@ export const getLegalDocsController = async (request, reply) => {
     result[c.item] = c.value;
   });
 
-  reply.send(result);
+  return ok(reply, result);
 };
 
 // 后台保存法律文档配置
@@ -53,5 +55,5 @@ export const saveLegalDocsController = async (request, reply) => {
     });
   }
 
-  reply.send({ message: "保存成功" });
+  return ok(reply, { message: "保存成功" });
 };

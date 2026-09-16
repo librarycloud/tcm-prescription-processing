@@ -32,7 +32,8 @@
                 return response;
             })
             .then(response => response.json())
-            .then(data => {
+            .then(json => {
+                const data = json.code === 0 ? json.data : (json || {});
                 const markdown = data.user_agreement || '# 用户协议\n暂无内容';
                 document.getElementById('content').innerHTML = marked.parse(markdown);
             })
