@@ -79,6 +79,11 @@ public struct SettingsView: View {
         .background(Color.pageBackground)
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TCMServerConfigImported"))) { notif in
+            if let newURL = notif.object as? String {
+                configuredBaseURL = newURL
+            }
+        }
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationView {
                 Form {

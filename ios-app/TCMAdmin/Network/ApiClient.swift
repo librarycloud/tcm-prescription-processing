@@ -41,6 +41,72 @@ public class ApiClient {
         }
     }
     
+
+    // MARK: - 自动导入服务器配置 (支持 Deep Link 与二维码)
+    @discardableResult
+    public func importServerConfig(from url: URL) -> (success: Bool, newURL: String?, message: String) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+            return (false, nil, "无效的配置链接格式")
+        }
+        
+        var targetServer: String? = nil
+        
+        // 1. 优先解析 Query 参数: ?server=... 或 ?url=... 或 ?baseURL=...
+        if let queryItems = components.queryItems {
+            for item in queryItems {
+                let name = item.name.lowercased()
+                if (name == "server" || name == "url" || name == "baseurl" || name == "api"),
+                   let val = item.value, !val.isEmpty {
+                    targetServer = val
+                    break
+                }
+            }
+        }
+        
+        // 2. 若无 Query，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
+        if targetServer == nil {
+            if let host = components.host, !host.isEmpty, host != "config" && host != "server" {
+                let port = components.port.map { ":\($0)" } ?? ""
+                targetServer = "http://\(host)\(port)"
+            }
+        }
+        
+        guard let serverStr = targetServer?.trimmingCharacters(in: .whitespacesAndNewlines), !serverStr.isEmpty else {
+            return (false, nil, "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=http://...)")
+        }
+        
+        var finalURL = serverStr
+        if !finalURL.hasPrefix("http://") && !finalURL.hasPrefix("https://") {
+            finalURL = "http://" + finalURL
+        }
+        finalURL = finalURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        
+        guard URL(string: finalURL) != nil else {
+            return (false, nil, "服务器地址格式不正确: \(serverStr)")
+        }
+        
+        self.baseURL = finalURL
+        NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: finalURL)
+        return (true, finalURL, "成功导入服务器地址: \(finalURL)")
+    }
+    
+    @discardableResult
+    public func importServerConfig(from string: String) -> (success: Bool, newURL: String?, message: String) {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed), (url.scheme == "tcmadmin" || url.scheme == "tcm") {
+            return importServerConfig(from: url)
+        }
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+            if let _ = URL(string: trimmed) {
+                let sanitized = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                self.baseURL = sanitized
+                NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: sanitized)
+                return (true, sanitized, "成功导入服务器地址: \(sanitized)")
+            }
+        }
+        return (false, nil, "无法识别为有效的服务器配置格式")
+    }
+
     private init() {}
     
     // MARK: - Generic Response Cache

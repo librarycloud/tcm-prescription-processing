@@ -165,6 +165,11 @@ public struct LoginView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TCMServerConfigImported"))) { notif in
+            if let newURL = notif.object as? String {
+                configuredBaseURL = newURL
+            }
+        }
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationView {
                 Form {
