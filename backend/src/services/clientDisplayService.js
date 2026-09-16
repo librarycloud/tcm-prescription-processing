@@ -19,6 +19,10 @@ const DEFAULT_CONFIG = {
     customDownloadUrl: '',
     displayName: '药房助手 Android 版'
   },
+  ios: {
+    displayName: '药房助手 iOS 版',
+    testflightUrl: ''
+  },
   serverUrl: '',
   announcement: ''
 };
@@ -83,6 +87,10 @@ export async function getClientDisplayConfig() {
     android: {
       ...DEFAULT_CONFIG.android,
       ...(raw.android || {})
+    },
+    ios: {
+      ...DEFAULT_CONFIG.ios,
+      ...(raw.ios || {})
     },
     serverUrl: raw.serverUrl || '',
     announcement: raw.announcement || ''
@@ -151,6 +159,10 @@ export async function saveClientDisplayConfig(patch) {
       releaseHubAppId: String(patch.android?.releaseHubAppId ?? raw.android?.releaseHubAppId ?? '').trim(),
       customDownloadUrl: String(patch.android?.customDownloadUrl ?? raw.android?.customDownloadUrl ?? '').trim(),
       displayName: String(patch.android?.displayName ?? raw.android?.displayName ?? '').trim() || '药房助手 Android 版'
+    },
+    ios: {
+      displayName: String(patch.ios?.displayName ?? raw.ios?.displayName ?? '').trim() || '药房助手 iOS 版',
+      testflightUrl: String(patch.ios?.testflightUrl ?? raw.ios?.testflightUrl ?? '').trim()
     },
     serverUrl: stripTrailingSlashes(String(patch.serverUrl ?? raw.serverUrl ?? '').trim()),
     announcement: String(patch.announcement ?? raw.announcement ?? '').trim()

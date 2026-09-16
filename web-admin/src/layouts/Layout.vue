@@ -125,7 +125,7 @@
     <el-dialog
       v-model="clientDisplayVisible"
       title="移动端接入与下载"
-      width="920px"
+      width="1080px"
       append-to-body
       destroy-on-close
       class="client-modal"
@@ -215,6 +215,38 @@
               <ul class="notes-items">
                 <li v-for="(item, i) in clientInfo.android.releaseNotes" :key="i">{{ item }}</li>
               </ul>
+            </div>
+          </div>
+          <!-- iOS TestFlight 卡片 -->
+          <div class="col-divider" />
+          <div class="client-col">
+            <div class="col-header">
+              <span class="col-title">{{ clientInfo?.ios?.displayName || 'iOS 客户端' }}</span>
+            </div>
+            <div class="qr-container">
+              <img
+                v-if="iosQrDataUrl"
+                :src="iosQrDataUrl"
+                class="modal-qr-img"
+                alt="TestFlight二维码"
+              />
+              <el-empty
+                v-else-if="!clientInfo?.ios?.testflightUrl"
+                description="暂无下载链接"
+                :image-size="80"
+              />
+              <div v-else class="qr-loading">生成二维码中...</div>
+            </div>
+            <p class="qr-hint">iPhone 扫码直达 TestFlight</p>
+            <div class="apk-actions">
+              <el-button
+                v-if="clientInfo?.ios?.testflightUrl"
+                type="primary"
+                :icon="Download"
+                @click="downloadApk(clientInfo.ios.testflightUrl)"
+              >
+                跳转 TestFlight
+              </el-button>
             </div>
           </div>
 
@@ -474,6 +506,7 @@ const clientDisplayVisible = ref(false);
 const clientInfoLoading = ref(false);
 const clientInfo = ref(null);
 const androidQrDataUrl = ref('');
+const iosQrDataUrl = ref('');
 const serverConfigQrDataUrl = ref('');
 
 const effectiveModalServerUrl = computed(() => {
@@ -523,6 +556,16 @@ async function openClientDisplayModal() {
       });
     } else {
       androidQrDataUrl.value = '';
+    }
+
+    if (res?.ios?.testflightUrl) {
+      iosQrDataUrl.value = await QRCode.toDataURL(res.ios.testflightUrl, {
+        width: 160,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+    } else {
+      iosQrDataUrl.value = '';
     }
 
     if (modalDeepLink.value) {

@@ -508,6 +508,10 @@ const form = ref({
     customDownloadUrl: '',
     displayName: '药房助手 Android 版'
   },
+  ios: {
+    displayName: '药房助手 iOS 版',
+    testflightUrl: ''
+  },
   serverUrl: '',
   announcement: ''
 });
@@ -644,6 +648,7 @@ async function loadSettings() {
       form.value = {
         wechat: { ...form.value.wechat, ...(res.config.wechat || {}) },
         android: { ...form.value.android, ...(res.config.android || {}) },
+        ios: { ...form.value.ios, ...(res.config.ios || {}) },
         serverUrl: res.config.serverUrl || '',
         announcement: res.config.announcement || ''
       };
@@ -670,6 +675,7 @@ async function saveSettings() {
       form.value = {
         wechat: { ...form.value.wechat, ...(res.config.wechat || {}) },
         android: { ...form.value.android, ...(res.config.android || {}) },
+        ios: { ...form.value.ios, ...(res.config.ios || {}) },
         serverUrl: res.config.serverUrl || '',
         announcement: res.config.announcement || ''
       };

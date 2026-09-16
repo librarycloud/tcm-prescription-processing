@@ -22,6 +22,10 @@ test('client display service loads default config and saves updates', async () =
       releaseHubUrl: 'https://hub.example.com///',
       releaseHubAppId: 'tcm-admin'
     },
+    ios: {
+      displayName: '测试药房助手 iOS',
+      testflightUrl: 'https://testflight.apple.com/join/xxxx'
+    },
     serverUrl: 'https://api.tcm.example.com///',
     announcement: '欢迎使用移动客户端'
   });
@@ -31,6 +35,8 @@ test('client display service loads default config and saves updates', async () =
   assert.equal(updated.android.displayName, '测试药房助手 Android');
   assert.equal(updated.android.releaseHubUrl, 'https://hub.example.com');
   assert.equal(updated.android.releaseHubAppId, 'tcm-admin');
+  assert.equal(updated.ios.displayName, '测试药房助手 iOS');
+  assert.equal(updated.ios.testflightUrl, 'https://testflight.apple.com/join/xxxx');
   assert.equal(updated.serverUrl, 'https://api.tcm.example.com');
   assert.equal(updated.announcement, '欢迎使用移动客户端');
 
