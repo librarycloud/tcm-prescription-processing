@@ -33,6 +33,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
+import com.tcm.admin.api.ApiClient
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacyPolicyDialog(onAgree: () -> Unit, onDisagree: () -> Unit) {
@@ -47,7 +49,7 @@ fun PrivacyPolicyDialog(onAgree: () -> Unit, onDisagree: () -> Unit) {
             Surface(modifier = Modifier.fillMaxSize()) {
                 Column {
                     TopAppBar(
-                        title = { Text(if (webUrlToShow?.contains("privacy") == true) "隐私政策" else "用户协议") },
+                        title = { Text(if (webUrlToShow == "privacy_policy") "隐私政策" else "用户协议") },
                         navigationIcon = {
                             IconButton(onClick = { webUrlToShow = null }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -59,7 +61,38 @@ fun PrivacyPolicyDialog(onAgree: () -> Unit, onDisagree: () -> Unit) {
                             WebView(ctx).apply {
                                 webViewClient = WebViewClient()
                                 settings.javaScriptEnabled = true
-                                loadUrl(webUrlToShow!!)
+                                val htmlData = """
+                                    <!DOCTYPE html>
+                                    <html lang="zh-CN">
+                                    <head>
+                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+                                        <style>
+                                            body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 16px; color: #333; }
+                                            .loading { text-align: center; color: #666; margin-top: 50px; }
+                                            img { max-width: 100%; height: auto; }
+                                            pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
+                                            blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <div id="content"><div class="loading">加载中...</div></div>
+                                        <script>
+                                            fetch('${ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
+                                                .then(res => res.json())
+                                                .then(json => {
+                                                    const data = json.code === 0 ? json.data : (json || {});
+                                                    const md = data.${if(webUrlToShow == "privacy_policy") "privacy_policy" else "user_agreement"} || '暂无内容';
+                                                    document.getElementById('content').innerHTML = marked.parse(md);
+                                                })
+                                                .catch(e => {
+                                                    document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络并重试</div>';
+                                                });
+                                        </script>
+                                    </body>
+                                    </html>
+                                """.trimIndent()
+                                loadDataWithBaseURL(null, htmlData, "text/html", "utf-8", null)
                             }
                         },
                         modifier = Modifier.fillMaxSize()
@@ -92,13 +125,13 @@ fun PrivacyPolicyDialog(onAgree: () -> Unit, onDisagree: () -> Unit) {
 
                 val annotatedString = buildAnnotatedString {
                     append("感谢您使用本应用！我们非常重视您的个人信息和隐私保护。在您使用本应用前，请仔细阅读")
-                    pushStringAnnotation(tag = "PRIVACY", annotation = "https://yourdomain.com/privacy.html")
+                    pushStringAnnotation(tag = "PRIVACY", annotation = "privacy_policy")
                     withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
                         append("《隐私政策》")
                     }
                     pop()
                     append("和")
-                    pushStringAnnotation(tag = "AGREEMENT", annotation = "https://yourdomain.com/agreement.html")
+                    pushStringAnnotation(tag = "AGREEMENT", annotation = "user_agreement")
                     withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
                         append("《用户协议》")
                     }

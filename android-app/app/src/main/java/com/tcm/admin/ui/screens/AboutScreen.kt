@@ -635,14 +635,14 @@ internal fun AboutScreen(
                 "《隐私政策》",
                 color = Primary,
                 fontSize = 13.sp,
-                modifier = Modifier.clickable { webUrlToShow = "https://yourdomain.com/privacy.html" }.padding(8.dp)
+                modifier = Modifier.clickable { webUrlToShow = "privacy_policy" }.padding(8.dp)
             )
             Spacer(Modifier.width(16.dp))
             Text(
                 "《用户协议》",
                 color = Primary,
                 fontSize = 13.sp,
-                modifier = Modifier.clickable { webUrlToShow = "https://yourdomain.com/agreement.html" }.padding(8.dp)
+                modifier = Modifier.clickable { webUrlToShow = "user_agreement" }.padding(8.dp)
             )
         }
 
@@ -655,7 +655,7 @@ internal fun AboutScreen(
                     Column {
                         @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
                         androidx.compose.material3.TopAppBar(
-                            title = { Text(if (webUrlToShow?.contains("privacy") == true) "隐私政策" else "用户协议") },
+                            title = { Text(if (webUrlToShow == "privacy_policy") "隐私政策" else "用户协议") },
                             navigationIcon = {
                                 androidx.compose.material3.IconButton(onClick = { webUrlToShow = null }) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -667,7 +667,38 @@ internal fun AboutScreen(
                                 android.webkit.WebView(ctx).apply {
                                     webViewClient = android.webkit.WebViewClient()
                                     settings.javaScriptEnabled = true
-                                    loadUrl(webUrlToShow!!)
+                                    val htmlData = """
+                                        <!DOCTYPE html>
+                                        <html lang="zh-CN">
+                                        <head>
+                                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+                                            <style>
+                                                body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 16px; color: #333; }
+                                                .loading { text-align: center; color: #666; margin-top: 50px; }
+                                                img { max-width: 100%; height: auto; }
+                                                pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
+                                                blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <div id="content"><div class="loading">加载中...</div></div>
+                                            <script>
+                                                fetch('${com.tcm.admin.api.ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
+                                                    .then(res => res.json())
+                                                    .then(json => {
+                                                        const data = json.code === 0 ? json.data : (json || {});
+                                                        const md = data.${if(webUrlToShow == "privacy_policy") "privacy_policy" else "user_agreement"} || '暂无内容';
+                                                        document.getElementById('content').innerHTML = marked.parse(md);
+                                                    })
+                                                    .catch(e => {
+                                                        document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络并重试</div>';
+                                                    });
+                                            </script>
+                                        </body>
+                                        </html>
+                                    """.trimIndent()
+                                    loadDataWithBaseURL(null, htmlData, "text/html", "utf-8", null)
                                 }
                             },
                             modifier = Modifier.fillMaxSize()

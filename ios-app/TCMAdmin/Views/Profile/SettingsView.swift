@@ -420,6 +420,7 @@ public struct AboutView: View {
     @State private var updateMessage = ""
     @State private var showEditHubUrl = false
     @State private var hubUrlInput = ""
+    @State private var webUrlToShow: String?
     
     public init() {}
     
@@ -509,11 +510,11 @@ public struct AboutView: View {
             .padding(.horizontal, 16)
             
             HStack(spacing: 16) {
-                if let privacyUrl = URL(string: "https://yourdomain.com/privacy.html") {
-                    Link("《隐私政策》", destination: privacyUrl)
+                Button("《隐私政策》") {
+                    webUrlToShow = "privacy_policy"
                 }
-                if let agreementUrl = URL(string: "https://yourdomain.com/agreement.html") {
-                    Link("《用户协议》", destination: agreementUrl)
+                Button("《用户协议》") {
+                    webUrlToShow = "user_agreement"
                 }
             }
             .font(.system(size: (13) * ThemeManager.shared.fontScale))
@@ -531,6 +532,22 @@ public struct AboutView: View {
                 message: Text(updateMessage),
                 dismissButton: .default(Text("确定"))
             )
+        }
+        .sheet(item: Binding<String?>(
+            get: { webUrlToShow },
+            set: { webUrlToShow = $0 }
+        )) { type in
+            NavigationView {
+                InlineWebView(type: type)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("关闭") {
+                                webUrlToShow = nil
+                            }
+                        }
+                    }
+            }
         }
     }
     

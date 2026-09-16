@@ -649,10 +649,57 @@ struct KeyboardDismissalView: UIViewRepresentable {
     }
 }
 
+import WebKit
+
+struct InlineWebView: UIViewRepresentable {
+    let type: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        return WKWebView()
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        let baseUrl = ApiClient.shared.baseURL
+        let htmlData = """
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+            <style>
+                body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 16px; color: #333; }
+                .loading { text-align: center; color: #666; margin-top: 50px; }
+                img { max-width: 100%; height: auto; }
+                pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
+                blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
+            </style>
+        </head>
+        <body>
+            <div id="content"><div class="loading">加载中...</div></div>
+            <script>
+                fetch('\(baseUrl)/app/legal-docs')
+                    .then(res => res.json())
+                    .then(json => {
+                        const data = json.code === 0 ? json.data : (json || {});
+                        const md = data.\(type) || '暂无内容';
+                        document.getElementById('content').innerHTML = marked.parse(md);
+                    })
+                    .catch(e => {
+                        document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络并重试</div>';
+                    });
+            </script>
+        </body>
+        </html>
+        """
+        uiView.loadHTMLString(htmlData, baseURL: nil)
+    }
+}
+
 // MARK: - 隐私政策提示弹窗
 public struct PrivacyPolicyView: View {
     public var onAgree: () -> Void
     public var onDisagree: () -> Void
+    @State private var webUrlToShow: String?
 
     public init(onAgree: @escaping () -> Void, onDisagree: @escaping () -> Void) {
         self.onAgree = onAgree
@@ -668,9 +715,13 @@ public struct PrivacyPolicyView: View {
                     .font(.headline)
                     .fontWeight(.bold)
 
-                Text("感谢您使用本应用！我们非常重视您的个人信息和隐私保护。在您使用本应用前，请仔细阅读[《隐私政策》](https://yourdomain.com/privacy.html)和[《用户协议》](https://yourdomain.com/agreement.html)。\n\n我们将在获得您的明确同意后，收集必要的设备信息、网络信息等，并初始化相关第三方 SDK 以提供服务。")
+                Text("感谢您使用本应用！我们非常重视您的个人信息和隐私保护。在您使用本应用前，请仔细阅读[《隐私政策》](privacy_policy)和[《用户协议》](user_agreement)。\n\n我们将在获得您的明确同意后，收集必要的设备信息、网络信息等，并初始化相关第三方 SDK 以提供服务。")
                     .font(.body)
                     .tint(.blue)
+                    .environment(\.openURL, OpenURLAction { url in
+                        self.webUrlToShow = url.absoluteString
+                        return .handled
+                    })
 
                 HStack(spacing: 40) {
                     Button(action: onDisagree) {
@@ -694,5 +745,25 @@ public struct PrivacyPolicyView: View {
             .cornerRadius(16)
             .padding(32)
         }
+        .sheet(item: Binding<String?>(
+            get: { webUrlToShow },
+            set: { webUrlToShow = $0 }
+        )) { type in
+            NavigationView {
+                InlineWebView(type: type)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("关闭") {
+                                webUrlToShow = nil
+                            }
+                        }
+                    }
+            }
+        }
     }
+}
+
+extension String: Identifiable {
+    public var id: String { self }
 }
