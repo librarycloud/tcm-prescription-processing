@@ -96,6 +96,7 @@ internal fun InventoryScreen(
     scanRequestId: Long = 0L,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
+    onNavigate: (Route) -> Unit,
     viewModel: InventoryViewModel = hiltViewModel(),
 ) {
     val showStore = user?.optInt("role", -1) == 0
