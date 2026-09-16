@@ -187,6 +187,7 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
     public let processDate: String?
     public let startDate: String?
     public let finishDate: String?
+    public let updatedAt: String?
     public let remark: String?
     public let processRemark: String?
     
@@ -202,7 +203,7 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
     public let store: StoreNested?
     
     enum CodingKeys: String, CodingKey {
-        case id, planCode, status, createdAt, delayDays, priority, isUrgent, batchNo, totalDose
+        case id, planCode, status, createdAt, updatedAt, delayDays, priority, isUrgent, batchNo, totalDose
         case prescriptionId, plans, bagCount, volumeMl, pickupMethod, processDate, startDate, finishDate, remark, processRemark
         case prescription, processType, package, store
     }
@@ -213,6 +214,7 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
         self.planCode = (try? c.decodeIfPresent(String.self, forKey: .planCode)) ?? ""
         self.status = try? c.decodeIfPresent(Int.self, forKey: .status)
         self.createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        self.updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
         self.delayDays = try? c.decodeIfPresent(Int.self, forKey: .delayDays)
         self.priority = try? c.decodeIfPresent(Int.self, forKey: .priority)
         if let u = try? c.decodeIfPresent(Bool.self, forKey: .isUrgent) {
@@ -246,6 +248,7 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
         try c.encode(planCode, forKey: .planCode)
         try c.encodeIfPresent(status, forKey: .status)
         try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try c.encodeIfPresent(delayDays, forKey: .delayDays)
         try c.encodeIfPresent(priority, forKey: .priority)
         try c.encodeIfPresent(rawIsUrgent, forKey: .isUrgent)
@@ -851,7 +854,7 @@ public struct E6RawItem: Codable, Identifiable , Equatable {
 }
 
 // MARK: - 盘点模型
-public struct StocktakingModel: Codable, Identifiable , Equatable {
+public struct StocktakingModel: Codable, Identifiable, Equatable {
     public let id: Int
     public let checkName: String
     public let checkNo: String?
@@ -867,7 +870,7 @@ public struct StocktakingModel: Codable, Identifiable , Equatable {
     public let items: [StocktakingItemModel]?
     public let summary: StocktakingSummaryModel?
     
-    public struct StoreNested: Codable , Equatable {
+    public struct StoreNested: Codable, Equatable {
         public let name: String?
     }
     
@@ -883,9 +886,57 @@ public struct StocktakingModel: Codable, Identifiable , Equatable {
         default: return "未知"
         }
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, checkName, checkNo, checkType, status, storeId, store
+        case totalCount, diffCount, checkedCount, createdAt, createdBy
+        case items, summary
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let idVal = try? c.decodeIfPresent(Int.self, forKey: .id) {
+            self.id = idVal
+        } else if let s = try? c.decodeIfPresent(String.self, forKey: .id), let idVal = Int(s) {
+            self.id = idVal
+        } else {
+            self.id = 0
+        }
+        self.checkName = (try? c.decodeIfPresent(String.self, forKey: .checkName)) ?? "盘点单"
+        self.checkNo = try? c.decodeIfPresent(String.self, forKey: .checkNo)
+        self.checkType = try? c.decodeIfPresent(Int.self, forKey: .checkType)
+        self.status = try? c.decodeIfPresent(Int.self, forKey: .status)
+        self.storeId = try? c.decodeIfPresent(Int.self, forKey: .storeId)
+        self.store = try? c.decodeIfPresent(StoreNested.self, forKey: .store)
+        self.totalCount = try? c.decodeIfPresent(Int.self, forKey: .totalCount)
+        self.diffCount = try? c.decodeIfPresent(Int.self, forKey: .diffCount)
+        self.checkedCount = try? c.decodeIfPresent(Int.self, forKey: .checkedCount)
+        self.createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        self.createdBy = try? c.decodeIfPresent(Int.self, forKey: .createdBy)
+        self.items = try? c.decodeIfPresent([StocktakingItemModel].self, forKey: .items)
+        self.summary = try? c.decodeIfPresent(StocktakingSummaryModel.self, forKey: .summary)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(checkName, forKey: .checkName)
+        try c.encodeIfPresent(checkNo, forKey: .checkNo)
+        try c.encodeIfPresent(checkType, forKey: .checkType)
+        try c.encodeIfPresent(status, forKey: .status)
+        try c.encodeIfPresent(storeId, forKey: .storeId)
+        try c.encodeIfPresent(store, forKey: .store)
+        try c.encodeIfPresent(totalCount, forKey: .totalCount)
+        try c.encodeIfPresent(diffCount, forKey: .diffCount)
+        try c.encodeIfPresent(checkedCount, forKey: .checkedCount)
+        try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(createdBy, forKey: .createdBy)
+        try c.encodeIfPresent(items, forKey: .items)
+        try c.encodeIfPresent(summary, forKey: .summary)
+    }
 }
 
-public struct StocktakingSummaryModel: Codable , Equatable {
+public struct StocktakingSummaryModel: Codable, Equatable {
     public let total: Int?
     public let counted: Int?
     public let missing: Int?
@@ -894,21 +945,24 @@ public struct StocktakingSummaryModel: Codable , Equatable {
     public let mine: Int?
 }
 
-public struct StocktakingItemModel: Codable, Identifiable , Equatable {
-    public let id: Int
+public struct StocktakingItemModel: Codable, Identifiable, Equatable {
+    public let rawId: Int?
     public let checkId: Int?
     public let productId: Int?
     public let batchNo: String?
     public let locationCode: String?
+    public let systemLocationName: String?
+    public let countLocationName: String?
     public let systemQty: Double?
     public let firstCountQty: Double?
     public let recountQty: Double?
     public let diffQty: Double?
+    public let difference: Double?
     public let checkStatus: Int?
     public let reviewStatus: Int?
     public let product: StocktakingProductNested?
     
-    public struct StocktakingProductNested: Codable , Equatable {
+    public struct StocktakingProductNested: Codable, Equatable {
         public let id: Int?
         public let name: String?
         public let productCode: String?
@@ -917,26 +971,189 @@ public struct StocktakingItemModel: Codable, Identifiable , Equatable {
         public let barcode: String?
     }
     
+    public var id: Int {
+        if let rawId = rawId, rawId > 0 {
+            return rawId
+        }
+        var hasher = Hasher()
+        hasher.combine(productId ?? 0)
+        hasher.combine(batchNo ?? "")
+        hasher.combine(displayLocation)
+        let hash = abs(hasher.finalize())
+        return -(hash == 0 ? 1 : hash)
+    }
+    
+    public var itemId: Int? {
+        if let r = rawId, r > 0 { return r }
+        return nil
+    }
+    
+    public var displayLocation: String {
+        if let loc = countLocationName, !loc.isEmpty { return loc }
+        if let loc = systemLocationName, !loc.isEmpty { return loc }
+        if let loc = locationCode, !loc.isEmpty { return loc }
+        return ""
+    }
+    
     public var productName: String { product?.name ?? "商品 #\(productId ?? 0)" }
     public var productSpec: String { product?.specification ?? "-" }
     public var productUnit: String { product?.unit ?? "" }
+    
     public var displayDiff: Double {
         if let d = diffQty { return d }
+        if let d = difference { return d }
         if let r = recountQty { return r - (systemQty ?? 0) }
         if let f = firstCountQty { return f - (systemQty ?? 0) }
         return 0
     }
+    
+    enum CodingKeys: String, CodingKey {
+        case rawId = "id"
+        case itemId, checkItemId
+        case checkId, productId, batchNo, locationCode
+        case systemLocationName, countLocationName
+        case systemQty, firstCountQty, recountQty, diffQty, difference
+        case checkStatus, reviewStatus, product
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let val = try? c.decodeIfPresent(Int.self, forKey: .rawId) {
+            self.rawId = val
+        } else if let s = try? c.decodeIfPresent(String.self, forKey: .rawId), let val = Int(s) {
+            self.rawId = val
+        } else if let val = try? c.decodeIfPresent(Int.self, forKey: .itemId) {
+            self.rawId = val
+        } else if let val = try? c.decodeIfPresent(Int.self, forKey: .checkItemId) {
+            self.rawId = val
+        } else {
+            self.rawId = nil
+        }
+        
+        self.checkId = try? c.decodeIfPresent(Int.self, forKey: .checkId)
+        self.productId = (try? c.decodeIfPresent(Int.self, forKey: .productId))
+        self.batchNo = try? c.decodeIfPresent(String.self, forKey: .batchNo)
+        self.locationCode = try? c.decodeIfPresent(String.self, forKey: .locationCode)
+        self.systemLocationName = try? c.decodeIfPresent(String.self, forKey: .systemLocationName)
+        self.countLocationName = try? c.decodeIfPresent(String.self, forKey: .countLocationName)
+        
+        func decodeDouble(_ key: CodingKeys) -> Double? {
+            if let val = try? c.decodeIfPresent(Double.self, forKey: key) { return val }
+            if let val = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(val) }
+            if let s = try? c.decodeIfPresent(String.self, forKey: key), let val = Double(s) { return val }
+            return nil
+        }
+        
+        self.systemQty = decodeDouble(.systemQty)
+        self.firstCountQty = decodeDouble(.firstCountQty)
+        self.recountQty = decodeDouble(.recountQty)
+        self.diffQty = decodeDouble(.diffQty)
+        self.difference = decodeDouble(.difference)
+        self.checkStatus = try? c.decodeIfPresent(Int.self, forKey: .checkStatus)
+        self.reviewStatus = try? c.decodeIfPresent(Int.self, forKey: .reviewStatus)
+        self.product = try? c.decodeIfPresent(StocktakingProductNested.self, forKey: .product)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(rawId, forKey: .rawId)
+        try c.encodeIfPresent(checkId, forKey: .checkId)
+        try c.encodeIfPresent(productId, forKey: .productId)
+        try c.encodeIfPresent(batchNo, forKey: .batchNo)
+        try c.encodeIfPresent(locationCode, forKey: .locationCode)
+        try c.encodeIfPresent(systemLocationName, forKey: .systemLocationName)
+        try c.encodeIfPresent(countLocationName, forKey: .countLocationName)
+        try c.encodeIfPresent(systemQty, forKey: .systemQty)
+        try c.encodeIfPresent(firstCountQty, forKey: .firstCountQty)
+        try c.encodeIfPresent(recountQty, forKey: .recountQty)
+        try c.encodeIfPresent(diffQty, forKey: .diffQty)
+        try c.encodeIfPresent(difference, forKey: .difference)
+        try c.encodeIfPresent(checkStatus, forKey: .checkStatus)
+        try c.encodeIfPresent(reviewStatus, forKey: .reviewStatus)
+        try c.encodeIfPresent(product, forKey: .product)
+    }
 }
 
-public struct StocktakingCandidateModel: Codable, Identifiable , Equatable {
+public struct StocktakingCandidateModel: Codable, Identifiable, Equatable {
     public let id: Int
+    public let productId: Int
     public let name: String
     public let productCode: String?
     public let specification: String?
     public let unit: String?
     public let barcode: String?
+    public let batchNo: String?
     public let locationCode: String?
     public let currentStock: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id, productId, name, productCode, specification, unit, barcode, batchNo
+        case locationCode, locationName, countLocationName
+        case currentStock, quantity, systemQty
+        case product
+    }
+
+    private struct NestedProduct: Codable {
+        let id: Int?
+        let name: String?
+        let productCode: String?
+        let specification: String?
+        let unit: String?
+        let barcode: String?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let nested = try? c.decodeIfPresent(NestedProduct.self, forKey: .product)
+
+        let pid = (try? c.decodeIfPresent(Int.self, forKey: .productId))
+            ?? nested?.id
+            ?? (try? c.decodeIfPresent(Int.self, forKey: .id))
+            ?? 0
+        self.productId = pid
+
+        self.id = (try? c.decodeIfPresent(Int.self, forKey: .id)) ?? pid
+
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name))
+            ?? nested?.name
+            ?? "未知商品"
+
+        self.productCode = (try? c.decodeIfPresent(String.self, forKey: .productCode)) ?? nested?.productCode
+        self.specification = (try? c.decodeIfPresent(String.self, forKey: .specification)) ?? nested?.specification
+        self.unit = (try? c.decodeIfPresent(String.self, forKey: .unit)) ?? nested?.unit
+        self.barcode = (try? c.decodeIfPresent(String.self, forKey: .barcode)) ?? nested?.barcode
+        self.batchNo = try? c.decodeIfPresent(String.self, forKey: .batchNo)
+
+        self.locationCode = (try? c.decodeIfPresent(String.self, forKey: .locationCode))
+            ?? (try? c.decodeIfPresent(String.self, forKey: .locationName))
+            ?? (try? c.decodeIfPresent(String.self, forKey: .countLocationName))
+
+        if let val = try? c.decodeIfPresent(Double.self, forKey: .currentStock) {
+            self.currentStock = val
+        } else if let val = try? c.decodeIfPresent(Double.self, forKey: .quantity) {
+            self.currentStock = val
+        } else if let val = try? c.decodeIfPresent(Double.self, forKey: .systemQty) {
+            self.currentStock = val
+        } else if let s = try? c.decodeIfPresent(String.self, forKey: .quantity), let val = Double(s) {
+            self.currentStock = val
+        } else {
+            self.currentStock = nil
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(productId, forKey: .productId)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(productCode, forKey: .productCode)
+        try c.encodeIfPresent(specification, forKey: .specification)
+        try c.encodeIfPresent(unit, forKey: .unit)
+        try c.encodeIfPresent(barcode, forKey: .barcode)
+        try c.encodeIfPresent(batchNo, forKey: .batchNo)
+        try c.encodeIfPresent(locationCode, forKey: .locationCode)
+        try c.encodeIfPresent(currentStock, forKey: .currentStock)
+    }
 }
 
 // MARK: - 差异统计与商品模型

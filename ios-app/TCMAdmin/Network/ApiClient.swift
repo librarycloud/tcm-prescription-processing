@@ -354,20 +354,6 @@ public class ApiClient {
         return try await request(path: "/admin/prescriptions/\(id)")
     }
     
-    public func updatePrescriptionBasicInfo(id: Int, patientName: String, patientPhone: String, diagnosis: String) async throws {
-        let body: [String: Any] = [
-            "patientName": patientName,
-            "patientPhone": patientPhone,
-            "diagnosis": diagnosis
-        ]
-        struct EmptyResponse: Decodable {}
-        let _: EmptyResponse = try await request(
-            path: "/admin/prescriptions/\(id)",
-            method: "PUT",
-            body: body
-        )
-    }
-    
     // MARK: - 3. 加工管理接口
     public func fetchProcessingPlans(
         view: String = "today-all",
@@ -1073,9 +1059,13 @@ public class ApiClient {
         return res.list ?? []
     }
     
-    public func addGoodsCheckItem(checkId: Int, productId: Int, quantity: Double, locationCode: String? = nil) async throws {
+    public func addGoodsCheckItem(checkId: Int, productId: Int, quantity: Double, locationCode: String? = nil, batchNo: String? = nil) async throws {
         var body: [String: Any] = ["productId": productId, "firstCountQty": quantity]
-        if let loc = locationCode { body["locationCode"] = loc }
+        if let loc = locationCode {
+            body["locationCode"] = loc
+            body["locationName"] = loc
+        }
+        if let b = batchNo { body["batchNo"] = b }
         struct EmptyResponse: Decodable {}
         let _: EmptyResponse = try await request(path: "/admin/yd-goods-check/\(checkId)/items", method: "POST", body: body)
     }
@@ -1089,7 +1079,11 @@ public class ApiClient {
     public func updateGoodsCheckLocation(itemId: Int, batchNo: String?, locationCode: String?) async throws {
         var body: [String: Any] = [:]
         if let b = batchNo { body["batchNo"] = b }
-        if let l = locationCode { body["locationCode"] = l }
+        if let l = locationCode {
+            body["locationCode"] = l
+            body["locationName"] = l
+            body["countLocationName"] = l
+        }
         struct EmptyResponse: Decodable {}
         let _: EmptyResponse = try await request(path: "/admin/yd-goods-check/items/\(itemId)/location", method: "PUT", body: body)
     }

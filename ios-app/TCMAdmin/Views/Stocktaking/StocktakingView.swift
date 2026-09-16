@@ -324,8 +324,56 @@ public struct StocktakingDetailView: View {
                 if isLoading && detail == nil {
                     ProgressView("正在加载盘点明细...")
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                        .padding(.top, 60)
+                } else if let err = errorMessage, detail == nil {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(.orange)
+                        Text("加载盘点明细失败")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.ink)
+                        Text(err)
+                            .font(.system(size: 13))
+                            .foregroundColor(.muted)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                        Button(action: {
+                            Task { await loadDetail() }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("点击重试")
+                            }
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(Color.appPrimary)
+                            .cornerRadius(8)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
                 } else if let item = detail {
+                    if let err = errorMessage {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(.danger)
+                            Text(err)
+                                .font(.system(size: 12))
+                                .foregroundColor(.danger)
+                            Spacer()
+                            Button(action: { errorMessage = nil }) {
+                                Image(systemName: "xmark")
+                                    .foregroundColor(.muted)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.danger.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
                     // 1. 顶部单据信息卡片
                     AppCard(padding: 16) {
                         VStack(alignment: .leading, spacing: 10) {
@@ -480,7 +528,8 @@ public struct StocktakingDetailView: View {
                                                 .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
                                                 .foregroundColor(.ink)
                                             Spacer()
-                                            if let loc = row.locationCode, !loc.isEmpty {
+                                            let loc = row.displayLocation
+                                            if !loc.isEmpty {
                                                 Text(loc)
                                                     .font(.system(size: (11) * ThemeManager.shared.fontScale))
                                                     .foregroundColor(.appPrimaryDark)
@@ -506,11 +555,11 @@ public struct StocktakingDetailView: View {
                                                 
                                             Spacer()
                                             
-                                            if item.status != 2 {
+                                            if item.status != 2 && row.itemId != nil {
                                                 Button(action: {
                                                     editTargetItem = row
                                                     editBatchNo = row.batchNo ?? ""
-                                                    editLocationCode = row.locationCode ?? ""
+                                                    editLocationCode = row.displayLocation
                                                 }) {
                                                     Image(systemName: "pencil")
                                                         .font(.system(size: (13) * ThemeManager.shared.fontScale))
@@ -552,7 +601,7 @@ public struct StocktakingDetailView: View {
                                         }
                                         
                                         // 复盘操作入口
-                                        if item.status != 2 && row.displayDiff != 0 {
+                                        if item.status != 2 && row.displayDiff != 0 && row.itemId != nil {
                                             Divider().foregroundColor(Color.cardBorder)
                                             HStack {
                                                 Spacer()
@@ -595,10 +644,28 @@ public struct StocktakingDetailView: View {
                         .disabled(isFinishing)
                         .padding(.top, 8)
                     }
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 40))
+                            .foregroundColor(.muted)
+                        Text("未找到盘点明细")
+                            .font(.system(size: 14))
+                            .foregroundColor(.muted)
+                        Button("重新加载") {
+                            Task { await loadDetail() }
+                        }
+                        .font(.system(size: 13))
+                        .foregroundColor(.appPrimary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(16)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("完成盘点确认", isPresented: $showFinishAlert) {
             Button("取消", role: .cancel) {}
             Button("确认完成", role: .destructive) { finishCheck() }
@@ -715,7 +782,13 @@ public struct StocktakingDetailView: View {
         isAddingItem = true
         Task {
             do {
-                try await ApiClient.shared.addGoodsCheckItem(checkId: checkId, productId: cand.id, quantity: qty, locationCode: cand.locationCode)
+                try await ApiClient.shared.addGoodsCheckItem(
+                    checkId: checkId,
+                    productId: cand.productId,
+                    quantity: qty,
+                    locationCode: cand.locationCode,
+                    batchNo: cand.batchNo
+                )
                 await MainActor.run {
                     isAddingItem = false
                     selectedCandidate = nil
@@ -734,6 +807,7 @@ public struct StocktakingDetailView: View {
     }
     
     private func submitRecount(targetId: Int) {
+        guard targetId > 0 else { return }
         guard let qty = Double(recountInputQty) else { return }
         isRecounting = true
         Task {
@@ -755,6 +829,7 @@ public struct StocktakingDetailView: View {
     }
     
     private func submitLocationUpdate(targetId: Int) {
+        guard targetId > 0 else { return }
         isUpdatingLocation = true
         Task {
             do {
@@ -813,7 +888,8 @@ private struct CandidateRowView: View {
                     
                     let spec = cand.specification ?? "-"
                     let loc = cand.locationCode ?? "-"
-                    Text("规格: \(spec)  ·  货位: \(loc)")
+                    let stock = cand.currentStock.map { "  ·  库存: \(String(format: "%g", $0))" } ?? ""
+                    Text("规格: \(spec)  ·  货位: \(loc)\(stock)")
                         .font(.system(size: (11) * ThemeManager.shared.fontScale))
                         .foregroundColor(.muted)
                 }

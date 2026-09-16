@@ -648,3 +648,51 @@ struct KeyboardDismissalView: UIViewRepresentable {
         }
     }
 }
+
+// MARK: - 隐私政策提示弹窗
+public struct PrivacyPolicyView: View {
+    public var onAgree: () -> Void
+    public var onDisagree: () -> Void
+
+    public init(onAgree: @escaping () -> Void, onDisagree: @escaping () -> Void) {
+        self.onAgree = onAgree
+        self.onDisagree = onDisagree
+    }
+
+    public var body: some View {
+        ZStack {
+            Color.black.opacity(0.4).ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Text("隐私政策与用户协议")
+                    .font(.headline)
+                    .fontWeight(.bold)
+
+                Text("感谢您使用本应用！我们非常重视您的个人信息和隐私保护。在您使用本应用前，请仔细阅读[《隐私政策》](https://yourdomain.com/privacy.html)和[《用户协议》](https://yourdomain.com/agreement.html)。\n\n我们将在获得您的明确同意后，收集必要的设备信息、网络信息等，并初始化相关第三方 SDK 以提供服务。")
+                    .font(.body)
+                    .tint(.blue)
+
+                HStack(spacing: 40) {
+                    Button(action: onDisagree) {
+                        Text("暂不同意/退出")
+                            .foregroundColor(.gray)
+                    }
+
+                    Button(action: onAgree) {
+                        Text("同 意")
+                            .bold()
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+            .padding(24)
+            .background(Color(UIColor.systemBackground))
+            .cornerRadius(16)
+            .padding(32)
+        }
+    }
+}

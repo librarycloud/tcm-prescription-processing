@@ -3,12 +3,21 @@ import SwiftUI
 // MARK: - 库存差异管理 (1:1 移植 Android DifferencesScreens)
 @MainActor
 public struct DifferencesView: View {
+    @EnvironmentObject var session: SessionManager
+    var isStoreStaff: Bool { session.currentUser?.role == 3 }
+    
     @State private var selectedTab = 0 // 0: 当前差异商品, 1: 差异变动流水
     @State private var stats: DifferenceStatsModel = DifferenceStatsModel(more: 0, less: 0, total: 0)
     @State private var products: [DifferenceProductModel] = []
     @State private var logs: [DifferenceLogModel] = []
     
+    @State private var productsPage = 1
+    @State private var logsPage = 1
+    @State private var hasMoreProducts = true
+    @State private var hasMoreLogs = true
+    
     @State private var isLoading = false
+    @State private var isLoadingMore = false
     @State private var errorMessage: String? = nil
     
     // 销账弹窗
@@ -29,17 +38,19 @@ public struct DifferencesView: View {
                 HStack(alignment: .center) {
                     SectionHeader(title: "库存差异", subtitle: "管理未入库/未销库的实货差异")
                     Spacer()
-                    Button(action: { isRegisterSheetShowing = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus")
-                            Text("登记差异")
+                    if !isStoreStaff {
+                        Button(action: { isRegisterSheetShowing = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus")
+                                Text("登记差异")
+                            }
+                            .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.appPrimary)
+                            .cornerRadius(8)
                         }
-                        .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.appPrimary)
-                        .cornerRadius(8)
                     }
                 }
                 
@@ -143,18 +154,20 @@ public struct DifferencesView: View {
                                                         .font(.system(size: (12) * ThemeManager.shared.fontScale, weight: .medium))
                                                         .foregroundColor(.success)
                                                     Spacer()
-                                                    Button(action: {
-                                                        writeOffProduct = item
-                                                        writeOffType = "WRITE_OFF_RECEIPT"
-                                                        writeOffQuantityText = "\(String(format: "%g", preReceipt))"
-                                                    }) {
-                                                        Text("入库销账")
-                                                            .font(.system(size: (11) * ThemeManager.shared.fontScale, weight: .bold))
-                                                            .foregroundColor(.white)
-                                                            .padding(.horizontal, 8)
-                                                            .padding(.vertical, 4)
-                                                            .background(Color.success)
-                                                            .cornerRadius(4)
+                                                    if !isStoreStaff {
+                                                        Button(action: {
+                                                            writeOffProduct = item
+                                                            writeOffType = "WRITE_OFF_RECEIPT"
+                                                            writeOffQuantityText = "\(String(format: "%g", preReceipt))"
+                                                        }) {
+                                                            Text("入库销账")
+                                                                .font(.system(size: (11) * ThemeManager.shared.fontScale, weight: .bold))
+                                                                .foregroundColor(.white)
+                                                                .padding(.horizontal, 8)
+                                                                .padding(.vertical, 4)
+                                                                .background(Color.success)
+                                                                .cornerRadius(4)
+                                                        }
                                                     }
                                                 }
                                                 .padding(.horizontal, 8)
@@ -169,18 +182,20 @@ public struct DifferencesView: View {
                                                         .font(.system(size: (12) * ThemeManager.shared.fontScale, weight: .medium))
                                                         .foregroundColor(.danger)
                                                     Spacer()
-                                                    Button(action: {
-                                                        writeOffProduct = item
-                                                        writeOffType = "WRITE_OFF_SHIPMENT"
-                                                        writeOffQuantityText = "\(String(format: "%g", preShipment))"
-                                                    }) {
-                                                        Text("销库销账")
-                                                            .font(.system(size: (11) * ThemeManager.shared.fontScale, weight: .bold))
-                                                            .foregroundColor(.white)
-                                                            .padding(.horizontal, 8)
-                                                            .padding(.vertical, 4)
-                                                            .background(Color.danger)
-                                                            .cornerRadius(4)
+                                                    if !isStoreStaff {
+                                                        Button(action: {
+                                                            writeOffProduct = item
+                                                            writeOffType = "WRITE_OFF_SHIPMENT"
+                                                            writeOffQuantityText = "\(String(format: "%g", preShipment))"
+                                                        }) {
+                                                            Text("销库销账")
+                                                                .font(.system(size: (11) * ThemeManager.shared.fontScale, weight: .bold))
+                                                                .foregroundColor(.white)
+                                                                .padding(.horizontal, 8)
+                                                                .padding(.vertical, 4)
+                                                                .background(Color.danger)
+                                                                .cornerRadius(4)
+                                                        }
                                                     }
                                                 }
                                                 .padding(.horizontal, 8)
@@ -198,6 +213,10 @@ public struct DifferencesView: View {
                                         }
                                     }
                                 }
+                            }
+                            if hasMoreProducts {
+                                Color.clear.frame(height: 10)
+                                    .task { await loadMoreProducts() }
                             }
                         }
                     }
@@ -238,6 +257,10 @@ public struct DifferencesView: View {
                                             .foregroundColor(.appPrimary)
                                     }
                                 }
+                            }
+                            if hasMoreLogs {
+                                Color.clear.frame(height: 10)
+                                    .task { await loadMoreLogs() }
                             }
                         }
                     }
@@ -319,19 +342,54 @@ public struct DifferencesView: View {
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
+        productsPage = 1
+        logsPage = 1
+        hasMoreProducts = true
+        hasMoreLogs = true
+        
         do {
             async let fetchStats = ApiClient.shared.fetchDifferenceStats()
-            async let fetchProds = ApiClient.shared.fetchDifferences()
-            async let fetchLgs = ApiClient.shared.fetchDifferenceLogs()
+            async let fetchProds = ApiClient.shared.fetchDifferences(page: 1)
+            async let fetchLgs = ApiClient.shared.fetchDifferenceLogs(page: 1)
             
             let (loadedStats, loadedProds, loadedLogs) = try await (fetchStats, fetchProds, fetchLgs)
             self.stats = loadedStats
             self.products = loadedProds
             self.logs = loadedLogs
+            if loadedProds.count < 30 { hasMoreProducts = false }
+            if loadedLogs.count < 20 { hasMoreLogs = false }
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+    
+    private func loadMoreProducts() async {
+        guard hasMoreProducts, !isLoadingMore else { return }
+        isLoadingMore = true
+        productsPage += 1
+        do {
+            let newProds = try await ApiClient.shared.fetchDifferences(page: productsPage)
+            if newProds.count < 30 { hasMoreProducts = false }
+            self.products.append(contentsOf: newProds)
+        } catch {
+            hasMoreProducts = false
+        }
+        isLoadingMore = false
+    }
+    
+    private func loadMoreLogs() async {
+        guard hasMoreLogs, !isLoadingMore else { return }
+        isLoadingMore = true
+        logsPage += 1
+        do {
+            let newLogs = try await ApiClient.shared.fetchDifferenceLogs(page: logsPage)
+            if newLogs.count < 20 { hasMoreLogs = false }
+            self.logs.append(contentsOf: newLogs)
+        } catch {
+            hasMoreLogs = false
+        }
+        isLoadingMore = false
     }
     
     private func submitWriteOffAction(product: DifferenceProductModel) {
@@ -439,12 +497,21 @@ public struct RegisterDifferenceSheet: View {
                                             }) {
                                                 HStack {
                                                     VStack(alignment: .leading, spacing: 2) {
-                                                        Text(item.displayName)
-                                                            .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .semibold))
-                                                            .foregroundColor(.ink)
-                                                        Text("\(item.productCode ?? "") · 规格：\(item.specification ?? "-")")
-                                                            .font(.system(size: (11) * ThemeManager.shared.fontScale))
-                                                            .foregroundColor(.muted)
+                                                        HighlightedText(
+                                                            text: item.displayName,
+                                                            keyword: keyword,
+                                                            font: .system(size: (13) * ThemeManager.shared.fontScale),
+                                                            regularColor: .ink,
+                                                            highlightColor: .appPrimary,
+                                                            weight: .semibold
+                                                        )
+                                                        HighlightedText(
+                                                            text: "\(item.productCode ?? "") · 规格：\(item.specification ?? "-")",
+                                                            keyword: keyword,
+                                                            font: .system(size: (11) * ThemeManager.shared.fontScale),
+                                                            regularColor: .muted,
+                                                            highlightColor: .appPrimary
+                                                        )
                                                     }
                                                     Spacer()
                                                     if selectedProduct?.id == item.id {

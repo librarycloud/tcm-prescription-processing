@@ -7,7 +7,8 @@ public struct PrescriptionEditView: View {
     
     @State private var patientName = ""
     @State private var patientPhone = ""
-    @State private var diagnosis = ""
+    @State private var totalDose = ""
+    @State private var remark = ""
     
     @State private var isLoading = false
     @State private var isSubmitting = false
@@ -19,11 +20,13 @@ public struct PrescriptionEditView: View {
     
     public var body: some View {
         Form {
-            Section(header: Text("患者信息")) {
-                TextField("患者姓名", text: $patientName)
+            Section(header: Text("基本信息")) {
+                TextField("患者姓名 *", text: $patientName)
                 TextField("联系电话", text: $patientPhone)
                     .keyboardType(.phonePad)
-                TextField("临床诊断", text: $diagnosis)
+                TextField("处方剂数 *", text: $totalDose)
+                    .keyboardType(.numberPad)
+                TextField("处方备注", text: $remark)
             }
             
             if let error = errorMessage {
@@ -44,7 +47,7 @@ public struct PrescriptionEditView: View {
                     }
                     .foregroundColor(.appPrimary)
                 }
-                .disabled(isSubmitting)
+                .disabled(isSubmitting || patientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || Int(totalDose) ?? 0 <= 0)
             }
         }
         .navigationTitle(id == nil ? "新建处方" : "编辑处方")
@@ -63,7 +66,8 @@ public struct PrescriptionEditView: View {
             if let rx = try await ApiClient.shared.fetchPrescriptionDetail(id: rxId) {
                 patientName = rx.patientName ?? ""
                 patientPhone = rx.patientPhone ?? ""
-                diagnosis = rx.diagnosis ?? ""
+                totalDose = rx.totalDose != nil ? "\(rx.totalDose!)" : ""
+                remark = rx.remark ?? ""
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -74,17 +78,23 @@ public struct PrescriptionEditView: View {
     private func submitForm() {
         isSubmitting = true
         errorMessage = nil
+        
+        let dose = Int(totalDose) ?? 0
+        let pName = patientName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pPhone = patientPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pRemark = remark.trimmingCharacters(in: .whitespacesAndNewlines)
+        let payload: [String: Any] = [
+            "customerName": pName,
+            "phone": pPhone,
+            "totalDose": dose,
+            "remark": pRemark
+        ]
+        
         Task {
             do {
-                if let rxId = id {
-                    try await ApiClient.shared.updatePrescriptionBasicInfo(id: rxId, patientName: patientName, patientPhone: patientPhone, diagnosis: diagnosis)
+                if let rxId = self.id {
+                    try await ApiClient.shared.updatePrescription(id: rxId, payload: payload)
                 } else {
-                    let payload: [String: Any] = [
-                        "patientName": patientName,
-                        "patientPhone": patientPhone,
-                        "diagnosis": diagnosis,
-                        "items": []
-                    ]
                     _ = try await ApiClient.shared.createPrescription(payload: payload)
                 }
                 await MainActor.run {

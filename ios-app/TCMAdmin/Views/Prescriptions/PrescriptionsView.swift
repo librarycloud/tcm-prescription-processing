@@ -578,7 +578,7 @@ public struct PrescriptionDetailView: View {
                                         }
                                         
                                         ForEach(Array(pickupPlans.enumerated()), id: \.offset) { index, plan in
-                                            planRowView(index: index, plan: plan)
+                                            pickupRowView(index: index, plan: plan)
                                         }
                                     }
                                 }
@@ -1009,8 +1009,68 @@ public struct PrescriptionDetailView: View {
         .background(Color.pageBackground)
         .cornerRadius(8)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 0.5))
+        .onTapGesture {
+            router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
+        }
     }
 
+    @ViewBuilder
+    private func pickupRowView(index: Int, plan: ProcessingPlanItem) -> some View {
+        let isPicked = plan.status == 4
+        let statusText = isPicked ? "已领取" : "待领取"
+        let bNoStr = plan.batchNo != nil ? "\(plan.batchNo!)" : "\(index + 1)"
+        let pName = plan.processType?.name ?? "加工"
+        let rawCode = plan.package?.code ?? "-"
+        
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("第 \(bNoStr) 批 · \(pName)")
+                    .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
+                    .foregroundColor(.ink)
+                Spacer()
+                Text(statusText)
+                    .font(.system(size: (12) * ThemeManager.shared.fontScale))
+                    .foregroundColor(isPicked ? .success : .warning)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(isPicked ? Color.success.opacity(0.1) : Color.warning.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            
+            Text("剂数：\(plan.totalDose ?? 0) 剂  ·  取货码：\(rawCode.formattedPickupCode)")
+                .font(.system(size: (12) * ThemeManager.shared.fontScale))
+                .foregroundColor(.ink.opacity(0.8))
+            
+            let finishDate = plan.finishDate ?? "-"
+            Text("完成时间：\(finishDate)")
+                .font(.system(size: (12) * ThemeManager.shared.fontScale))
+                .foregroundColor(.muted)
+                .padding(.top, 2)
+                
+            if let pkg = plan.package {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        router.navigate(to: .packageDetail(id: pkg.id ?? 0))
+                    }) {
+                        Text("包裹详情")
+                            .font(.system(size: (12) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.surface)
+                            .cornerRadius(6)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cardBorder, lineWidth: 1))
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(10)
+        .background(Color.pageBackground)
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 0.5))
+    }
     private func deleteAttachment() {
         guard !isBusy else { return }
         isBusy = true

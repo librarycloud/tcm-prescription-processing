@@ -6,14 +6,31 @@ struct TCMAdminApp: App {
     @StateObject private var theme = ThemeManager.shared
     @State private var importedAlertMessage: String? = nil
     @State private var showImportAlert = false
-    
+    @State private var hasAgreedPrivacy: Bool = UserDefaults.standard.bool(forKey: "agreed_privacy")
+
     var body: some Scene {
         WindowGroup {
-            Group {
-                if session.isAuthenticated {
-                    MainShellView()
-                } else {
-                    LoginView()
+            ZStack {
+                Group {
+                    if session.isAuthenticated {
+                        MainShellView()
+                    } else {
+                        LoginView()
+                    }
+                }
+                
+                if !hasAgreedPrivacy {
+                    PrivacyPolicyView(
+                        onAgree: {
+                            UserDefaults.standard.set(true, forKey: "agreed_privacy")
+                            hasAgreedPrivacy = true
+                            // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
+                        },
+                        onDisagree: {
+                            exit(0)
+                        }
+                    )
+                    .zIndex(1)
                 }
             }
             .id(theme.themeId)
