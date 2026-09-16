@@ -141,7 +141,6 @@ import org.json.JSONObject
 
 import dagger.hilt.android.AndroidEntryPoint
 
-object ServerConfigNotifier {
     val importResult = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Boolean, String>>(
         extraBufferCapacity = 1,
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
@@ -151,7 +150,6 @@ object ServerConfigNotifier {
     }
 }
 
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -578,15 +576,7 @@ private fun TcmAdminApp() {
                             initialQuery = route.initialQuery,
                             scanRequestId = route.scanRequestId,
                             listState = inventoryListState,
-                            onNavigate = ::navigateTo,
                         )
-                    }
-                }
-                composable<Route.InventoryDetail> { entry ->
-                    val route = entry.toRoute<Route.InventoryDetail>()
-                    val product = rememberRouteParam(entry, route.argId) { JSONObject() }
-                    DetailShell("商品详情", onBack = { navigateBack() }) {
-                        InventoryDetailScreen(product = product)
                     }
                 }
                 composable<Route.PrescriptionDetail> { entry ->
@@ -717,25 +707,6 @@ private fun TcmAdminApp() {
                             user = session?.user,
                             scrollState = stocktakingDetailScrollState,
                             refreshKey = stocktakingDetailRevision,
-                            onNavigate = ::navigateTo,
-                        )
-                    }
-                }
-                composable<Route.StocktakingEntry> { entry ->
-                    val route = entry.toRoute<Route.StocktakingEntry>()
-                    val initialItem = rememberRouteParam(entry, route.argId) { JSONObject() }
-                    val isEdit = initialItem.length() > 0
-                    DetailShell(if (isEdit) "盘点明细修改" else "盘点录入", onBack = { navigateBack() }) {
-                        StocktakingEntryScreen(
-                            checkId = route.checkId,
-                            user = session?.user,
-                            initialItem = if (isEdit) initialItem else null,
-                            onModeChanged = {},
-                            onDismiss = { navigateBack() },
-                            onSaved = { 
-                                stocktakingDetailRevision++
-                                navigateBack()
-                            }
                         )
                     }
                 }

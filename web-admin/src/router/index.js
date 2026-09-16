@@ -16,6 +16,12 @@ const routes = [
     meta: { public: true }
   },
   {
+    path: '/app-config',
+    name: 'AppConfig',
+    component: () => import('@/views/app-config/AppConfig.vue'),
+    meta: { public: true }
+  },
+  {
     path: '/admin',
     component: () => import('@/layouts/Layout.vue'),
     redirect: '/admin/dashboard',

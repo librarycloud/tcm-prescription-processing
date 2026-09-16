@@ -517,7 +517,7 @@ const effectiveModalServerUrl = computed(() => {
 
 const modalDeepLink = computed(() => {
   return effectiveModalServerUrl.value
-    ? `tcmadmin://config?server=${effectiveModalServerUrl.value}`
+    ? `${window.location.origin}/app-config?server=${encodeURIComponent(effectiveModalServerUrl.value)}`
     : '';
 });
 

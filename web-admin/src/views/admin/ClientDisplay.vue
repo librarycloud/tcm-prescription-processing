@@ -556,7 +556,7 @@ const effectiveServerUrl = computed(() => {
 
 const standardDeepLink = computed(() => {
   const s = effectiveServerUrl.value;
-  return s ? `tcmadmin://config?server=${s}` : '';
+  return s ? `${window.location.origin}/app-config?server=${encodeURIComponent(s)}` : '';
 });
 
 const shortDeepLink = computed(() => {

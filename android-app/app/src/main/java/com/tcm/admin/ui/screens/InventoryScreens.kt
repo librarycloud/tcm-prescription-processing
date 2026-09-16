@@ -96,7 +96,6 @@ internal fun InventoryScreen(
     scanRequestId: Long = 0L,
     scrollState: ScrollState? = null,
     listState: LazyListState = rememberLazyListState(),
-    onNavigate: (Route) -> Unit,
     viewModel: InventoryViewModel = hiltViewModel(),
 ) {
     val showStore = user?.optInt("role", -1) == 0
@@ -207,7 +206,7 @@ internal fun InventoryScreen(
                     keyboardController?.hide()
                     focusManager.clearFocus(force = false)
                     listScrollPosition = listState.firstVisibleItemIndex
-                    onNavigate(Route.InventoryDetail(RouteParams.put(singleProduct)))
+                    viewModel.selectedProduct.value = singleProduct
                 }
             }
         }
@@ -385,7 +384,321 @@ internal fun InventoryScreen(
             }
         }
 
+        // When a product is selected -> show detailed breakdown
+        selectedProduct?.let { product ->
+            val inventories = product.optJSONArray("inventories") ?: JSONArray()
+            val totalQuantity = product.optDouble("totalQuantity", 0.0)
+            val unit = product.displayField("unit", "")
+            val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+
+            item(key = "product_info_header") {
+                Spacer(Modifier.height(16.dp))
+                SectionHeader(
+                    title = "商品信息",
+                    action = {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.selectedProduct.value = null
+                                restoreListScroll = true
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.heightIn(min = 28.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("返回列表", fontSize = 12.sp)
+                        }
+                    },
+                )
+                Spacer(Modifier.height(6.dp))
+
+                AppCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = product.displayField("name", "商品"),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Ink,
+                            )
+                        }
+                        if (!retailPrice.isNullOrBlank()) {
+                            Text(
+                                text = "¥${priceText(retailPrice)}",
+                                color = Danger,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "商品编码",
+                            color = Muted,
+                            fontSize = 11.sp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = product.displayField("productCode").ifBlank { "-" },
+                            color = Ink,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "商品条码",
+                            color = Muted,
+                            fontSize = 11.sp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = product.displayField("barcode").ifBlank { "无条码" },
+                            color = Ink,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "规格：${product.displayField("specification").ifBlank { "-" }}",
+                            color = Muted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "单位：${unit.ifBlank { "-" }}",
+                            color = Muted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "生产厂商",
+                            color = Muted,
+                            fontSize = 11.sp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = product.displayField("manufacturer").ifBlank { "-" },
+                            color = Muted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        )
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Highlighted Total Stock banner
+                    Surface(
+                        color = PrimarySoft,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append("总库存：")
+                                    }
+                                    withStyle(SpanStyle(
+                                        color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )) {
+                                        append(quantityText(totalQuantity))
+                                    }
+                                    append(" ")
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append(unit)
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append("共 ")
+                                    }
+                                    withStyle(SpanStyle(
+                                        color = PrimaryDark,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )) {
+                                        append("${product.optInt("batchCount", inventories.length())}")
+                                    }
+                                    withStyle(SpanStyle(color = RegularText, fontSize = 13.sp)) {
+                                        append(" 个库存批次")
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                SectionHeader(title = "库存批次明细")
+                Spacer(Modifier.height(6.dp))
+            }
+
+            if (inventories.length() == 0) {
+                item(key = "empty_batches") {
+                    AppEmptyState("该商品暂无库存批次", icon = Icons.Rounded.Inventory)
+                }
+            } else {
+                items(inventories.length(), key = { idx ->
+                    val itm = inventories.getJSONObject(idx)
+                    "batch_${idx}_${itm.optString("batchNo")}"
+                }) { i ->
+                    val item = inventories.getJSONObject(i)
+                    val storeName = item.optJSONObject("store")?.displayField("name", "")
+                        ?: item.displayField("storeName", "")
+                    val batchNo = item.displayField("batchNo")
+                    val location = item.displayField("locationName", "").ifBlank { formatLocationCode(item.displayField("locationCode")) }
+                    val qty = item.optDouble("quantity", 0.0)
+                    val prodDate = inventoryDate(item, "productionDate")
+                    val expDate = inventoryDate(item, "expiryDate", "expirationDate", "expireDate")
+                    val expiringSoon = inventoryExpiryWarning(expDate)
+                    val inDate = inventoryDate(item, "inboundDate", "receivedAt")
+
+                    AppCard(modifier = Modifier.padding(bottom = 6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "批号：$batchNo",
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Ink,
+                                        fontSize = 14.sp,
+                                    )
+                                    if (showStore && storeName.isNotBlank()) {
+                                        Spacer(Modifier.width(8.dp))
+                                        StatusPill(storeName)
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "货位：",
+                                        color = RegularText,
+                                        fontSize = 14.sp,
+                                    )
+                                    Text(
+                                        text = location.ifBlank { "未分配" },
+                                        color = if (location.isNotBlank()) PrimaryDark else Muted,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp,
+                                        modifier = if (location.isNotBlank()) {
+                                            Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(PrimarySoft)
+                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        } else Modifier
+                                    )
+                                }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        withStyle(SpanStyle(
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (qty <= 0.0) Danger else PrimaryDark,
+                                            fontSize = 15.sp
+                                        )) {
+                                            append(quantityText(qty))
+                                        }
+                                        append(" ")
+                                        withStyle(SpanStyle(color = RegularText, fontSize = 12.sp)) {
+                                            append(unit)
+                                        }
+                                    }
+                                )
+                                if (expiringSoon) {
+                                    Text(
+                                        text = "即将过期",
+                                        color = Danger,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+
+                        if (prodDate.isNotBlank() || expDate.isNotBlank() || inDate.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("生产日期", color = Muted, fontSize = 9.sp)
+                                    Text(prodDate.ifBlank { "-" }, color = RegularText, fontSize = 10.sp, maxLines = 1)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("有效期至", color = Muted, fontSize = 9.sp)
+                                    Text(
+                                        expDate.ifBlank { "-" },
+                                        color = if (expiringSoon) Danger else RegularText,
+                                        fontWeight = if (expiringSoon) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("入库日期", color = Muted, fontSize = 9.sp)
+                                    Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // When multiple products match and none is selected -> show selection list
+        if (selectedProduct == null) {
             if (query.isNotBlank()) {
                 if (products.itemCount == 0 && products.loadState.refresh !is LoadState.Loading && products.loadState.refresh !is LoadState.Error) {
                     item(key = "empty_matches") {
@@ -451,7 +764,7 @@ internal fun InventoryScreen(
                                     keyboardController?.hide()
                                     focusManager.clearFocus(force = false)
                                     listScrollPosition = listState.firstVisibleItemIndex
-                                    onNavigate(Route.InventoryDetail(RouteParams.put(product)))
+                                    viewModel.selectedProduct.value = product
                                 },
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -515,10 +828,10 @@ internal fun InventoryScreen(
                     )
                 }
             }
+        }
+    }
     }
 }
-}
-
 
 private fun inventoryDate(item: JSONObject, vararg keys: String): String {
     return keys.asSequence()
@@ -531,219 +844,3 @@ private fun inventoryDate(item: JSONObject, vararg keys: String): String {
 private fun inventoryExpiryWarning(value: String): Boolean = runCatching {
     LocalDate.parse(value.take(10)).isBefore(serverToday().plusMonths(6))
 }.getOrDefault(false)
-
-
-@Composable
-internal fun InventoryDetailScreen(product: JSONObject) {
-    val inventories = product.optJSONArray("inventories") ?: JSONArray()
-    val totalQuantity = product.optDouble("totalQuantity", 0.0)
-    val unit = product.displayField("unit", "")
-    val retailPrice = product.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
-        item(key = "product_info_header") {
-            Spacer(Modifier.height(16.dp))
-            SectionHeader(
-                title = "商品信息"
-            )
-            Spacer(Modifier.height(6.dp))
-
-            AppCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = product.displayField("name", "商品"),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Ink,
-                        )
-                    }
-                    if (!retailPrice.isNullOrBlank()) {
-                        Text(
-                            text = "¥${priceText(retailPrice)}",
-                            color = Danger,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(6.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(6.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "商品编码",
-                        color = Muted,
-                        fontSize = 13.sp,
-                    )
-                    Text(
-                        text = product.displayField("code", "-"),
-                        color = Ink,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "商品条码",
-                        color = Muted,
-                        fontSize = 13.sp,
-                    )
-                    Text(
-                        text = product.displayField("barcode", "-"),
-                        color = Ink,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "生产厂商",
-                        color = Muted,
-                        fontSize = 13.sp,
-                    )
-                    Text(
-                        text = product.displayField("manufacturer", "-"),
-                        color = Ink,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-                if (product.displayField("approvalNumber", "").isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "批准文号",
-                            color = Muted,
-                            fontSize = 13.sp,
-                        )
-                        Text(
-                            text = product.displayField("approvalNumber", "-"),
-                            color = Ink,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "当前总库存",
-                        color = Muted,
-                        fontSize = 13.sp,
-                    )
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(SpanStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)) {
-                                append(quantityText(totalQuantity))
-                            }
-                            if (unit.isNotBlank()) {
-                                append(" ")
-                                withStyle(SpanStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal)) {
-                                    append(unit)
-                                }
-                            }
-                        },
-                        color = Primary,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-            SectionHeader(
-                title = "库存批次与位置明细 (${inventories.length()})",
-            )
-            Spacer(Modifier.height(6.dp))
-        }
-
-        if (inventories.length() == 0) {
-            item(key = "no_inventory") {
-                AppEmptyState("该商品暂无库存记录", icon = Icons.Rounded.Inventory2)
-            }
-        } else {
-            items(inventories.length()) { index ->
-                val inv = inventories.getJSONObject(index)
-                val qty = inv.optDouble("quantity", 0.0)
-                val storeName = inv.displayField("storeName", "药房")
-                val inDate = inv.displayField("inDate", "")
-
-                AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                StatusPill(text = storeName, color = Primary)
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = inv.displayField("locationName", "未分配货位"),
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Ink,
-                                    maxLines = 1,
-                                )
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "批号: ${inv.displayField("batchNo", "-")}",
-                                fontSize = 12.sp,
-                                color = Muted,
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = buildAnnotatedString {
-                                    withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold)) {
-                                        append(quantityText(qty))
-                                    }
-                                    if (unit.isNotBlank()) {
-                                        append(" ")
-                                        withStyle(SpanStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal)) {
-                                            append(unit)
-                                        }
-                                    }
-                                },
-                                color = if (qty > 0) Success else Danger,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            if (inDate.isNotBlank()) {
-                                Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 10.sp, maxLines = 1)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
