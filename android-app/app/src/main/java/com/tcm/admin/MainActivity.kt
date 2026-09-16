@@ -141,8 +141,6 @@ import org.json.JSONObject
 
 import dagger.hilt.android.AndroidEntryPoint
 
-@AndroidEntryPoint
-
 object ServerConfigNotifier {
     val importResult = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Boolean, String>>(
         extraBufferCapacity = 1,
@@ -153,6 +151,7 @@ object ServerConfigNotifier {
     }
 }
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -579,7 +578,15 @@ private fun TcmAdminApp() {
                             initialQuery = route.initialQuery,
                             scanRequestId = route.scanRequestId,
                             listState = inventoryListState,
+                            onNavigate = ::navigateTo,
                         )
+                    }
+                }
+                composable<Route.InventoryDetail> { entry ->
+                    val route = entry.toRoute<Route.InventoryDetail>()
+                    val product = rememberRouteParam(entry, route.argId) { JSONObject() }
+                    DetailShell("商品详情", onBack = { navigateBack() }) {
+                        InventoryDetailScreen(product = product)
                     }
                 }
                 composable<Route.PrescriptionDetail> { entry ->
