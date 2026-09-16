@@ -2,7 +2,7 @@
 
 **TCM Prescription Processing & Pickup Management System**
 
-面向连锁中药房的一体化处方流转、分批加工、智能斗谱、取药通知与核销管理系统。项目采用现代化前后端分离架构，由 Fastify 高性能 API 与 MariaDB 核心数据库提供支撑，统一协同 Web 管理端、普通用户 Web 端、微信小程序、Android 原生药房助手以及 Windows E6 ERP 同步服务，实现中药调剂全链路数字化闭环。
+面向连锁中药房的一体化处方流转、分批加工、智能斗谱、取药通知与核销管理系统。项目采用现代化前后端分离架构，由 Fastify 高性能 API 与 MariaDB 核心数据库提供支撑，统一协同 Web 管理端、普通用户 Web 端、微信小程序、Android 原生药房助手、iOS 原生药房助手以及 Windows E6 ERP 同步服务，实现中药调剂全链路数字化闭环。
 
 ---
 
@@ -24,7 +24,7 @@
 
 ## 终端生态与技术架构
 
-系统由六大核心工程组成，覆盖 PC 桌面运维、移动端手持作业以及第三方 ERP 自动化同步：
+系统由七大核心工程组成，覆盖 PC 桌面运维、移动端手持作业以及第三方 ERP 自动化同步：
 
 ```mermaid
 flowchart TD
@@ -35,6 +35,7 @@ flowchart TD
     WebUser[Web 用户端 PC<br>Vue 3 + Vite] --> API
     MiniProgram[微信小程序 双端<br>原生 + TDesign] --> API
     Android[Android 药房助手<br>Compose + ML Kit] --> API
+    IOS[iOS 药房助手<br>SwiftUI + Vision OCR] --> API
 
     API((Fastify 后端 API 服务<br>Node.js 24 LTS<br>Prisma ORM 7<br>MariaDB 10.6+ / Redis))
     
@@ -51,6 +52,7 @@ flowchart TD
 | **用户端 Web** | `web-user/` | Vue 3, Vite, Pinia, Vue Router, Element Plus, Axios, qrcode | 顾客端独立门户：查验处方进度、待取/已取包裹、查看 6 位取货码与二维码凭证 |
 | **微信小程序** | `wechat-miniprogram/` | 微信原生小程序, TDesign Miniprogram, ES6 | 双端合一：管理员/员工移动工作台（扫码核销、斗谱查药、加工打卡）+ 顾客查件 |
 | **Android 端** | `android-app/` | Kotlin, Jetpack Compose, CameraX, Google ML Kit (离线OCR/条码), ONNX PP-OCR | 门店现场专用手持终端（药房助手）：离线快速扫码、调配拍照留档、工序流转 |
+| **iOS 端** | `ios-app/` | Swift 5.9+, SwiftUI, Apple Vision OCR, AVFoundation, CoreImage | 门店现场 iOS 手持终端（药房助手）：Vision 离线文字识别、中心优先纠错、极速扫码核销 |
 | **E6 同步工具** | `E6Sync/` | C#, .NET Framework 4.6.2, WinForms, ADO.NET (SqlClient) | Windows Server 运行工具：单向只读提取浪潮 E6 诊所处方及药店商品库存并上传 |
 
 ---
@@ -209,10 +211,11 @@ cd web-admin && npm install && npm run dev
 cd web-user && npm install && npm run dev
 ```
 
-### 4. 微信小程序与 Android 启动
+### 4. 移动工作台（小程序、Android 与 iOS）启动
 
 - **微信小程序**：打开微信开发者工具，导入 `wechat-miniprogram` 目录，执行 `npm install` 后点击菜单栏「工具 ➔ 构建 npm」。在 `app.js` 中将 `baseUrl` 配置为局域网 IP（真机预览不可使用 `localhost`）。
 - **Android 药房助手**：使用 Android Studio 打开 `android-app` 目录，或在终端执行 `./gradlew assembleDebug`，产物位于 `app/build/outputs/apk/debug/app-debug.apk`。
+- **iOS 药房助手**：使用 Xcode 打开 `ios-app/TCMAdmin`，配置开发团队签名后直接运行（推荐 iOS 15+ 真机）。初次运行可在登录页右上角「服务器设置」配置后端 API Base URL。
 
 ### 5. 初始默认账号
 
