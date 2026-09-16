@@ -324,8 +324,10 @@ internal fun maskPhone(phone: String?): String {
 internal fun StatusPill(
     text: String,
     modifier: Modifier = Modifier,
+    color: Color? = null,
+    bgColor: Color? = null,
 ) {
-    val (color, bgColor) = when {
+    val (defaultColor, defaultBgColor) = when {
         text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款") ->
             Pair(Success, SuccessSoft)
         text == "自提" ->
@@ -353,16 +355,30 @@ internal fun StatusPill(
         else ->
             Pair(Warning, WarningSoft)
     }
+    val resolvedColor = color ?: defaultColor
+    val resolvedBgColor = bgColor ?: when (color) {
+        Primary -> PrimarySoft
+        Success -> SuccessSoft
+        Danger -> DangerSoft
+        Warning -> WarningSoft
+        Info -> InfoSoft
+        Indigo -> IndigoSoft
+        Pink -> PinkSoft
+        Brown -> BrownSoft
+        PrimaryDark -> PrimarySoft
+        null -> defaultBgColor
+        else -> color.copy(alpha = 0.12f)
+    }
     Surface(
         modifier = modifier,
-        color = bgColor,
+        color = resolvedBgColor,
         shape = RoundedCornerShape(4.dp),
-        border = BorderStroke(0.5.dp, color.copy(alpha = 0.35f)),
+        border = BorderStroke(0.5.dp, resolvedColor.copy(alpha = 0.35f)),
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
-            color = color,
+            color = resolvedColor,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
         )
