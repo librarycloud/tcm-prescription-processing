@@ -488,9 +488,10 @@ public struct AboutView: View {
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                     } else {
-                        Text(updateManager.hubBaseURL.isEmpty ? "未配置 App Release Hub 地址 (点击修改)" : updateManager.hubBaseURL)
+                        let base = updateManager.hubBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Text(base.isEmpty || base.contains("example.com") ? "未单独配置（自动通过业务 API 检查更新）" : base)
                             .font(.system(size: (13) * ThemeManager.shared.fontScale))
-                            .foregroundColor(updateManager.hubBaseURL.isEmpty ? .muted : .ink)
+                            .foregroundColor(base.isEmpty || base.contains("example.com") ? .muted : .ink)
                     }
                 }
             }

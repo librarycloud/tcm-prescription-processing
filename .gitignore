@@ -18,6 +18,7 @@
 **/logs/
 **/uploads/
 *.log
+*_log.txt
 *.pid
 
 # E6Sync .NET build artifacts

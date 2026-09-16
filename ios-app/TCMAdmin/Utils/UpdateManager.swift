@@ -78,19 +78,6 @@ public class UpdateManager: ObservableObject {
     
     public func checkUpdate(force: Bool = false) async throws -> AppUpdateInfo {
         let base = hubBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        // 如果未配置或仍然是占位域名，避免发起无效的网络请求
-        if base.isEmpty || base.contains("example.com") {
-            if force {
-                throw NSError(
-                    domain: "UpdateManager",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "尚未配置更新服务器地址，请先在下方配置有效的 App Release Hub 域名或 IP。"]
-                )
-            } else {
-                // 静默检查直接返回无更新，避免控制台产生网络/TLS报错
-                return AppUpdateInfo(hasUpdate: false, updateType: nil, versionCode: nil, versionName: nil, forceUpdate: false, releaseNotes: nil, downloadUrl: nil)
-            }
-        }
         
         // 非强制检查时，如果距离上次检查时间还在间隔内，直接返回缓存结果
         if !force, let last = lastCheckTime, Date().timeIntervalSince(last) < checkInterval {
@@ -107,7 +94,15 @@ public class UpdateManager: ObservableObject {
         let deviceModel = Self.currentDeviceModel
         let osVersion = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
         
-        var urlComponents = URLComponents(string: "\(base)/api/apps/\(appId)/version/\(platform)")
+        var requestUrlString: String
+        if base.isEmpty || base.contains("example.com") {
+            let apiBase = ApiClient.shared.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            requestUrlString = "\(apiBase)/app/version/\(platform)"
+        } else {
+            requestUrlString = "\(base)/api/apps/\(appId)/version/\(platform)"
+        }
+        
+        var urlComponents = URLComponents(string: requestUrlString)
         urlComponents?.queryItems = [
             URLQueryItem(name: "versionCode", value: currentVersionCode),
             URLQueryItem(name: "deviceId", value: deviceId),

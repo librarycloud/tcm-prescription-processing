@@ -10,9 +10,11 @@ export default async function appRoutes(fastify) {
   // 1. 检查更新接口代理（支持 /version/:platform 如 android、ios）
   fastify.get('/version/:platform', async (request, reply) => {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate').header('Pragma', 'no-cache');
-    const hubUrl = config.appReleaseHubUrl;
-    const appId = config.appReleaseHubAppId;
     const platform = request.params.platform || 'android';
+    const hubUrl = config.appReleaseHubUrl;
+    const appId = platform === 'ios' && config.appReleaseHubIosAppId 
+      ? config.appReleaseHubIosAppId 
+      : config.appReleaseHubAppId;
 
     if (!hubUrl || !appId) {
       // 未配置 Hub 地址或 App ID 时返回无更新，优雅兜底，避免老手机弹出 404 错误
