@@ -182,7 +182,7 @@ internal fun AboutScreen(
                 .take(16)
             val separator = if (url.contains('?')) "&" else "?"
             val downloadUrl = "$url${separator}versionCode=$versionCode&cacheKey=${java.net.URLEncoder.encode(cacheKey, "UTF-8")}"
-            val fileName = "update_pending.apk"
+            val fileName = "update_" + versionCode + ".apk"
             downloadFileName = fileName
             val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             if (destDir != null) {
@@ -245,12 +245,12 @@ internal fun AboutScreen(
         scope.launch {
             val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
             val patchFile = File(context.cacheDir, "update_patch.tmp")
-            val synthesizedApk = File(destDir, "update_pending.apk")
+            val synthesizedApk = File(destDir, "update_" + versionCode + ".apk")
             try {
                 runCatching {
                     if (patchFile.exists()) patchFile.delete()
                     if (synthesizedApk.exists()) synthesizedApk.delete()
-                    File(context.cacheDir, "update_pending.apk").delete()
+                    File(context.cacheDir, "update_" + versionCode + ".apk").delete()
                 }
 
                 // 1. Download patch
@@ -332,7 +332,7 @@ internal fun AboutScreen(
                 runCatching {
                     patchFile.delete()
                     synthesizedApk.delete()
-                    File(context.cacheDir, "update_pending.apk").delete()
+                    File(context.cacheDir, "update_" + versionCode + ".apk").delete()
                 }
                 isPatchDownloading = false
                 isSynthesizing = false
