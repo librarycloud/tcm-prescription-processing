@@ -22,4 +22,24 @@ object DeviceUtils {
         cachedDeviceId = id
         return id
     }
+
+    /**
+     * 获取设备机型，例如 "Xiaomi M2011K2C"
+     */
+    fun getDeviceModel(): String {
+        val manufacturer = android.os.Build.MANUFACTURER?.takeIf { it.isNotBlank() } ?: "Unknown"
+        val model = android.os.Build.MODEL?.takeIf { it.isNotBlank() } ?: "Unknown"
+        return if (model.lowercase().startsWith(manufacturer.lowercase())) {
+            model.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
+        } else {
+            "${manufacturer.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }} $model"
+        }
+    }
+
+    /**
+     * 获取操作系统版本，例如 "Android 13 (API 33)"
+     */
+    fun getOsVersion(): String {
+        return "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
+    }
 }

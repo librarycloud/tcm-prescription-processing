@@ -388,6 +388,14 @@ object ApiClient {
         if (!resolvedDeviceId.isNullOrBlank()) {
             queryParams.add("deviceId=${java.net.URLEncoder.encode(resolvedDeviceId, "UTF-8")}")
         }
+        val deviceModel = DeviceUtils.getDeviceModel()
+        if (deviceModel.isNotBlank()) {
+            queryParams.add("deviceModel=${java.net.URLEncoder.encode(deviceModel, "UTF-8")}")
+        }
+        val osVersion = DeviceUtils.getOsVersion()
+        if (osVersion.isNotBlank()) {
+            queryParams.add("osVersion=${java.net.URLEncoder.encode(osVersion, "UTF-8")}")
+        }
         val query = "?" + queryParams.joinToString("&")
         val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/')
         if (updateBase.isNotBlank()) {
@@ -405,6 +413,8 @@ object ApiClient {
             val requestBuilder = Request.Builder()
                 .url(url)
                 .header("Accept", "application/json")
+                .header("x-device-model", DeviceUtils.getDeviceModel())
+                .header("x-os-version", DeviceUtils.getOsVersion())
             if (!resolvedDeviceId.isNullOrBlank()) {
                 requestBuilder.header("x-device-id", resolvedDeviceId)
             }
@@ -424,6 +434,8 @@ object ApiClient {
         val requestBuilder = Request.Builder()
             .url(backendUrl)
             .header("Accept", "application/json")
+            .header("x-device-model", DeviceUtils.getDeviceModel())
+            .header("x-os-version", DeviceUtils.getOsVersion())
         if (!resolvedDeviceId.isNullOrBlank()) {
             requestBuilder.header("x-device-id", resolvedDeviceId)
         }
