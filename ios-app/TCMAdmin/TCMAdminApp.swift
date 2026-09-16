@@ -36,6 +36,7 @@ struct TCMAdminApp: App {
             .id(theme.themeId)
             .preferredColorScheme(theme.currentColorScheme)
             .environment(\.sizeCategory, theme.currentSizeCategory)
+            .environmentObject(session)
             .tint(theme.primaryColor)
             .enableGlobalKeyboardDismiss()
             .onOpenURL { url in
