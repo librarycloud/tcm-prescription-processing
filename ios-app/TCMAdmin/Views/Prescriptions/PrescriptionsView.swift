@@ -457,23 +457,25 @@ public struct PrescriptionDetailView: View {
                                     Divider().foregroundColor(Color.cardBorder)
                                     
                                     HStack(spacing: 12) {
-                                        Button(action: loadAndShowAttachment) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "doc.text.magnifyingglass")
-                                                Text("查看原件照片")
+                                        if rx.attachment != nil {
+                                            Button(action: loadAndShowAttachment) {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "doc.text.magnifyingglass")
+                                                    Text("查看原件照片")
+                                                }
+                                                .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .semibold))
+                                                .foregroundColor(.appPrimary)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 38)
+                                                .background(Color.appPrimarySoft)
+                                                .cornerRadius(8)
                                             }
-                                            .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .semibold))
-                                            .foregroundColor(.appPrimary)
-                                            .frame(maxWidth: .infinity)
-                                            .frame(height: 38)
-                                            .background(Color.appPrimarySoft)
-                                            .cornerRadius(8)
                                         }
                                         
                                         Button(action: { isShowingCamera = true }) {
                                             HStack(spacing: 6) {
                                                 Image(systemName: "camera.fill")
-                                                Text("拍照上传")
+                                                Text(rx.attachment != nil ? "重新拍照" : "拍照上传")
                                             }
                                             .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .semibold))
                                             .foregroundColor(.white)
@@ -499,20 +501,22 @@ public struct PrescriptionDetailView: View {
                                         }
                                         .disabled(isUploading || isBusy)
                                         
-                                        Button(action: { showDeleteAttachmentConfirm = true }) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "trash.fill")
-                                                Text("删除")
+                                        if rx.attachment != nil {
+                                            Button(action: { showDeleteAttachmentConfirm = true }) {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "trash.fill")
+                                                    Text("删除")
+                                                }
+                                                .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .semibold))
+                                                .foregroundColor(.danger)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 38)
+                                                .background(Color.surface)
+                                                .cornerRadius(8)
+                                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.danger.opacity(0.4), lineWidth: 1))
                                             }
-                                            .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .semibold))
-                                            .foregroundColor(.danger)
-                                            .frame(maxWidth: .infinity)
-                                            .frame(height: 38)
-                                            .background(Color.surface)
-                                            .cornerRadius(8)
-                                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.danger.opacity(0.4), lineWidth: 1))
+                                            .disabled(isUploading || isBusy)
                                         }
-                                        .disabled(isUploading || isBusy)
                                     }
                                 }
                             }
@@ -778,6 +782,7 @@ public struct PrescriptionDetailView: View {
             
 
         }
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .task {
             await reloadDetail()
         }

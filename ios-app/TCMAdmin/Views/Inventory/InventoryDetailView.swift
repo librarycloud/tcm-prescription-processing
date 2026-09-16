@@ -99,7 +99,7 @@ public struct InventoryDetailView: View {
                         ForEach(batches) { batch in
                             AppCard(padding: 16) {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    HStack(alignment: .top) {
+                                    HStack(alignment: .center) {
                                         VStack(alignment: .leading, spacing: 6) {
                                             Text("批号：\(batch.batchNo?.isEmpty == false ? batch.batchNo! : "-")")
                                                 .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .semibold))
@@ -123,14 +123,14 @@ public struct InventoryDetailView: View {
                                         
                                         Spacer()
                                         
-                                        VStack(alignment: .trailing, spacing: 4) {
-                                            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                        VStack(alignment: .trailing, spacing: 2) {
+                                            HStack(alignment: .firstTextBaseline, spacing: 3) {
                                                 let qty = batch.quantity ?? 0.0
                                                 Text(String(format: "%g", qty))
-                                                    .font(.system(size: (15) * ThemeManager.shared.fontScale, weight: .bold))
+                                                    .font(.system(size: (24) * ThemeManager.shared.fontScale, weight: .bold))
                                                     .foregroundColor(qty <= 0 ? .danger : .appPrimaryDark)
                                                 Text(item.displayUnit)
-                                                    .font(.system(size: (12) * ThemeManager.shared.fontScale))
+                                                    .font(.system(size: (12) * ThemeManager.shared.fontScale, weight: .medium))
                                                     .foregroundColor(.muted)
                                             }
                                         }

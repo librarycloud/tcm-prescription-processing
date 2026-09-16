@@ -159,7 +159,7 @@ struct InventoryView: View {
                 Spacer()
                 ProgressView("正在查询药品库存...")
                 Spacer()
-            } else if let error = errorMessage {
+            } else if let error = errorMessage, !error.isEmpty {
                 Spacer()
                 Text(error).foregroundColor(.danger).font(.system(size: (14) * ThemeManager.shared.fontScale)).padding()
                 Spacer()
@@ -195,7 +195,7 @@ struct InventoryView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(items) { item in
-                            InventoryRowView(item: item)
+                            InventoryRowView(item: item, keyword: searchText)
                         }
                     }
                     .padding(16)
@@ -239,12 +239,20 @@ struct InventoryView: View {
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
         do {
-            self.items = try await ApiClient.shared.fetchInventory(keyword: term, storeId: selectedStoreId)
+            let res = try await ApiClient.shared.fetchInventory(keyword: term, storeId: selectedStoreId)
+            guard !Task.isCancelled else { return }
+            self.items = res
+        } catch is CancellationError {
+            return
         } catch {
-            self.errorMessage = error.localizedDescription
+            guard !Task.isCancelled else { return }
+            let desc = error.localizedDescription
+            if !desc.lowercased().contains("cancel") && !desc.isEmpty {
+                self.errorMessage = desc
+            }
         }
-        isLoading = false
     }
 }
 
@@ -252,6 +260,7 @@ struct InventoryView: View {
 @MainActor
 struct InventoryRowView: View {
     let item: InventoryItem
+    var keyword: String = ""
     
     var body: some View {
         AppCard(padding: 16) {
@@ -264,10 +273,15 @@ struct InventoryRowView: View {
                         .padding(.top, 2)
                     
                     let code = item.productCode?.isEmpty == false ? item.productCode! : "-"
-                    Text("\(code) · \(item.name)")
-                        .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
-                        .foregroundColor(.ink)
-                        .lineLimit(2)
+                    HighlightedText(
+                        text: "\(code) · \(item.name)",
+                        keyword: keyword,
+                        font: .system(size: (14) * ThemeManager.shared.fontScale),
+                        regularColor: .ink,
+                        highlightColor: .appPrimary,
+                        weight: .bold
+                    )
+                    .lineLimit(2)
                     
                     Spacer()
                     
@@ -280,9 +294,13 @@ struct InventoryRowView: View {
                 
                 // Row 2: Spec, Unit
                 HStack {
-                    Text("规格：\(item.specification?.isEmpty == false ? item.specification! : "-")")
-                        .font(.system(size: (12) * ThemeManager.shared.fontScale))
-                        .foregroundColor(.muted)
+                    HighlightedText(
+                        text: "规格：\(item.specification?.isEmpty == false ? item.specification! : "-")",
+                        keyword: keyword,
+                        font: .system(size: (12) * ThemeManager.shared.fontScale),
+                        regularColor: .muted,
+                        highlightColor: .appPrimary
+                    )
                     Spacer()
                     Text("单位：\(item.unit?.isEmpty == false ? item.unit! : "-")")
                         .font(.system(size: (12) * ThemeManager.shared.fontScale))
@@ -291,16 +309,24 @@ struct InventoryRowView: View {
                 
                 // Row 3: Manufacturer, Barcode
                 HStack {
-                    Text("厂家：\(item.manufacturer?.isEmpty == false ? item.manufacturer! : "-")")
-                        .font(.system(size: (12) * ThemeManager.shared.fontScale))
-                        .foregroundColor(.muted)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HighlightedText(
+                        text: "厂家：\(item.manufacturer?.isEmpty == false ? item.manufacturer! : "-")",
+                        keyword: keyword,
+                        font: .system(size: (12) * ThemeManager.shared.fontScale),
+                        regularColor: .muted,
+                        highlightColor: .appPrimary
+                    )
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    Text("条码：\(item.barcode?.isEmpty == false ? item.barcode! : "无条码")")
-                        .font(.system(size: (12) * ThemeManager.shared.fontScale))
-                        .foregroundColor(.muted)
-                        .lineLimit(1)
+                    HighlightedText(
+                        text: "条码：\(item.barcode?.isEmpty == false ? item.barcode! : "无条码")",
+                        keyword: keyword,
+                        font: .system(size: (12) * ThemeManager.shared.fontScale),
+                        regularColor: .muted,
+                        highlightColor: .appPrimary
+                    )
+                    .lineLimit(1)
                 }
             }
         }

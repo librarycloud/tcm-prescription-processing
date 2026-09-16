@@ -438,17 +438,18 @@ struct HighlightedText: View, Equatable {
     }
     
     var body: some View {
-        if keyword.isEmpty {
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || !text.localizedCaseInsensitiveContains(trimmed) {
             Text(text).font(font).fontWeight(weight).foregroundColor(regularColor)
         } else {
-            buildHighlightedText()
+            buildHighlightedText(for: trimmed)
         }
     }
     
-    private func buildHighlightedText() -> Text {
+    private func buildHighlightedText(for trimmedKey: String) -> Text {
         var result = Text("")
         let lowerText = text.lowercased()
-        let lowerKey = keyword.lowercased()
+        let lowerKey = trimmedKey.lowercased()
         
         var currentIndex = text.startIndex
         var searchStartIndex = lowerText.startIndex
