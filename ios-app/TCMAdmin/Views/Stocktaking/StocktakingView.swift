@@ -294,6 +294,7 @@ public struct StocktakingDetailView: View {
     @State private var detail: StocktakingModel? = nil
     @State private var isLoading = false
     @State private var itemFilter = "all" // all, counted, mine, missing, recount, diff
+    @State private var searchTask: Task<Void, Never>? = nil
     @State private var errorMessage: String? = nil
     @State private var isFinishing = false
     @State private var showFinishAlert = false
@@ -423,30 +424,25 @@ public struct StocktakingDetailView: View {
                                     .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
                                     .foregroundColor(.ink)
                                 
-                                HStack(spacing: 8) {
-                                    TextField("搜索药材名称/编码/条码", text: $candidateKeyword)
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                                        .onSubmit { searchCandidates() }
-                                    
-                                    Button(action: {
-                                        Router.shared.presentScanner(enableOCR: true)
-                                    }) {
-                                        Image(systemName: "viewfinder")
-                                            .font(.system(size: (16) * ThemeManager.shared.fontScale))
-                                            .foregroundColor(.appPrimary)
-                                            .padding(6)
-                                            .background(Color.appPrimarySoft)
-                                            .cornerRadius(6)
+                                SearchBarField(
+                                    text: $candidateKeyword,
+                                    placeholder: "搜索药材名称/编码/条码...",
+                                    onSearch: { searchCandidates() },
+                                    onScan: { Router.shared.presentScanner(enableOCR: true) }
+                                )
+                                .onChange(of: candidateKeyword) {
+                                    searchTask?.cancel()
+                                    let term = candidateKeyword.trimmingCharacters(in: .whitespaces)
+                                    if term.isEmpty {
+                                        candidates = []
+                                        return
                                     }
-                                    
-                                    Button(action: searchCandidates) {
-                                        Text("查找")
-                                            .font(.system(size: (13) * ThemeManager.shared.fontScale, weight: .medium))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 7)
-                                            .background(Color.appPrimary)
-                                            .cornerRadius(6)
+                                    searchTask = Task {
+                                        do {
+                                            try await Task.sleep(nanoseconds: 500_000_000)
+                                            guard !Task.isCancelled else { return }
+                                            searchCandidates()
+                                        } catch {}
                                     }
                                 }
                                 

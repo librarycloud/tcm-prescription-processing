@@ -329,6 +329,10 @@ public struct PackageVerifyView: View {
     @State private var errorMessage: String? = nil
     @State private var isScannerShowing = false
     
+    private var rawPickupCode: String {
+        codeText.filter { $0.isNumber }
+    }
+    
     public init(initialCode: String = "") {
         self.initialCode = initialCode
     }
@@ -363,7 +367,14 @@ public struct PackageVerifyView: View {
                                 .font(.system(size: (18) * ThemeManager.shared.fontScale, weight: .bold))
                                 .keyboardType(.numberPad)
                                 .onChange(of: codeText) {
-                                    codeText = String(codeText.filter { $0.isNumber }.prefix(6))
+                                    let raw = codeText.filter { $0.isNumber }.prefix(6)
+                                    if raw.count > 3 {
+                                        let start = raw.startIndex
+                                        let mid = raw.index(start, offsetBy: 3)
+                                        codeText = "\(raw[start..<mid])-\(raw[mid...])"
+                                    } else {
+                                        codeText = String(raw)
+                                    }
                                 }
                             
                             if !codeText.isEmpty {
@@ -427,10 +438,10 @@ public struct PackageVerifyView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
-                            .background(codeText.count == 6 && (selectedMethod != 2 || !expressTrackingNo.isEmpty) ? Color.success : Color.success.opacity(0.4))
+                            .background(rawPickupCode.count == 6 && (selectedMethod != 2 || !expressTrackingNo.isEmpty) ? Color.success : Color.success.opacity(0.4))
                             .cornerRadius(10)
                         }
-                        .disabled(codeText.count != 6 || isVerifying || (selectedMethod == 2 && expressTrackingNo.isEmpty))
+                        .disabled(rawPickupCode.count != 6 || isVerifying || (selectedMethod == 2 && expressTrackingNo.isEmpty))
                     }
                 }
                 
@@ -498,7 +509,7 @@ public struct PackageVerifyView: View {
         
         Task {
             do {
-                let code = codeText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let code = rawPickupCode
                 let tracking = selectedMethod == 2 ? expressTrackingNo.trimmingCharacters(in: .whitespacesAndNewlines) : ""
                 let res = try await ApiClient.shared.verifyPackage(
                     code: code,

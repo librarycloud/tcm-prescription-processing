@@ -675,7 +675,8 @@ internal fun PackageVerifyScreen(
     var code by remember(initialCode) {
         val signedCode = Regex("^TCM:PICKUP:1:\\d+:(\\d{6}):[A-Za-z0-9_-]+$")
             .matchEntire(initialCode)?.groupValues?.getOrNull(1)
-        mutableStateOf(signedCode ?: initialCode.filter(Char::isDigit).take(6))
+        val raw = (signedCode ?: initialCode.filter(Char::isDigit).take(6))
+        mutableStateOf(if (raw.length > 3) "${raw.substring(0, 3)}-${raw.substring(3)}" else raw)
     }
     var method by remember { mutableStateOf(0) }
     var tracking by remember { mutableStateOf("") }
@@ -708,7 +709,8 @@ internal fun PackageVerifyScreen(
             OutlinedTextField(
                 value = code,
                 onValueChange = {
-                    code = it.filter(Char::isDigit).take(6)
+                    val raw = it.filter(Char::isDigit).take(6)
+                    code = if (raw.length > 3) "${raw.substring(0, 3)}-${raw.substring(3)}" else raw
                     signedQrContent = null
                 },
                 label = { Text("6 位取货码 *") },
@@ -757,14 +759,15 @@ internal fun PackageVerifyScreen(
 
         Spacer(Modifier.height(24.dp))
 
+        val rawPickupCode = code.filter(Char::isDigit)
         Button(
-            enabled = code.length == 6 && !busy && (method != 2 || tracking.isNotBlank()),
+            enabled = rawPickupCode.length == 6 && !busy && (method != 2 || tracking.isNotBlank()),
             onClick = {
                 busy = true
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
-                            ApiClient.verifyPackage(code, method, tracking.trim(), signedQrContent)
+                            ApiClient.verifyPackage(rawPickupCode, method, tracking.trim(), signedQrContent)
                         }
                     }.onSuccess {
                         onVerified()

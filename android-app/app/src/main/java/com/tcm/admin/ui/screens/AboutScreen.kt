@@ -684,7 +684,7 @@ internal fun AboutScreen(
                                         <body>
                                             <div id="content"><div class="loading">加载中...</div></div>
                                             <script>
-                                                fetch('${com.tcm.admin.api.ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
+                                                fetch('${com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
                                                     .then(res => res.json())
                                                     .then(json => {
                                                         const data = json.code === 0 ? json.data : (json || {});
