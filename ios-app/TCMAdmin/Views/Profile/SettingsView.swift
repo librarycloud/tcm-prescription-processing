@@ -7,6 +7,8 @@ public struct SettingsView: View {
     
     @State private var cacheSize: String = "24.5 MB"
     @State private var isClearingCache = false
+    @State private var isShowingServerConfig = false
+    @State private var configuredBaseURL = ApiClient.shared.baseURL
     
     public init() {}
     
@@ -42,6 +44,11 @@ public struct SettingsView: View {
                             }
                         }
                         Divider().padding(.leading, 48)
+                        ProfileRow(icon: "server.rack", title: "API 服务器地址", value: ApiClient.shared.baseURL) {
+                            configuredBaseURL = ApiClient.shared.baseURL
+                            isShowingServerConfig = true
+                        }
+                        Divider().padding(.leading, 48)
                         ProfileRow(icon: "bell.fill", title: "新消息通知", value: "已开启") {}
                         Divider().padding(.leading, 48)
                         ProfileRow(icon: "lock.shield.fill", title: "安全与隐私") {}
@@ -72,6 +79,40 @@ public struct SettingsView: View {
         .background(Color.pageBackground)
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isShowingServerConfig) {
+            NavigationView {
+                Form {
+                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("提示：在 Mac 电脑模拟器中运行，连接本机服务直接填 http://127.0.0.1:3000 或 http://localhost:3000；若是真机调试，请填 Mac 的局域网 IP 地址。")) {
+                        TextField("http://127.0.0.1:3000", text: $configuredBaseURL)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                    
+                    Section(header: Text("快捷预设")) {
+                        Button("本机开发机 (http://127.0.0.1:3000)") {
+                            configuredBaseURL = "http://127.0.0.1:3000"
+                        }
+                        Button("本地主机名 (http://localhost:3000)") {
+                            configuredBaseURL = "http://localhost:3000"
+                        }
+                    }
+                }
+                .navigationTitle("服务器设置")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("取消") { isShowingServerConfig = false }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("保存") {
+                            ApiClient.shared.baseURL = configuredBaseURL
+                            isShowingServerConfig = false
+                        }
+                        .fontWeight(.bold)
+                    }
+                }
+            }
+        }
     }
 }
 
