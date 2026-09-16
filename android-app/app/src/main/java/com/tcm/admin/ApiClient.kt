@@ -38,6 +38,7 @@ object ApiClient {
     private const val SESSION_PREFS = "admin_session"
     private const val TOKEN_KEY = "token"
     private const val USER_KEY = "user"
+    private const val CUSTOM_BASE_URL_KEY = "custom_base_url"
     private const val E6_IMPORT_CACHE_PREFS = "e6_import_cache"
     private const val E6_IMPORT_CACHE_KEY = "records"
     private const val RESPONSE_CACHE_PREFS = "api_response_cache"
@@ -53,8 +54,58 @@ object ApiClient {
     @Volatile
     private var token: String? = null
     @Volatile
+    var currentBaseUrl: String = BuildConfig.API_BASE_URL
+        private set
+    @Volatile
     private var cacheContext: Context? = null
     private data class CacheEntry(val route: String, val savedAt: Long, val data: String)
+
+    
+    fun importServerConfig(context: Context, uri: android.net.Uri): Pair<Boolean, String> {
+        var targetServer: String? = null
+        
+        // 1. 优先解析 Query 参数: ?server=... 或 ?url=... 或 ?baseURL=... 或 ?api=...
+        val queryNames = listOf("server", "url", "baseurl", "api")
+        for (name in queryNames) {
+            val valStr = uri.getQueryParameter(name)
+            if (!valStr.isNullOrBlank()) {
+                targetServer = valStr
+                break
+            }
+        }
+        
+        // 2. 若无 Query，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
+        if (targetServer == null) {
+            val host = uri.host
+            if (!host.isNullOrBlank() && host != "config" && host != "server") {
+                val port = uri.port
+                val portStr = if (port != -1) ":$port" else ""
+                targetServer = "http://$host$portStr"
+            }
+        }
+        
+        val serverStr = targetServer?.trim()
+        if (serverStr.isNullOrBlank()) {
+            return false to "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=http://...)"
+        }
+        
+        var finalURL = serverStr
+        if (!finalURL.startsWith("http://", ignoreCase = true) && !finalURL.startsWith("https://", ignoreCase = true)) {
+            finalURL = "http://$finalURL"
+        }
+        finalURL = finalURL.trimEnd('/')
+        
+        currentBaseUrl = finalURL
+        getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
+        return true to "成功导入服务器地址:\n\n$finalURL"
+    }
+
+    fun initBaseUrl(context: Context) {
+        val saved = getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
+        if (!saved.isNullOrBlank()) {
+            currentBaseUrl = saved
+        }
+    }
 
     private class ProgressRequestBody(
         private val bytes: ByteArray,
@@ -369,7 +420,7 @@ object ApiClient {
                 json.getJSONObject("data")
             }
         }
-        val backendUrl = BuildConfig.API_BASE_URL.trimEnd('/') + "/app/version/android$query"
+        val backendUrl = currentBaseUrl + "/app/version/android$query"
         val requestBuilder = Request.Builder()
             .url(backendUrl)
             .header("Accept", "application/json")
@@ -942,7 +993,7 @@ object ApiClient {
             .build()
         
         val requestBuilder = Request.Builder()
-            .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
+            .url(currentBaseUrl + path)
             .post(requestBody)
             .header("Accept", "application/json")
             
@@ -992,7 +1043,7 @@ object ApiClient {
             cachedResponse(path, cacheTtl)?.let { return@withContext it }
         }
         val requestBuilder = Request.Builder()
-            .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
+            .url(currentBaseUrl + path)
             .header("Accept", "application/json")
 
         // Only send JSON metadata when a JSON payload exists. Fastify rejects an
@@ -1082,7 +1133,7 @@ object ApiClient {
 
     private suspend fun requestBytes(path: String): ByteArray = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val requestBuilder = Request.Builder()
-            .url(BuildConfig.API_BASE_URL.trimEnd('/') + path)
+            .url(currentBaseUrl + path)
             .header("Accept", "image/*")
         applyAuthorizationHeader(requestBuilder)
         client.newCall(requestBuilder.get().build()).execute().use { response ->

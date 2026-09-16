@@ -70,6 +70,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.ui.platform.LocalContext
 import com.tcm.admin.util.CacheManager
+import com.tcm.admin.ServerConfigNotifier
+import com.tcm.admin.ApiClient
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -1233,6 +1236,57 @@ internal fun SettingsScreen(
             }
         }
 
+
+        Spacer(Modifier.height(18.dp))
+        Text("网络与服务器", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(10.dp))
+        
+        var baseUrl by remember { mutableStateOf(ApiClient.currentBaseUrl) }
+        LaunchedEffect(Unit) {
+            ServerConfigNotifier.importResult.collect {
+                baseUrl = ApiClient.currentBaseUrl
+            }
+        }
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.CloudQueue,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("当前服务器地址", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = baseUrl,
+                    fontSize = 13.sp,
+                    color = Primary,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "如需切换服务器，请使用系统相机扫描配置二维码，或通过其他应用打开专属配置链接 (tcmadmin://config?server=...) 进行自动导入。",
+                    fontSize = 12.sp,
+                    color = Muted,
+                    lineHeight = 17.sp,
+                )
+            }
+        }
+
+
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -1557,6 +1611,57 @@ internal fun ThemeAppearanceScreen(
                 }
             }
         }
+
+        Spacer(Modifier.height(18.dp))
+        Text("网络与服务器", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+        Spacer(Modifier.height(10.dp))
+        
+        var baseUrl by remember { mutableStateOf(ApiClient.currentBaseUrl) }
+        LaunchedEffect(Unit) {
+            ServerConfigNotifier.importResult.collect {
+                baseUrl = ApiClient.currentBaseUrl
+            }
+        }
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.CloudQueue,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("当前服务器地址", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = baseUrl,
+                    fontSize = 13.sp,
+                    color = Primary,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "如需切换服务器，请使用系统相机扫描配置二维码，或通过其他应用打开专属配置链接 (tcmadmin://config?server=...) 进行自动导入。",
+                    fontSize = 12.sp,
+                    color = Muted,
+                    lineHeight = 17.sp,
+                )
+            }
+        }
+
+
         Spacer(Modifier.height(24.dp))
     }
 }

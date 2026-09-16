@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
@@ -71,6 +72,7 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -140,9 +142,38 @@ import org.json.JSONObject
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
+
+object ServerConfigNotifier {
+    val importResult = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Boolean, String>>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
+    fun notify(success: Boolean, message: String) {
+        importResult.tryEmit(success to message)
+    }
+}
+
 class MainActivity : ComponentActivity() {
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        intent?.let { handleIntent(it) }
+    }
+
+    private fun handleIntent(intent: android.content.Intent?) {
+        if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
+            val uri = intent.data!!
+            if (uri.scheme == "tcmadmin" || uri.scheme == "tcm") {
+                val (success, message) = ApiClient.importServerConfig(this, uri)
+                ServerConfigNotifier.notify(success, message)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ApiClient.initBaseUrl(this)
+        handleIntent(intent)
         setContent { TcmAdminApp() }
     }
 
@@ -175,6 +206,18 @@ private fun TcmAdminApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    
+    var showImportAlert by remember { mutableStateOf(false) }
+    var importAlertMessage by remember { mutableStateOf("") }
+    var importAlertSuccess by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        ServerConfigNotifier.importResult.collect { (success, message) ->
+            importAlertSuccess = success
+            importAlertMessage = message
+            showImportAlert = true
+        }
+    }
     var session by remember { mutableStateOf(restoredSession) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
@@ -346,6 +389,19 @@ private fun TcmAdminApp() {
             ),
         ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
+                        
+        if (showImportAlert) {
+            AlertDialog(
+                onDismissRequest = { showImportAlert = false },
+                title = { Text("服务器配置") },
+                text = { Text(importAlertMessage) },
+                confirmButton = {
+                    TextButton(onClick = { showImportAlert = false }) {
+                        Text("好的")
+                    }
+                }
+            )
+        }
                         NavHost(
     navController = navController,
     startDestination = if (session != null) Route.Inventory() else Route.Login,
@@ -693,8 +749,17 @@ private fun TcmAdminApp() {
 
 @Composable
 private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, String) -> Unit) {
+
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf(ApiClient.currentBaseUrl) }
+
+    LaunchedEffect(Unit) {
+        ServerConfigNotifier.importResult.collect {
+            baseUrl = ApiClient.currentBaseUrl
+        }
+    }
+
 
     Column(
         modifier = Modifier
