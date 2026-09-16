@@ -43,3 +43,10 @@ android-app/.gradle/
 /*.py
 /*.swift
 /ios-app/.build/
+
+# Xcode local files
+*.xcuserstate
+project.xcworkspace/xcuserdata/
+*.xcuserdatad/
+xcuserdata/
+DerivedData/

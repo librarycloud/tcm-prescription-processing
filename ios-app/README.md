@@ -83,3 +83,47 @@ ios-app/TCMAdmin/
 - **Mac 模拟器调试**：填入 `http://127.0.0.1:3000` 或 `http://localhost:3000`。
 - **局域网真机调试**：填入运行 Fastify 后端电脑的局域网 IP（例如 `http://192.168.1.100:3000`）。
 - **生产环境**：填入线上正式 API 域名（例如 `https://api.tcm.example.com`）。
+
+---
+
+## GitHub Actions 自动化编译 Release (.ipa) 与发版
+
+项目已配置好全自动编译、打包、签名与发布的 GitHub Actions 工作流（`.github/workflows/ios-release.yml`），且与 Android 一样**无缝直连 App Release Hub 同步更新**。
+
+### 1. 准备仓库 Secrets（仅首次需配置）
+
+进入 GitHub 仓库：**Settings ➔ Secrets and variables ➔ Actions**，点击 **New repository secret** 添加以下配置：
+
+| Secret 变量名 | 必填 | 说明与获取方式 |
+| --- | --- | --- |
+| `IOS_BUILD_CERTIFICATE_BASE64` | 是 | 苹果发布证书（`.p12`）的 Base64 编码。终端生成命令：`base64 -i distribution.p12 \| pbcopy` |
+| `IOS_P12_PASSWORD` | 是 | 导出 `.p12` 时设置的证书安全密码 |
+| `IOS_PROVISION_PROFILE_BASE64` | 是 | 苹果描述文件（`.mobileprovision`）的 Base64 编码。终端生成命令：`base64 -i App.mobileprovision \| pbcopy` |
+| `RELEASE_HUB_URL` | 否 | App Release Hub 根域名（例如 `https://release.example.com`，也可在 Actions 变量中设置） |
+| `RELEASE_HUB_API_KEY` | 否 | Release Hub 服务端鉴权 API Key（与 Android 保持一致） |
+| `RELEASE_HUB_APP_ID` | 否 | App ID，默认填 `tcm-admin` |
+
+### 2. 触发方式
+
+#### 方式 A：打 Git Tag 自动触发（推荐）
+```bash
+# 推送形如 ios-v1.0.0 的版本标签
+git tag ios-v1.0.0
+git push origin ios-v1.0.0
+```
+
+#### 方式 B：GitHub 网页手动点击触发
+1. 访问 GitHub 仓库 ➔ **Actions** 标签页。
+2. 左侧选择 **iOS Release IPA** 工作流。
+3. 点击右侧 **Run workflow** 下拉框：
+   - 填写版本号（如 `1.0.0`）。
+   - 选择导出方式（`ad-hoc` 用于企业内测分发，`app-store` 用于上传 TestFlight / App Store）。
+4. 点击绿色 **Run workflow** 开始自动化构建。
+
+### 3. 构建产物与自动化闭环
+
+构建完成后，流水线将自动执行以下动作：
+1. **生成 IPA**：输出标准化 `tcm-admin-release.ipa`。
+2. **生成元数据**：生成 `app-version.ios.json`，内含 sha256 校验和、文件大小与自动截取的 Git Changelog。
+3. **发布 GitHub Release**：自动创建或更新 Release 并上传 IPA 与版本元数据。
+4. **通知 App Release Hub**：自动向更新服务器发起 `POST /admin/apps/{appId}/sync` 请求，客户端打开「关于 ➔ 检查更新」即可无缝检测到新版本。
