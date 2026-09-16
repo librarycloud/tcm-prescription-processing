@@ -538,7 +538,7 @@ internal fun InventoryScreen(
                                     }
                                     withStyle(SpanStyle(
                                         color = if (totalQuantity <= 0.0) Danger else PrimaryDark,
-                                        fontSize = 16.sp,
+                                        fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold
                                     )) {
                                         append(quantityText(totalQuantity))
@@ -643,7 +643,7 @@ internal fun InventoryScreen(
                                         withStyle(SpanStyle(
                                             fontWeight = FontWeight.Bold,
                                             color = if (qty <= 0.0) Danger else PrimaryDark,
-                                            fontSize = 15.sp
+                                            fontSize = 24.sp
                                         )) {
                                             append(quantityText(qty))
                                         }

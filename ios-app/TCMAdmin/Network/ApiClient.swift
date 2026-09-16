@@ -93,11 +93,18 @@ public class ApiClient {
     @discardableResult
     public func importServerConfig(from string: String) -> (success: Bool, newURL: String?, message: String) {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = URL(string: trimmed), (url.scheme == "tcmadmin" || url.scheme == "tcm") {
-            return importServerConfig(from: url)
-        }
-        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
-            if let _ = URL(string: trimmed) {
+        if let url = URL(string: trimmed) {
+            if url.scheme == "tcmadmin" || url.scheme == "tcm" {
+                return importServerConfig(from: url)
+            }
+            // 如果是标准网页中转落地页 (如 http://域名/app-config?server=...)
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+               let queryItems = components.queryItems,
+               queryItems.contains(where: { ["server", "url", "baseurl", "api"].contains($0.name.lowercased()) }) {
+                return importServerConfig(from: url)
+            }
+            // 如果是直接填入的标准后端 HTTP/HTTPS API 根地址
+            if url.scheme == "http" || url.scheme == "https" {
                 let sanitized = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 self.baseURL = sanitized
                 NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: sanitized)

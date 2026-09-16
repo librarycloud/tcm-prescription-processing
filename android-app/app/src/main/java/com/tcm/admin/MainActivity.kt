@@ -141,6 +141,7 @@ import org.json.JSONObject
 
 import dagger.hilt.android.AndroidEntryPoint
 
+object ServerConfigNotifier {
     val importResult = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Boolean, String>>(
         extraBufferCapacity = 1,
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
@@ -150,6 +151,7 @@ import dagger.hilt.android.AndroidEntryPoint
     }
 }
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
