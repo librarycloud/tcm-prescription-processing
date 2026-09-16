@@ -956,7 +956,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: var(--el-fill-color-light);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
   padding: 8px;
@@ -968,13 +968,18 @@ onMounted(() => {
   width: 124px;
   height: 124px;
   object-fit: contain;
+  background: #ffffff;
+  padding: 4px;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .apk-qr-tip {
   font-size: 11px;
   color: var(--el-text-color-secondary);
-  margin-top: 4px;
+  margin-top: 6px;
   white-space: nowrap;
+  text-align: center;
 }
 
 .apk-info-box {
@@ -1107,7 +1112,7 @@ onMounted(() => {
 
 .links-table-wrapper {
   overflow-x: auto;
-  background: #fff;
+  background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
 }
@@ -1128,8 +1133,16 @@ onMounted(() => {
 .deeplink-table th {
   background: var(--el-fill-color);
   font-weight: 600;
-  color: var(--el-text-color-regular);
+  color: var(--el-text-color-primary);
   font-size: 12px;
+}
+
+.deeplink-table td {
+  color: var(--el-text-color-regular);
+}
+
+.deeplink-table td strong {
+  color: var(--el-text-color-primary);
 }
 
 .deeplink-table tr:last-child td {
@@ -1139,10 +1152,11 @@ onMounted(() => {
 .code-badge {
   display: inline-block;
   max-width: 250px;
-  padding: 3px 6px;
+  padding: 3px 8px;
   border-radius: 4px;
-  background: var(--el-fill-color-light);
+  background: var(--el-fill-color);
   color: var(--el-color-primary);
+  border: 1px solid var(--el-border-color-lighter);
   font-family: monospace;
   font-size: 12px;
   word-break: break-all;
@@ -1159,11 +1173,31 @@ onMounted(() => {
   line-height: 1.5;
 }
 
+.deeplink-tip-box code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--el-color-warning-dark-2, var(--el-text-color-primary));
+  font-family: monospace;
+  font-size: 11px;
+}
+
+html.dark .deeplink-tip-box {
+  background: rgba(230, 162, 60, 0.12);
+  border-color: rgba(230, 162, 60, 0.3);
+  color: var(--el-text-color-regular);
+}
+
+html.dark .deeplink-tip-box code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6a23c;
+}
+
 .server-qr-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: #fff;
+  background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
   padding: 16px;
@@ -1178,25 +1212,29 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 170px;
-  height: 170px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
-  padding: 8px;
-  background: #fff;
-  margin-bottom: 10px;
+  padding: 12px;
+  background: var(--el-fill-color-light);
+  margin-bottom: 12px;
 }
 
 .server-qr-img {
   width: 136px;
   height: 136px;
   object-fit: contain;
+  background: #ffffff;
+  padding: 6px;
+  border-radius: 6px;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .qr-subtext {
   font-size: 11px;
   color: var(--el-text-color-secondary);
-  margin-top: 2px;
+  margin-top: 8px;
+  text-align: center;
 }
 
 .qr-action-btns {
@@ -1208,6 +1246,7 @@ onMounted(() => {
 .camera-steps-box {
   width: 100%;
   background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 12px;
@@ -1215,6 +1254,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.step-line strong {
+  color: var(--el-text-color-primary);
 }
 
 .step-line {

@@ -172,6 +172,12 @@ const routes = [
         meta: { title: '上传设置', icon: 'Upload', group: 'system', allowedRoles: [0] }
       },
       {
+        path: 'legal-docs',
+        name: 'LegalDocs',
+        component: () => import('@/views/admin/LegalDocs.vue'),
+        meta: { title: '法律文档', icon: 'Document', group: 'system', allowedRoles: [0] }
+      },
+      {
         path: 'robot-notifications',
         name: 'RobotNotifications',
         component: () => import('@/views/admin/RobotNotifications.vue'),

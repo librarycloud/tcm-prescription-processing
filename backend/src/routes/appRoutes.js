@@ -1,5 +1,6 @@
 import { ok } from '../utils/response.js';
 import { config } from '../config.js';
+import { getLegalDocsController } from '../controllers/legalDocsController.js';
 
 /**
  * 兼容老客户端的轻量透明代理路由：
@@ -7,6 +8,7 @@ import { config } from '../config.js';
  * 自动代理到独立的 app-release-hub，无需本地处理或存储文件。
  */
 export default async function appRoutes(fastify) {
+  fastify.get('/legal-docs', getLegalDocsController);
   // 1. 检查更新接口代理（支持 /version/:platform 如 android、ios）
   fastify.get('/version/:platform', async (request, reply) => {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate').header('Pragma', 'no-cache');

@@ -815,7 +815,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   padding: 8px;
-  background: #fff;
+  background: var(--el-fill-color-light);
   margin-bottom: 12px;
 }
 
@@ -823,6 +823,10 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background: #ffffff;
+  padding: 6px;
+  border-radius: 6px;
+  box-sizing: border-box;
 }
 
 .qr-loading {

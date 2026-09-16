@@ -214,13 +214,27 @@ import {
   generateWechatQrcodeController,
   getClientDisplayInfoController,
 } from "../controllers/clientDisplayController.js";
+import { getLegalDocsController, saveLegalDocsController } from "../controllers/legalDocsController.js";
 
-export default async function adminRoutes(fastify) {
+export default async function adminRoutes(fastify, options) {
   const storeStaffRoute = { config: { storeStaff: true } };
   fastify.addHook("preHandler", fastify.rateLimit());
   fastify.addHook("preHandler", verifyToken);
   fastify.addHook("preHandler", verifyAdmin);
   fastify.addHook("preHandler", verifyStoreStaffRoute);
+
+  // System Legal Docs routes
+  fastify.get(
+    "/system/legal-docs",
+    { config: { storeStaff: true } },
+    getLegalDocsController
+  );
+
+  fastify.put(
+    "/system/legal-docs",
+    { config: { storeStaff: false } }, // only superadmin or store manager can edit
+    saveLegalDocsController
+  );
 
   fastify.get("/stats", storeStaffRoute, statsController);
   fastify.get("/herb-locations/stores", storeStaffRoute, listHerbLocationStoresController);
