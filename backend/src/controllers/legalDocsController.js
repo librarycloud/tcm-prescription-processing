@@ -1,8 +1,6 @@
-import prisma from "../prisma.js";
-
 // 获取所有法律文档配置 (后台或公开使用)
 export const getLegalDocsController = async (request, reply) => {
-  const configs = await prisma.systemConfig.findMany({
+  const configs = await request.server.prisma.systemConfig.findMany({
     where: {
       item: { in: ["privacy_policy", "user_agreement"] }
     }
@@ -23,6 +21,7 @@ export const getLegalDocsController = async (request, reply) => {
 // 后台保存法律文档配置
 export const saveLegalDocsController = async (request, reply) => {
   const { privacy_policy, user_agreement } = request.body;
+  const prisma = request.server.prisma;
 
   if (privacy_policy !== undefined) {
     await prisma.systemConfig.upsert({
