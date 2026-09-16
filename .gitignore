@@ -40,3 +40,6 @@ wechat-miniprogram/project.private.config.json
 android-app/release.keystore
 android-app/app/build/
 android-app/.gradle/
+/*.py
+/*.swift
+/ios-app/.build/
