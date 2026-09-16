@@ -618,6 +618,60 @@ internal fun AboutScreen(
                         targetVersion = latest?.optString("versionName", "") ?: "",
                         hasUpdate = hasUpdate,
                     )
+            }
+        }
+        
+        var webUrlToShow by remember { mutableStateOf<String?>(null) }
+        
+        Spacer(Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "《隐私政策》",
+                color = Primary,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { webUrlToShow = "https://yourdomain.com/privacy.html" }.padding(8.dp)
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(
+                "《用户协议》",
+                color = Primary,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { webUrlToShow = "https://yourdomain.com/agreement.html" }.padding(8.dp)
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+
+        if (webUrlToShow != null) {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { webUrlToShow = null },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    Column {
+                        @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+                        androidx.compose.material3.TopAppBar(
+                            title = { Text(if (webUrlToShow?.contains("privacy") == true) "隐私政策" else "用户协议") },
+                            navigationIcon = {
+                                androidx.compose.material3.IconButton(onClick = { webUrlToShow = null }) {
+                                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { ctx ->
+                                android.webkit.WebView(ctx).apply {
+                                    webViewClient = android.webkit.WebViewClient()
+                                    settings.javaScriptEnabled = true
+                                    loadUrl(webUrlToShow!!)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
         }

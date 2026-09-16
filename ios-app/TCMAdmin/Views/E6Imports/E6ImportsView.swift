@@ -723,6 +723,24 @@ public struct E6ImportDetailView: View {
                     ProgressView("正在加载订单详情...")
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
+                } else if detail == nil {
+                    VStack(spacing: 12) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: (36) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                        Text(errorMessage ?? "未能加载订单详情")
+                            .font(.system(size: (14) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                            .multilineTextAlignment(.center)
+                        Button("点击重试") {
+                            Task { await loadDetail() }
+                        }
+                        .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
+                        .foregroundColor(.appPrimary)
+                        .padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
                 } else if let item = detail {
                     if let err = errorMessage {
                         AppCard(padding: 12) {
@@ -881,15 +899,13 @@ public struct E6ImportDetailView: View {
                         }
                         .padding(.top, 6)
                     }
-                } else {
-                    Text("未能加载详情")
-                        .foregroundColor(.muted)
-                        .padding(.top, 40)
                 }
             }
             .padding(16)
+            .frame(maxWidth: .infinity)
         }
-        .background(Color.pageBackground)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("订单详情")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isShowingConfirmSheet) {

@@ -367,6 +367,25 @@ public struct PrescriptionDetailView: View {
             Group {
                 if isLoading && prescription == nil {
                     ProgressView("正在加载处方详情...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if prescription == nil {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: (36) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                        Text(errorMessage ?? "未能加载到处方信息")
+                            .font(.system(size: (14) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                            .multilineTextAlignment(.center)
+                        Button("点击重试") {
+                            Task { await reloadDetail() }
+                        }
+                        .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
+                        .foregroundColor(.appPrimary)
+                        .padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(16)
                 } else if let rx = prescription {
                     ScrollView {
                         VStack(spacing: 16) {
@@ -719,15 +738,9 @@ public struct PrescriptionDetailView: View {
                             }
                         }
                         .padding(16)
+                        .frame(maxWidth: .infinity)
                     }
-                } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: (36) * ThemeManager.shared.fontScale))
-                            .foregroundColor(.muted)
-                        Text("未能加载到处方信息")
-                            .foregroundColor(.muted)
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             

@@ -507,6 +507,18 @@ public struct AboutView: View {
             }
             .padding(.horizontal, 16)
             
+            HStack(spacing: 16) {
+                if let privacyUrl = URL(string: "https://yourdomain.com/privacy.html") {
+                    Link("《隐私政策》", destination: privacyUrl)
+                }
+                if let agreementUrl = URL(string: "https://yourdomain.com/agreement.html") {
+                    Link("《用户协议》", destination: agreementUrl)
+                }
+            }
+            .font(.system(size: (13) * ThemeManager.shared.fontScale))
+            .foregroundColor(.appPrimary)
+            .padding(.top, 8)
+            
             Spacer()
         }
         .background(Color.pageBackground.ignoresSafeArea())

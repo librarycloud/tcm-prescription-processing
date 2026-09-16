@@ -27,7 +27,7 @@ public func extractExpressTrackingNo(_ raw: String) -> String {
 }
 
 // MARK: - CoreImage 原生二维码生成视图
-private let qrSharedCIContext = CIContext()
+nonisolated(unsafe) private let qrSharedCIContext = CIContext()
 
 @MainActor
 public struct QRCodeView: View {
@@ -261,7 +261,7 @@ public struct PackageFormView: View {
                 }
                 .padding(16)
             }
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
             .navigationTitle(isEdit ? "编辑包裹" : "新建包裹")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -464,7 +464,7 @@ public struct PackageVerifyView: View {
             }
             .padding(16)
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("取件核销")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -539,7 +539,7 @@ public struct PackageDetailView: View {
     public var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if let error = errorMessage {
+                if let error = errorMessage, package != nil {
                     AppCard(padding: 12) {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -557,10 +557,28 @@ public struct PackageDetailView: View {
                     }
                 }
                 
-                if isLoading {
+                if isLoading && package == nil {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
+                } else if package == nil {
+                    VStack(spacing: 12) {
+                        Image(systemName: "shippingbox")
+                            .font(.system(size: (36) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                        Text(errorMessage ?? "未能加载包裹详情")
+                            .font(.system(size: (14) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                            .multilineTextAlignment(.center)
+                        Button("点击重试") {
+                            Task { await loadDetail() }
+                        }
+                        .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
+                        .foregroundColor(.appPrimary)
+                        .padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
                 } else if let pkg = package {
                     AppCard(padding: 16) {
                         VStack(alignment: .leading, spacing: 12) {
@@ -678,8 +696,10 @@ public struct PackageDetailView: View {
                 }
             }
             .padding(16)
+            .frame(maxWidth: .infinity)
         }
-        .background(Color.pageBackground)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("包裹详情")
         .navigationBarTitleDisplayMode(.inline)
         .task {

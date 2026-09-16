@@ -10,6 +10,12 @@ public struct PrescriptionEditView: View {
     @State private var totalDose = ""
     @State private var remark = ""
     
+    @State private var totalPrice = ""
+    @State private var isExternal = false
+    @State private var externalHospital = ""
+    @State private var externalDoctor = ""
+    @State private var externalRemark = ""
+    
     @State private var isLoading = false
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
@@ -26,6 +32,16 @@ public struct PrescriptionEditView: View {
                     .keyboardType(.phonePad)
                 TextField("处方剂数 *", text: $totalDose)
                     .keyboardType(.numberPad)
+                TextField("处方金额（可选）", text: $totalPrice)
+                    .keyboardType(.decimalPad)
+                
+                Toggle("是否外院处方", isOn: $isExternal)
+                if isExternal {
+                    TextField("外方医院", text: $externalHospital)
+                    TextField("外方医生", text: $externalDoctor)
+                    TextField("外方备注", text: $externalRemark)
+                }
+                
                 TextField("处方备注", text: $remark)
             }
             
@@ -68,6 +84,11 @@ public struct PrescriptionEditView: View {
                 patientPhone = rx.patientPhone ?? ""
                 totalDose = rx.totalDose != nil ? "\(rx.totalDose!)" : ""
                 remark = rx.remark ?? ""
+                totalPrice = rx.totalPrice != nil ? String(format: "%.2f", rx.totalPrice!) : ""
+                isExternal = rx.isExternal ?? false
+                externalHospital = rx.externalHospital ?? ""
+                externalDoctor = rx.externalDoctor ?? ""
+                externalRemark = rx.externalRemark ?? ""
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -83,12 +104,22 @@ public struct PrescriptionEditView: View {
         let pName = patientName.trimmingCharacters(in: .whitespacesAndNewlines)
         let pPhone = patientPhone.trimmingCharacters(in: .whitespacesAndNewlines)
         let pRemark = remark.trimmingCharacters(in: .whitespacesAndNewlines)
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "customerName": pName,
             "phone": pPhone,
             "totalDose": dose,
-            "remark": pRemark
+            "remark": pRemark,
+            "isExternal": isExternal
         ]
+        
+        if let price = Double(totalPrice) {
+            payload["totalPrice"] = price
+        }
+        if isExternal {
+            payload["externalHospital"] = externalHospital.trimmingCharacters(in: .whitespacesAndNewlines)
+            payload["externalDoctor"] = externalDoctor.trimmingCharacters(in: .whitespacesAndNewlines)
+            payload["externalRemark"] = externalRemark.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         
         Task {
             do {

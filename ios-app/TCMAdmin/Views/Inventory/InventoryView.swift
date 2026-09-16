@@ -161,7 +161,19 @@ struct InventoryView: View {
                 Spacer()
             } else if let error = errorMessage, !error.isEmpty {
                 Spacer()
-                Text(error).foregroundColor(.danger).font(.system(size: (14) * ThemeManager.shared.fontScale)).padding()
+                VStack(spacing: 8) {
+                    Text(error)
+                        .foregroundColor(.danger)
+                        .font(.system(size: (14) * ThemeManager.shared.fontScale))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                    Button("点击重试") {
+                        Task { await loadInventory() }
+                    }
+                    .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
+                    .foregroundColor(.appPrimary)
+                }
+                .frame(maxWidth: .infinity)
                 Spacer()
             } else if items.isEmpty {
                 Spacer()

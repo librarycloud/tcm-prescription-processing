@@ -154,7 +154,7 @@ public struct WorkflowOperationView: View {
                 }
                 .padding(16)
             }
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
             .navigationTitle("工序详情")
             .navigationBarTitleDisplayMode(.inline)
             .task {

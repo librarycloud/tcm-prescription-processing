@@ -174,7 +174,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ApiClient.initBaseUrl(this)
         handleIntent(intent)
-        setContent { TcmAdminApp() }
+        setContent { 
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sharedPrefs = context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+            var hasAgreedPrivacy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(sharedPrefs.getBoolean("agreed_privacy", false)) }
+            
+            if (!hasAgreedPrivacy) {
+                PrivacyPolicyDialog(
+                    onAgree = {
+                        sharedPrefs.edit().putBoolean("agreed_privacy", true).apply()
+                        hasAgreedPrivacy = true
+                        // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
+                    },
+                    onDisagree = {
+                        finish()
+                    }
+                )
+            } else {
+                TcmAdminApp() 
+            }
+        }
     }
 
     override fun onTrimMemory(level: Int) {

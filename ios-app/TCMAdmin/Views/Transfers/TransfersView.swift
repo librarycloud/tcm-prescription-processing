@@ -264,7 +264,7 @@ public struct TransfersView: View {
                 await loadStats()
             }
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("门店调拨")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isCreateSheetShowing) {
@@ -275,7 +275,7 @@ public struct TransfersView: View {
                 }
             }
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .scrollDismissesKeyboard(.interactively)
         .task {
             stores = (try? await ApiClient.shared.fetchStores()) ?? []
@@ -487,7 +487,7 @@ public struct TransferFormView: View {
                 }
                 .padding(16)
             }
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
             .navigationTitle("新建调拨")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -582,7 +582,7 @@ public struct TransferDetailView: View {
     public var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if let error = errorMessage {
+                if let error = errorMessage, transfer != nil {
                     AppCard(padding: 12) {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -600,10 +600,28 @@ public struct TransferDetailView: View {
                     }
                 }
                 
-                if isLoading {
+                if isLoading && transfer == nil {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
+                } else if transfer == nil {
+                    VStack(spacing: 12) {
+                        Image(systemName: "arrow.triangle.swap")
+                            .font(.system(size: (36) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                        Text(errorMessage ?? "未能加载调拨详情")
+                            .font(.system(size: (14) * ThemeManager.shared.fontScale))
+                            .foregroundColor(.muted)
+                            .multilineTextAlignment(.center)
+                        Button("点击重试") {
+                            Task { await loadDetail() }
+                        }
+                        .font(.system(size: (14) * ThemeManager.shared.fontScale, weight: .bold))
+                        .foregroundColor(.appPrimary)
+                        .padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
                 } else if let item = transfer {
                     // 头部卡片
                     AppCard(padding: 16) {
@@ -837,8 +855,10 @@ public struct TransferDetailView: View {
                 }
             }
             .padding(16)
+            .frame(maxWidth: .infinity)
         }
-        .background(Color.pageBackground)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("调拨详情")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -885,7 +905,7 @@ public struct TransferDetailView: View {
                     Spacer()
                 }
                 .padding(16)
-                .background(Color.pageBackground)
+                .background(Color.pageBackground.edgesIgnoringSafeArea(.all))
                 .navigationTitle("申请归还")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
