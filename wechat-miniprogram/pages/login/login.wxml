@@ -1,0 +1,39 @@
+<view class="page login-page">
+  <t-toast id="t-toast" />
+  <view class="brand">
+    <view class="title">中药处方加工与取药管理系统</view>
+    <view class="subtitle">工作人员登录平台</view>
+  </view>
+
+  <view class="app-card">
+    <t-input label="账号" value="{{adminIdentifier}}" placeholder="请输入手机号或用户名" bind:change="onAdminPhoneChange" />
+    <t-input label="密码" value="{{adminPassword}}" placeholder="请输入密码" type="password" bind:change="onAdminPasswordChange" />
+    
+    <view class="login-action">
+      <t-button theme="primary" block loading="{{loading}}" bind:tap="submitAdmin">账号密码登录</t-button>
+    </view>
+  </view>
+
+  <view class="wechat-login-section">
+    <view class="wechat-divider">
+      <view class="line"></view>
+      <text class="text">快捷登录</text>
+      <view class="line"></view>
+    </view>
+    <t-button block loading="{{loadingWechat}}" bind:tap="submitWechat" t-class="btn-wechat" style="background: #07c160; color: #fff; border-color: #07c160;">
+      <t-icon name="logo-wechat" size="42rpx" style="margin-right: 10rpx; color: #fff;" />微信一键登录
+    </t-button>
+  </view>
+
+  <view class="agreement">
+    <view class="agreement-check">
+      <t-checkbox value="agree" checked="{{agreeProtocol}}" bind:change="onProtocolChange" />
+    </view>
+    <view class="agreement-text" bindtap="selectProtocol">
+      <text>我已阅读并同意</text>
+      <text class="link" catchtap="goService">《服务协议》</text>
+      <text>和</text>
+      <text class="link" catchtap="goPrivacy">《隐私政策》</text>
+    </view>
+  </view>
+</view>

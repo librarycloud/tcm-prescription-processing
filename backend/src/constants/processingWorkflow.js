@@ -1,0 +1,57 @@
+export const PROCESSING_STAGE = Object.freeze({
+  DISPENSING: 1,
+  DISPENSING_DONE: 2,
+  SOAKING: 3,
+  DECOCTING: 4,
+  PACKAGING: 5,
+  PACKAGING_DONE: 6,
+  COMPLETED: 7,
+});
+
+export const EQUIPMENT_TYPE = Object.freeze({
+  SOAK_BUCKET: "SOAK_BUCKET",
+  DECOCTION_POT: "DECOCTION_POT",
+  PACKAGING_MACHINE: "PACKAGING_MACHINE",
+});
+
+export const EQUIPMENT_TYPE_NAMES = Object.freeze({
+  [EQUIPMENT_TYPE.SOAK_BUCKET]: "浸泡桶",
+  [EQUIPMENT_TYPE.DECOCTION_POT]: "煎药机",
+  [EQUIPMENT_TYPE.PACKAGING_MACHINE]: "包装机",
+});
+
+export const EQUIPMENT_STATUS = Object.freeze({
+  DISABLED: 0,
+  ENABLED: 1,
+  MAINTENANCE: 2,
+});
+
+export const EQUIPMENT_USAGE_STATUS = Object.freeze({
+  ACTIVE: 1,
+  COMPLETED: 2,
+  VOIDED: 3,
+});
+
+export const EQUIPMENT_USAGE_SOURCE = Object.freeze({
+  SCAN: 1,
+  MANUAL: 2,
+  FAULT_TRANSFER: 3,
+});
+
+export const WORKFLOW_EXCEPTION_TYPE = Object.freeze({
+  WRONG_SCAN: 1,
+  DEVICE_FAULT: 2,
+  MANUAL_ENTRY: 3,
+});
+
+export const WORKFLOW_EXCEPTION_STATUS = Object.freeze({
+  OPEN: 1,
+  RESOLVED: 2,
+});
+
+export const PROCESSING_PHOTO_KIND = Object.freeze({
+  DISPENSING_COMPLETED: "DISPENSING_COMPLETED",
+});
+
+export const PROCESSING_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
+export const PROCESSING_PHOTO_MAX_COUNT = 3;

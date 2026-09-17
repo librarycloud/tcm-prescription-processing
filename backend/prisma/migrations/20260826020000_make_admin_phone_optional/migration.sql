@@ -1,0 +1,2 @@
+ALTER TABLE `admins`
+  MODIFY `phone` VARCHAR(20) NULL;

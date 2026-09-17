@@ -1,0 +1,191 @@
+page {
+  background: #f4f6f9; /* Softer gray background */
+  color: #1d2129; /* Slightly softer than pure black */
+  font-size: 28rpx;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial, Roboto, 'PingFang SC', 'miui', 'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;
+  line-height: 1.5;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 24rpx 24rpx calc(144rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+/* Typography Utilities */
+.text-h1 { font-size: 36rpx; font-weight: 600; color: #1d2129; line-height: 1.4; }
+.text-h2 { font-size: 32rpx; font-weight: 600; color: #1d2129; line-height: 1.4; }
+.text-body { font-size: 28rpx; color: #4e5969; line-height: 1.5; }
+.text-caption { font-size: 24rpx; color: #86909c; line-height: 1.5; }
+.font-bold { font-weight: 600 !important; }
+.font-medium { font-weight: 500 !important; }
+.text-primary { color: #0052d9 !important; }
+.text-success { color: #00a870 !important; }
+.text-warning { color: #ed7b2f !important; }
+.text-danger { color: #e34d59 !important; }
+
+.section {
+  margin-bottom: 24rpx;
+}
+
+.section-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 32rpx 0 24rpx;
+  padding-left: 20rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1d2129;
+  box-sizing: border-box;
+}
+
+.section-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8rpx;
+  height: 28rpx;
+  background: #0052d9;
+  border-radius: 4rpx;
+}
+
+/* Card Design */
+.app-card {
+  margin-bottom: 24rpx;
+  padding: 32rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  border: 1rpx solid #f2f3f5;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.02);
+  box-sizing: border-box;
+  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-card-clickable:active {
+  opacity: 0.85;
+  transform: scale(0.99);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.01);
+}
+
+.card-divider {
+  height: 1rpx;
+  background: #f2f3f5;
+  margin: 24rpx -32rpx; /* Extend to card edges if needed, or keep internal */
+}
+.card-divider-internal {
+  height: 1rpx;
+  background: #f2f3f5;
+  margin: 24rpx 0;
+}
+
+.toolbar {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.toolbar .grow {
+  flex: 1;
+}
+
+.compact-textarea {
+  height: 144rpx !important;
+  min-height: 144rpx !important;
+  max-height: 144rpx !important;
+  overflow-y: auto !important;
+}
+
+.muted {
+  color: #86909c;
+  font-size: 24rpx;
+}
+
+.code-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.code {
+  color: #0052d9;
+  font-size: 36rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.copy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 6rpx 16rpx;
+  background: #f2f7ff;
+  color: #0052d9;
+  border-radius: 32rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  border: 1rpx solid rgba(0, 82, 217, 0.15);
+  transition: all 0.2s ease;
+}
+
+.copy-badge:active {
+  background: #dbeafe;
+  transform: scale(0.96);
+}
+
+.copy-badge-sm {
+  display: inline-flex;
+  align-items: center;
+  padding: 2rpx 10rpx;
+  margin-left: 8rpx;
+  background: #f2f7ff;
+  color: #0052d9;
+  border-radius: 12rpx;
+  font-size: 20rpx;
+  border: 1rpx solid rgba(0, 82, 217, 0.15);
+}
+
+.copy-badge-sm:active {
+  background: #dbeafe;
+}
+
+.copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rpx 8rpx;
+  border-radius: 8rpx;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.copy-icon-btn:active {
+  opacity: 1;
+  background: #f2f7ff;
+}
+
+.status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.page-no-tabbar {
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom)) !important;
+}
+
+.safe-bottom-padding {
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+}
+

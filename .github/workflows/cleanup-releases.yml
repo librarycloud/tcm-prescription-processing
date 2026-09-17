@@ -1,0 +1,182 @@
+name: Cleanup Releases and Tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      action_mode:
+        description: '清理模式'
+        type: choice
+        required: true
+        options:
+          - 'by_pattern (按通配符/前缀批量删除，如 v1.2.* 或 v1.2.1*)'
+          - 'specific_tags (指定具体版本列表删除，逗号分隔)'
+          - 'keep_latest (保留最新的 N 个版本，其余全部删除)'
+          - 'all (删除所有 Release 和 Tag)'
+        default: 'by_pattern (按通配符/前缀批量删除，如 v1.2.* 或 v1.2.1*)'
+      pattern:
+        description: '【by_pattern 模式】匹配通配符（如 v1.2.* 或 v1.2.3* 或 1.0.*）'
+        required: false
+        type: string
+        default: 'v1.2.*'
+      tag_list:
+        description: '【specific_tags 模式】要删除的版本列表（逗号或空格隔开，如 v1.2.14, v1.2.15）'
+        required: false
+        type: string
+        default: ''
+      keep_latest_count:
+        description: '【keep_latest 模式】保留最新的 Release 数量（整数）'
+        required: false
+        type: string
+        default: '3'
+      dry_run:
+        description: '演练模式：仅打印将要删除的版本，不实际执行删除（防止误删）'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Cleanup Releases & Tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Execute Cleanup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTION_MODE: ${{ github.event.inputs.action_mode }}
+          PATTERN: ${{ github.event.inputs.pattern }}
+          TAG_LIST: ${{ github.event.inputs.tag_list }}
+          KEEP_COUNT: ${{ github.event.inputs.keep_latest_count }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "模式: $ACTION_MODE"
+          echo "演练模式 (Dry Run): $DRY_RUN"
+          echo "=========================================="
+
+          # 1. 获取所有的 GitHub Releases
+          RELEASES_JSON=$(gh release list -L 1000 --json tagName,name,createdAt,isDraft,isPrerelease)
+          ALL_RELEASE_TAGS=$(echo "$RELEASES_JSON" | jq -r '.[].tagName')
+
+          # 2. 获取所有 Git 远程 Tags
+          git fetch --tags
+          ALL_GIT_TAGS=$(git tag -l)
+
+          # 合并去重所有待考虑的 Tags
+          ALL_TAGS=$(printf "%s\n%s\n" "$ALL_RELEASE_TAGS" "$ALL_GIT_TAGS" | sed '/^$/d' | sort -u)
+
+          TO_DELETE=()
+
+          case "$ACTION_MODE" in
+            by_pattern*)
+              echo "匹配规则: $PATTERN"
+              for tag in $ALL_TAGS; do
+                # 使用 bash 通配符模式匹配
+                # shellcheck disable=SC2053
+                if [[ "$tag" == $PATTERN ]]; then
+                  TO_DELETE+=("$tag")
+                fi
+              done
+              ;;
+
+            specific_tags*)
+              echo "指定列表: $TAG_LIST"
+              # 替换逗号与换行为空格
+              CLEAN_LIST=$(echo "$TAG_LIST" | tr ',' ' ' | tr '\n' ' ')
+              for tag in $CLEAN_LIST; do
+                tag_trimmed=$(echo "$tag" | xargs)
+                if [ -n "$tag_trimmed" ]; then
+                  TO_DELETE+=("$tag_trimmed")
+                fi
+              done
+              ;;
+
+            keep_latest*)
+              echo "保留最新数量: $KEEP_COUNT"
+              # gh release list 默认按最新排序，通过 jq 截取第 KEEP_COUNT 个之后的 tag
+              OLD_TAGS=$(gh release list -L 1000 --json tagName --jq ".[$KEEP_COUNT:][].tagName")
+              for tag in $OLD_TAGS; do
+                if [ -n "$tag" ]; then
+                  TO_DELETE+=("$tag")
+                fi
+              done
+              ;;
+
+            all*)
+              echo "清空所有 Release 和 Tag"
+              for tag in $ALL_TAGS; do
+                TO_DELETE+=("$tag")
+              done
+              ;;
+
+            *)
+              echo "未知模式: $ACTION_MODE"
+              exit 1
+              ;;
+          esac
+
+          # 去重
+          UNIQUE_DELETE=()
+          if [ ${#TO_DELETE[@]} -gt 0 ]; then
+            while IFS= read -r line; do
+              [ -n "$line" ] && UNIQUE_DELETE+=("$line")
+            done < <(printf "%s\n" "${TO_DELETE[@]}" | sort -u)
+          fi
+
+          TOTAL_COUNT=${#UNIQUE_DELETE[@]}
+          echo "------------------------------------------"
+          echo "匹配到待清理的版本总数: $TOTAL_COUNT"
+          echo "------------------------------------------"
+
+          if [ "$TOTAL_COUNT" -eq 0 ]; then
+            echo "没有匹配到任何需要删除的 Release 或 Tag。"
+            echo "### 提示: 没有匹配到任何需要清理的版本" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # 生成 Step Summary 表格
+          {
+            echo "### 清理任务执行报告"
+            echo "- **模式**: \`$ACTION_MODE\`"
+            echo "- **演练模式**: \`$DRY_RUN\`"
+            echo "- **匹配数量**: $TOTAL_COUNT"
+            echo ""
+            echo "| 序号 | Tag / Release | 执行状态 |"
+            echo "| :--- | :--- | :--- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          INDEX=1
+          for tag in "${UNIQUE_DELETE[@]}"; do
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[$INDEX/$TOTAL_COUNT] [DRY RUN 演练] 将删除 Release & Tag: $tag"
+              echo "| $INDEX | \`$tag\` | 🟡 仅演练预览（未删除） |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "[$INDEX/$TOTAL_COUNT] 正在删除 Release & Tag: $tag ..."
+              
+              # 1. 尝试通过 gh release delete 删除 GitHub Release（同时清理 tag）
+              gh release delete "$tag" --cleanup-tag -y 2>/dev/null || true
+              
+              # 2. 补漏：防止孤立 Git Tag 未被删净
+              git push origin --delete "$tag" 2>/dev/null || true
+              
+              echo "| $INDEX | \`$tag\` | ✅ 已删除 |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            INDEX=$((INDEX + 1))
+          done
+
+          echo "=========================================="
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "演练完成！以上 $TOTAL_COUNT 个版本未做实际删除。如确认无误，请关闭 Dry Run 重新运行。"
+          else
+            echo "清理完成！成功删除 $TOTAL_COUNT 个 Release 与 Tag。"
+          fi
+          echo "=========================================="

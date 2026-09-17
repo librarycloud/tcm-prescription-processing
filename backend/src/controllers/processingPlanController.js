@@ -1,0 +1,368 @@
+import { getFileDownloadUrl } from "../services/uploadConfigService.js";
+import { ok } from "../utils/response.js";
+import {
+  createProcessingPlan,
+  createProcessingPlanBatch,
+  delayProcessingPlan,
+  deleteProcessingPlan,
+  getProcessingCalendar,
+  generateProcessingPlanPackage,
+  linkPackage,
+  listProcessingPlans,
+  receiveProcessingNotice,
+  reorderPrescriptionPlans,
+  reorderProcessingQueue,
+  restoreProcessingQueue,
+  transitionProcessingPlan,
+  updateProcessingPlan,
+} from "../services/processingPlanService.js";
+import { AppError } from "../utils/appError.js";
+import {
+  completeDispensing,
+  createManualEquipmentUsage,
+  deleteProcessingPhoto,
+  findProcessingPlanByScan,
+  finishEquipmentUsage,
+  getProcessingPhoto,
+  getProcessingWorkflow,
+  startEquipmentUsage,
+  startPackagingUsage,
+  transferFaultyEquipment,
+  voidEquipmentUsage,
+} from "../services/processingWorkflowService.js";
+
+export async function listController(request, reply) {
+  return ok(
+    reply,
+    await listProcessingPlans(
+      request.server.prisma,
+      request.user,
+      request.query || {},
+    ),
+  );
+}
+export async function createController(request, reply) {
+  return ok(
+    reply,
+    await createProcessingPlan(
+      request.server.prisma,
+      request.user,
+      request.body || {},
+    ),
+    "创建成功",
+  );
+}
+export async function createBatchController(request, reply) {
+  return ok(
+    reply,
+    await createProcessingPlanBatch(
+      request.server.prisma,
+      request.user,
+      request.body || {},
+    ),
+    "创建成功",
+  );
+}
+export async function updateController(request, reply) {
+  return ok(
+    reply,
+    await updateProcessingPlan(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "更新成功",
+  );
+}
+export async function transitionController(request, reply) {
+  return ok(
+    reply,
+    await transitionProcessingPlan(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "状态更新成功",
+  );
+}
+export async function generatePackageController(request, reply) {
+  return ok(
+    reply,
+    await generateProcessingPlanPackage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "包裹生成成功",
+  );
+}
+export async function deleteController(request, reply) {
+  return ok(
+    reply,
+    await deleteProcessingPlan(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+    ),
+    "删除成功",
+  );
+}
+export async function linkPackageController(request, reply) {
+  return ok(
+    reply,
+    await linkPackage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body?.packageId,
+    ),
+    "关联成功",
+  );
+}
+export async function delayController(request, reply) {
+  return ok(
+    reply,
+    await delayProcessingPlan(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "延期成功",
+  );
+}
+export async function receiveNoticeController(request, reply) {
+  return ok(
+    reply,
+    await receiveProcessingNotice(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "已安排加工日期",
+  );
+}
+export async function reorderQueueController(request, reply) {
+  return ok(
+    reply,
+    await reorderProcessingQueue(
+      request.server.prisma,
+      request.user,
+      request.body || {},
+    ),
+    "顺序已更新",
+  );
+}
+export async function reorderPrescriptionPlansController(request, reply) {
+  return ok(
+    reply,
+    await reorderPrescriptionPlans(
+      request.server.prisma,
+      request.user,
+      request.params.prescriptionId,
+      request.body || {},
+    ),
+    "批次顺序已更新",
+  );
+}
+export async function restoreQueueController(request, reply) {
+  return ok(
+    reply,
+    await restoreProcessingQueue(
+      request.server.prisma,
+      request.user,
+      request.body || {},
+    ),
+    "已恢复默认排序",
+  );
+}
+export async function calendarController(request, reply) {
+  return ok(
+    reply,
+    await getProcessingCalendar(
+      request.server.prisma,
+      request.user,
+      request.query || {},
+    ),
+  );
+}
+
+export async function workflowController(request, reply) {
+  return ok(
+    reply,
+    await getProcessingWorkflow(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+    ),
+  );
+}
+
+export async function scanController(request, reply) {
+  return ok(
+    reply,
+    await findProcessingPlanByScan(
+      request.server.prisma,
+      request.user,
+      request.query?.code,
+    ),
+  );
+}
+
+export async function completeDispensingController(request, reply) {
+  let fileData = {};
+  
+  if (request.isMultipart()) {
+    const file = await request.file();
+    if (!file) throw new AppError("请选择调配完成照片", 400);
+    let buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (error) {
+      if (error?.code === "FST_REQ_FILE_TOO_LARGE")
+        throw new AppError("照片不能超过 5MB", 400);
+      throw error;
+    }
+    fileData = {
+      buffer,
+      filename: file.filename,
+      mimetype: file.mimetype,
+    };
+  } else {
+    const body = request.body || {};
+    if (!body.storagePath) throw new AppError("请提供调配完成照片路径", 400);
+    fileData = {
+      storagePath: body.storagePath,
+      filename: body.filename || 'dispensing.jpg',
+      mimetype: body.mimetype || body.mimeType || 'image/jpeg',
+      size: body.size || 0,
+    };
+  }
+
+  return ok(
+    reply,
+    await completeDispensing(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      fileData
+    ),
+    "调配已完成",
+  );
+}
+
+export async function photoController(request, reply) {
+  const photo = await getProcessingPhoto(
+    request.server.prisma,
+    request.user,
+    request.params.id,
+    request.params.photoId,
+  );
+  if (photo.storagePath && !photo.data) {
+    const url = await getFileDownloadUrl(request.server.prisma, photo.storagePath);
+    if (url) {
+      return reply.redirect(url);
+    } else {
+      return reply.status(404).send({ message: "照片文件不在本地，且未正确配置云存储" });
+    }
+  }
+  return reply
+    .header("Content-Type", photo.mimeType)
+    .header("Content-Length", photo.fileSize)
+    .header("Cache-Control", "private, no-store")
+    .send(photo.data);
+}
+export async function deletePhotoController(request, reply) {
+  await deleteProcessingPhoto(
+    request.server.prisma,
+    request.user,
+    request.params.id,
+    request.params.photoId,
+  );
+  return ok(reply, {}, "照片已删除");
+}
+
+export async function startEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await startEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "设备工序已记录",
+  );
+}
+
+export async function finishEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await finishEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+    ),
+    "已完成打包",
+  );
+}
+
+export async function startPackagingUsageController(request, reply) {
+  return ok(
+    reply,
+    await startPackagingUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+      request.body || {},
+    ),
+    "已开始打包",
+  );
+}
+
+export async function voidEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await voidEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+      request.body || {},
+    ),
+    "误扫记录已撤销",
+  );
+}
+
+export async function transferFaultyEquipmentController(request, reply) {
+  return ok(
+    reply,
+    await transferFaultyEquipment(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.params.usageId,
+      request.body || {},
+    ),
+    "故障设备已更换",
+  );
+}
+
+export async function createManualEquipmentUsageController(request, reply) {
+  return ok(
+    reply,
+    await createManualEquipmentUsage(
+      request.server.prisma,
+      request.user,
+      request.params.id,
+      request.body || {},
+    ),
+    "工序补录成功",
+  );
+}

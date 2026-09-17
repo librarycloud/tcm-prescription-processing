@@ -1,0 +1,23 @@
+.inventory-page { padding-bottom: 180rpx; }
+.page-heading { margin-bottom: 20rpx; }
+.page-title { font-size: 36rpx; font-weight: 700; }
+.search-panel { position: relative; margin-bottom: 18rpx; }
+.filter-picker { margin-bottom: 14rpx; padding: 18rpx 24rpx; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; color: #1f2329; }
+.search-row { display: flex; align-items: center; gap: 12rpx; overflow: hidden; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; --td-input-bg-color: transparent; --td-input-vertical-padding: 16rpx 24rpx; --td-input-suffix-text-color: #0052d9; }
+.search-scan-icon { flex: 0 0 auto; padding: 8rpx; }
+.search-input { min-width: 0; flex: 1; }
+.section-title { margin: 28rpx 0 14rpx; color: #4e5969; font-size: 28rpx; font-weight: 600; }
+.product-option { margin-bottom: 14rpx; }
+.product-title-row { display: flex; align-items: center; gap: 20rpx; min-width: 0; }
+.product-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
+.product-price { flex: 0 0 auto; min-width: 132rpx; color: #0052d9; font-size: 28rpx; font-weight: 600; text-align: right; }
+.product-option .muted, .product-detail .muted { margin-top: 10rpx; line-height: 1.5; }
+.inventory-total { margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid #eef0f5; color: #4e5969; }
+.inventory-total text { color: #0052d9; font-size: 34rpx; font-weight: 700; }
+.inventory-card { margin-bottom: 14rpx; }
+.inventory-row { display: flex; justify-content: space-between; gap: 24rpx; margin-bottom: 12rpx; color: #4e5969; }
+.inventory-row text:last-child { min-width: 0; color: #1f2329; text-align: right; word-break: break-all; }
+.inventory-row.location-row { font-size: 32rpx; font-weight: 700; color: #1f2329; }
+.inventory-row.location-row text:last-child { color: #1f2329; }
+.inventory-row.strong { font-size: 30rpx; font-weight: 600; }
+.inventory-dates { padding-top: 14rpx; border-top: 1rpx solid #eef0f5; line-height: 1.6; }

@@ -1,0 +1,13 @@
+{
+  "navigationBarTitleText": "E6药店商品库存",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "store-picker": "../../../components/store-picker/store-picker",
+    "t-icon": "tdesign-miniprogram/icon/icon",
+    "t-input": "tdesign-miniprogram/input/input",
+    "t-empty": "tdesign-miniprogram/empty/empty",
+    "t-loading": "tdesign-miniprogram/loading/loading",
+    "t-tab-bar": "tdesign-miniprogram/tab-bar/tab-bar",
+    "t-tab-bar-item": "tdesign-miniprogram/tab-bar-item/tab-bar-item"
+  }
+}

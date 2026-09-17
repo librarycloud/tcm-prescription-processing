@@ -1,0 +1,54 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/agreement/service/service",
+    "pages/agreement/privacy/privacy"
+  ],
+  "window": {
+    "navigationBarTitleText": "中药处方加工与取药管理系统",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f7fa"
+  },
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "subpackages": [
+    {
+      "root": "pages/admin",
+      "name": "admin",
+      "pages": [
+        "dashboard/dashboard",
+        "prescriptions/prescriptions",
+        "prescription-form/prescription-form",
+        "prescription-detail/prescription-detail",
+        "processing-workbench/processing-workbench",
+        "processing-operation/processing-operation",
+        "processing-plan-form/processing-plan-form",
+        "processing-plan-batch/processing-plan-batch",
+        "packages/packages",
+        "package-form/package-form",
+        "package-edit/package-edit",
+        "package-detail/package-detail",
+        "verify/verify",
+        "store-transfers/store-transfers",
+        "herb-locations/herb-locations",
+        "product-differences/product-differences",
+        "e6-inventory/e6-inventory",
+        "e6-inventory-detail/e6-inventory-detail",
+        "business/business",
+        "yd-goods-checks/yd-goods-checks",
+        "profile/profile"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/login/login": {
+      "network": "all",
+      "packages": [
+        "admin"
+      ]
+    }
+  }
+}

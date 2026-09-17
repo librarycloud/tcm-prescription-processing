@@ -1,0 +1,118 @@
+<view class="page profile-page page-no-tabbar">
+  <view class="app-card profile-card">
+    <view class="avatar">{{avatarText}}</view>
+    <view class="profile-main">
+      <view class="profile-name-row">
+        <text class="profile-name">{{user.nickname || user.phone || '未设置昵称'}}</text>
+        <t-tag size="small" theme="{{user.role === 0 ? 'primary' : (user.role === 2 ? 'warning' : (user.role === 3 ? 'success' : 'default'))}}" variant="light">
+          {{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}
+        </t-tag>
+      </view>
+      <view class="profile-sub muted" wx:if="{{user.store && user.store.name}}">
+        <t-icon name="shop" size="28rpx" color="#86909c" />
+        <text>{{user.store.name}}</text>
+      </view>
+      <view class="profile-sub muted" wx:elif="{{user.phone}}">
+        <text>{{user.phone}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="app-card profile-info" wx:if="{{!editing}}">
+    <view class="info-row">
+      <view class="info-label">手机号</view>
+      <view class="info-value selectable" user-select="true">{{user.phone || '-'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">用户名</view>
+      <view class="info-value selectable" user-select="true">{{user.username || '未设置'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">昵称</view>
+      <view class="info-value selectable" user-select="true">{{user.nickname || '未设置'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">账号角色</view>
+      <view class="info-value">{{user.role === 0 ? '全局管理员' : (user.role === 2 ? '门店管理员' : (user.role === 3 ? '门店员工' : '用户'))}}</view>
+    </view>
+    <view class="info-row" wx:if="{{user.role === 2 || user.role === 3}}">
+      <view class="info-label">所属门店</view>
+      <view class="info-value">{{user.store.name || '-'}}</view>
+    </view>
+    <view class="info-row">
+      <view class="info-label">微信绑定</view>
+      <view class="info-value wechat-value" hover-class="wechat-value-active" bind:tap="openWechatBinding">
+        <view class="wechat-pill {{user.openidBound ? 'pill-bound' : 'pill-unbound'}}">
+          <t-icon name="{{user.openidBound ? 'check-circle-filled' : 'info-circle-filled'}}" size="28rpx" />
+          <text>{{user.openidBound ? '已绑定' : '未绑定'}}</text>
+        </view>
+        <view class="wechat-action-btn">
+          <text>{{wechatBindingLoading ? '处理中...' : (user.openidBound ? '修改绑定' : '去绑定')}}</text>
+          <t-icon name="chevron-right" size="26rpx" />
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{wechatBindingVisible}}" class="wechat-binding-panel">
+      <view class="wechat-binding-title">修改微信绑定</view>
+      <view class="muted">输入当前账号密码，确认后绑定到当前微信。</view>
+      <view class="form-control-wrap wechat-password-wrap">
+        <input class="form-control password-control" value="{{wechatPassword}}" password="{{!wechatPasswordVisible}}" placeholder="请输入当前密码" bindinput="onWechatPasswordChange" />
+        <view class="password-eye" bindtap="toggleWechatPasswordVisible">
+          <t-icon name="{{wechatPasswordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+      <view class="wechat-binding-actions">
+        <t-button size="small" bind:tap="closeWechatBinding">取消</t-button>
+        <t-button size="small" theme="primary" loading="{{wechatBindingLoading}}" bind:tap="submitWechatBinding">确认修改</t-button>
+      </view>
+    </view>
+    <view class="submit">
+      <t-button theme="primary" block bind:tap="startEdit">修改资料</t-button>
+    </view>
+  </view>
+
+  <view class="app-card" wx:else>
+    <view class="form-row">
+      <view class="form-label">手机号</view>
+      <input class="form-control" value="{{form.phone}}" type="number" placeholder="请输入手机号" data-field="phone" bindinput="onChange" />
+    </view>
+    <view class="form-row">
+      <view class="form-label">用户名</view>
+      <input class="form-control" value="{{form.username}}" maxlength="64" placeholder="可选，英文和数字，不能是纯数字" data-field="username" bindinput="onChange" />
+    </view>
+    <view class="form-row">
+      <view class="form-label">昵称</view>
+      <input class="form-control" value="{{form.nickname}}" placeholder="请输入昵称" data-field="nickname" bindinput="onChange" />
+    </view>
+    <view class="form-row">
+      <view class="form-label">新密码</view>
+      <view class="form-control-wrap">
+        <input class="form-control password-control" value="{{form.password}}" password="{{!passwordVisible}}" placeholder="不修改请留空" data-field="password" bindinput="onChange" />
+        <view class="password-eye" aria-label="显示或隐藏密码" bindtap="togglePasswordVisible">
+          <t-icon name="{{passwordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+    </view>
+    <view class="form-row">
+      <view class="form-label">确认密码</view>
+      <view class="form-control-wrap">
+        <input class="form-control password-control" value="{{form.confirmPassword}}" password="{{!passwordVisible}}" placeholder="再次输入新密码" data-field="confirmPassword" bindinput="onChange" />
+        <view class="password-eye" aria-label="显示或隐藏密码" bindtap="togglePasswordVisible">
+          <t-icon name="{{passwordVisible ? 'browse-off' : 'browse'}}" size="34rpx" />
+        </view>
+      </view>
+    </view>
+    <view class="edit-actions">
+      <t-button bind:tap="cancelEdit">取消</t-button>
+      <t-button theme="primary" loading="{{saving}}" bind:tap="submit">保存修改</t-button>
+    </view>
+  </view>
+
+  <view class="about">
+    <t-button variant="outline" block bind:tap="showAbout">关于</t-button>
+  </view>
+
+  <view class="logout">
+    <t-button variant="outline" block bind:tap="logout">退出登录</t-button>
+  </view>
+</view>

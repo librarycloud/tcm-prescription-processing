@@ -1,0 +1,53 @@
+# Dependencies
+**/node_modules/
+
+# Build output and local tooling
+**/dist/
+**/.vite/
+**/coverage/
+*.tsbuildinfo
+*.pdf
+*.zip
+
+# Local environment configuration
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Runtime data and logs
+**/logs/
+**/uploads/
+*.log
+*_log.txt
+*.pid
+
+# E6Sync .NET build artifacts
+E6Sync/bin/
+E6Sync/obj/
+E6Sync-Windows11/bin/
+E6Sync-Windows11/obj/
+
+# Downloaded IP geolocation database
+# backend/data/*.ipdb
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# WeChat Developer Tools local settings
+wechat-miniprogram/project.private.config.json
+android-app/release.keystore
+android-app/app/build/
+android-app/.gradle/
+/*.py
+/*.swift
+/ios-app/.build/
+
+# Xcode local files
+*.xcuserstate
+project.xcworkspace/xcuserdata/
+*.xcuserdatad/
+xcuserdata/
+DerivedData/

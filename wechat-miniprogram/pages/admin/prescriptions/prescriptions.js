@@ -1,0 +1,176 @@
+import {
+  deletePrescription,
+  getPrescriptions,
+  getStores
+} from '../../../api/admin';
+import { formatDate, maskPhone } from '../../../utils/format';
+import { getUser } from '../../../utils/auth';
+import { clearResponseCache } from '../../../utils/request';
+
+const STATUS_META = {
+  0: { text: '进行中', theme: 'primary' },
+  1: { text: '已完成', theme: 'success' },
+  2: { text: '已取消', theme: 'default' }
+};
+
+function decoratePrescription(item, isStoreStaff) {
+  const status = STATUS_META[Number(item.status)] || STATUS_META[0];
+  return {
+    ...item,
+    phoneMasked: maskPhone(item.phone),
+    statusText: status.text,
+    statusTheme: status.theme,
+    createdAtText: formatDate(item.createdAt),
+    storeName: item.store ? item.store.name : '',
+    doctorName: item.doctor ? item.doctor.name : '-',
+    sourceName: item.source ? item.source.name : '-',
+    plansCount: item.plans ? item.plans.length : 0,
+    canEdit: !isStoreStaff && Number(item.status) !== 1,
+    canDelete: !isStoreStaff && !(item.plans && item.plans.length)
+  };
+}
+
+Page({
+  data: {
+    loading: false,
+    keyword: '',
+    status: '',
+    isSuperAdmin: false,
+    isStoreStaff: false,
+    stores: [],
+    storeIndex: 0,
+    storeId: '',
+    storeName: '全部门店',
+    page: 1,
+    pageSize: 15,
+    pages: 1,
+    loading: false,
+    loadingMore: false,
+    list: []
+  },
+
+  async onShow() {
+    const user = getUser();
+    const isSuperAdmin = Number(user.role) === 0;
+    const isStoreStaff = Number(user.role) === 3;
+    this.setData({ isSuperAdmin, isStoreStaff });
+    if (isSuperAdmin && !this.data.stores.length) {
+      const data = await getStores({ page: 1, pageSize: 100 });
+      this.setData({
+        stores: [{ id: '', name: '全部门店' }, ...(data.list || [])]
+      });
+    }
+    await this.load();
+  },
+
+  async onPullDownRefresh() {
+    clearResponseCache();
+    this.setData({ page: 1 });
+    try {
+      await this.load(1);
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
+
+  async load(page = 1) {
+    this.setData({ loading: true, page });
+    try {
+      const data = await getPrescriptions({
+        keyword: this.data.keyword,
+        status: this.data.status,
+        storeId: this.data.storeId,
+        page,
+        pageSize: this.data.pageSize
+      });
+      this.setData({
+        list: (data.list || []).map((item) => decoratePrescription(item, this.data.isStoreStaff)),
+        pages: data.pagination?.pages || 1
+      });
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  onKeywordChange(e) {
+    this.setData({ keyword: e.detail.value });
+  },
+
+  search() {
+    this.setData({ page: 1 });
+    this.load();
+  },
+
+  setStatus(e) {
+    const value = e.currentTarget.dataset.status;
+    this.setData({ status: value === '' ? '' : Number(value), page: 1 });
+    this.load();
+  },
+
+  onStoreChange(e) {
+    const storeIndex = Number(e.detail.value);
+    const store = this.data.stores[storeIndex];
+    this.setData({
+      storeIndex,
+      storeId: store.id,
+      storeName: store.name,
+      page: 1
+    });
+    this.load();
+  },
+
+  async onReachBottom() {
+    if (this.data.loading || this.data.loadingMore || this.data.page >= this.data.pages) return;
+    this.setData({ loadingMore: true });
+    try {
+      const nextPage = this.data.page + 1;
+      const data = await getPrescriptions({
+        keyword: this.data.keyword,
+        status: this.data.status,
+        storeId: this.data.storeId,
+        page: nextPage,
+        pageSize: this.data.pageSize
+      });
+      const newItems = (data.list || []).map((item) => decoratePrescription(item, this.data.isStoreStaff));
+      const start = this.data.list.length;
+      const patch = { page: nextPage, pages: data.pagination?.pages || 1 };
+      newItems.forEach((item, i) => { patch[`list[${start + i}]`] = item; });
+      this.setData(patch);
+    } finally {
+      this.setData({ loadingMore: false });
+    }
+  },
+
+  goDetail(e) {
+    wx.navigateTo({
+      url: `/pages/admin/prescription-detail/prescription-detail?id=${e.currentTarget.dataset.id}`
+    });
+  },
+
+  goCreate() {
+    wx.navigateTo({ url: '/pages/admin/prescription-form/prescription-form' });
+  },
+
+  goEdit(e) {
+    wx.navigateTo({
+      url: `/pages/admin/prescription-form/prescription-form?id=${e.currentTarget.dataset.id}`
+    });
+  },
+
+  remove(e) {
+    const id = e.currentTarget.dataset.id;
+    const no = e.currentTarget.dataset.no;
+    wx.showModal({
+      title: '删除处方',
+      content: `确认删除处方 ${no}？`,
+      confirmColor: '#d54941',
+      success: async (result) => {
+        if (!result.confirm) return;
+        await deletePrescription(id);
+        wx.showToast({ title: '已删除', icon: 'success' });
+        this.setData({ page: 1 });
+        await this.load();
+      }
+    });
+  }
+});

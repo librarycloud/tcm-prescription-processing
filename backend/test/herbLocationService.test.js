@@ -1,0 +1,672 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import ExcelJS from "exceljs";
+import {
+  assignHerbLocation,
+  exportHerbLocations,
+  getHerbLocationLayout,
+  importHerbLocationMoves,
+  importHerbLocations,
+  parseLocationCode,
+  removeHerbLocationAssignment,
+  updateHerbLocationAssignment,
+} from "../src/services/herbLocationService.js";
+
+async function workbookBuffer(headers, rows) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("导入");
+  sheet.addRow(headers);
+  rows.forEach((row) => sheet.addRow(row));
+  return workbook.xlsx.writeBuffer();
+}
+
+test("parses the agreed D/G/F/C location code formats", () => {
+  const sixColumnLayout = {
+    drawerLayerCount: 8,
+    drawerColumnCount: 6,
+    drawerLayerColumns: [6, 6, 6, 6, 6, 6, 6, 6],
+    bigCabinetUnitCount: 5,
+  };
+  assert.deepEqual(parseLocationCode("d-1-8-6", sixColumnLayout), {
+    locationCode: "D-1-8-6",
+    locationType: "D",
+    unitNo: 1,
+    layerNo: 8,
+    columnNo: 6,
+    slotNo: null,
+    medicineCapacity: 3,
+  });
+  assert.equal(parseLocationCode("G-5-3").locationCode, "G-5-3");
+  assert.equal(parseLocationCode("D365").locationCode, "D-3-6-5");
+  assert.deepEqual(
+    parseLocationCode("D1222", {
+      drawerLayerCount: 8,
+      drawerColumnCount: 6,
+      drawerLayerColumns: [6, 6, 6, 6, 6, 6, 6, 3],
+      bigCabinetUnitCount: 5,
+    }),
+    {
+      locationCode: "D-1-2-2",
+      locationType: "D",
+      unitNo: 1,
+      layerNo: 2,
+      columnNo: 2,
+      slotNo: 2,
+      medicineCapacity: 3,
+    },
+  );
+  assert.equal(parseLocationCode("G53").locationCode, "G-5-3");
+  assert.equal(parseLocationCode("F-2-4").locationType, "F");
+  assert.equal(parseLocationCode("C-3-7").locationType, "C");
+});
+
+test("rejects locations outside the known drug-drawer layout", () => {
+  assert.throws(() => parseLocationCode("D-6-1-1"), { statusCode: 400 });
+  assert.throws(() => parseLocationCode("D-1-9-1"), { statusCode: 400 });
+  assert.throws(() => parseLocationCode("F-1-1-1"), { statusCode: 400 });
+});
+
+test("does not apply cabinet layout limits to G locations", () => {
+  const layout = { bigCabinetUnitCount: 5, bigCabinetLayerCount: 2 };
+  assert.equal(parseLocationCode("G-1-2", layout).locationCode, "G-1-2");
+  assert.equal(parseLocationCode("G-9-127", layout).locationCode, "G-9-127");
+  assert.equal(parseLocationCode("G9127", layout).locationCode, "G-9-127");
+});
+
+test("does not apply cabinet layout layer limits to refrigerators", () => {
+  const layout = { bigCabinetUnitCount: 1, bigCabinetLayerCount: 1 };
+  assert.equal(parseLocationCode("F-1-127", layout).locationCode, "F-1-127");
+  assert.equal(parseLocationCode("F1127", layout).locationCode, "F-1-127");
+  assert.throws(() => parseLocationCode("F-1-0", layout), { statusCode: 400 });
+});
+
+test("uses the current store drawer layout when validating a D location", () => {
+  const layout = {
+    drawerLayerCount: 9,
+    drawerColumnCount: 7,
+    drawerLayerColumns: [7, 7, 7, 7, 7, 7, 7, 7, 7],
+    bigCabinetUnitCount: 5,
+  };
+  assert.equal(parseLocationCode("D197", layout).locationCode, "D-1-9-7");
+  assert.throws(() => parseLocationCode("D198", layout), { statusCode: 400 });
+});
+
+test("supports a top row and cabinet-specific column counts", () => {
+  const drawerLayerColumns = Array.from({ length: 5 }, () => [
+    6, 6, 6, 6, 6, 6, 6, 6, 3,
+  ]);
+  drawerLayerColumns[2][8] = 6;
+  const layout = {
+    drawerLayerCount: 8,
+    drawerLayerColumns,
+    drawerTopColumnCount: 6,
+    bigCabinetUnitCount: 5,
+  };
+
+  assert.equal(parseLocationCode("D102", layout).locationCode, "D-1-0-2");
+  assert.equal(parseLocationCode("D386", layout).locationCode, "D-3-8-6");
+  assert.throws(() => parseLocationCode("D186", layout), { statusCode: 400 });
+});
+
+test("uses the configured drawer cabinet count", () => {
+  const drawerLayerColumns = Array.from({ length: 6 }, () => [
+    6, 6, 6, 6, 6, 6, 6, 6, 3,
+  ]);
+  const layout = {
+    drawerUnitCount: 6,
+    drawerLayerCount: 8,
+    drawerLayerColumns,
+    bigCabinetUnitCount: 5,
+  };
+
+  assert.equal(parseLocationCode("D611", layout).locationCode, "D-6-1-1");
+});
+
+test("exports D/G/F/C locations into separate worksheets in one workbook", async () => {
+  const locations = [
+    ["D", "D-2-3-4", "斗药"],
+    ["G", "G-1-2", "柜药"],
+    ["F", "F-2-3", "冰箱药"],
+    ["C", "C-3-4", "仓库药"],
+  ].map(([locationType, locationCode, name], index) => ({
+    id: index + 1,
+    locationType,
+    locationCode,
+    unitNo: index + 1,
+    layerNo: index + 1,
+    columnNo: locationType === "D" ? 4 : null,
+    assignments: [
+      {
+        id: index + 10,
+        slotNo: locationType === "D" ? 1 : null,
+        herb: { code: `${locationType}01`, name, specification: "统货" },
+      },
+    ],
+  }));
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => ({
+        drawerUnitCount: 5,
+        drawerLayerCount: 8,
+        drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+        drawerTopColumnCount: 6,
+        bigCabinetUnitCount: 5,
+        bigCabinetLayerCount: 3,
+      }),
+    },
+    herbLocation: {
+      createMany: async () => ({ count: 0 }),
+      findMany: async () => locations,
+    },
+  };
+
+  const result = await exportHerbLocations(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    {},
+  );
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(result.buffer);
+
+  assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), [
+    "斗",
+    "柜",
+    "冰箱",
+    "仓库",
+  ]);
+  assert.deepEqual(
+    workbook.worksheets.map((sheet) => sheet.getRow(2).values.slice(1)),
+    [
+      ["D234", "D01", "斗药", "统货"],
+      ["G12", "G01", "柜药", "统货"],
+      ["F23", "F01", "冰箱药", "统货"],
+      ["C34", "C01", "仓库药", "统货"],
+    ],
+  );
+});
+
+test("store administrators only read the layout of their assigned store", async () => {
+  const store = {
+    id: 7,
+    name: "测试门店",
+    code: "STORE7",
+    address: null,
+    phone: null,
+    status: 1,
+    deletedAt: null,
+    drawerUnitCount: 5,
+    drawerLayerCount: 8,
+    drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+    drawerTopColumnCount: 6,
+    bigCabinetUnitCount: 5,
+  };
+  const prisma = {
+    store: {
+      findUnique: async ({ where }) => {
+        assert.equal(where.id, 7);
+        return store;
+      },
+      findFirst: async ({ where }) => {
+        assert.equal(where.id, 7);
+        return store;
+      },
+    },
+  };
+
+  const result = await getHerbLocationLayout(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    { storeId: 999 },
+  );
+
+  assert.equal(result.store.id, 7);
+  assert.equal(result.layout.drawerLayerColumns.length, 5);
+});
+
+test("assigning an herb to a refrigerator ignores an empty drawer slot number", async () => {
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "F-2-3",
+    locationType: "F",
+    unitNo: 2,
+    layerNo: 3,
+    columnNo: null,
+  };
+  let assignmentData;
+  const transaction = {
+    herbLocation: {
+      findUnique: async () => location,
+      create: async () => location,
+    },
+    herb: {
+      findFirst: async () => ({ id: 40, storeId: 7, name: "冰箱药", status: 1 }),
+    },
+    herbLocationAssignment: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      create: async ({ data }) => {
+        assignmentData = data;
+        return { id: 30, ...data };
+      },
+    },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => ({
+        drawerUnitCount: 5,
+        drawerLayerCount: 8,
+        drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+        drawerTopColumnCount: 6,
+        bigCabinetUnitCount: 5,
+        bigCabinetLayerCount: 3,
+      }),
+    },
+    herbLocation: { createMany: async () => ({ count: 0 }) },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  await assignHerbLocation(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    { locationCode: "F-2-3", slotNo: "", herbId: 40 },
+  );
+
+  assert.deepEqual(assignmentData, {
+    locationId: 20,
+    herbId: 40,
+    slotNo: null,
+    createdBy: 10,
+  });
+});
+
+test("updates the final D-code digit used for ordering herbs in a drawer", async () => {
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "D-1-2-2",
+    locationType: "D",
+    unitNo: 1,
+    layerNo: 2,
+    columnNo: 2,
+    medicineCapacity: 3,
+  };
+  let updateData;
+  const assignment = {
+    id: 30,
+    herbId: 40,
+    locationId: 20,
+    slotNo: 2,
+    location,
+    herb: { id: 40, name: "花椒" },
+  };
+  const transaction = {
+    herbLocation: { findUnique: async () => location },
+    herbLocationAssignment: {
+      findFirst: async () => null,
+      update: async ({ data }) => {
+        updateData = data;
+        return assignment;
+      },
+    },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => ({
+        drawerUnitCount: 5,
+        drawerLayerCount: 8,
+        drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+        drawerTopColumnCount: 6,
+        bigCabinetUnitCount: 5,
+      }),
+    },
+    herbLocationAssignment: { findUnique: async () => assignment },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  await updateHerbLocationAssignment(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    30,
+    { locationCode: "D1221" },
+  );
+
+  assert.deepEqual(updateData, { locationId: 20, slotNo: 1 });
+});
+
+for (const [type, label] of [
+  ["G", "cabinet"],
+  ["F", "refrigerator"],
+  ["C", "warehouse"],
+]) {
+  test(`removes an empty old ${label} location after moving its herb`, async () => {
+    const source = {
+      id: 20,
+      storeId: 7,
+      locationCode: `${type}-5-1`,
+      locationType: type,
+      unitNo: 5,
+      layerNo: 1,
+      columnNo: null,
+    };
+    const destination = {
+      ...source,
+      id: 21,
+      locationCode: `${type}-1-5`,
+      unitNo: 1,
+      layerNo: 5,
+    };
+    const assignment = {
+      id: 30,
+      herbId: 40,
+      locationId: source.id,
+      slotNo: null,
+      location: source,
+      herb: { id: 40, name: "测试药材" },
+    };
+    const deletedLocations = [];
+    const transaction = {
+      herbLocation: {
+        findUnique: async () => destination,
+        deleteMany: async ({ where }) => {
+          deletedLocations.push(where);
+          return { count: 1 };
+        },
+      },
+      herbLocationAssignment: {
+        findFirst: async () => null,
+        update: async () => assignment,
+      },
+    };
+    const prisma = {
+      store: {
+        findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+        findFirst: async () => ({
+          drawerUnitCount: 5,
+          drawerLayerCount: 8,
+          drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+          drawerTopColumnCount: 6,
+          bigCabinetUnitCount: 5,
+          bigCabinetLayerCount: 3,
+        }),
+      },
+      herbLocationAssignment: { findUnique: async () => assignment },
+      operationLog: { create: async () => ({ id: 1 }) },
+      $transaction: async (callback) => callback(transaction),
+    };
+
+    await updateHerbLocationAssignment(
+      prisma,
+      { id: 10, role: 2, storeId: 7 },
+      30,
+      { locationCode: `${type}15` },
+    );
+
+    assert.deepEqual(deletedLocations, [
+      { id: source.id, assignments: { none: {} } },
+    ]);
+  });
+}
+
+test("removing the final herb also removes its empty warehouse location", async () => {
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "C-5-1",
+    locationType: "C",
+  };
+  const assignment = {
+    id: 30,
+    herbId: 40,
+    locationId: location.id,
+    location,
+    herb: { id: 40, name: "测试药材" },
+  };
+  const calls = [];
+  const transaction = {
+    herbLocationAssignment: {
+      delete: async (args) => calls.push(["assignment", args]),
+    },
+    herbLocation: {
+      deleteMany: async (args) => calls.push(["location", args]),
+    },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+    },
+    herbLocationAssignment: { findUnique: async () => assignment },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  await removeHerbLocationAssignment(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    30,
+  );
+
+  assert.deepEqual(calls, [
+    ["assignment", { where: { id: 30 } }],
+    [
+      "location",
+      { where: { id: location.id, assignments: { none: {} } } },
+    ],
+  ]);
+});
+
+test("temporarily releases a slot before swapping two assignments", async () => {
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "D-1-2-2",
+    locationType: "D",
+    unitNo: 1,
+    layerNo: 2,
+    columnNo: 2,
+    medicineCapacity: 3,
+  };
+  const assignment = {
+    id: 30,
+    herbId: 40,
+    locationId: 20,
+    slotNo: 2,
+    location,
+    herb: { id: 40, name: "花椒" },
+  };
+  const updates = [];
+  const transaction = {
+    herbLocation: { findUnique: async () => location },
+    herbLocationAssignment: {
+      findFirst: async ({ where }) =>
+        where.slotNo === 1 ? { id: 31, herbId: 41, slotNo: 1 } : null,
+      update: async (args) => {
+        updates.push(args);
+        return assignment;
+      },
+    },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => ({
+        drawerUnitCount: 5,
+        drawerLayerCount: 8,
+        drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+        drawerTopColumnCount: 6,
+        bigCabinetUnitCount: 5,
+      }),
+    },
+    herbLocationAssignment: { findUnique: async () => assignment },
+    operationLog: { create: async () => ({ id: 1 }) },
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  await updateHerbLocationAssignment(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    30,
+    { locationCode: "D1221" },
+  );
+
+  assert.deepEqual(updates, [
+    { where: { id: 30 }, data: { slotNo: null } },
+    { where: { id: 31 }, data: { slotNo: 2 } },
+    { where: { id: 30 }, data: { locationId: 20, slotNo: 1 } },
+  ]);
+});
+
+test("import updates an existing herb by code inside one transaction", async () => {
+  const layout = {
+    drawerUnitCount: 5,
+    drawerLayerCount: 8,
+    drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+    drawerTopColumnCount: 6,
+    bigCabinetUnitCount: 5,
+    bigCabinetLayerCount: 2,
+  };
+  const location = { id: 20, locationCode: "D-1-2-2" };
+  const existingHerb = {
+    id: 40,
+    storeId: 7,
+    code: "HJ",
+    name: "老名称",
+    specification: "统货",
+    status: 1,
+  };
+  let herbUpdate;
+  let transactionOptions;
+  const transaction = {
+    herbLocation: {
+      createMany: async () => ({ count: 0 }),
+      findUnique: async () => location,
+    },
+    herb: {
+      findFirst: async () => existingHerb,
+      update: async ({ data }) => {
+        herbUpdate = data;
+        return { ...existingHerb, ...data };
+      },
+    },
+    herbLocationAssignment: {
+      findUnique: async () => ({ id: 30, locationId: 20, herbId: 40 }),
+    },
+    operationLog: { create: async () => ({ id: 1 }) },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => layout,
+    },
+    $transaction: async (callback, options) => {
+      transactionOptions = options;
+      return callback(transaction);
+    },
+  };
+  const buffer = await workbookBuffer(
+    ["位置编号", "药材编码", "药材名称", "规格"],
+    [["D122", "HJ", "花椒", "选货"]],
+  );
+
+  const result = await importHerbLocations(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    7,
+    { buffer },
+  );
+
+  assert.deepEqual(result, { total: 1, added: 0, updated: 1, skipped: 0 });
+  assert.deepEqual(herbUpdate, {
+    name: "花椒",
+    specification: "选货",
+    updatedBy: 10,
+  });
+  assert.equal(transactionOptions.timeout, 60000);
+});
+
+test("batch location import swaps drawer slot numbers atomically", async () => {
+  const layout = {
+    drawerUnitCount: 5,
+    drawerLayerCount: 8,
+    drawerLayerColumns: "[6,6,6,6,6,6,6,3]",
+    drawerTopColumnCount: 6,
+    bigCabinetUnitCount: 5,
+    bigCabinetLayerCount: 2,
+  };
+  const location = {
+    id: 20,
+    storeId: 7,
+    locationCode: "D-1-2-2",
+    locationType: "D",
+  };
+  const herbs = {
+    HJ: { id: 40, storeId: 7, code: "HJ", name: "花椒", status: 1 },
+    HQ: { id: 41, storeId: 7, code: "HQ", name: "黄芪", status: 1 },
+  };
+  const assignments = {
+    40: { id: 30, locationId: 20, herbId: 40, slotNo: 1 },
+    41: { id: 31, locationId: 20, herbId: 41, slotNo: 2 },
+  };
+  const updates = [];
+  const transaction = {
+    herbLocation: {
+      createMany: async () => ({ count: 0 }),
+      findUnique: async () => location,
+    },
+    herb: {
+      findMany: async ({ where }) => [herbs[where.code]],
+    },
+    herbLocationAssignment: {
+      findUnique: async ({ where }) => {
+        const key = where.locationId_herbId;
+        return assignments[key.herbId] || null;
+      },
+      findFirst: async ({ where }) =>
+        Object.values(assignments).find(
+          (item) =>
+            item.locationId === where.locationId && item.slotNo === where.slotNo,
+        ) || null,
+      update: async (args) => {
+        updates.push(args);
+        return { id: args.where.id, ...args.data };
+      },
+    },
+    operationLog: { create: async () => ({ id: 1 }) },
+  };
+  const prisma = {
+    store: {
+      findUnique: async () => ({ id: 7, status: 1, deletedAt: null }),
+      findFirst: async () => layout,
+    },
+    $transaction: async (callback) => callback(transaction),
+  };
+  const buffer = await workbookBuffer(
+    ["原位置", "新位置", "药材编码", "药材名称"],
+    [
+      ["D1221", "D1222", "HJ", "花椒"],
+      ["D1222", "D1221", "HQ", "黄芪"],
+    ],
+  );
+
+  const result = await importHerbLocationMoves(
+    prisma,
+    { id: 10, role: 2, storeId: 7 },
+    7,
+    { buffer },
+  );
+
+  assert.deepEqual(result, { total: 2, moved: 2, skipped: 0 });
+  assert.deepEqual(updates, [
+    { where: { id: 30 }, data: { slotNo: null } },
+    { where: { id: 31 }, data: { slotNo: null } },
+    { where: { id: 30 }, data: { locationId: 20, slotNo: null } },
+    { where: { id: 31 }, data: { locationId: 20, slotNo: null } },
+    { where: { id: 30 }, data: { slotNo: 2 } },
+    { where: { id: 31 }, data: { slotNo: 1 } },
+  ]);
+});

@@ -1,0 +1,1160 @@
+package com.tcm.admin
+
+import android.content.Context
+import android.util.Log
+import com.tcm.admin.util.DeviceUtils
+import org.json.JSONArray
+import org.json.JSONObject
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okio.BufferedSink
+import java.util.concurrent.TimeUnit
+import okhttp3.ConnectionPool
+import java.security.MessageDigest
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+
+data class AdminSession(val token: String, val user: JSONObject)
+
+object ApiClient {
+    private const val LOG_TAG = "TcmApiClient"
+    var onUnauthorized: (() -> Unit)? = null
+    private val client = OkHttpClient.Builder()
+        .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
+    // Object-storage uploads can take longer than normal API requests on mobile networks.
+    private val uploadClient = client.newBuilder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.MINUTES)
+        .writeTimeout(5, TimeUnit.MINUTES)
+        .build()
+    private const val SESSION_PREFS = "admin_session"
+    private const val TOKEN_KEY = "token"
+    private const val USER_KEY = "user"
+    private const val CUSTOM_BASE_URL_KEY = "custom_base_url"
+    private const val E6_IMPORT_CACHE_PREFS = "e6_import_cache"
+    private const val E6_IMPORT_CACHE_KEY = "records"
+    private const val RESPONSE_CACHE_PREFS = "api_response_cache"
+    private const val REFERENCE_CACHE_TTL = 24 * 60 * 60 * 1000L
+    // The herb-location matrix changes only through explicit management actions.
+    // Those write requests clear the response cache, so reuse it between visits.
+    private const val HERB_LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000L
+    private const val E6_CACHE_TTL = 5 * 60 * 1000L
+    private const val BUSINESS_LIST_CACHE_TTL = 15 * 60 * 1000L
+    private const val INVENTORY_CACHE_TTL = 5 * 60 * 1000L
+    private const val OPERATION_CACHE_TTL = 30 * 1000L
+    private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
+    @Volatile
+    private var token: String? = null
+    @Volatile
+    var currentBaseUrl: String = BuildConfig.API_BASE_URL
+        private set
+    @Volatile
+    private var cacheContext: Context? = null
+    private data class CacheEntry(val route: String, val savedAt: Long, val data: String)
+
+    
+    fun importServerConfig(context: Context, uri: android.net.Uri): Pair<Boolean, String> {
+        var targetServer: String? = null
+        
+        // 1. 优先解析 Query 参数: ?server=... 或 ?url=... 或 ?baseURL=... 或 ?api=...
+        val queryNames = listOf("server", "url", "baseurl", "api")
+        for (name in queryNames) {
+            val valStr = uri.getQueryParameter(name)
+            if (!valStr.isNullOrBlank()) {
+                targetServer = valStr
+                break
+            }
+        }
+        
+        // 2. 若无 Query，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
+        if (targetServer == null) {
+            val host = uri.host
+            if (!host.isNullOrBlank() && host != "config" && host != "server") {
+                val port = uri.port
+                val portStr = if (port != -1) ":$port" else ""
+                targetServer = "http://$host$portStr"
+            }
+        }
+        
+        val serverStr = targetServer?.trim()
+        if (serverStr.isNullOrBlank()) {
+            return false to "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=http://...)"
+        }
+        
+        var finalURL = serverStr
+        if (!finalURL.startsWith("http://", ignoreCase = true) && !finalURL.startsWith("https://", ignoreCase = true)) {
+            finalURL = "http://$finalURL"
+        }
+        finalURL = finalURL.trimEnd('/')
+        
+        currentBaseUrl = finalURL
+        getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
+        return true to "成功导入服务器地址:\n\n$finalURL"
+    }
+
+    fun initBaseUrl(context: Context) {
+        val saved = getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
+        if (!saved.isNullOrBlank()) {
+            currentBaseUrl = saved
+        }
+    }
+
+    private class ProgressRequestBody(
+        private val bytes: ByteArray,
+        private val mediaType: okhttp3.MediaType?,
+        private val onProgress: ((Int) -> Unit)?,
+    ) : RequestBody() {
+        override fun contentType() = mediaType
+        override fun contentLength() = bytes.size.toLong()
+
+        override fun writeTo(sink: BufferedSink) {
+            if (bytes.isEmpty()) {
+                onProgress?.invoke(100)
+                return
+            }
+            var offset = 0
+            var reported = -1
+            while (offset < bytes.size) {
+                val count = minOf(16 * 1024, bytes.size - offset)
+                sink.write(bytes, offset, count)
+                offset += count
+                val progress = (offset * 100L / bytes.size).toInt()
+                if (progress != reported) {
+                    reported = progress
+                    onProgress?.invoke(progress)
+                }
+            }
+        }
+    }
+    private val memoryCache = object : LinkedHashMap<String, CacheEntry>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry>?): Boolean {
+            return size > 64
+        }
+    }
+
+    private fun cacheDir(context: Context): File {
+        return File(context.cacheDir, "api_response_cache").apply { if (!exists()) mkdirs() }
+    }
+
+    private fun sessionFingerprint(): String {
+        val current = sanitizeToken(token) ?: return "anonymous"
+        return MessageDigest.getInstance("SHA-256")
+            .digest(current.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+            .take(24)
+    }
+
+    // Use short TTLs for operational data and a longer TTL for stable references.
+    private fun cacheTtlMillis(path: String): Long? {
+        val route = path.substringBefore('?')
+        return when {
+            route == "/admin/e6/imports" -> E6_CACHE_TTL
+            route == "/admin/doctors" ||
+                route == "/admin/dictionaries" ||
+                route == "/stores" ||
+                route == "/admin/store-transfers/stores" ||
+                route == "/admin/herb-locations/stores" -> REFERENCE_CACHE_TTL
+            route == "/admin/herb-locations" -> HERB_LOCATION_CACHE_TTL
+            route == "/admin/prescriptions" ||
+                route == "/admin/processing-plans" ||
+                route == "/admin/packages" ||
+                route == "/admin/store-transfers" ||
+                route == "/admin/store-transfers/stats" -> BUSINESS_LIST_CACHE_TTL
+            route == "/admin/e6-pharmacy/products" -> INVENTORY_CACHE_TTL
+            route == "/admin/stats" ||
+                route == "/admin/products" ||
+                route == "/admin/product-differences/stats" ||
+                route == "/admin/product-differences/logs" ||
+                route == "/admin/yd-goods-check" -> OPERATION_CACHE_TTL
+            route.startsWith("/admin/prescriptions/") ||
+                route.startsWith("/admin/processing-plans/") ||
+                route.startsWith("/admin/packages/") ||
+                route.startsWith("/admin/yd-goods-check/") ||
+                route.startsWith("/admin/store-transfers/") ||
+                route.startsWith("/admin/herb-locations/") ||
+                route.startsWith("/admin/e6/imports/") -> DETAIL_CACHE_TTL
+            else -> null
+        }
+    }
+
+    private const val SECRET_PREFIX = "b64:"
+
+    fun sanitizeToken(raw: String?): String? {
+        val t = raw?.trim() ?: return null
+        if (t.isBlank()) return null
+        // Header values in OkHttp must be strictly printable ASCII without control characters.
+        // Standard JWT characters [A-Za-z0-9._-] are all in '!'..'~'.
+        if (!t.all { it in '!'..'~' }) return null
+        return t
+    }
+
+    fun setToken(value: String?) { token = sanitizeToken(value) }
+
+    private fun encodeSecret(value: String): String =
+        SECRET_PREFIX + android.util.Base64.encodeToString(value.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+
+    private fun decodeToken(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        // 1. Plain JWT token: starts with "eyJ" and contains dots separating header, payload, signature.
+        // NEVER run Base64 decode on a plain JWT, as Android Base64 silently skips dots and corrupts bytes into 0x08.
+        if (trimmed.startsWith("eyJ") && trimmed.contains(".")) {
+            return sanitizeToken(trimmed)
+        }
+
+        // 2. Explicitly prefixed with "b64:"
+        if (trimmed.startsWith(SECRET_PREFIX)) {
+            val content = trimmed.removePrefix(SECRET_PREFIX)
+            val decoded = runCatching {
+                String(android.util.Base64.decode(content, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+            return sanitizeToken(decoded)
+        }
+
+        // 3. Legacy Base64-encoded JWT (encoded from "eyJ...", starts with "ZXlK" and has no dots)
+        if (trimmed.startsWith("ZXlK") && !trimmed.contains(".")) {
+            val decoded = runCatching {
+                String(android.util.Base64.decode(trimmed, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+            return sanitizeToken(decoded)
+        }
+
+        // 4. Fallback: try decoding, if it produces a valid printable ASCII token use it; otherwise test raw
+        val decoded = runCatching {
+            String(android.util.Base64.decode(trimmed, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+        }.getOrNull()
+        return sanitizeToken(decoded) ?: sanitizeToken(trimmed)
+    }
+
+    private fun decodeUser(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        // 1. Plain JSON object or array
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            return trimmed
+        }
+
+        // 2. Explicitly prefixed with "b64:"
+        if (trimmed.startsWith(SECRET_PREFIX)) {
+            val content = trimmed.removePrefix(SECRET_PREFIX)
+            val decoded = runCatching {
+                String(android.util.Base64.decode(content, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+            if (decoded != null && (decoded.trim().startsWith("{") || decoded.trim().startsWith("["))) {
+                return decoded
+            }
+        }
+
+        // 3. Legacy Base64-encoded JSON (starts with eyI for {" or Ww for [)
+        val decoded = runCatching {
+            String(android.util.Base64.decode(trimmed, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+        }.getOrNull()
+        if (decoded != null && (decoded.trim().startsWith("{") || decoded.trim().startsWith("["))) {
+            return decoded
+        }
+
+        return trimmed
+    }
+
+    private fun getSessionPrefs(context: Context): android.content.SharedPreferences {
+        val masterKey = androidx.security.crypto.MasterKey.Builder(context)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return androidx.security.crypto.EncryptedSharedPreferences.create(
+            context,
+            "admin_session_enc",
+            masterKey,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    fun saveSession(context: Context, session: AdminSession) {
+        cacheContext = context.applicationContext
+        clearE6ImportCache(context)
+        clearResponseCache(context)
+        clearProcessingPhotoCache(context)
+        val cleanToken = sanitizeToken(session.token)
+            ?: throw IllegalArgumentException("登录凭证格式无效")
+        try {
+            getSessionPrefs(context).edit()
+                .putString(TOKEN_KEY, encodeSecret(cleanToken))
+                .putString(USER_KEY, encodeSecret(session.user.toString()))
+                .apply()
+        } catch (failure: Throwable) {
+            token = null
+            throw IllegalStateException("无法保存登录状态", failure)
+        }
+        token = cleanToken
+    }
+
+    fun loadSession(context: Context): AdminSession? {
+        cacheContext = context.applicationContext
+        
+        // Migrate from old plain prefs if needed
+        val oldPrefs = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+        if (oldPrefs.contains(TOKEN_KEY) || oldPrefs.contains(USER_KEY)) {
+            val oldRawToken = oldPrefs.getString(TOKEN_KEY, null)
+            val oldRawUser = oldPrefs.getString(USER_KEY, null)
+            val migrated = if (oldRawToken != null && oldRawUser != null) {
+                runCatching {
+                    getSessionPrefs(context).edit()
+                        .putString(TOKEN_KEY, oldRawToken)
+                        .putString(USER_KEY, oldRawUser)
+                        .apply()
+                    true
+                }.getOrDefault(false)
+            } else false
+            // Do not destroy the legacy session until the encrypted copy succeeds.
+            if (migrated) {
+                oldPrefs.edit().clear().apply()
+            }
+        }
+
+        val preferences = runCatching { getSessionPrefs(context) }.getOrNull() ?: return null
+        val rawToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
+        val rawUser = preferences.getString(USER_KEY, null) ?: return null
+        val savedToken = decodeToken(rawToken)
+        val savedUser = decodeUser(rawUser)
+        val user = savedUser?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (savedToken == null || user == null) {
+            clearSession(context)
+            return null
+        }
+        // Auto-upgrade legacy storage to prefixed format
+        if (!rawToken.startsWith(SECRET_PREFIX) || !rawUser.startsWith(SECRET_PREFIX)) {
+            preferences.edit()
+                .putString(TOKEN_KEY, encodeSecret(savedToken))
+                .putString(USER_KEY, encodeSecret(user.toString()))
+                .apply()
+        }
+        token = savedToken
+        return AdminSession(savedToken, user)
+    }
+
+    fun clearSession(context: Context) {
+        cacheContext = context.applicationContext
+        token = null
+        runCatching {
+            getSessionPrefs(context).edit().clear().apply()
+        }
+        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        clearE6ImportCache(context)
+        clearResponseCache(context)
+        clearProcessingPhotoCache(context)
+    }
+
+    suspend fun login(identifier: String, password: String): AdminSession {
+        val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
+        val result = data.getJSONObject("data")
+        val receivedToken = sanitizeToken(result.getString("token"))
+            ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
+        return AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
+    }
+
+    suspend fun updateMe(payload: JSONObject): AdminSession {
+        val data = request("/user/me", "PUT", payload).getJSONObject("data")
+        val newToken = sanitizeToken(data.getString("token"))
+            ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
+        val newUser = data.getJSONObject("user")
+        return AdminSession(newToken, newUser).also { token = it.token }
+    }
+
+    suspend fun me(): JSONObject = request("/user/me").getJSONObject("data")
+
+    suspend fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    suspend fun androidAppVersion(
+        versionCode: Int? = BuildConfig.VERSION_CODE,
+        deviceId: String? = null,
+        context: Context? = null,
+    ): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val currentVersionCode = versionCode ?: BuildConfig.VERSION_CODE
+        val resolvedDeviceId = deviceId?.trim()?.ifBlank { null }
+            ?: (context ?: cacheContext)?.let { DeviceUtils.getDeviceId(it) }
+
+        val queryParams = mutableListOf<String>()
+        queryParams.add("versionCode=$currentVersionCode")
+        queryParams.add("policy=fallback_full")
+        if (!resolvedDeviceId.isNullOrBlank()) {
+            queryParams.add("deviceId=${java.net.URLEncoder.encode(resolvedDeviceId, "UTF-8")}")
+        }
+        val deviceModel = DeviceUtils.getDeviceModel()
+        if (deviceModel.isNotBlank()) {
+            queryParams.add("deviceModel=${java.net.URLEncoder.encode(deviceModel, "UTF-8")}")
+        }
+        val osVersion = DeviceUtils.getOsVersion()
+        if (osVersion.isNotBlank()) {
+            queryParams.add("osVersion=${java.net.URLEncoder.encode(osVersion, "UTF-8")}")
+        }
+        val query = "?" + queryParams.joinToString("&")
+        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/')
+        if (updateBase.isNotBlank()) {
+            val url = if (updateBase.contains("/version/android")) {
+                val separator = if (updateBase.contains('?')) "&" else "?"
+                val cleanQuery = query.removePrefix("?")
+                if (cleanQuery.isNotBlank()) "$updateBase$separator$cleanQuery" else updateBase
+            } else {
+                val appId = BuildConfig.UPDATE_APP_ID.trim()
+                if (appId.isBlank()) {
+                    throw IllegalStateException("已配置 UPDATE_BASE_URL 但未配置 UPDATE_APP_ID")
+                }
+                "$updateBase/api/apps/$appId/version/android$query"
+            }
+            val requestBuilder = Request.Builder()
+                .url(url)
+                .header("Accept", "application/json")
+                .header("x-device-model", DeviceUtils.getDeviceModel())
+                .header("x-os-version", DeviceUtils.getOsVersion())
+            if (!resolvedDeviceId.isNullOrBlank()) {
+                requestBuilder.header("x-device-id", resolvedDeviceId)
+            }
+            val request = requestBuilder.get().build()
+            return@withContext client.newCall(request).execute().use { response ->
+                val responseBodyString = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                    JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+                }
+                if (json.optInt("code", -1) != 0) {
+                    throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
+                }
+                json.getJSONObject("data")
+            }
+        }
+        val backendUrl = currentBaseUrl + "/app/version/android$query"
+        val requestBuilder = Request.Builder()
+            .url(backendUrl)
+            .header("Accept", "application/json")
+            .header("x-device-model", DeviceUtils.getDeviceModel())
+            .header("x-os-version", DeviceUtils.getOsVersion())
+        if (!resolvedDeviceId.isNullOrBlank()) {
+            requestBuilder.header("x-device-id", resolvedDeviceId)
+        }
+        applyAuthorizationHeader(requestBuilder)
+        client.newCall(requestBuilder.get().build()).execute().use { response ->
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                JSONObject().put("code", -1).put("message", "更新服务器响应格式错误")
+            }
+            if (json.optInt("code", -1) != 0) {
+                throw ApiException(json.optString("message", "检查更新失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            }
+            json.getJSONObject("data")
+        }
+    }
+    suspend fun prescriptions(status: Int? = null, keyword: String = "", storeId: Int? = null, createdDate: String? = null): JSONArray {
+        val data = prescriptionsPaged(status = status, keyword = keyword, storeId = storeId, pageSize = 100, createdDate = createdDate)
+        return data.optJSONArray("list") ?: JSONArray()
+    }
+    suspend fun prescriptionsPaged(
+        status: Int? = null,
+        keyword: String = "",
+        storeId: Int? = null,
+        doctorId: Int? = null,
+        page: Int = 1,
+        pageSize: Int = 10,
+        createdDate: String? = null,
+    ): JSONObject {
+        val query = buildList {
+            add("page=$page"); add("pageSize=$pageSize")
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            doctorId?.let { add("doctorId=$it") }
+            createdDate?.takeIf { it.isNotBlank() }?.let { add("createdDate=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/prescriptions?$query").getJSONObject("data")
+    }
+    suspend fun prescriptionDetail(id: Int): JSONObject = request("/admin/prescriptions/$id").getJSONObject("data")
+    suspend fun createPrescription(payload: JSONObject): JSONObject = request("/admin/prescriptions", "POST", payload).getJSONObject("data")
+    suspend fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
+    suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray, onProgress: ((Int) -> Unit)? = null): JSONObject =
+        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes, "prescriptions", onProgress).getJSONObject("data")
+    suspend fun prescriptionAttachment(id: Int): ByteArray = requestBytes("/admin/prescriptions/$id/attachment")
+    suspend fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
+    suspend fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
+    suspend fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
+    suspend fun plans(view: String = "today-all", keyword: String = "", storeId: Int? = null): JSONArray {
+        val query = buildList {
+            add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
+            add("page=1")
+            add("pageSize=100")
+            storeId?.let { add("storeId=$it") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return list(request("/admin/processing-plans?$query").getJSONObject("data"))
+    }
+    suspend fun processingWorkflow(id: Int): JSONObject = request("/admin/processing-plans/$id/workflow").getJSONObject("data")
+    // Compatibility helpers for screen modules that use descriptive API names.
+    suspend fun processingStats(storeId: Int? = null): JSONObject = stats(storeId)
+    suspend fun processingPlansPaged(view: String = "today-all", keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
+        val query = buildList {
+            add("view=${java.net.URLEncoder.encode(view, "UTF-8")}")
+            add("page=$page"); add("pageSize=$pageSize")
+            storeId?.let { add("storeId=$it") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/processing-plans?$query").getJSONObject("data")
+    }
+    suspend fun pickupTasks(status: Int? = null, keyword: String = "", storeId: Int? = null): JSONArray =
+        packages(status = status, keyword = keyword, storeId = storeId)
+    suspend fun pickupTasksPaged(status: Int? = null, keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject =
+        packagesPaged(status = status, keyword = keyword, storeId = storeId, page = page, pageSize = pageSize)
+    suspend fun createPlan(payload: JSONObject): JSONObject = createProcessingPlan(payload)
+    suspend fun updatePlan(id: Int, payload: JSONObject): JSONObject = updateProcessingPlan(id, payload)
+    suspend fun cancelPlan(id: Int, reason: String = ""): JSONObject = transitionPlan(id, 5)
+    suspend fun generatePlanPackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = generatePackage(id, payload)
+    suspend fun delayPlan(planId: Int, days: Int): JSONObject = delayPlan(planId, JSONObject().put("days", days))
+    suspend fun createProcessingPlan(payload: JSONObject): JSONObject = request("/admin/processing-plans", "POST", payload).getJSONObject("data")
+    suspend fun updateProcessingPlan(id: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deleteProcessingPlan(id: Int): JSONObject = request("/admin/processing-plans/$id", "DELETE").getJSONObject("data")
+    suspend fun completeDispensing(id: Int, filename: String, mimeType: String, bytes: ByteArray, onProgress: ((Int) -> Unit)? = null): JSONObject = requestMultipart("/admin/processing-plans/$id/dispensing-complete", "file", filename, mimeType, bytes, "processing-photos", onProgress).getJSONObject("data")
+    suspend fun processingPhoto(id: Int, photoId: Int): ByteArray = requestBytes("/admin/processing-plans/$id/photos/$photoId")
+    suspend fun deleteProcessingPhoto(id: Int, photoId: Int): JSONObject = request("/admin/processing-plans/$id/photos/$photoId", "DELETE").getJSONObject("data")
+    suspend fun processingPlanByScan(code: String): JSONObject? {
+        val trimmed = code.trim()
+        val query = java.net.URLEncoder.encode(trimmed, "UTF-8")
+        val res = runCatching { request("/admin/processing-plans/by-scan?code=$query") }.getOrNull()
+        val plan = res?.optJSONObject("data")
+        if (plan != null) return plan
+        val cleanCode = trimmed.removePrefix("TCM:PLAN:1:").trim()
+        val paged = runCatching { processingPlansPaged(view = "all", keyword = cleanCode, pageSize = 1) }.getOrNull()
+        return paged?.optJSONArray("list")?.optJSONObject(0)
+    }
+    fun clearProcessingPhotoCache(context: Context, planId: Int? = null, photoId: Int? = null) {
+        val cacheDir = File(context.applicationContext.cacheDir, "processing-photos")
+        val legacyDir = File(context.applicationContext.filesDir, "processing-photos")
+        if (planId != null && photoId != null) {
+            File(cacheDir, "$planId-$photoId").delete()
+            File(legacyDir, "$planId-$photoId").delete()
+        } else {
+            cacheDir.listFiles()?.forEach { it.delete() }
+            cacheDir.delete()
+            legacyDir.listFiles()?.forEach { it.delete() }
+            legacyDir.delete()
+        }
+    }
+    suspend fun packages(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt"): JSONArray {
+        val query = buildList {
+            add("page=1")
+            add("pageSize=100")
+            add("sortBy=${java.net.URLEncoder.encode(sortBy, "UTF-8")}")
+            add("sortOrder=desc")
+            status?.let { add("status=$it") }
+            storeId?.let { add("storeId=$it") }
+            source?.let { add("source=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            dateScope?.let { add("dateScope=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return list(request("/admin/packages?$query").getJSONObject("data"))
+    }
+    suspend fun packagesPaged(status: Int? = null, source: String? = null, dateScope: String? = null, keyword: String = "", storeId: Int? = null, sortBy: String = "createdAt", page: Int = 1, pageSize: Int = 10): JSONObject {
+        val query = buildList {
+            add("page=$page"); add("pageSize=$pageSize")
+            add("sortBy=${java.net.URLEncoder.encode(sortBy, "UTF-8")}"); add("sortOrder=desc")
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            source?.let { add("source=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            dateScope?.let { add("dateScope=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/packages?$query").getJSONObject("data")
+    }
+   suspend fun packageDetail(id: Int): JSONObject = request("/admin/packages/$id").getJSONObject("data")
+    suspend fun packageByCode(code: String): JSONObject = request("/admin/packages/by-code/${java.net.URLEncoder.encode(code, "UTF-8")}").getJSONObject("data")
+    suspend fun createPackage(payload: JSONObject): JSONObject = request("/admin/packages", "POST", payload).getJSONObject("data")
+    suspend fun updatePackage(id: Int, payload: JSONObject): JSONObject = request("/admin/packages/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deletePackage(id: Int): JSONObject = request("/admin/packages/$id", "DELETE").getJSONObject("data")
+    suspend fun inventory(keyword: String = "", storeId: Int? = null): JSONArray = list(request(
+        "/admin/e6-pharmacy/products?page=1&pageSize=50" +
+            (storeId?.let { "&storeId=$it" } ?: "") +
+            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
+    ).getJSONObject("data"))
+    suspend fun inventoryPaged(keyword: String = "", storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject = request(
+        "/admin/e6-pharmacy/products?page=$page&pageSize=$pageSize" +
+            (storeId?.let { "&storeId=$it" } ?: "") +
+            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
+    ).getJSONObject("data")
+    suspend fun availableStores(): JSONArray = arrayData(request("/stores?page=1&pageSize=100&status=1").opt("data"))
+    suspend fun differences(): JSONArray = differenceProducts()
+    suspend fun productCatalog(keyword: String = ""): JSONArray = list(request(
+        "/admin/products?page=1&pageSize=100" +
+            (keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: "")
+    ).getJSONObject("data"))
+    suspend fun differenceSummary(storeId: Int? = null): JSONObject {
+        val summary = request("/admin/product-differences/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+        return JSONObject()
+            .put("preReceiptQuantity", summary.optInt("more", 0))
+            .put("preShipmentQuantity", summary.optInt("less", 0))
+            .put("affectedProducts", summary.optInt("total", 0))
+            .put("total", summary.optInt("total", 0))
+    }
+    suspend fun differenceProducts(): JSONArray {
+        val values = list(request("/admin/products?onlyDifference=1&page=1&pageSize=30").getJSONObject("data"))
+        return JSONArray().also { result ->
+            for (index in 0 until values.length()) {
+                val product = values.getJSONObject(index)
+                val difference = product.optDouble("diffQuantity", 0.0)
+                result.put(JSONObject(product.toString())
+                    .put("preReceiptQuantity", if (difference > 0) difference else 0.0)
+                    .put("preShipmentQuantity", if (difference < 0) -difference else 0.0))
+            }
+        }
+    }
+    suspend fun differenceProductsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
+        val data = request("/admin/products?onlyDifference=1&page=$page&pageSize=$pageSize").getJSONObject("data")
+        val list = data.optJSONArray("list") ?: data.optJSONArray("items") ?: JSONArray()
+        val normalized = JSONArray().also { result ->
+            for (index in 0 until list.length()) {
+                val product = list.getJSONObject(index)
+                val difference = product.optDouble("diffQuantity", 0.0)
+                result.put(JSONObject(product.toString())
+                    .put("preReceiptQuantity", if (difference > 0) difference else 0.0)
+                    .put("preShipmentQuantity", if (difference < 0) -difference else 0.0))
+            }
+        }
+        return JSONObject(data.toString()).put("list", normalized)
+    }
+    suspend fun differenceLogs(): JSONArray {
+        val values = list(request("/admin/product-differences/logs?page=1&pageSize=30").getJSONObject("data"))
+        return JSONArray().also { result ->
+            for (index in 0 until values.length()) {
+                val log = values.getJSONObject(index)
+                result.put(JSONObject(log.toString())
+                    .put("quantity", kotlin.math.abs(log.optDouble("changeQuantity", 0.0))))
+            }
+        }
+    }
+    suspend fun differenceLogsPaged(page: Int = 1, pageSize: Int = 10): JSONObject {
+        val data = request("/admin/product-differences/logs?page=$page&pageSize=$pageSize").getJSONObject("data")
+        val source = data.optJSONArray("list") ?: data.optJSONArray("items") ?: JSONArray()
+        val normalized = JSONArray().also { result ->
+            for (index in 0 until source.length()) {
+                val log = source.getJSONObject(index)
+                result.put(JSONObject(log.toString()).put("quantity", kotlin.math.abs(log.optDouble("changeQuantity", 0.0))))
+            }
+        }
+        data.put("list", normalized)
+        return data
+    }
+    suspend fun stocktakings(storeId: Int? = null, page: Int = 1, pageSize: Int = 10): JSONObject {
+        val query = buildList { add("page=$page"); add("pageSize=$pageSize"); storeId?.let { add("storeId=$it") } }.joinToString("&")
+        return request("/admin/yd-goods-check?$query").getJSONObject("data")
+    }
+    suspend fun prescriptionSources(): JSONArray = dictionaries("PrescriptionSource")
+    suspend fun processTypes(): JSONArray = dictionaries("ProcessType")
+    suspend fun e6Imports(
+        keyword: String = "",
+        orderDate: String = "",
+        status: Int? = null,
+        cashierName: String = "",
+        storeId: Int? = null,
+        page: Int = 1,
+        pageSize: Int = 20,
+    ): JSONObject {
+        val query = buildList {
+            add("page=$page")
+            add("pageSize=$pageSize")
+            status?.let { add("status=$it") }
+            storeId?.let { add("storeId=$it") }
+            if (keyword.isNotBlank()) add("keyword=${java.net.URLEncoder.encode(keyword.trim(), "UTF-8")}")
+            if (orderDate.isNotBlank()) add("orderDate=${java.net.URLEncoder.encode(orderDate, "UTF-8")}")
+            if (cashierName.isNotBlank()) add("cashierName=${java.net.URLEncoder.encode(cashierName.trim(), "UTF-8")}")
+        }.joinToString("&")
+        return request("/admin/e6/imports?$query").getJSONObject("data")
+    }
+    suspend fun e6ImportsAll(): JSONObject {
+        val first = e6Imports(page = 1, pageSize = 100)
+        val list = JSONArray()
+        val firstList = first.optJSONArray("list") ?: JSONArray()
+        for (index in 0 until firstList.length()) list.put(firstList.getJSONObject(index))
+        val pages = first.optJSONObject("pagination")?.optInt("pages", 1)?.coerceAtLeast(1) ?: 1
+        for (page in 2..pages) {
+            val nextList = e6Imports(page = page, pageSize = 100).optJSONArray("list") ?: JSONArray()
+            for (index in 0 until nextList.length()) list.put(nextList.getJSONObject(index))
+        }
+        return JSONObject().put("list", list).put("pagination", JSONObject().put("total", list.length()).put("pages", 1).put("page", 1).put("pageSize", list.length().coerceAtLeast(1)))
+    }
+    suspend fun saveE6ImportCache(context: Context, data: JSONObject) {
+        context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(
+                E6_IMPORT_CACHE_KEY,
+                JSONObject()
+                    .put("savedAt", System.currentTimeMillis())
+                    .put("session", sessionFingerprint())
+                    .put("data", data)
+                    .toString(),
+            )
+            .apply()
+    }
+    suspend fun loadE6ImportCache(context: Context): JSONObject? {
+        val preferences = context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
+        val cached = preferences.getString(E6_IMPORT_CACHE_KEY, null)
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: return null
+        val savedAt = cached.optLong("savedAt", 0L)
+        if (cached.optString("session") != sessionFingerprint()) return null
+        val data = cached.optJSONObject("data")
+        if (data == null || savedAt <= 0L || System.currentTimeMillis() - savedAt > E6_CACHE_TTL) {
+            preferences.edit().remove(E6_IMPORT_CACHE_KEY).apply()
+            return null
+        }
+        return data
+    }
+    fun clearE6ImportCache(context: Context) {
+        context.getSharedPreferences(E6_IMPORT_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove(E6_IMPORT_CACHE_KEY)
+            .apply()
+    }
+    fun clearResponseCache(context: Context? = cacheContext) {
+        synchronized(memoryCache) { memoryCache.clear() }
+        val ctx = context ?: cacheContext ?: return
+        runCatching {
+            cacheDir(ctx).listFiles()?.forEach { it.delete() }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    fun onTrimMemory(level: Int) {
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+        ) {
+            synchronized(memoryCache) {
+                memoryCache.clear()
+            }
+        }
+    }
+
+    internal fun sanitizePrefix(route: String): String =
+        route.trim('/').replace('/', '_')
+
+    fun invalidateCachedRoutes(prefixes: List<String>, context: Context? = cacheContext) {
+        if (prefixes.isEmpty()) return
+        val normalizedPrefixes = prefixes.map { sanitizePrefix(it) }.filter { it.isNotBlank() }
+        synchronized(memoryCache) {
+            val iterator = memoryCache.entries.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next().value
+                if (prefixes.any { entry.route.startsWith(it) }) {
+                    iterator.remove()
+                }
+            }
+        }
+        val ctx = context ?: cacheContext ?: return
+        runCatching {
+            cacheDir(ctx).listFiles()?.forEach { file ->
+                val name = file.name
+                if (name.contains("__")) {
+                    // O(1) in-memory string prefix matching, zero disk I/O reads!
+                    if (normalizedPrefixes.any { name.startsWith(it) }) {
+                        file.delete()
+                    }
+                } else {
+                    // Legacy cache file without prefix: read first line once or delete if empty
+                    val firstLine = runCatching { file.bufferedReader().use { it.readLine() }.orEmpty() }.getOrNull().orEmpty()
+                    if (firstLine.isBlank() || prefixes.any { firstLine.startsWith(it) }) {
+                        file.delete()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun invalidateCacheForMutation(path: String) {
+        val route = path.substringBefore('?')
+        val isProcessingSubResource = route.contains("/equipment-usages") || route.contains("/photos") || route.endsWith("/dispensing-complete")
+        val prefixesToInvalidate = when {
+            isProcessingSubResource -> {
+                val planId = Regex("/admin/processing-plans/(\\d+)").find(route)?.groupValues?.get(1)
+                if (planId != null) listOf("/admin/processing-plans/$planId") else emptyList()
+            }
+            route.startsWith("/admin/prescriptions") -> listOf("/admin/prescriptions", "/admin/processing-plans", "/admin/stats")
+            route.startsWith("/admin/processing-plans") -> listOf("/admin/processing-plans", "/admin/packages", "/admin/stats")
+            route.startsWith("/admin/packages") -> listOf("/admin/packages", "/admin/processing-plans", "/admin/stats")
+            route.startsWith("/admin/store-transfers") -> listOf("/admin/store-transfers")
+            route.startsWith("/admin/yd-goods-check") -> listOf("/admin/yd-goods-check")
+            route.startsWith("/admin/product-differences") -> listOf("/admin/product-differences", "/admin/products")
+            route.startsWith("/admin/herb-locations") -> listOf("/admin/herb-locations")
+            route.startsWith("/admin/e6/imports") -> listOf("/admin/e6/imports", "/admin/prescriptions")
+            route.startsWith("/user/me") -> emptyList()
+            else -> listOf("/admin/prescriptions", "/admin/processing-plans", "/admin/packages", "/admin/stats")
+        }
+        invalidateCachedRoutes(prefixesToInvalidate)
+    }
+    suspend fun e6ImportDetail(id: Int): JSONObject = request("/admin/e6/imports/$id").getJSONObject("data")
+    suspend fun confirmE6Import(id: Int, payload: JSONObject): JSONObject = request("/admin/e6/imports/$id/confirm", "POST", payload).getJSONObject("data")
+    suspend fun mergeE6Imports(payload: JSONObject): JSONObject = request("/admin/e6/imports/merge", "POST", payload).getJSONObject("data")
+    suspend fun rejectE6Import(id: Int, reason: String): JSONObject = request("/admin/e6/imports/$id/reject", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun revalidateE6Import(id: Int): JSONObject = request("/admin/e6/imports/$id/revalidate", "POST").getJSONObject("data")
+    suspend fun herbLocationMatrix(storeId: Int? = null, keyword: String = "", type: String = ""): JSONObject {
+        val root = herbLocations(storeId?.toString())
+        val allLocations = root.optJSONArray("locations") ?: JSONArray()
+        val units = linkedMapOf<String, JSONObject>()
+        var assigned = 0
+        val needle = keyword.trim().lowercase()
+        for (index in 0 until allLocations.length()) {
+            val location = allLocations.getJSONObject(index)
+            val locationType = location.optString("type")
+            val herbs = location.optJSONArray("herbs") ?: JSONArray()
+            val matchesKeyword = needle.isBlank() || location.optString("code").lowercase().contains(needle) ||
+                (0 until herbs.length()).any { herbIndex ->
+                    val herb = herbs.getJSONObject(herbIndex)
+                    val name = herb.optString("name")
+                    name.lowercase().contains(needle) ||
+                        pinyinInitials(name).contains(needle) ||
+                        herb.optString("code").lowercase().contains(needle)
+                }
+            if ((type.isNotBlank() && locationType != type) || !matchesKeyword) continue
+            if (herbs.length() > 0) assigned++
+            val key = listOf(locationType, location.optInt("unitNo")).joinToString(":")
+            val unit = units.getOrPut(key) {
+                JSONObject().put("type", locationType).put("unitNo", location.optInt("unitNo")).put("locations", JSONArray())
+            }
+            unit.getJSONArray("locations").put(location)
+        }
+        val visibleLocations = units.values.sumOf { it.getJSONArray("locations").length() }
+        return JSONObject()
+            .put("store", root.optJSONObject("store"))
+            .put("herbs", root.optJSONArray("herbs") ?: JSONArray())
+            .put("units", JSONArray(units.values.toList()))
+            .put("summary", JSONObject()
+                .put("totalLocations", visibleLocations)
+                .put("assignedLocations", assigned)
+                .put("emptyLocations", visibleLocations - assigned)
+                .put("totalHerbs", (root.optJSONArray("herbs") ?: JSONArray()).length()))
+    }
+    suspend fun stocktaking(storeId: Int? = null): JSONObject = stocktakings(storeId)
+    suspend fun recordCheckItemCount(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = recountGoodsCheckItem(itemId, payload)
+    suspend fun updateCheckItemLocation(checkId: Int, itemId: Int, payload: JSONObject): JSONObject = updateGoodsCheckLocation(itemId, payload)
+    suspend fun searchGoodsCheckCandidates(checkId: Int, keyword: String = ""): JSONArray = goodsCheckCandidates(checkId, keyword)
+    suspend fun transfers(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false): JSONArray {
+        val query = buildList {
+            add("page=1"); add("pageSize=100")
+            keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            if (overdue) add("overdue=1")
+        }.joinToString("&")
+        return list(request("/admin/store-transfers?$query").getJSONObject("data"))
+    }
+    suspend fun transfersPaged(keyword: String = "", status: Int? = null, storeId: Int? = null, overdue: Boolean = false, page: Int = 1, pageSize: Int = 10): JSONObject {
+        val query = buildList {
+            add("page=$page"); add("pageSize=$pageSize")
+            keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
+            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            if (overdue) add("overdue=1")
+        }.joinToString("&")
+        return request("/admin/store-transfers?$query").getJSONObject("data")
+    }
+    suspend fun transferStats(storeId: Int? = null): JSONObject = request("/admin/store-transfers/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    suspend fun herbLocations(storeId: String? = null): JSONObject = request("/admin/herb-locations${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
+    suspend fun stores(): JSONArray = request("/admin/herb-locations/stores").getJSONArray("data")
+    suspend fun assignHerbLocation(payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments", "POST", payload).getJSONObject("data")
+    suspend fun updateHerb(id: Int, payload: JSONObject): JSONObject = request("/admin/herb-locations/herbs/$id", "PUT", payload).getJSONObject("data")
+    suspend fun moveHerbLocationAssignment(id: Int, payload: JSONObject): JSONObject = request("/admin/herb-locations/assignments/$id", "PUT", payload).getJSONObject("data")
+    suspend fun deleteHerbLocationAssignment(id: Int): JSONObject = request("/admin/herb-locations/assignments/$id", "DELETE").getJSONObject("data")
+    suspend fun transitionPlan(id: Int, status: Int, createPackage: Boolean = false): JSONObject = request("/admin/processing-plans/$id/transition", "POST", JSONObject().put("status", status).put("createPackage", createPackage)).getJSONObject("data")
+    suspend fun generatePackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST", payload).getJSONObject("data")
+    suspend fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
+    suspend fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
+    suspend fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = "", includeSummary: Boolean = true, loadItems: Boolean = true): JSONObject {
+        val query = buildList {
+            add("page=$page")
+            add("pageSize=$pageSize")
+            if (!includeSummary) add("summary=0")
+            if (!loadItems) add("items=0")
+            status.takeIf { it.isNotBlank() }?.let { add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+        }.joinToString("&")
+        return request("/admin/yd-goods-check/$id?$query").getJSONObject("data")
+    }
+    suspend fun goodsCheckCandidates(id: Int, keyword: String = ""): JSONArray = arrayData(request("/admin/yd-goods-check/$id/candidates?page=1&pageSize=100${keyword.takeIf { it.isNotBlank() }?.let { "&keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}" } ?: ""}").opt("data"))
+    suspend fun addGoodsCheckItem(checkId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/$checkId/items", "POST", payload).getJSONObject("data")
+    suspend fun recountGoodsCheckItem(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/recount", "PUT", payload).getJSONObject("data")
+    suspend fun updateGoodsCheckLocation(itemId: Int, payload: JSONObject): JSONObject = request("/admin/yd-goods-check/items/$itemId/location", "PUT", payload).getJSONObject("data")
+    suspend fun reviewGoodsCheckItem(itemId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/yd-goods-check/items/$itemId/review", "POST", payload).getJSONObject("data")
+    suspend fun finishGoodsCheck(id: Int): JSONObject = request("/admin/yd-goods-check/$id/finish", "POST").getJSONObject("data")
+    suspend fun registerDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/register", "POST", payload).getJSONObject("data")
+    suspend fun writeOffDifference(payload: JSONObject): JSONObject = request("/admin/product-differences/write-off", "POST", payload).getJSONObject("data")
+    suspend fun reverseDifference(logId: Int, reason: String): JSONObject = request("/admin/product-differences/logs/$logId/reverse", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun cancelTransfer(id: Int, reason: String): JSONObject = request("/admin/store-transfers/$id/cancel", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun confirmOutbound(id: Int): JSONObject = request("/admin/store-transfers/$id/confirm-outbound", "POST").getJSONObject("data")
+    suspend fun confirmReturn(id: Int, returnId: Int): JSONObject = request("/admin/store-transfers/$id/returns/$returnId/confirm", "POST").getJSONObject("data")
+    suspend fun addTransferReturns(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns", "POST", payload).getJSONObject("data")
+    suspend fun updateTransferReturn(id: Int, returnId: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns/$returnId", "PUT", payload).getJSONObject("data")
+    suspend fun transferDetail(id: Int): JSONObject = request("/admin/store-transfers/$id").getJSONObject("data")
+    suspend fun transferStores(): JSONArray = request("/admin/store-transfers/stores").getJSONArray("data")
+    suspend fun createTransfer(payload: JSONObject): JSONObject = request("/admin/store-transfers", "POST", payload).getJSONObject("data")
+    suspend fun updateTransfer(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id", "PUT", payload).getJSONObject("data")
+    suspend fun updateExpectedReturnDate(id: Int, date: String): JSONObject = request("/admin/store-transfers/$id/expected-return-date", "PUT", JSONObject().put("expectedReturnDate", date)).getJSONObject("data")
+    suspend fun startEquipmentUsage(planId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/equipment-usages", "POST", payload).getJSONObject("data")
+    suspend fun startPackaging(planId: Int, usageId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/start-packaging", "POST", payload).getJSONObject("data")
+    suspend fun finishEquipmentUsage(planId: Int, usageId: Int): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/finish", "POST").getJSONObject("data")
+    suspend fun voidEquipmentUsage(planId: Int, usageId: Int, reason: String): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/void", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
+    suspend fun transferFaultyEquipment(planId: Int, usageId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/equipment-usages/$usageId/fault-transfer", "POST", payload).getJSONObject("data")
+    suspend fun delayPlan(planId: Int, payload: JSONObject): JSONObject = request("/admin/processing-plans/$planId/delay", "POST", payload).getJSONObject("data")
+    suspend fun receiveNotice(planId: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$planId/receive-notice", "POST", payload).getJSONObject("data")
+
+    private fun list(data: JSONObject): JSONArray = when {
+        data.has("list") -> data.optJSONArray("list") ?: JSONArray()
+        data.has("items") -> data.optJSONArray("items") ?: JSONArray()
+        else -> JSONArray()
+    }
+    private fun arrayData(value: Any?): JSONArray = when (value) {
+        is JSONArray -> value
+        is JSONObject -> list(value)
+        else -> JSONArray()
+    }
+
+    private fun applyAuthorizationHeader(builder: Request.Builder) {
+        val currentToken = sanitizeToken(token)
+        if (currentToken != null) {
+            builder.header("Authorization", "Bearer $currentToken")
+        } else if (token != null) {
+            token = null
+            onUnauthorized?.invoke()
+            throw ApiException("登录凭证异常，请重新登录", 401)
+        }
+    }
+
+    private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default", onProgress: ((Int) -> Unit)? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        // 1. 尝试获取直传策略
+        val strategyAttempt = try {
+            Result.success(request("/admin/upload/strategy?category=$category&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}&mimeType=${java.net.URLEncoder.encode(mimeType, "UTF-8")}", "GET"))
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Log.w(LOG_TAG, "OSS upload strategy unavailable", failure)
+            Result.failure(failure)
+        }
+        strategyAttempt.exceptionOrNull()?.let { Log.w(LOG_TAG, "OSS upload strategy unavailable", it) }
+        val strategyRes = strategyAttempt.getOrNull()
+        val strategyData = strategyRes?.optJSONObject("data")
+        val uploadUrl = strategyData?.optString("uploadUrl")
+        
+        val directUploadAllowed = !uploadUrl.isNullOrEmpty() &&
+            (uploadUrl.startsWith("https://", ignoreCase = true) ||
+                (BuildConfig.DEBUG && uploadUrl.startsWith("http://", ignoreCase = true)))
+        if (!uploadUrl.isNullOrEmpty() && !directUploadAllowed) {
+            Log.w(LOG_TAG, "Ignoring non-HTTPS OSS upload URL in release build")
+        }
+        if (directUploadAllowed) {
+            // 使用 S3/OSS PUT 直传 (兼容 SeaweedFS)
+            val s3Request = Request.Builder()
+                .url(uploadUrl)
+                .put(ProgressRequestBody(bytes, mimeType.toMediaTypeOrNull(), onProgress))
+                .addHeader("Content-Type", mimeType)
+                .build()
+                
+            val s3Attempt = try {
+                Result.success(uploadClient.newCall(s3Request).execute())
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                Log.w(LOG_TAG, "OSS direct upload failed", failure)
+                Result.failure(failure)
+            }
+            val s3Response = s3Attempt.getOrNull()
+            s3Attempt.exceptionOrNull()?.let { Log.w(LOG_TAG, "OSS direct upload failed", it) }
+            if (s3Response != null && s3Response.isSuccessful) {
+                s3Response.close()
+                // 直传成功，告知后端
+                val notifyPayload = JSONObject().apply {
+                    put("storagePath", strategyData.optString("storagePath"))
+                    put("originalName", filename)
+                    put("mimeType", mimeType)
+                    put("mimetype", mimeType)
+                    put("filename", filename)
+                    put("size", bytes.size)
+                }
+                val backendPath = path.substringBefore('?')
+                val notifyRes = try {
+                    request(backendPath, "POST", notifyPayload)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    null
+                }
+                if (notifyRes != null && notifyRes.optInt("code", -1) == 0) {
+                    return@withContext notifyRes
+                }
+                Log.w(LOG_TAG, "OSS upload completed but backend notification failed")
+            }
+            if (s3Response != null && !s3Response.isSuccessful) {
+                Log.w(LOG_TAG, "OSS direct upload returned HTTP ${s3Response.code}")
+            }
+            if (s3Response != null && !s3Response.isSuccessful) s3Response.close()
+        }
+
+        // 降级：策略不可用或直传失败时交给后端中转；后端会继续尝试 OSS。
+        val requestBody = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                fieldName,
+                filename,
+                ProgressRequestBody(bytes, mimeType.toMediaTypeOrNull(), onProgress)
+            )
+            .build()
+        
+        val requestBuilder = Request.Builder()
+            .url(currentBaseUrl + path)
+            .post(requestBody)
+            .header("Accept", "application/json")
+            
+        applyAuthorizationHeader(requestBuilder)
+        
+        uploadClient.newCall(requestBuilder.build()).execute().use { response ->
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse {
+                val msg = if (response.code == 413) "文件过大，超出服务器限制 (413)" else "服务器响应格式错误"
+                JSONObject().put("code", -1).put("message", msg)
+            }
+            if (response.code == 401) {
+                token = null
+                onUnauthorized?.invoke()
+            }
+            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            invalidateCacheForMutation(path)
+            json
+        }
+    }
+
+    open class ApiException(
+        message: String,
+        val code: Int = -1,
+        val data: JSONObject? = null,
+    ) : IllegalStateException(message)
+
+    suspend fun processingEquipmentByScan(keyword: String): JSONObject? {
+        val trimmed = keyword.trim()
+        val query = java.net.URLEncoder.encode(trimmed, "UTF-8")
+        val res = runCatching { request("/admin/processing-equipment?keyword=$query&page=1&pageSize=1") }.getOrNull()
+        val match = res?.optJSONObject("data")?.optJSONArray("list")?.optJSONObject(0)
+        if (match != null) return match
+        if (trimmed.startsWith("TCM:EQUIPMENT:1:")) {
+            val token = trimmed.removePrefix("TCM:EQUIPMENT:1:").trim()
+            val tokenQuery = java.net.URLEncoder.encode(token, "UTF-8")
+            val tokenRes = runCatching { request("/admin/processing-equipment?keyword=$tokenQuery&page=1&pageSize=1") }.getOrNull()
+            return tokenRes?.optJSONObject("data")?.optJSONArray("list")?.optJSONObject(0)
+        }
+        return null
+    }
+
+    private suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val normalizedMethod = method.uppercase()
+        val cacheTtl = if (normalizedMethod == "GET") cacheTtlMillis(path) else null
+        if (cacheTtl != null) {
+            cachedResponse(path, cacheTtl)?.let { return@withContext it }
+        }
+        val requestBuilder = Request.Builder()
+            .url(currentBaseUrl + path)
+            .header("Accept", "application/json")
+
+        // Only send JSON metadata when a JSON payload exists. Fastify rejects an
+        // empty request body paired with application/json before reaching the route.
+        if (body != null) {
+            requestBuilder.header("Content-Type", "application/json")
+        }
+
+        applyAuthorizationHeader(requestBuilder)
+
+        val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
+
+        when (normalizedMethod) {
+            "GET" -> requestBuilder.get()
+            // OkHttp requires a non-null body for POST/PUT. A zero-byte body
+            // without a media type preserves the endpoint's bodyless semantics.
+            "POST" -> requestBuilder.post(requestBody ?: ByteArray(0).toRequestBody(null))
+            "PUT" -> requestBuilder.put(requestBody ?: ByteArray(0).toRequestBody(null))
+            "DELETE" -> requestBuilder.delete(requestBody)
+            else -> requestBuilder.method(method, requestBody)
+        }
+
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            val responseBodyString = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
+            if (response.code == 401) {
+                token = null
+                onUnauthorized?.invoke()
+            }
+            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            if (normalizedMethod != "GET") invalidateCacheForMutation(path)
+            else if (cacheTtl != null) cacheResponse(path, json.toString())
+            json
+        }
+    }
+
+    private fun cacheResponse(path: String, value: String) {
+        val context = cacheContext ?: return
+        val key = cacheKey(path)
+        val route = path.substringBefore('?')
+        val now = System.currentTimeMillis()
+        val entry = CacheEntry(route, now, value)
+        synchronized(memoryCache) {
+            memoryCache[key] = entry
+        }
+        runCatching {
+            val file = File(cacheDir(context), key)
+            file.writeText("$route\n$now\n$value")
+        }
+    }
+
+    private fun cachedResponse(path: String, ttlMillis: Long): JSONObject? {
+        val key = cacheKey(path)
+        val now = System.currentTimeMillis()
+        val entry = synchronized(memoryCache) { memoryCache[key] } ?: run {
+            val context = cacheContext ?: return null
+            val file = File(cacheDir(context), key)
+            if (!file.exists()) return null
+            runCatching {
+                val lines = file.readLines()
+                if (lines.size >= 3) {
+                    val route = lines[0]
+                    val savedAt = lines[1].toLongOrNull() ?: 0L
+                    val data = lines.drop(2).joinToString("\n")
+                    CacheEntry(route, savedAt, data)
+                } else null
+            }.getOrNull()
+        } ?: return null
+
+        if (entry.savedAt <= 0L || now - entry.savedAt > ttlMillis) {
+            synchronized(memoryCache) { memoryCache.remove(key) }
+            cacheContext?.let { File(cacheDir(it), key).delete() }
+            return null
+        }
+        return runCatching { JSONObject(entry.data) }.getOrNull()
+    }
+
+    internal fun cacheKey(path: String): String {
+        val route = path.substringBefore('?')
+        val prefix = sanitizePrefix(route)
+        val hash = MessageDigest
+            .getInstance("SHA-256")
+            .digest((sessionFingerprint() + "\u0000" + path).toByteArray())
+            .joinToString("") { byte -> "%02x".format(byte) }
+        return if (prefix.isNotBlank()) "${prefix}__${hash}" else hash
+    }
+
+    private suspend fun requestBytes(path: String): ByteArray = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val requestBuilder = Request.Builder()
+            .url(currentBaseUrl + path)
+            .header("Accept", "image/*")
+        applyAuthorizationHeader(requestBuilder)
+        client.newCall(requestBuilder.get().build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                val message = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(message) }.getOrNull()
+                throw IllegalStateException(json?.optString("message")?.takeIf { it.isNotBlank() } ?: "照片加载失败")
+            }
+            response.body?.bytes() ?: throw IllegalStateException("照片内容为空")
+        }
+    }
+}

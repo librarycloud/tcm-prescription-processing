@@ -1,0 +1,350 @@
+import bcrypt from "bcrypt";
+import { randomUUID } from "node:crypto";
+import { config } from "../config.js";
+import { AppError } from "../utils/appError.js";
+import { validatePhone, required } from "../utils/validators.js";
+import { ROLES, isAdmin, isStoreMember } from "../constants/roles.js";
+import { RECORD_STATUS } from "../constants/recordStatus.js";
+
+export function publicUser(user) {
+  const isAdmin = user.role !== undefined;
+  return {
+    id: user.id,
+    username: user.username,
+    phone: user.phone,
+    role: isAdmin ? user.role : ROLES.USER,
+    storeId: isAdmin ? user.storeId : null,
+    store: user.store
+      ? {
+          id: user.store.id,
+          name: user.store.name,
+          code: user.store.code,
+          status: user.store.status,
+        }
+      : null,
+    nickname: user.nickname,
+    email: user.email,
+    emailVerified: Boolean(user.emailVerifiedAt),
+    emailVerifiedAt: user.emailVerifiedAt,
+    openidBound: Boolean(user.openid),
+    wechatBoundAt: user.wechatBoundAt,
+  };
+}
+
+export async function signLoginToken(jwt, authSessions, user) {
+  const isAdmin = user.role !== undefined;
+  const accountType = isAdmin ? "admin" : "user";
+  const jti = randomUUID();
+  const token = jwt.sign(
+    {
+      id: user.id,
+      role: isAdmin ? user.role : ROLES.USER,
+      storeId: isAdmin ? user.storeId || null : null,
+      phone: user.phone,
+      jti,
+      ...(isAdmin ? {} : { accountType: "user" }),
+    },
+    { expiresIn: "7d" },
+  );
+  await authSessions.create({ accountType, accountId: Number(user.id), jti });
+  return token;
+}
+
+export async function login(prisma, jwt, authSessions, payload) {
+  const identifier = String(payload.identifier ?? '').trim();
+  const { password } = payload;
+  required(identifier, '手机号或用户名');
+  if (identifier.length > 64) throw new AppError('手机号或用户名格式不正确', 400);
+  required(password, "密码");
+
+  const account = await prisma.admin.findFirst({
+    where: { OR: [{ username: identifier }, { phone: identifier }] },
+    include: { store: true },
+  });
+  if (!account || !isAdmin(account) || account.status !== RECORD_STATUS.ENABLED) {
+    throw new AppError("手机号或密码错误", 401);
+  }
+  if (
+    isStoreMember(account) &&
+    (!account.storeId ||
+      account.store?.status !== RECORD_STATUS.ENABLED ||
+      account.store?.deletedAt)
+  ) {
+    throw new AppError("账号所属门店已停用，请联系全局管理员", 403);
+  }
+
+  const matched = await bcrypt.compare(password, account.password);
+  if (!matched) throw new AppError("手机号或密码错误", 401);
+
+  return {
+    token: await signLoginToken(jwt, authSessions, account),
+    user: publicUser(account),
+  };
+}
+
+export async function userLogin(prisma, jwt, authSessions, payload) {
+  const identifier = String(payload.identifier ?? '').trim();
+  const { password } = payload;
+  required(identifier, '手机号或用户名');
+  if (identifier.length > 64) throw new AppError('手机号或用户名格式不正确', 400);
+  required(password, "密码");
+
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ username: identifier }, { phone: identifier }] },
+  });
+  if (!user || user.status !== RECORD_STATUS.ENABLED) {
+    throw new AppError("手机号或密码错误", 401);
+  }
+
+  const matched = await bcrypt.compare(password, user.password);
+  if (!matched) throw new AppError("手机号或密码错误", 401);
+
+  return {
+    token: await signLoginToken(jwt, authSessions, user),
+    user: publicUser(user),
+  };
+}
+
+async function codeToWechatIdentity(code) {
+  if (!config.wxAppId || !config.wxSecret) {
+    throw new AppError("微信登录未配置 WX_APPID 或 WX_SECRET", 500);
+  }
+
+  required(code, "微信登录 code");
+  const url = new URL("https://api.weixin.qq.com/sns/jscode2session");
+  url.searchParams.set("appid", config.wxAppId);
+  url.searchParams.set("secret", config.wxSecret);
+  url.searchParams.set("js_code", code);
+  url.searchParams.set("grant_type", "authorization_code");
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (!data.openid) {
+    throw new AppError(data.errmsg || "微信登录失败", 400);
+  }
+
+  return { openid: data.openid, unionid: data.unionid || null };
+}
+
+function isAdminAccount(account) {
+  return account?.accountType === "admin";
+}
+
+function accountRepository(prisma, account) {
+  return isAdminAccount(account) ? prisma.admin : prisma.user;
+}
+
+async function assertEnabledAccount(account) {
+  if (!account || account.status !== RECORD_STATUS.ENABLED) {
+    throw new AppError("账号已停用", 403);
+  }
+  if (
+    isStoreMember(account) &&
+    (!account.storeId || account.store?.status !== RECORD_STATUS.ENABLED || account.store?.deletedAt)
+  ) {
+    throw new AppError("账号所属门店已停用", 403);
+  }
+}
+
+async function assertWechatAvailable(prisma, account, openid, unionid) {
+  const [openidUser, openidAdmin, unionidUser, unionidAdmin] = await Promise.all([
+    prisma.user.findUnique({ where: { openid } }),
+    prisma.admin.findUnique({ where: { openid } }),
+    unionid ? prisma.user.findUnique({ where: { unionid } }) : null,
+    unionid ? prisma.admin.findUnique({ where: { unionid } }) : null,
+  ]);
+  const owns = (owner, type) => owner && owner.id === account.id && type === account.accountType;
+  if ((openidUser && !owns(openidUser, "user")) || (openidAdmin && !owns(openidAdmin, "admin"))) {
+    throw new AppError("该微信已绑定其他账号", 400);
+  }
+  if ((unionidUser && !owns(unionidUser, "user")) || (unionidAdmin && !owns(unionidAdmin, "admin"))) {
+    throw new AppError("该微信已绑定其他账号", 400);
+  }
+}
+
+export async function wechatLogin(prisma, jwt, authSessions, payload) {
+  const { openid, unionid } = await codeToWechatIdentity(payload.code);
+  const user = await prisma.user.findUnique({ where: { openid } });
+
+  if (user) {
+    await assertEnabledAccount(user);
+    return {
+      requiresBind: false,
+      token: await signLoginToken(jwt, authSessions, user),
+      user: publicUser(user),
+    };
+  }
+
+  const admin = await prisma.admin.findUnique({ where: { openid }, include: { store: true } });
+  if (admin) {
+    await assertEnabledAccount(admin);
+    return { requiresBind: false, token: await signLoginToken(jwt, authSessions, admin), user: publicUser(admin) };
+  }
+
+  if (unionid) {
+    const unionidUser = await prisma.user.findUnique({ where: { unionid } });
+    if (unionidUser) {
+      await assertEnabledAccount(unionidUser);
+      return {
+        requiresBind: false,
+        token: await signLoginToken(jwt, authSessions, unionidUser),
+        user: publicUser(unionidUser),
+      };
+    }
+    const unionidAdmin = await prisma.admin.findUnique({ where: { unionid }, include: { store: true } });
+    if (unionidAdmin) {
+      await assertEnabledAccount(unionidAdmin);
+      return { requiresBind: false, token: await signLoginToken(jwt, authSessions, unionidAdmin), user: publicUser(unionidAdmin) };
+    }
+  }
+
+  return {
+    requiresBind: true,
+    bindToken: jwt.sign(
+      { type: 'wechat_pickup_bind', openid, unionid },
+      { expiresIn: '15m' },
+    ),
+  };
+}
+
+export async function bindWechat(prisma, currentUser, payload) {
+  const { openid, unionid } = await codeToWechatIdentity(payload.code);
+  const repository = accountRepository(prisma, currentUser);
+  const user = await repository.findUnique({ where: { id: Number(currentUser.id) }, include: isAdminAccount(currentUser) ? { store: true } : undefined });
+  await assertEnabledAccount(user);
+  if (user.openid && user.openid !== openid) {
+    throw new AppError("账号已绑定其他微信，请先解除绑定", 400);
+  }
+
+  await assertWechatAvailable(prisma, currentUser, openid, unionid);
+
+  const updated = await repository.update({
+    where: { id: user.id },
+    data: {
+      openid,
+      unionid: unionid || undefined,
+      wechatBoundAt: new Date(),
+    },
+  });
+
+  return {
+    user: publicUser(updated),
+  };
+}
+
+export async function rebindWechat(prisma, currentUser, payload) {
+  const password = String(payload.password || '');
+  required(password, '当前密码');
+  const repository = accountRepository(prisma, currentUser);
+  const user = await repository.findUnique({ where: { id: Number(currentUser.id) }, include: isAdminAccount(currentUser) ? { store: true } : undefined });
+  await assertEnabledAccount(user);
+  const matched = await bcrypt.compare(password, user.password);
+  if (!matched) throw new AppError('当前密码错误', 400);
+
+  const { openid, unionid } = await codeToWechatIdentity(payload.code);
+  await assertWechatAvailable(prisma, currentUser, openid, unionid);
+
+  const updated = await repository.update({
+    where: { id: user.id },
+    data: { openid, unionid: unionid || undefined, wechatBoundAt: new Date() },
+  });
+  return { user: publicUser(updated) };
+}
+
+export async function bindWechatByPickupCode(prisma, jwt, authSessions, payload) {
+  const { bindToken, phone, pickupCode } = payload;
+  required(bindToken, '绑定凭证');
+  validatePhone(phone);
+  required(pickupCode, '取货码');
+  const normalizedPhone = String(phone).trim();
+
+  let decoded;
+  try {
+    decoded = await jwt.verify(bindToken);
+  } catch {
+    throw new AppError('绑定凭证已过期，请重新微信登录', 401);
+  }
+  if (decoded.type !== 'wechat_pickup_bind' || !decoded.openid) {
+    throw new AppError('绑定凭证无效', 401);
+  }
+
+  const boundUser = await prisma.user.findUnique({ where: { openid: decoded.openid } });
+  if (boundUser) {
+    if (boundUser.status !== RECORD_STATUS.ENABLED) throw new AppError('账号已停用', 403);
+    return { token: await signLoginToken(jwt, authSessions, boundUser), user: publicUser(boundUser) };
+  }
+
+  const packageRecord = await prisma.package.findUnique({
+    where: { pickupCode: String(pickupCode).replace(/\D/g, '') },
+  });
+  if (
+    !packageRecord ||
+    packageRecord.deletedAt ||
+    packageRecord.receiverPhone !== normalizedPhone
+  ) {
+    throw new AppError('手机号或取货码不匹配', 400);
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { phone: normalizedPhone },
+  });
+  if (existingUser && existingUser.status !== RECORD_STATUS.ENABLED) {
+    throw new AppError('账号已停用', 403);
+  }
+  if (decoded.unionid) {
+    const unionidOwner = await prisma.user.findUnique({ where: { unionid: decoded.unionid } });
+    if (unionidOwner && unionidOwner.id !== existingUser?.id) {
+      throw new AppError('该微信已绑定其他账号', 400);
+    }
+  }
+
+  const placeholderPassword = await bcrypt.hash(`wx:${decoded.openid}:${Date.now()}`, 10);
+  const user = existingUser
+    ? await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          openid: decoded.openid,
+          unionid: decoded.unionid || undefined,
+          wechatBoundAt: new Date(),
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          username: null,
+          password: placeholderPassword,
+          phone: normalizedPhone,
+          openid: decoded.openid,
+          unionid: decoded.unionid || undefined,
+          wechatBoundAt: new Date(),
+          nickname: packageRecord.receiverName,
+        },
+      });
+
+  return { token: await signLoginToken(jwt, authSessions, user), user: publicUser(user) };
+}
+
+export async function getWechatStatus(prisma, currentUser) {
+  const user = await accountRepository(prisma, currentUser).findUnique({
+    where: { id: Number(currentUser.id) },
+    select: { openid: true, wechatBoundAt: true },
+  });
+  if (!user) throw new AppError('用户不存在', 404);
+  return { bound: Boolean(user.openid), boundAt: user.wechatBoundAt };
+}
+
+export async function unbindWechat(prisma, currentUser, payload) {
+  const password = String(payload.password || '');
+  required(password, '密码');
+  const repository = accountRepository(prisma, currentUser);
+  const user = await repository.findUnique({ where: { id: Number(currentUser.id) } });
+  if (!user) throw new AppError('用户不存在', 404);
+  const matched = await bcrypt.compare(password, user.password);
+  if (!matched) throw new AppError('密码错误', 400);
+
+  const updated = await repository.update({
+    where: { id: user.id },
+    data: { openid: null, unionid: null, wechatBoundAt: null },
+  });
+  return { user: publicUser(updated) };
+}

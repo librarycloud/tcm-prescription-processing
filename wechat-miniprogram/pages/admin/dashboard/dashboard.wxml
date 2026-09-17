@@ -1,0 +1,61 @@
+<view class="page">
+  <view class="app-card" wx:if="{{user.role === 2 || user.role === 3}}">当前门店：{{stats.store.name || user.store.name || '-'}}</view>
+  <view class="section-title">
+    <text>加工概况</text>
+  </view>
+  <view class="processing-stats">
+    <view class="app-card processing-stat" wx:for="{{processingCards}}" wx:key="key" data-view="{{item.view}}" hover-class="processing-stat-active" bind:tap="goProcessingView">
+      <view class="processing-value text-primary">{{item.value}}</view>
+      <view class="text-caption" style="margin-top: 4rpx;">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="section-title">
+    <text>包裹概况</text>
+  </view>
+  <view class="stats">
+    <view
+      class="app-card stat-card {{item.disabled ? 'stat-card-disabled' : ''}}"
+      wx:for="{{cards}}"
+      wx:key="key"
+      data-status="{{item.status}}"
+      data-date-scope="{{item.dateScope}}"
+      data-sort-by="{{item.sortBy}}"
+      data-disabled="{{item.disabled}}"
+      hover-class="{{item.disabled ? 'none' : 'stat-card-active'}}"
+      bind:tap="goPackageList"
+    >
+      <view class="stat-value text-primary">{{item.value}}</view>
+      <view class="text-caption" style="margin-top: 4rpx;">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="section-title">
+    <text>业务管理</text>
+  </view>
+  <view class="section-actions business-actions">
+    <view class="section-action-item">
+      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goPrescriptions">查看处方</t-button>
+    </view>
+    <view class="section-action-item" wx:if="{{user.role !== 3}}">
+      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goTransfers">门店调拨</t-button>
+    </view>
+    <view class="section-action-item" wx:if="{{user.role !== 3}}">
+      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goProductDifferences">库存差异</t-button>
+    </view>
+    <view class="section-action-item">
+      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goE6Inventory">E6药店库存</t-button>
+    </view>
+    <view class="section-action-item">
+      <t-button block theme="primary" t-class="business-action-button" variant="outline" bind:tap="goGoodsChecks">药店商品盘点</t-button>
+    </view>
+  </view>
+
+  <t-tab-bar value="{{activeTab}}" fixed bind:change="onTabChange">
+    <t-tab-bar-item value="overview" icon="home">库存</t-tab-bar-item>
+    <t-tab-bar-item value="herbs" icon="view-module">斗谱</t-tab-bar-item>
+    <t-tab-bar-item value="processing" icon="time">加工</t-tab-bar-item>
+    <t-tab-bar-item value="packages" icon="view-list">包裹</t-tab-bar-item>
+    <t-tab-bar-item value="business" icon="app">业务</t-tab-bar-item>    <t-tab-bar-item value="profile" icon="user">我的</t-tab-bar-item>
+  </t-tab-bar>
+</view>

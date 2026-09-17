@@ -1,0 +1,19 @@
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 32rpx;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.copyable-cell-note {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8rpx;
+}
+
+.cell-note-text {
+  color: #1f2329;
+}
+

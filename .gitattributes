@@ -1,0 +1,11 @@
+# Keep text files consistent across Windows, macOS, and Linux checkouts.
+* text=auto eol=lf
+
+# Treat binary assets as binary.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary

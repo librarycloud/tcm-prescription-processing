@@ -1,0 +1,20 @@
+.agreement-page {
+  color: #1f2329;
+  line-height: 1.7;
+}
+
+.title {
+  margin-bottom: 20rpx;
+  font-size: 44rpx;
+  font-weight: 700;
+}
+
+.section-title {
+  margin: 36rpx 0 16rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.paragraph {
+  margin-bottom: 16rpx;
+}

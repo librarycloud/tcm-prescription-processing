@@ -1,0 +1,123 @@
+package com.tcm.admin
+
+import org.json.JSONObject
+
+internal data class PackageItem(
+    val name: String,
+    val customer: String,
+    val code: String,
+    val status: String,
+    val time: String,
+    val id: Int = 0,
+    val phone: String = "-",
+    val store: String = "",
+    val method: String = "",
+    val info: String = "",
+    val statusCode: Int = 0,
+    val methodCode: Int = 0,
+    val expressTrackingNo: String = "",
+    val pickupQrContent: String = "",
+    val createdAt: String = "-",
+    val pickedAt: String = "",
+    val creatorName: String = "-",
+    val verifierName: String = "",
+)
+
+internal fun packageItem(value: JSONObject): PackageItem {
+    val statusCode = value.optInt("status", 0)
+    val store = value.optJSONObject("store")?.displayField("name", "") ?: ""
+    val methodCode = value.optInt("pickupMethod", 0)
+    val method = when (methodCode) { 0 -> "自提"; 1 -> "跑腿"; 2 -> "快递"; else -> "未设置" }
+    val status = when (statusCode) { 0 -> "待领取"; 1 -> "已领取"; else -> "已关闭" }
+    fun operatorName(key: String): String {
+        val operator = value.optJSONObject(key) ?: return ""
+        return operator.displayField("nickname", "")
+            .ifBlank { operator.displayField("name", "") }
+            .ifBlank { operator.displayField("phone", "") }
+    }
+    val createdAt = serverDateTime(value.opt("createdAt"))
+    val pickedAt = serverDateTime(value.opt("pickedAt"), "")
+    return PackageItem(
+        name = value.displayField("itemName", "包裹"),
+        customer = value.displayField("receiverName", "客户"),
+        code = value.displayField("pickupCode"),
+        status = status,
+        time = pickedAt.ifBlank { "未领取" },
+        id = value.optInt("id", 0),
+        phone = value.displayField("receiverPhone"),
+        store = store,
+        method = method,
+        info = value.displayField("itemInfo", ""),
+        statusCode = statusCode,
+        methodCode = methodCode,
+        expressTrackingNo = value.displayField("expressTrackingNo", ""),
+        pickupQrContent = value.displayField("pickupQrContent", ""),
+        createdAt = createdAt,
+        pickedAt = pickedAt,
+        creatorName = operatorName("creator").ifBlank { "-" },
+        verifierName = operatorName("verifier"),
+    )
+}
+
+internal fun PackageItem.toJson(): JSONObject = JSONObject().apply {
+    put("id", id)
+    put("name", name)
+    put("customer", customer)
+    put("code", code)
+    put("status", status)
+    put("time", time)
+    put("phone", phone)
+    put("store", store)
+    put("method", method)
+    put("info", info)
+    put("statusCode", statusCode)
+    put("methodCode", methodCode)
+    put("expressTrackingNo", expressTrackingNo)
+    put("pickupQrContent", pickupQrContent)
+    put("createdAt", createdAt)
+    put("pickedAt", pickedAt)
+    put("creatorName", creatorName)
+    put("verifierName", verifierName)
+}
+
+internal fun packageItemFromJson(json: JSONObject): PackageItem = PackageItem(
+    name = json.optString("name", "包裹"),
+    customer = json.optString("customer", "客户"),
+    code = json.optString("code", ""),
+    status = json.optString("status", ""),
+    time = json.optString("time", "未领取"),
+    id = json.optInt("id", 0),
+    phone = json.optString("phone", "-"),
+    store = json.optString("store", ""),
+    method = json.optString("method", ""),
+    info = json.optString("info", ""),
+    statusCode = json.optInt("statusCode", 0),
+    methodCode = json.optInt("methodCode", 0),
+    expressTrackingNo = json.optString("expressTrackingNo", ""),
+    pickupQrContent = json.optString("pickupQrContent", ""),
+    createdAt = json.optString("createdAt", "-"),
+    pickedAt = json.optString("pickedAt", ""),
+    creatorName = json.optString("creatorName", "-"),
+    verifierName = json.optString("verifierName", ""),
+)
+
+enum class PrescriptionStatus(val code: Int) {
+    IN_PROGRESS(0), COMPLETED(1), CANCELLED(2), UNKNOWN(-1)
+}
+
+enum class ProcessingPlanStatus(val code: Int) {
+    WAITING(0), IN_PROGRESS(1), COMPLETED(2), PENDING_PICKUP(3), PICKED_UP(4), CANCELLED(5), UNKNOWN(-1)
+}
+
+enum class PackageStatus(val code: Int) {
+    PENDING(0), PICKED_UP(1), CLOSED(2), UNKNOWN(-1)
+}
+
+fun Int?.toPrescriptionStatus(): PrescriptionStatus =
+    PrescriptionStatus.entries.find { it.code == this } ?: PrescriptionStatus.UNKNOWN
+
+fun Int?.toProcessingPlanStatus(): ProcessingPlanStatus =
+    ProcessingPlanStatus.entries.find { it.code == this } ?: ProcessingPlanStatus.UNKNOWN
+
+fun Int?.toPackageStatus(): PackageStatus =
+    PackageStatus.entries.find { it.code == this } ?: PackageStatus.UNKNOWN

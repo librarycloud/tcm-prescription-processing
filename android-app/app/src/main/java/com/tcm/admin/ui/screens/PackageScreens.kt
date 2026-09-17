@@ -1,0 +1,812 @@
+package com.tcm.admin
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tcm.admin.ui.viewmodels.PackageViewModel
+
+import androidx.compose.ui.graphics.asImageBitmap
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+
+@Composable
+private fun FakeQr(value: String) {
+    val bitmapState = produceState<Bitmap?>(initialValue = null, key1 = value) {
+        if (value.isBlank()) {
+            this.value = null
+            return@produceState
+        }
+        this.value = withContext(Dispatchers.Default) {
+            runCatching {
+                val size = 512
+                val matrix = MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, size, size)
+                val width = matrix.width
+                val height = matrix.height
+                val pixels = IntArray(width * height)
+                for (y in 0 until height) {
+                    val offset = y * width
+                    for (x in 0 until width) {
+                        pixels[offset + x] = if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                    }
+                }
+                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+                    setPixels(pixels, 0, width, 0, 0, width, height)
+                }
+            }.getOrNull()
+        }
+    }
+    val bitmap = bitmapState.value
+    if (bitmap != null) {
+        DisposableEffect(bitmap) {
+            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+        }
+        Image(bitmap = bitmap.asImageBitmap(), contentDescription = "取货二维码", modifier = Modifier.size(140.dp))
+    } else {
+        Box(Modifier.size(140.dp).background(Color.White, RoundedCornerShape(8.dp)))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PackagesScreen(
+    user: JSONObject?,
+    onNavigate: (Route) -> Unit,
+    scrollState: ScrollState? = null,
+    listState: LazyListState = rememberLazyListState(),
+    viewModel: PackageViewModel = hiltViewModel()
+) {
+    val showStore = user?.optInt("role", -1) == 0
+    val keyword by viewModel.keyword.collectAsStateWithLifecycle()
+    val status by viewModel.status.collectAsStateWithLifecycle()
+    val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
+    val selectedStoreId by viewModel.storeId.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+    
+    val items = viewModel.packagesFlow.collectAsLazyPagingItems()
+    
+    var lastAutoKeyword by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            onNavigate(Route.PackageVerify(value))
+        }
+    }
+
+    val reloadRevision = rememberListReloadRevision("packages")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            items.refresh()
+        }
+    }
+
+    LaunchedEffect(showStore) {
+        if (showStore) viewModel.loadStores()
+    }
+    
+    LaunchedEffect(stores) {
+        if (showStore && stores.size == 1 && selectedStoreId == null) {
+            viewModel.updateFilters(newStoreId = stores.first().optInt("id"))
+        }
+    }
+    
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (!shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            items.refresh()
+        }
+    }
+
+    PullToRefreshBox(
+        isRefreshing = items.loadState.refresh is LoadState.Loading,
+        onRefresh = { items.refresh() },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+        ) {
+            item(key = "header") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        SectionHeader("包裹管理", "取件记录与物流登记")
+                    }
+                    Button(
+                        onClick = { scannerLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                        shape = FieldShape,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("取件核销", fontSize = 13.sp)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                SearchBarField(
+                    keyword,
+                    {
+                        viewModel.updateFilters(newKeyword = it)
+                        if (it.isBlank()) items.refresh()
+                    },
+                    "搜索包裹号、处方号、收件人或手机号",
+                    onSearch = { lastAutoKeyword = keyword.trim(); items.refresh() },
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("全部包裹", status == null, onClick = { viewModel.updateFilters(newStatus = null) })
+                    SegmentedButton("待取件", status == 0, onClick = { viewModel.updateFilters(newStatus = 0) })
+                    SegmentedButton("已完成", status == 1, onClick = { viewModel.updateFilters(newStatus = 1) })
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("按入库时间排序", sortBy == "createdAt", onClick = { viewModel.updateFilters(newSortBy = "createdAt") })
+                    SegmentedButton("按取件时间排序", sortBy == "pickedAt", onClick = { viewModel.updateFilters(newSortBy = "pickedAt") })
+                }
+                if (showStore && stores.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    StoreChipsRow(stores, selectedStoreId?.toString() ?: "", onSelectStore = { viewModel.updateFilters(newStoreId = it.toIntOrNull()) })
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
+            val loadState = items.loadState.refresh
+            if (loadState is LoadState.Error) {
+                item(key = "error") {
+                    ErrorStateView(message = loadState.error.message ?: "加载包裹失败", onRetry = { items.retry() })
+                }
+            }
+
+            if (loadState is LoadState.Loading && items.itemCount == 0) {
+                item(key = "revalidating_indicator") {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = Primary,
+                        trackColor = Primary.copy(alpha = 0.12f),
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
+                item(key = "empty") {
+                    AppEmptyState("暂无匹配包裹", icon = Icons.Rounded.Inventory2)
+                }
+            }
+
+            items(
+                count = items.itemCount,
+                key = items.itemKey { it.id }
+            ) { index ->
+                val item = items[index]
+                if (item != null) {
+                    PackageSummaryCard(
+                        item = item,
+                        showStore = showStore,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        onClick = { onNavigate(Route.PackageDetail(RouteParams.put(item))) },
+                        onVerify = { onNavigate(Route.PackageVerify(item.code)) },
+                    )
+                }
+            }
+            
+            if (items.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Spacer(Modifier.height(16.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun PackageSummaryCard(
+    item: PackageItem,
+    showStore: Boolean,
+    onClick: () -> Unit,
+    onVerify: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AppCard(
+        modifier = modifier,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Inventory2, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink) }
+            Spacer(Modifier.width(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                StatusPill(text = item.method)
+                StatusPill(text = item.status)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = FieldShape,
+            border = BorderStroke(1.dp, CardBorderColor),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("取货码", color = Muted, fontSize = 11.sp)
+                    Text(
+                        text = formatPickupCode(item.code),
+                        color = PrimaryDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("收件人", color = Muted, fontSize = 11.sp)
+                    Text(
+                        text = "${item.customer} · ${maskPhone(item.phone)}",
+                        color = Ink,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        if (showStore && item.store.isNotBlank()) {
+            InfoRowItem(label = "所属门店", value = item.store)
+        }
+        InfoRowItem(label = "领取时间", value = item.time)
+        item.info.takeIf { it.isNotBlank() }?.let {
+            InfoRowItem(label = "备注", value = it)
+        }
+
+        if (item.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Button(
+                    onClick = onVerify,
+                    shape = FieldShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 5.dp),
+                ) {
+                    Text("快速核销", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun PackageDetailPage(
+    pkg: PackageItem,
+    showStore: Boolean,
+    onNavigate: (Route) -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        AppCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = pkg.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Ink,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StatusPill(text = pkg.method)
+                    StatusPill(text = pkg.status)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // QR Code Center Box
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = FieldShape,
+                border = BorderStroke(1.dp, CardBorderColor),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    FakeQr(pkg.pickupQrContent.ifBlank { pkg.code })
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "取货码：${formatPickupCode(pkg.code)}",
+                        color = PrimaryDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                    )
+                    Text("请向工作人员出示此取货码或二维码", color = Muted, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            InfoRowItem(label = "收件客户", value = pkg.customer)
+            InfoRowItem(label = "联系电话", value = maskPhone(pkg.phone))
+            InfoRowItem(label = "取货方式", value = pkg.method)
+            if (showStore && pkg.store.isNotBlank()) InfoRowItem(label = "所属门店", value = pkg.store)
+            if (pkg.expressTrackingNo.isNotBlank()) InfoRowItem(label = "快递单号", value = pkg.expressTrackingNo)
+            InfoRowItem(label = "包裹状态", value = pkg.status)
+            InfoRowItem(label = "录入时间", value = pkg.createdAt)
+            InfoRowItem(label = "取货时间", value = pkg.pickedAt.ifBlank { "未领取" })
+            InfoRowItem(label = "录入人", value = pkg.creatorName)
+            InfoRowItem(label = "核销人", value = pkg.verifierName.ifBlank { "未核销" })
+
+            if (pkg.info.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "备注：${pkg.info}",
+                        color = RegularText,
+                        fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (pkg.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
+                OutlinedButton(
+                    onClick = { onNavigate(Route.PackageForm(RouteParams.put(pkg))) },
+                    shape = FieldShape,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("编辑包裹")
+                }
+            }
+
+            if (pkg.statusCode == com.tcm.admin.PackageStatus.PENDING.code) {
+                Button(
+                    onClick = { onNavigate(Route.PackageVerify(pkg.code)) },
+                    shape = FieldShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Success),
+                    modifier = Modifier.weight(1f).height(46.dp),
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("立即核销")
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+internal fun PackageFormScreen(
+    initial: PackageItem?,
+    onSaved: () -> Unit,
+) {
+    val isEdit = initial != null && initial.id > 0
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var itemName by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
+    var itemInfo by remember(initial) { mutableStateOf(initial?.info.orEmpty()) }
+    var receiverName by remember(initial) { mutableStateOf(initial?.customer.orEmpty()) }
+    var receiverPhone by remember(initial) { mutableStateOf(initial?.phone?.takeIf { it != "-" }.orEmpty()) }
+    var method by remember(initial) { mutableStateOf(initial?.methodCode ?: 0) }
+    var tracking by remember(initial) { mutableStateOf(initial?.expressTrackingNo.orEmpty()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val expressScannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            tracking = extractExpressTrackingNo(value)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        AppCard {
+            SectionHeader(
+                title = if (isEdit) "编辑包裹信息" else "创建自提/代发包裹",
+                subtitle = "录入物品、备注与收件人联系方式",
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            OutlinedTextField(
+                value = itemName,
+                onValueChange = { itemName = it },
+                label = { Text("物品名称 *") },
+                placeholder = { Text("如：中药汤剂 14袋") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = itemInfo,
+                onValueChange = { itemInfo = it.take(500) },
+                label = { Text("备注") },
+                placeholder = { Text("如：请冷藏、分装或配送说明") },
+                minLines = 2,
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = receiverName,
+                onValueChange = { receiverName = it },
+                label = { Text("收件人姓名 *") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = receiverPhone,
+                onValueChange = { receiverPhone = it.filter(Char::isDigit).take(11) },
+                label = { Text("收件人手机号") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            Text("取货方式 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) ->
+                    SegmentedButton(label, method == key, onClick = { method = key })
+                }
+            }
+
+            if (method == 2) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = tracking,
+                    onValueChange = { tracking = it },
+                    label = { Text("快递单号 *") },
+                    placeholder = { Text("输入或扫描快递单号") },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            expressScannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        }) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = "扫描快递单号", tint = Primary)
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                )
+            }
+        }
+
+        if (error != null) {
+            Spacer(Modifier.height(10.dp))
+            ErrorStateView(message = error!!, onRetry = { error = null })
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            enabled = itemName.isNotBlank() && receiverName.isNotBlank() && !busy && (method != 2 || tracking.isNotBlank()),
+            onClick = {
+                busy = true
+                val payload = JSONObject()
+                    .put("itemName", itemName.trim())
+                    .put("itemInfo", itemInfo.trim())
+                    .put("receiverName", receiverName.trim())
+                    .put("receiverPhone", receiverPhone.trim())
+                    .put("pickupMethod", method)
+                    .put("expressTrackingNo", tracking.trim())
+
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            if (isEdit) {
+                                ApiClient.updatePackage(initial!!.id, payload)
+                            } else {
+                                ApiClient.createPackage(payload)
+                            }
+                        }
+                    }.onSuccess {
+                        onSaved()
+                    }.onFailure {
+                        error = it.message ?: "保存包裹失败"
+                    }
+                    busy = false
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+        ) {
+            Text(if (busy) "正在保存..." else if (isEdit) "确认修改" else "保存并生成取货码", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+internal fun PackageVerifyScreen(
+    initialCode: String,
+    onVerified: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var signedQrContent by remember(initialCode) {
+        mutableStateOf(initialCode.takeIf { it.startsWith("TCM:PICKUP:1:") })
+    }
+    var code by remember(initialCode) {
+        val signedCode = Regex("^TCM:PICKUP:1:\\d+:(\\d{6}):[A-Za-z0-9_-]+$")
+            .matchEntire(initialCode)?.groupValues?.getOrNull(1)
+        val raw = (signedCode ?: initialCode.filter(Char::isDigit).take(6))
+        mutableStateOf(if (raw.length > 3) "${raw.substring(0, 3)}-${raw.substring(3)}" else raw)
+    }
+    var method by remember { mutableStateOf(0) }
+    var tracking by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val expressScannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
+        if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
+            tracking = extractExpressTrackingNo(value)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        AppCard {
+            SectionHeader(
+                title = "取货码核销",
+                subtitle = "输入顾客提供的 6 位取货码进行包裹核销与出库",
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            OutlinedTextField(
+                value = code,
+                onValueChange = {
+                    val raw = it.filter(Char::isDigit).take(6)
+                    code = if (raw.length > 3) "${raw.substring(0, 3)}-${raw.substring(3)}" else raw
+                    signedQrContent = null
+                },
+                label = { Text("6 位取货码 *") },
+                placeholder = { Text("例如：891234") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = FieldShape,
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            Text("确认最终取货方式", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "自提", 1 to "跑腿", 2 to "快递").forEach { (key, label) ->
+                    SegmentedButton(label, method == key, onClick = { method = key })
+                }
+            }
+
+            if (method == 2) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = tracking,
+                    onValueChange = { tracking = it },
+                    label = { Text("快递单号 *") },
+                    placeholder = { Text("输入或扫描快递单号") },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            expressScannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        }) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = "扫描快递单号", tint = Primary)
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FieldShape,
+                )
+            }
+        }
+
+        if (error != null) {
+            Spacer(Modifier.height(10.dp))
+            ErrorStateView(message = error!!, onRetry = { error = null })
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        val rawPickupCode = code.filter(Char::isDigit)
+        Button(
+            enabled = rawPickupCode.length == 6 && !busy && (method != 2 || tracking.isNotBlank()),
+            onClick = {
+                busy = true
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            ApiClient.verifyPackage(rawPickupCode, method, tracking.trim(), signedQrContent)
+                        }
+                    }.onSuccess {
+                        onVerified()
+                    }.onFailure {
+                        error = it.message ?: "核销失败"
+                    }
+                    busy = false
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = FieldShape,
+            colors = ButtonDefaults.buttonColors(containerColor = Success),
+        ) {
+            Text(if (busy) "正在核销..." else "确认核销出库", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+
+/** 提取快递单号（支持顺丰等主流快递条码、二维码 URL 及标准单号文本） */
+internal fun extractExpressTrackingNo(raw: String): String {
+    val text = raw.trim()
+    if (text.isBlank()) return ""
+    // 匹配 SF 开头的单号（例如 SF1432567890123、SF-123456789012、包含在URL中等）
+    val sfMatch = Regex("(?i)(?:SF|sf)[\\s-]*([0-9]{10,16})").find(text)
+    if (sfMatch != null) {
+        return "SF" + sfMatch.groupValues[1]
+    }
+    // 匹配 12-15 位纯数字顺丰或快递单号（包括从网址或二维码参数中提取）
+    val digitsMatch = Regex("(?<!\\d)(\\d{12,16})(?!\\d)").find(text)
+    if (digitsMatch != null) {
+        return digitsMatch.groupValues[1]
+    }
+    // 去除空格和短横线后的连续字母数字（>=10位）
+    val cleaned = text.replace(Regex("[\\s-]+"), "")
+    if (cleaned.length >= 10 && cleaned.all { it.isLetterOrDigit() }) {
+        return cleaned
+    }
+    return text
+}

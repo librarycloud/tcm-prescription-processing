@@ -1,0 +1,17 @@
+.batch-page { padding-bottom: 220rpx; }
+.mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 20rpx; padding: 6rpx; border: 1rpx solid #e5e6eb; border-radius: 8rpx; background: #fff; }
+.mode-item { padding: 18rpx 10rpx; border-radius: 6rpx; text-align: center; }
+.mode-item.active { color: #fff; background: #0052d9; font-weight: 600; }
+.section-title { font-size: 30rpx; font-weight: 700; }
+.prescription-card { margin-bottom: 20rpx; }
+.search-row { overflow: hidden; margin: 16rpx 0; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; --td-input-bg-color: transparent; --td-input-vertical-padding: 16rpx 24rpx; --td-input-suffix-text-color: #0052d9; }
+.picker-row { display: flex; align-items: center; justify-content: space-between; min-height: 96rpx; border-bottom: 1rpx solid #eef0f5; }
+.picker-value { max-width: 68%; color: #1f2329; text-align: right; }
+.picker-value.placeholder { color: #b0b5bd; }
+.batch-heading, .plan-heading, .plan-actions { display: flex; align-items: center; }
+.batch-heading { justify-content: space-between; margin: 28rpx 0 16rpx; }
+.plan-card { margin-bottom: 18rpx; padding: 22rpx; border-left: 6rpx solid #0052d9; }
+.plan-heading { justify-content: space-between; margin-bottom: 12rpx; }
+.plan-title { color: #0052d9; font-size: 30rpx; font-weight: 700; }
+.plan-actions { gap: 8rpx; }
+.submit { margin-top: 28rpx; }

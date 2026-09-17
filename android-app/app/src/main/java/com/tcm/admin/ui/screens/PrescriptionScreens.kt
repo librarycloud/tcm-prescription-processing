@@ -1,0 +1,1265 @@
+package com.tcm.admin
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import java.io.File
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+import android.widget.Toast
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tcm.admin.ui.viewmodels.PrescriptionViewModel
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+private fun prescriptionStatusLabel(value: Int): String = when (value) {
+    0 -> "进行中"
+    1 -> "已完成"
+    2 -> "已取消"
+    else -> "未知"
+}
+
+private fun isStoreStaff(user: JSONObject?): Boolean = user?.optInt("role", -1) == 3
+private fun isSuperAdmin(user: JSONObject?): Boolean = user?.optInt("role", -1) == 0
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PrescriptionsScreen(
+    user: JSONObject?,
+    onNavigate: (Route) -> Unit,
+    scrollState: ScrollState? = null,
+    listState: LazyListState = rememberLazyListState(),
+    viewModel: PrescriptionViewModel = hiltViewModel()
+) {
+    val readOnly = isStoreStaff(user)
+    val keyword by viewModel.keyword.collectAsStateWithLifecycle()
+    val status by viewModel.status.collectAsStateWithLifecycle()
+    val doctorId by viewModel.doctorId.collectAsStateWithLifecycle()
+    val selectedStoreId by viewModel.storeId.collectAsStateWithLifecycle()
+    val doctors by viewModel.doctors.collectAsStateWithLifecycle()
+    val stores by viewModel.stores.collectAsStateWithLifecycle()
+    
+    val items = viewModel.prescriptionsFlow.collectAsLazyPagingItems()
+    
+    var deleteTarget by remember { mutableStateOf<JSONObject?>(null) }
+    var deleting by remember { mutableStateOf(false) }
+    var lastAutoKeyword by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.loadFilters()
+    }
+    
+    val reloadRevision = rememberListReloadRevision("prescriptions")
+    LaunchedEffect(reloadRevision) {
+        if (reloadRevision > 0) {
+            items.refresh()
+        }
+    }
+    
+    LaunchedEffect(stores) {
+        if (!isSuperAdmin(user) && stores.size == 1 && selectedStoreId == null) {
+            viewModel.updateFilters(newStoreId = stores.first().optInt("id"))
+        }
+    }
+    
+    LaunchedEffect(keyword) {
+        val term = keyword.trim()
+        if (!shouldAutoSearchQuery(term)) {
+            lastAutoKeyword = ""
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        if (keyword.trim() == term && lastAutoKeyword != term) {
+            lastAutoKeyword = term
+            items.refresh()
+        }
+    }
+
+    PullToRefreshBox(
+        isRefreshing = items.loadState.refresh is LoadState.Loading,
+        onRefresh = { items.refresh() },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+    ) {
+        item(key = "header") {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { SectionHeader("处方管理", "患者处方、加工批次与原件") }
+                if (!readOnly) {
+                    Button(
+                        onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(JSONObject()))) },
+                        shape = FieldShape,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("新建处方", fontSize = 13.sp)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            SearchBarField(
+                keyword,
+                {
+                    viewModel.updateFilters(newKeyword = it)
+                    if (it.isBlank()) items.refresh()
+                },
+                "搜索患者姓名、手机号、处方号或医生",
+                onSearch = { lastAutoKeyword = keyword.trim(); items.refresh() },
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentedButton("全部状态", status == null, onClick = { viewModel.updateFilters(newStatus = null) })
+                SegmentedButton("进行中", status == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code, onClick = { viewModel.updateFilters(newStatus = com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) })
+                SegmentedButton("已完成", status == com.tcm.admin.PrescriptionStatus.COMPLETED.code, onClick = { viewModel.updateFilters(newStatus = com.tcm.admin.PrescriptionStatus.COMPLETED.code) })
+                SegmentedButton("已取消", status == com.tcm.admin.PrescriptionStatus.CANCELLED.code, onClick = { viewModel.updateFilters(newStatus = com.tcm.admin.PrescriptionStatus.CANCELLED.code) })
+            }
+        }
+
+        if (doctors.isNotEmpty()) {
+            item(key = "doctors_filter") {
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("全部医生", doctorId == null, onClick = { viewModel.updateFilters(newDoctorId = null) })
+                    doctors.forEach { doctor ->
+                        val doctorValue = doctor.optInt("id")
+                        SegmentedButton(doctor.displayField("name", "医生"), doctorId == doctorValue, onClick = { viewModel.updateFilters(newDoctorId = doctorValue) })
+                    }
+                }
+            }
+        }
+
+        if (isSuperAdmin(user) && stores.isNotEmpty()) {
+            item(key = "stores_filter") {
+                Spacer(Modifier.height(8.dp))
+                StoreChipsRow(stores, selectedStoreId?.toString() ?: "", onSelectStore = { viewModel.updateFilters(newStoreId = it.toIntOrNull()) })
+            }
+        }
+
+        val loadState = items.loadState.refresh
+        if (loadState is LoadState.Error) {
+            item(key = "error") {
+                Spacer(Modifier.height(14.dp))
+                ErrorStateView(message = loadState.error.message ?: "加载处方失败", onRetry = { items.retry() })
+            }
+        }
+
+        if (loadState is LoadState.Loading && items.itemCount == 0) {
+            item(key = "revalidating_indicator") {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = Primary,
+                    trackColor = Primary.copy(alpha = 0.12f),
+                    strokeCap = StrokeCap.Round,
+                    gapSize = 0.dp,
+                )
+            }
+        } else if (items.itemCount == 0 && loadState !is LoadState.Error && loadState !is LoadState.Loading) {
+            item(key = "empty") {
+                Spacer(Modifier.height(32.dp))
+                AppEmptyState(if (keyword.isNotBlank()) "没有找到包含 “$keyword” 的处方" else "暂无处方", icon = Icons.Rounded.MedicalServices)
+            }
+        }
+
+        if (items.itemCount > 0) {
+            item(key = "items_spacer_top") {
+                Spacer(Modifier.height(14.dp))
+            }
+            items(
+                count = items.itemCount,
+                key = items.itemKey { it.optInt("id") }
+            ) { index ->
+                val item = items[index]
+                if (item != null) {
+                    val plans = item.optJSONArray("plans") ?: JSONArray()
+                    val remainingDose = (item.optInt("totalDose", 0) - item.optInt("takenDose", 0)).coerceAtLeast(0)
+                    AppCard(modifier = Modifier.padding(bottom = 12.dp), onClick = { onNavigate(Route.PrescriptionDetail(item.optInt("id"))) }) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.MedicalServices, null, Modifier.size(16.dp), tint = Primary)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(item.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(item.displayField("prescriptionNo"), color = Muted, fontSize = 12.sp)
+                            }
+                            StatusPill(prescriptionStatusLabel(item.optInt("status")))
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        InfoRowItem("联系电话", maskPhone(item.displayField("phone", "")))
+                        InfoRowItem("主治医生", item.optJSONObject("doctor")?.displayField("name") ?: "-")
+                        InfoRowItem("剂数进度", "${quantityText(item.opt("takenDose"), "0")} / ${quantityText(item.opt("totalDose"), "0")} 剂（余 $remainingDose 剂）")
+                        InfoRowItem("加工批次", "${plans.length()} 批")
+                        if (isSuperAdmin(user)) {
+                            item.optJSONObject("store")?.displayField("name", "")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("所属门店", it) }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            if (!readOnly && item.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
+                                Button(
+                                    onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject().put("prescriptionId", item.optInt("id")).put("prescription", item)))) },
+                                    shape = FieldShape,
+                                    modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                ) { Text("新增加工", fontSize = 12.sp) }
+                            }
+
+                            if (!readOnly && item.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
+                                OutlinedButton(
+                                    onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(item))) },
+                                    shape = FieldShape,
+                                    modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                ) { Text("编辑", fontSize = 12.sp) }
+                            }
+                            if (!readOnly && plans.length() == 0) {
+                                OutlinedButton(
+                                    onClick = { deleteTarget = item },
+                                    shape = FieldShape,
+                                    modifier = Modifier.heightIn(min = 32.dp).defaultMinSize(minWidth = 44.dp, minHeight = 32.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                ) { Text("删除", fontSize = 12.sp) }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (items.loadState.append is LoadState.Loading) {
+                item(key = "append_loading") {
+                    Spacer(Modifier.height(16.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary, strokeWidth = 2.dp)
+                    }
+                }
+            }
+        }
+    }
+    }
+
+    if (deleteTarget != null) {
+        val name = deleteTarget!!.displayField("customerName", "患者")
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("删除处方") },
+            text = { Text("确定要删除 $name 的处方吗？此操作不可撤销。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (deleting) return@Button
+                        deleting = true
+                        scope.launch {
+                            runCatching { viewModel.deletePrescription(deleteTarget!!.optInt("id")) }
+                                .onSuccess {
+                                    deleting = false
+                                    deleteTarget = null
+                                    items.refresh()
+                                }
+                                .onFailure {
+                                    deleting = false
+                                    Toast.makeText(context, it.message ?: "删除失败", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Danger)
+                ) {
+                    Text("确认删除")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deleteTarget = null }) { Text("取消") }
+            }
+        )
+    }
+}
+
+@Composable
+internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (Route) -> Unit) {
+    val readOnly = isStoreStaff(user)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var detail by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0) }
+    var deletePlan by remember { mutableStateOf<JSONObject?>(null) }
+    var deleteAttachment by remember { mutableStateOf(false) }
+    var viewingAttachment by remember { mutableStateOf(false) }
+    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var previewScale by remember { mutableStateOf(1f) }
+    var previewOffsetX by remember { mutableStateOf(0f) }
+    var previewOffsetY by remember { mutableStateOf(0f) }
+
+    fun viewAttachmentFile(attachment: JSONObject) {
+        viewingAttachment = true
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val bytes = ApiClient.prescriptionAttachment(id)
+                    val mimeType = attachment.displayField("mimeType", "").lowercase()
+                    val fileName = attachment.displayField("originalName", "prescription_$id")
+                    val isImg = mimeType.startsWith("image/") ||
+                        listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { fileName.endsWith(it, ignoreCase = true) }
+                    if (isImg) {
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } else {
+                        val cacheDir = File(context.cacheDir, "prescriptions").apply { if (!exists()) mkdirs() }
+                        val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                        val file = File(cacheDir, safeName)
+                        file.writeBytes(bytes)
+                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file
+                        )
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(contentUri, mimeType.ifBlank { "application/pdf" })
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        null
+                    }
+                }
+            }.onSuccess { bmp ->
+                if (bmp != null) {
+                    previewScale = 1f
+                    previewOffsetX = 0f
+                    previewOffsetY = 0f
+                    previewBitmap = bmp
+                }
+            }.onFailure {
+                rethrowCancellation(it)
+                error = it.message ?: "打开处方原件失败"
+            }
+            viewingAttachment = false
+        }
+    }
+
+    val attachmentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) scope.launch {
+            busy = true
+            uploadProgress = 0
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    uploadAttachment(context, id, uri) { progress ->
+                        scope.launch { uploadProgress = progress }
+                    }
+                }
+            }
+                .onSuccess { reload++ }.onFailure {
+                    rethrowCancellation(it)
+                    error = it.message ?: "上传处方原件失败"
+                }
+            busy = false
+        }
+    }
+    LaunchedEffect(id, reload) {
+        error = null
+        runCatching { withContext(Dispatchers.IO) { ApiClient.prescriptionDetail(id) } }
+            .onSuccess { detail = it }.onFailure { error = it.message ?: "加载处方详情失败" }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        if (detail == null && error == null) AppEmptyState("正在加载处方详情...", icon = Icons.Rounded.HourglassEmpty)
+        error?.let { Text(it, color = Danger, fontSize = 13.sp) }
+        detail?.let { p ->
+            val plans = p.optJSONArray("plans") ?: JSONArray()
+            val attachment = p.optJSONObject("attachment")
+            val totalDose = p.optInt("totalDose", 0)
+            val takenDose = p.optInt("takenDose", 0)
+            val remainingDose = (totalDose - takenDose).coerceAtLeast(0)
+            val pickupPlans = remember(plans) {
+                val list = mutableListOf<JSONObject>()
+                for (i in 0 until plans.length()) {
+                    val plan = plans.optJSONObject(i) ?: continue
+                    if (!plan.isNull("package") && plan.optJSONObject("package") != null) {
+                        list.add(plan)
+                    }
+                }
+                list
+            }
+            val e6Imports = remember(p) {
+                val list = mutableListOf<JSONObject>()
+                val arr = p.optJSONArray("e6Imports")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        arr.optJSONObject(i)?.let { list.add(it) }
+                    }
+                }
+                list
+            }
+
+            // Header Card
+            AppCard {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(p.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
+                        Text(p.displayField("prescriptionNo"), color = Muted, fontSize = 12.sp)
+                    }
+                    StatusPill(prescriptionStatusLabel(p.optInt("status")))
+                }
+                if (!readOnly && p.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(p))) },
+                        shape = FieldShape,
+                        modifier = Modifier.heightIn(min = 32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                    ) {
+                        Icon(Icons.Default.Edit, null, Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("编辑处方", fontSize = 12.sp)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+                Spacer(Modifier.height(10.dp))
+                InfoRowItem("联系电话", maskPhone(p.displayField("phone", "")))
+                InfoRowItem("所属门店", p.optJSONObject("store")?.displayField("name") ?: "-")
+                InfoRowItem("主治医生", p.optJSONObject("doctor")?.displayField("name") ?: "-")
+                InfoRowItem("处方来源", p.optJSONObject("source")?.displayField("name") ?: "-")
+                InfoRowItem("处方类型", if (p.optBoolean("isExternal")) "外方" else "本方")
+                InfoRowItem("剂数进度", "$takenDose / $totalDose 剂，剩余 $remainingDose 剂", isBold = true, valueColor = PrimaryDark)
+                InfoRowItem("录入时间", serverDateTime(p.opt("createdAt")))
+                p.optJSONObject("creator")?.displayField("nickname")?.takeIf { it.isNotBlank() }?.let { InfoRowItem("录入人", it) }
+                p.displayField("remark", "").takeIf { it.isNotBlank() }?.let { InfoRowItem("备注", it) }
+            }
+
+            // Prescription Attachment Card
+            Spacer(Modifier.height(14.dp))
+            AppCard {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("处方原件", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+                    if (!readOnly) {
+                        Button(
+                            enabled = !busy,
+                            onClick = { attachmentLauncher.launch(arrayOf("image/*", "application/pdf")) },
+                            shape = FieldShape,
+                            modifier = Modifier.heightIn(min = 32.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        ) {
+                            Icon(Icons.Default.UploadFile, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (attachment != null) "重新上传" else "上传原件", fontSize = 12.sp)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (busy) {
+                    LinearProgressIndicator(
+                        progress = { (uploadProgress / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = Primary,
+                        trackColor = Primary.copy(alpha = 0.12f),
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                        drawStopIndicator = {},
+                    )
+                    Text(
+                        if (uploadProgress > 0) "上传中 $uploadProgress%" else "准备上传...",
+                        color = Muted,
+                        fontSize = 11.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+                if (attachment != null) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(attachment.displayField("originalName", "处方原件"), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
+                                Text(attachmentSizeText(attachment.optLong("fileSize")), color = Muted, fontSize = 11.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedButton(
+                                    enabled = !busy && !viewingAttachment,
+                                    onClick = { viewAttachmentFile(attachment) },
+                                    shape = FieldShape,
+                                    modifier = Modifier.heightIn(min = 32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                ) {
+                                    if (viewingAttachment) {
+                                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = Primary)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("加载中...", fontSize = 12.sp)
+                                    } else {
+                                        Icon(Icons.Default.Visibility, null, Modifier.size(14.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("查看", fontSize = 12.sp)
+                                    }
+                                }
+                                if (!readOnly) {
+                                    TextButton(
+                                        enabled = !busy && !viewingAttachment,
+                                        onClick = { deleteAttachment = true },
+                                        modifier = Modifier.heightIn(min = 32.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    ) {
+                                        Text("删除", color = Danger, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("暂未上传处方原件", color = Muted, fontSize = 12.sp)
+                }
+            }
+
+            // Processing Plans (加工批次)
+            Spacer(Modifier.height(14.dp))
+            AppCard {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    SectionHeader("加工批次", "共 ${plans.length()} 批", modifier = Modifier.weight(1f))
+                    if (!readOnly && p.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
+                        Button(
+                            onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject().put("prescriptionId", id).put("prescription", p)))) },
+                            shape = FieldShape,
+                            modifier = Modifier.heightIn(min = 32.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        ) { Text("新增批次", fontSize = 12.sp) }
+                    }
+                }
+                if (plans.length() == 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("暂无加工批次", color = Muted, fontSize = 13.sp)
+                }
+                (0 until plans.length()).forEach { index ->
+                    val plan = plans.getJSONObject(index)
+                    val processType = plan.optJSONObject("processType")
+                    val isDecoction = processType?.displayField("name", "")?.contains("煎") == true || plan.displayField("processTypeName", "").contains("煎")
+                    val pkg = plan.optJSONObject("package")
+
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = FieldShape,
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigate(Route.WorkflowOperation(RouteParams.put(plan), "", "open")) },
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("第 ${plan.optInt("batchNo", index + 1)} 批 · ${processType?.displayField("name") ?: "代煎"}", fontWeight = FontWeight.Bold, color = Ink, fontSize = 14.sp)
+                                StatusPill(planStatus(plan.optInt("status")))
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text("剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  安排：${serverDateOnly(plan.opt("processDate"), "等待安排")}", color = RegularText, fontSize = 12.sp)
+                            if (isDecoction) {
+                                Text("规格：${plan.optInt("bagCount", 0)} 袋 · ${plan.optInt("volumeMl", 0)} ml", color = Muted, fontSize = 12.sp)
+                            }
+                            pkg?.let {
+                                Text("取货码：${it.displayField("pickupCode")}", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 2.dp))
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            @OptIn(ExperimentalLayoutApi::class)
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                pkg?.let { pItem ->
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        packageItem(ApiClient.packageDetail(pItem.optInt("id")))
+                                                    }
+                                                }.onSuccess { onNavigate(Route.PackageDetail(RouteParams.put(it))) }
+                                                    .onFailure { error = it.message ?: "加载包裹失败" }
+                                            }
+                                        },
+                                        shape = FieldShape,
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    ) { Text("包裹", fontSize = 11.5.sp) }
+                                }
+
+                                if (!readOnly && plan.optInt("status") in 0..1) {
+                                    OutlinedButton(
+                                        onClick = { onNavigate(Route.ProcessingPlanForm(RouteParams.put(JSONObject(plan.toString()).put("prescription", p)))) },
+                                        shape = FieldShape,
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    ) { Text("编辑", fontSize = 11.5.sp) }
+                                }
+
+                                if (!readOnly && plan.optInt("status") == com.tcm.admin.PrescriptionStatus.IN_PROGRESS.code) {
+                                    OutlinedButton(
+                                        onClick = { deletePlan = plan },
+                                        shape = FieldShape,
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    ) { Text("删除", fontSize = 11.5.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Pickup Records (领取记录)
+            Spacer(Modifier.height(14.dp))
+            AppCard {
+                SectionHeader("领取记录", "共 ${pickupPlans.size} 批")
+                if (pickupPlans.isEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("暂无领取记录", color = Muted, fontSize = 13.sp)
+                }
+                pickupPlans.forEachIndexed { index, plan ->
+                    val processType = plan.optJSONObject("processType")
+                    val pkg = plan.optJSONObject("package")
+                    val isPicked = plan.optInt("status") == 4
+                    val statusText = if (isPicked) "已领取" else "待领取"
+
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = FieldShape,
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "第 ${plan.optInt("batchNo", index + 1)} 批 · ${processType?.displayField("name") ?: "加工"}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Ink,
+                                    fontSize = 14.sp,
+                                )
+                                StatusPill(statusText)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            val rawPickupCode = pkg?.displayField("pickupCode")?.takeIf { it.isNotBlank() && it != "-" }
+                                ?: plan.displayField("pickupCode", "-")
+                            val pickupCode = if (rawPickupCode != "-") formatPickupCode(rawPickupCode) else "-"
+                            val finishDateStr = plan.opt("finishDate")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+                            val finishText = if (finishDateStr != null) serverDateTime(finishDateStr) else "-"
+                            Text(
+                                "剂数：${quantityText(plan.opt("totalDose"), "0")} 剂  ·  取货码：$pickupCode",
+                                color = RegularText,
+                                fontSize = 12.sp,
+                            )
+                            Text(
+                                "完成时间：$finishText",
+                                color = Muted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                            pkg?.let { pItem ->
+                                Spacer(Modifier.height(8.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        packageItem(ApiClient.packageDetail(pItem.optInt("id")))
+                                                    }
+                                                }.onSuccess { onNavigate(Route.PackageDetail(RouteParams.put(it))) }
+                                                    .onFailure { error = it.message ?: "加载包裹失败" }
+                                            }
+                                        },
+                                        shape = FieldShape,
+                                        modifier = Modifier.heightIn(min = 30.dp).defaultMinSize(minWidth = 44.dp, minHeight = 30.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    ) { Text("详情", fontSize = 11.5.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // E6 Import Details (E6导入处方明细)
+            if (e6Imports.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                AppCard {
+                    SectionHeader("E6导入处方明细", "共 ${e6Imports.size} 笔")
+                    e6Imports.forEachIndexed { impIndex, imp ->
+                        if (impIndex > 0) {
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = CardBorderColor, thickness = 0.5.dp)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = FieldShape,
+                            border = BorderStroke(1.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "订单号：${imp.displayField("externalOrderNo")}",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Ink,
+                                        fontSize = 13.5.sp,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    val isPaid = imp.optInt("isPaid") == 1
+                                    StatusPill(if (isPaid) "已付款" else "未付款")
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                val operatorName = imp.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty()
+                                    .ifBlank { imp.displayField("operatorName", "").trim() }
+                                    .ifBlank { imp.displayField("cashierName", "-") }
+                                Text(
+                                    "操作员：$operatorName  ·  订单时间：${serverDateTime(imp.opt("sourceCreatedAt"))}",
+                                    color = RegularText,
+                                    fontSize = 12.sp,
+                                )
+                                val price = imp.opt("totalPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+                                    ?.let { runCatching { "¥" + String.format("%.2f", it.toDouble()) }.getOrNull() } ?: "-"
+                                Text(
+                                    "总价：$price",
+                                    color = Danger,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+
+                                val items = remember(imp) {
+                                    val raw = imp.opt("rawPayload")
+                                    val payload = when (raw) {
+                                        is JSONObject -> raw
+                                        is String -> runCatching { JSONObject(raw) }.getOrNull()
+                                        else -> null
+                                    }
+                                    val arr = payload?.optJSONArray("items")
+                                    val itemList = mutableListOf<JSONObject>()
+                                    if (arr != null) {
+                                        for (j in 0 until arr.length()) {
+                                            arr.optJSONObject(j)?.let { itemList.add(it) }
+                                        }
+                                        itemList.sortBy { it.optInt("sequence", 0) }
+                                    }
+                                    itemList
+                                }
+
+                                Spacer(Modifier.height(8.dp))
+                                HorizontalDivider(color = CardBorderColor.copy(alpha = 0.6f), thickness = 0.5.dp)
+                                Spacer(Modifier.height(6.dp))
+
+                                if (items.isEmpty()) {
+                                    Text("暂无处方明细", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                                } else {
+                                    PrescriptionDetailE6ItemRow(
+                                        seq = "顺序",
+                                        name = "商品名称",
+                                        doseCount = "剂数",
+                                        singleQuantity = "单剂量",
+                                        totalQuantity = "总量",
+                                        header = true,
+                                    )
+                                    items.forEachIndexed { itemIdx, row ->
+                                        val unit = row.displayField("unit", "")
+                                        val singleQty = "${quantityText(row.opt("quantity"))}$unit"
+                                        val totalQty = "${quantityText(row.opt("totalQuantity"))}$unit"
+                                        val seq = row.optInt("sequence", itemIdx + 1).toString()
+                                        PrescriptionDetailE6ItemRow(
+                                            seq = seq,
+                                            name = row.displayField("name", "药材"),
+                                            doseCount = quantityText(row.opt("doseCount")),
+                                            singleQuantity = singleQty,
+                                            totalQuantity = totalQty,
+                                            header = false,
+                                        )
+                                    }
+                                }
+
+                                imp.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("备注：$it", color = Muted, fontSize = 11.5.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+    if (deleteAttachment) AlertDialog(
+        onDismissRequest = { deleteAttachment = false },
+        title = { Text("删除处方原件") },
+        text = { Text("确认删除该处方原件？") },
+        confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescriptionAttachment(id) } }.onSuccess { deleteAttachment = false; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
+        dismissButton = { TextButton(onClick = { deleteAttachment = false }) { Text("取消") } },
+    )
+    deletePlan?.let { plan -> AlertDialog(
+        onDismissRequest = { deletePlan = null },
+        title = { Text("删除加工批次") },
+        text = { Text("确认删除该加工批次？历史操作记录仍会保留。") },
+        confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deleteProcessingPlan(plan.optInt("id")) } }.onSuccess { deletePlan = null; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
+        dismissButton = { TextButton(onClick = { deletePlan = null }) { Text("取消") } },
+    ) }
+
+    previewBitmap?.let { bitmap ->
+        DisposableEffect(bitmap) {
+            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+        }
+        Dialog(
+            onDismissRequest = { previewBitmap = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            Surface(
+                color = Color.Black,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    androidx.compose.foundation.Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "处方原件",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clipToBounds()
+                            .graphicsLayer {
+                                scaleX = previewScale
+                                scaleY = previewScale
+                                translationX = previewOffsetX
+                                translationY = previewOffsetY
+                            }
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    previewScale = (previewScale * zoom).coerceIn(1f, 5f)
+                                    previewOffsetX += pan.x
+                                    previewOffsetY += pan.y
+                                }
+                            },
+                    )
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 36.dp, end = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(
+                            onClick = {
+                                previewScale = 1f
+                                previewOffsetX = 0f
+                                previewOffsetY = 0f
+                            },
+                        ) { Text("复位", color = Color.White) }
+                        TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrescriptionDetailE6ItemRow(
+    seq: String,
+    name: String,
+    doseCount: String,
+    singleQuantity: String,
+    totalQuantity: String,
+    header: Boolean = false,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            seq,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.Normal,
+            modifier = Modifier.weight(0.45f),
+        )
+        Text(
+            name,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.Normal,
+            modifier = Modifier.weight(1.35f),
+        )
+        Text(
+            doseCount,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(0.5f),
+        )
+        Text(
+            singleQuantity,
+            color = if (header) Muted else RegularText,
+            fontSize = if (header) 11.sp else 12.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.85f),
+        )
+        Text(
+            totalQuantity,
+            color = if (header) Muted else Ink,
+            fontSize = if (header) 11.sp else 12.sp,
+            fontWeight = if (header) FontWeight.Medium else FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.85f),
+        )
+    }
+}
+
+@Composable
+internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSaved: () -> Unit) {
+    val isEdit = initial.optInt("id") > 0
+    var customer by remember(initial) { mutableStateOf(initial.displayField("customerName", "")) }
+    var phone by remember(initial) { mutableStateOf(initial.displayField("phone", "")) }
+    var remark by remember(initial) { mutableStateOf(initial.displayField("remark", "")) }
+    var totalPrice by remember(initial) { mutableStateOf(initial.displayField("totalPrice", "")) }
+    var totalDose by remember(initial) { mutableStateOf(initial.displayField("totalDose", "1")) }
+    var doctorId by remember(initial) { mutableStateOf<Int?>(initial.optJSONObject("doctor")?.optInt("id") ?: initial.optInt("doctorId").takeIf { it > 0 }) }
+    var sourceId by remember(initial) { mutableStateOf<Int?>(initial.optJSONObject("source")?.optInt("id") ?: initial.optInt("sourceId").takeIf { it > 0 }) }
+    var storeId by remember(initial) { mutableStateOf<Int?>(initial.optJSONObject("store")?.optInt("id") ?: initial.optInt("storeId").takeIf { it > 0 }) }
+    var external by remember(initial) { mutableStateOf(initial.optBoolean("isExternal")) }
+    var externalHospital by remember(initial) { mutableStateOf(initial.displayField("externalHospital", "")) }
+    var externalDoctor by remember(initial) { mutableStateOf(initial.displayField("externalDoctor", "")) }
+    var externalRemark by remember(initial) { mutableStateOf(initial.displayField("externalRemark", "")) }
+    var status by remember(initial) { mutableStateOf(initial.optInt("status", 0)) }
+    var doctors by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var sources by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var stores by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { Triple(ApiClient.doctors(), ApiClient.prescriptionSources(), if (isSuperAdmin(user)) ApiClient.availableStores() else JSONArray()) } }
+            .onSuccess { (docList, srcList, strList) ->
+                doctors = (0 until docList.length()).map { docList.getJSONObject(it) }
+                sources = (0 until srcList.length()).map { srcList.getJSONObject(it) }
+                stores = (0 until strList.length()).map { strList.getJSONObject(it) }
+                if (doctorId == null && doctors.isNotEmpty()) doctorId = doctors.first().optInt("id")
+                if (sourceId == null && sources.isNotEmpty()) sourceId = sources.first().optInt("id")
+                if (storeId == null && stores.isNotEmpty()) storeId = stores.first().optInt("id")
+            }.onFailure { error = it.message ?: "加载处方基础数据失败" }
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        SectionHeader(if (isEdit) "编辑处方" else "新建处方")
+        Spacer(Modifier.height(14.dp))
+        error?.let { Text(it, color = Danger, fontSize = 13.sp); Spacer(Modifier.height(8.dp)) }
+        AppCard {
+            OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text("患者姓名 *") }, singleLine = true, shape = FieldShape)
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("联系电话") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), shape = FieldShape)
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(totalDose, { totalDose = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("处方剂数 *") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = FieldShape)
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(totalPrice, { totalPrice = it }, Modifier.fillMaxWidth(), label = { Text("处方金额（可选）") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), shape = FieldShape)
+            if (isSuperAdmin(user) && stores.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp)); Text("所属门店", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    stores.forEach { store ->
+                        val id = store.optInt("id")
+                        SegmentedButton(store.displayField("name", "门店"), storeId == id, onClick = { storeId = id })
+                    }
+                }
+            }
+            if (doctors.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp)); Text("主治医生", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    doctors.forEach { doc ->
+                        val id = doc.optInt("id")
+                        SegmentedButton(doc.displayField("name", "医生"), doctorId == id, onClick = { doctorId = id })
+                    }
+                }
+            }
+            if (sources.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp)); Text("处方来源", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    sources.forEach { src ->
+                        val id = src.optInt("id")
+                        SegmentedButton(src.displayField("name", "来源"), sourceId == id, onClick = { sourceId = id })
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("外方处方", color = Ink, fontWeight = FontWeight.Medium)
+                        Text("由外部医院或诊所开具", color = Muted, fontSize = 12.sp)
+                    }
+                    Switch(external, { external = it })
+                }
+            }
+            if (external) {
+                Spacer(Modifier.height(10.dp)); OutlinedTextField(externalHospital, { externalHospital = it }, Modifier.fillMaxWidth(), label = { Text("外方医院") }, singleLine = true, shape = FieldShape)
+                Spacer(Modifier.height(10.dp)); OutlinedTextField(externalDoctor, { externalDoctor = it }, Modifier.fillMaxWidth(), label = { Text("外方医生") }, singleLine = true, shape = FieldShape)
+                Spacer(Modifier.height(10.dp)); OutlinedTextField(externalRemark, { externalRemark = it }, Modifier.fillMaxWidth(), label = { Text("外方备注") }, shape = FieldShape)
+            }
+            if (isEdit) {
+                Spacer(Modifier.height(14.dp)); Text("处方状态", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp); Spacer(Modifier.height(6.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SegmentedButton("进行中", status == 0, onClick = { status = 0 })
+                    SegmentedButton("已完成", status == 1, onClick = { status = 1 })
+                    SegmentedButton("已取消", status == 2, onClick = { status = 2 })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(remark, { remark = it }, Modifier.fillMaxWidth(), label = { Text("处方备注") }, shape = FieldShape)
+        }
+        Spacer(Modifier.height(20.dp))
+        Button(
+            enabled = !busy && customer.isNotBlank() && totalDose.toIntOrNull()?.let { it > 0 } == true,
+            onClick = {
+                busy = true
+                val payload = JSONObject()
+                    .put("customerName", customer.trim())
+                    .put("phone", phone.trim())
+                    .put("totalDose", totalDose.toInt())
+                    .put("remark", remark.trim())
+                    .put("isExternal", external)
+                totalPrice.toDoubleOrNull()?.let { payload.put("totalPrice", it) }
+                doctorId?.let { payload.put("doctorId", it) }
+                sourceId?.let { payload.put("sourceId", it) }
+                storeId?.let { payload.put("storeId", it) }
+                if (external) {
+                    payload.put("externalHospital", externalHospital.trim())
+                        .put("externalDoctor", externalDoctor.trim())
+                        .put("externalRemark", externalRemark.trim())
+                }
+                if (isEdit) payload.put("status", status)
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            if (isEdit) ApiClient.updatePrescription(initial.optInt("id"), payload)
+                            else ApiClient.createPrescription(payload)
+                        }
+                    }.onSuccess { onSaved() }.onFailure { error = it.message ?: "保存处方失败" }
+                    busy = false
+                }
+            },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
+            shape = FieldShape,
+            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+        ) {
+            Text(if (busy) "保存中..." else "确认保存处方", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(20.dp))
+    }
+}
+
+private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteArray {
+    val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+        if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
+    }
+    if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
+        throw IllegalStateException("处方文件过大，请选择 25MB 以内的图片")
+    }
+    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IllegalStateException("无法读取处方文件")
+    if (original.size <= 2 * 1024 * 1024) return original
+
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+
+    var sampleSize = 1
+    val maxDim = 2560
+    while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
+        (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
+    ) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    val rawBitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, decodeOptions) }
+        ?: return original
+
+    val rotation = runCatching {
+        context.contentResolver.openInputStream(uri)?.use {
+            val exif = android.media.ExifInterface(it)
+            when (exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }
+    }.getOrNull() ?: 0f
+
+    val rotatedBitmap = if (rotation != 0f) {
+        val matrix = android.graphics.Matrix().apply { postRotate(rotation) }
+        val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+        if (rotated != rawBitmap) rawBitmap.recycle()
+        rotated
+    } else {
+        rawBitmap
+    }
+
+    val finalBitmap = if (rotatedBitmap.width > maxDim || rotatedBitmap.height > maxDim) {
+        val scale = maxDim.toFloat() / maxOf(rotatedBitmap.width, rotatedBitmap.height)
+        val w = (rotatedBitmap.width * scale).toInt().coerceAtLeast(1)
+        val h = (rotatedBitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(rotatedBitmap, w, h, true)
+        if (scaled != rotatedBitmap) rotatedBitmap.recycle()
+        scaled
+    } else {
+        rotatedBitmap
+    }
+
+    val qualities = intArrayOf(88, 80, 70)
+    try {
+        for (quality in qualities) {
+            val output = java.io.ByteArrayOutputStream()
+            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= 4 * 1024 * 1024) {
+                return output.toByteArray()
+            }
+        }
+    } finally {
+        finalBitmap.recycle()
+    }
+    return original
+}
+
+private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri, onProgress: (Int) -> Unit) {
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    val name = cursor?.use {
+        if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null
+    } ?: "prescription_${System.currentTimeMillis()}"
+    val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+    val isImage = mimeType.startsWith("image/") ||
+        listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { name.endsWith(it, ignoreCase = true) }
+    val bytes = if (isImage) {
+        compressPrescriptionImageIfNeeded(context, uri)
+    } else {
+        val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+            if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
+        }
+        if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
+            throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
+        }
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+    }
+    val uploadMime = if (isImage && !mimeType.startsWith("image/")) "image/jpeg" else mimeType
+    ApiClient.uploadPrescriptionAttachment(prescriptionId, name, uploadMime, bytes, onProgress)
+}
+
+private fun attachmentSizeText(size: Long): String = when {
+    size <= 0 -> "-"
+    size < 1024 -> "$size B"
+    size < 1024 * 1024 -> "${size / 1024} KB"
+    else -> String.format(java.util.Locale.US, "%.1f MB", size.toDouble() / (1024 * 1024))
+}

@@ -1,0 +1,39 @@
+.yd-check-page { padding-bottom: 180rpx; }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-bottom: 20rpx; }
+.page-heading > view { min-width: 0; }
+.heading-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 12rpx; }
+.switch-check-button { flex: 0 0 auto; width: auto !important; min-width: 0 !important; white-space: nowrap; }
+.page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 36rpx; font-weight: 700; }
+.check-card, .product-option, .inventory-card { margin-bottom: 14rpx; }
+.check-title, .product-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; font-weight: 600; }
+.product-title-row { display: flex; align-items: center; gap: 20rpx; min-width: 0; }
+.product-title-row .product-title { min-width: 0; flex: 1; }
+.product-price { flex: 0 0 auto; min-width: 132rpx; color: #0052d9; font-size: 28rpx; font-weight: 600; text-align: right; }
+.check-card .muted, .product-option .muted { margin-top: 10rpx; }
+.search-panel { position: relative; margin-bottom: 28rpx; }
+.filter-picker { display: flex; align-items: center; justify-content: space-between; min-height: 76rpx; padding: 16rpx 20rpx; box-sizing: border-box; border: 1rpx solid #cbd8f2; border-radius: 12rpx; background: #f5f8ff; color: #0052d9; font-size: 26rpx; font-weight: 600; box-shadow: 0 4rpx 12rpx rgba(0, 82, 217, .08); }
+.heading-filter { min-width: 180rpx; padding: 12rpx 16rpx; }
+.search-row { display: flex; align-items: center; gap: 12rpx; overflow: hidden; border: 1rpx solid #dcdcdc; border-radius: 6px; background: #ffffff; --td-input-bg-color: transparent; --td-input-vertical-padding: 16rpx 24rpx; --td-input-suffix-text-color: #0052d9; }
+.search-scan-icon { flex: 0 0 auto; padding: 8rpx; }
+.search-input { min-width: 0; flex: 1; }
+.section-title { margin: 28rpx 0 14rpx; color: #4e5969; font-size: 28rpx; font-weight: 600; }
+.inventory-heading { display: flex; align-items: center; justify-content: space-between; }
+.selected-product-card { margin-bottom: 14rpx; }
+.selected-product-card .muted { margin-top: 10rpx; line-height: 1.5; }
+.inventory-total { padding-top: 16rpx; margin-top: 18rpx; border-top: 1rpx solid #eef0f5; color: #4e5969; }
+.inventory-total text { color: #0052d9; font-size: 34rpx; font-weight: 700; }
+.inventory-row, .inventory-action, .confirm-row { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; }
+.inventory-row { margin-bottom: 12rpx; color: #4e5969; }
+.inventory-row text:last-child, .confirm-row text:last-child { min-width: 0; color: #1f2329; text-align: right; word-break: break-all; }
+.inventory-row.strong { font-size: 30rpx; font-weight: 600; }
+.inventory-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rpx; padding: 14rpx 0; margin: 4rpx 0 8rpx; border-top: 1rpx solid #eef0f5; border-bottom: 1rpx solid #eef0f5; }
+.inventory-metric { min-width: 0; display: flex; flex-direction: column; gap: 6rpx; color: #4e5969; font-size: 24rpx; }
+.inventory-metric text:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1f2329; font-size: 28rpx; font-weight: 600; }
+.difference-value { color: #d54941 !important; }
+.inventory-action { padding-top: 16rpx; margin-top: 16rpx; border-top: 1rpx solid #eef0f5; }
+.overlay { position: fixed; z-index: 1001; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: flex-end; background: rgba(0, 0, 0, .42); }
+.modal-card { width: 100%; max-height: 88vh; padding: 28rpx; box-sizing: border-box; overflow-y: auto; border-radius: 24rpx 24rpx 0 0; background: #fff; }
+.modal-title { margin-bottom: 20rpx; font-size: 34rpx; font-weight: 700; }
+.store-picker { min-height: 76rpx; padding: 18rpx 20rpx; margin-bottom: 18rpx; box-sizing: border-box; border: 1rpx solid #e5e6eb; border-radius: 8rpx; background: #fff; color: #4e5969; }
+.confirm-row { padding: 20rpx 0; border-bottom: 1rpx solid #eef0f5; color: #4e5969; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 12rpx; margin-top: 20rpx; }

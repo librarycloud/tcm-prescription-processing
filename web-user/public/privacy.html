@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隐私政策</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1, h2, h3 { color: #222; }
+        a { color: #007bff; text-decoration: none; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .loading { text-align: center; color: #666; margin-top: 50px; }
+        img { max-width: 100%; height: auto; }
+        pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
+        blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
+    </style>
+</head>
+<body>
+    <div id="content">
+        <div class="loading">加载中...</div>
+    </div>
+    <script>
+        fetch('/api/app/legal-docs')
+            .then(response => {
+                // To support both proxy and direct api routing
+                if (response.status === 404) {
+                    return fetch('/app/legal-docs');
+                }
+                return response;
+            })
+            .then(response => response.json())
+            .then(json => {
+                const data = json.code === 0 ? json.data : (json || {});
+                const markdown = data.privacy_policy || '# 隐私政策\n暂无内容';
+                document.getElementById('content').innerHTML = marked.parse(markdown);
+            })
+            .catch(error => {
+                document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络。</div>';
+                console.error('Error fetching privacy policy:', error);
+            });
+    </script>
+</body>
+</html>
