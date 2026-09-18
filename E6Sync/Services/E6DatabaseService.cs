@@ -219,7 +219,7 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
             var result = new E6PharmacyLocationSnapshot { Cursor = cursor ?? "" };
             var cursorBytes = DecodeCursor(cursor);
             var cursorClause = cursorBytes == null ? "" : " WHERE l.[_c_] > @cursor ";
-            var sql = @"SELECT l.[编号], l.[名称], l.[停用], l.[修改日期], l.[_c_]
+            var sql = @"SELECT l.[编号], l.[名称], l.[停用], l.[_c_]
 FROM dbo.[DC货位] l " + cursorClause + @"
 ORDER BY l.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
@@ -243,8 +243,7 @@ ORDER BY l.[_c_];";
                         {
                             code = code,
                             name = Convert.ToString(reader["名称"])?.Trim(),
-                            isDisabled = reader["停用"] != DBNull.Value && Convert.ToBoolean(reader["停用"]),
-                            e6ModifiedAt = ToIso(reader["修改日期"])
+                            isDisabled = reader["停用"] != DBNull.Value && Convert.ToBoolean(reader["停用"])
                         });
                         result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
                     }

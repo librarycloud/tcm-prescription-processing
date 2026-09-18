@@ -169,7 +169,16 @@ namespace E6Sync
             trayMenu.Items.Add(new ToolStripSeparator());
             trayMenu.Items.Add("退出", null, delegate { ExitApplication(); });
             trayIcon.Text = "E6 处方同步";
-            trayIcon.Icon = SystemIcons.Application;
+            try 
+            {
+                var appIcon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                trayIcon.Icon = appIcon;
+                this.Icon = appIcon;
+            }
+            catch 
+            {
+                trayIcon.Icon = SystemIcons.Application;
+            }
             trayIcon.ContextMenuStrip = trayMenu;
             trayIcon.DoubleClick += delegate { ShowFromTray(); };
 
