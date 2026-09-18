@@ -208,6 +208,22 @@ function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, locationCode, e
   return filters.length ? Prisma.join(filters, " AND ") : Prisma.sql`1=1`;
 }
 
+export async function listE6PharmacyLocations(prisma, actor, query = {}) {
+  const scope = businessScope(actor, query.storeId);
+  const where = {
+    ...(scope.storeId ? { storeId: scope.storeId } : {}),
+  };
+  return prisma.e6PharmacyLocation.findMany({
+    where,
+    orderBy: { code: 'asc' },
+    select: {
+      code: true,
+      name: true,
+      storeId: true,
+    }
+  });
+}
+
 export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);

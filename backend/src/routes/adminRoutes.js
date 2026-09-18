@@ -189,6 +189,7 @@ import {
   importE6PharmacyBarcodesController,
   listE6PharmacyCategoryMappingsController,
   listE6PharmacyProductsController,
+  listE6PharmacyLocationsController,
   saveE6PharmacyCategoryMappingController,
 } from "../controllers/e6PharmacyController.js";
 import {
@@ -285,6 +286,7 @@ export default async function adminRoutes(fastify, options) {
   fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
   fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
   fastify.get("/e6-pharmacy/products", storeStaffRoute, listE6PharmacyProductsController);
+  fastify.get("/e6-pharmacy/locations", storeStaffRoute, listE6PharmacyLocationsController);
   fastify.get("/e6-pharmacy/category-mappings", storeStaffRoute, listE6PharmacyCategoryMappingsController);
   fastify.post("/e6-pharmacy/category-mappings", createE6PharmacyCategoryMappingController);
   fastify.put("/e6-pharmacy/category-mappings/:id", saveE6PharmacyCategoryMappingController);

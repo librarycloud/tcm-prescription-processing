@@ -18,7 +18,7 @@
           v-model="query.storeId"
           clearable
           placeholder="全部门店"
-          @change="search"
+          @change="handleStoreChange"
         >
           <el-option
             v-for="store in stores"
@@ -33,12 +33,20 @@
           placeholder="编号、商品名称或条形码"
           @keyup.enter="search"
         />
-        <el-input
-          v-model.trim="query.locationCode"
+        <el-select
+          v-model="query.locationCode"
           clearable
-          placeholder="货位编号"
-          @keyup.enter="search"
-        />
+          filterable
+          placeholder="全部货位"
+          @change="search"
+        >
+          <el-option
+            v-for="loc in locations"
+            :key="loc.code"
+            :label="`${loc.code}-${loc.name}`"
+            :value="loc.code"
+          />
+        </el-select>
         <el-select v-model="query.categoryCode" clearable placeholder="全部分类" @change="search">
           <el-option
             v-for="item in categoryMappings"
@@ -288,6 +296,7 @@ import { getProductStores } from '@/api/productDifference';
 import {
   downloadE6PharmacyBarcodeTemplate,
   getE6PharmacyCategoryMappings,
+  getE6PharmacyLocations,
   getE6PharmacyProducts,
   importE6PharmacyBarcodes
 } from '@/api/e6Pharmacy';
@@ -297,6 +306,7 @@ const userStore = useUserStore();
 const tableRef = ref();
 const stores = ref([]);
 const categoryMappings = ref([]);
+const locations = ref([]);
 const barcodeImportVisible = ref(false);
 const barcodeImporting = ref(false);
 const barcodeFile = ref(null);
@@ -474,9 +484,19 @@ async function submitBarcodeImport() {
   }
 }
 
+async function loadLocations() {
+  locations.value = await getE6PharmacyLocations({ storeId: query.storeId });
+}
+
+function handleStoreChange() {
+  query.locationCode = '';
+  loadLocations();
+  search();
+}
+
 onMounted(async () => {
   await loadStores();
-  await Promise.all([loadCategoryMappings(), load()]);
+  await Promise.all([loadCategoryMappings(), loadLocations(), load()]);
 });
 </script>
 
