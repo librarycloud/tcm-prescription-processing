@@ -214,6 +214,45 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
             }
         }
 
+        public E6PharmacyLocationSnapshot QueryPharmacyLocations(string cursor)
+        {
+            var result = new E6PharmacyLocationSnapshot { Cursor = cursor ?? "" };
+            var cursorBytes = DecodeCursor(cursor);
+            var cursorClause = cursorBytes == null ? "" : " WHERE l.[_c_] > @cursor ";
+            var sql = @"SELECT l.[编号], l.[名称], l.[停用], l.[修改日期], l.[_c_]
+FROM dbo.[DC货位] l " + cursorClause + @"
+ORDER BY l.[_c_];";
+            using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.CommandTimeout = 60;
+                if (cursorBytes != null) command.Parameters.Add("@cursor", SqlDbType.Binary, 8).Value = cursorBytes;
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (reader.Read())
+                    {
+                        var code = Convert.ToString(reader["编号"])?.Trim();
+                        if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                        {
+                            result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
+                            continue;
+                        }
+                        result.Locations.Add(new E6PharmacyLocationUpload
+                        {
+                            code = code,
+                            name = Convert.ToString(reader["名称"])?.Trim(),
+                            isDisabled = reader["停用"] != DBNull.Value && Convert.ToBoolean(reader["停用"]),
+                            e6ModifiedAt = ToIso(reader["修改日期"])
+                        });
+                        result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
+                    }
+                }
+            }
+            return result;
+        }
+
         public E6PharmacyProductSnapshot QueryPharmacyProducts(string cursor)
         {
             var result = new E6PharmacyProductSnapshot { Cursor = cursor ?? "" };
@@ -355,7 +394,7 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
             var cursorClause = outerConditions.Count > 0
                 ? " AND (" + string.Join(" OR ", outerConditions) + ") "
                 : "";
-            var sql = @"SELECT p.[编号] AS [商品编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[_c_], l.[_c_] AS [货位_c_]
+            var sql = @"SELECT p.[编号] AS [商品编号], l.[编号] AS [货位编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[_c_], l.[_c_] AS [货位_c_]
 FROM dbo.[AC货位商品帐] i
 LEFT JOIN dbo.[DC商品] p ON p.[ID] = i.[商品id]
 LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id]
@@ -377,6 +416,7 @@ WHERE i.[数量] > 0
                         result.Batches.Add(new E6PharmacyBatchUpload
                         {
                             productCode = ToNullableText(reader["商品编号"]),
+                            locationCode = ToNullableText(reader["货位编号"]),
                             locationName = ToNullableText(reader["货位名称"]),
                             batchNo = ToNullableText(reader["批号"]) ?? "",
                             productionDate = ToDate(reader["生产日期"]),

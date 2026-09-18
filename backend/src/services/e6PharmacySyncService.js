@@ -66,6 +66,7 @@ function normalizeBatch(item) {
     productionDate: date(item?.productionDate, "生产日期"),
     expiryDate: date(item?.expiryDate, "有效期至"),
     inboundDate: date(item?.inboundDate, "入库时间"),
+    locationCode: text(item?.locationCode, 120, "货位编号") || "",
     locationName: text(item?.locationName, 120, "货位名称") || "",
     quantity,
   };
@@ -89,6 +90,58 @@ export function mergeBatches(items) {
 async function storeFromRequest(prisma, payload, apiKey) {
   const storeCode = text(payload?.storeCode, 50, "门店编码", true).toUpperCase();
   return authenticateStore(prisma, storeCode, apiKey);
+}
+
+export async function uploadE6PharmacyLocations(prisma, payload, apiKey) {
+  const store = await storeFromRequest(prisma, payload, apiKey);
+  const items = Array.isArray(payload?.locations) ? payload.locations : [];
+  if (items.length > 5000) throw new AppError("单次货位上传不能超过5000条", 400);
+
+  const normalized = items.map(item => ({
+    storeId: store.id,
+    code: text(item?.code, 100, "货位编号", true),
+    name: text(item?.name, 120, "货位名称") || "",
+    isDisabled: Boolean(item?.isDisabled),
+    receivedAt: new Date(),
+  }));
+
+  const codes = normalized.map((item) => item.code);
+  const existingRows = await prisma.e6PharmacyLocation.findMany({
+    where: { storeId: store.id, code: { in: codes } },
+  });
+  const existingMap = new Map(existingRows.map((row) => [row.code, row]));
+
+  let created = 0;
+  let updated = 0;
+  const toCreate = [];
+  const toUpdate = [];
+
+  for (const item of normalized) {
+    const existing = existingMap.get(item.code);
+    if (!existing) {
+      toCreate.push(item);
+      created++;
+    } else if (existing.name !== item.name || existing.isDisabled !== item.isDisabled) {
+      toUpdate.push(item);
+      updated++;
+    }
+  }
+
+  if (toCreate.length || toUpdate.length) {
+    await prisma.$transaction(async (tx) => {
+      for (const item of toCreate) {
+        await tx.e6PharmacyLocation.create({ data: item });
+      }
+      for (const item of toUpdate) {
+        await tx.e6PharmacyLocation.update({
+          where: { storeId_code: { storeId: store.id, code: item.code } },
+          data: item,
+        });
+      }
+    }, { timeout: 60000 });
+  }
+
+  return { received: normalized.length, created, updated };
 }
 
 export async function uploadE6PharmacyProducts(prisma, payload, apiKey) {
@@ -268,11 +321,11 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
             storeId: w.storeId, productId: w.productId,
             batchNo: item.batchNo, productionDate: item.productionDate,
             expiryDate: item.expiryDate, inboundDate: item.inboundDate,
-            locationName: item.locationName, quantity: item.quantity, receivedAt: new Date(),
+            locationCode: item.locationCode, locationName: item.locationName, quantity: item.quantity, receivedAt: new Date(),
           },
           update: {
             productionDate: item.productionDate, expiryDate: item.expiryDate,
-            inboundDate: item.inboundDate, quantity: item.quantity, receivedAt: new Date(),
+            inboundDate: item.inboundDate, locationCode: item.locationCode, quantity: item.quantity, receivedAt: new Date(),
           },
         });
       } else if (w.type === "deleteMany") {

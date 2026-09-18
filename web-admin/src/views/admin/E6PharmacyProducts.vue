@@ -93,7 +93,11 @@
                   <template #default="{ row: batch }">{{ batch.store?.name || '-' }}</template>
                 </el-table-column>
                 <el-table-column prop="batchNo" label="批号" min-width="140" />
-                <el-table-column prop="locationName" label="货位" min-width="140" />
+                <el-table-column label="货位" min-width="140">
+                  <template #default="{ row: batch }">
+                    {{ batch.locationCode ? `${batch.locationCode}-` : '' }}{{ batch.locationName || '-' }}
+                  </template>
+                </el-table-column>
                 <el-table-column label="生产日期" width="130">
                   <template #default="{ row: batch }">{{
                     dateText(batch.productionDate)

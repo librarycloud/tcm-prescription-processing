@@ -19,9 +19,24 @@ namespace E6Sync.Models
         public string e6ModifiedAt { get; set; }
     }
 
+    public sealed class E6PharmacyLocationUpload
+    {
+        public string code { get; set; }
+        public string name { get; set; }
+        public bool isDisabled { get; set; }
+        public string e6ModifiedAt { get; set; }
+    }
+
+    public sealed class E6PharmacyLocationSnapshot
+    {
+        public List<E6PharmacyLocationUpload> Locations { get; set; } = new List<E6PharmacyLocationUpload>();
+        public string Cursor { get; set; }
+    }
+
     public sealed class E6PharmacyBatchUpload
     {
         public string productCode { get; set; }
+        public string locationCode { get; set; }
         public string locationName { get; set; }
         public string batchNo { get; set; }
         public string productionDate { get; set; }

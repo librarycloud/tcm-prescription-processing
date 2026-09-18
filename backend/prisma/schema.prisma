@@ -122,6 +122,7 @@ model Store {
   e6OperatorMappings  E6OperatorMapping[]
   e6Imports           E6Import[]
   e6PharmacyInventory E6PharmacyInventoryBatch[]
+  e6PharmacyLocations E6PharmacyLocation[]
   ydGoodsChecks       YdGoodsCheck[]
   ydGoodsCheckItems   YdGoodsCheckItem[]
   processingEquipment ProcessingEquipment[]
@@ -178,6 +179,22 @@ model Product {
   @@map("products")
 }
 
+model E6PharmacyLocation {
+  id           Int      @id @default(autoincrement())
+  storeId      Int      @map("store_id")
+  code         String   @map("code") @db.VarChar(100)
+  name         String   @map("name") @db.VarChar(120)
+  isDisabled   Boolean  @default(false) @map("is_disabled")
+  receivedAt   DateTime @default(now()) @map("received_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, code])
+  @@map("e6_pharmacy_locations")
+}
+
+
 model E6PharmacyProduct {
   id                  Int       @id @default(autoincrement())
   productCode         String    @map("product_code") @db.VarChar(64)
@@ -226,6 +243,7 @@ model E6PharmacyInventoryBatch {
   productionDate DateTime? @map("production_date") @db.Date
   expiryDate     DateTime? @map("expiry_date") @db.Date
   inboundDate    DateTime? @map("inbound_date") @db.Date
+  locationCode   String    @default("") @map("location_code") @db.VarChar(120)
   locationName   String    @default("") @map("location_name") @db.VarChar(120)
   quantity       Decimal   @db.Decimal(14, 3)
   receivedAt     DateTime  @default(now()) @map("received_at")

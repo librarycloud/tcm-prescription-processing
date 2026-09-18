@@ -704,6 +704,7 @@ public struct InventoryItem: Codable, Identifiable, Hashable {
 public struct InventoryBatch: Codable, Identifiable, Hashable {
     public let id: Int
     public let batchNo: String?
+    public let locationCode: String?
     public let locationName: String?
     public let quantity: Double?
     public let productionDate: String?
@@ -711,12 +712,13 @@ public struct InventoryBatch: Codable, Identifiable, Hashable {
     public let inboundDate: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, batchNo, locationName, quantity, productionDate, expiryDate, inboundDate
+        case id, batchNo, locationCode, locationName, quantity, productionDate, expiryDate, inboundDate
     }
 
-    public init(id: Int, batchNo: String? = nil, locationName: String? = nil, quantity: Double? = nil, productionDate: String? = nil, expiryDate: String? = nil, inboundDate: String? = nil) {
+    public init(id: Int, batchNo: String? = nil, locationCode: String? = nil, locationName: String? = nil, quantity: Double? = nil, productionDate: String? = nil, expiryDate: String? = nil, inboundDate: String? = nil) {
         self.id = id
         self.batchNo = batchNo
+        self.locationCode = locationCode
         self.locationName = locationName
         self.quantity = quantity
         self.productionDate = productionDate
@@ -734,6 +736,7 @@ public struct InventoryBatch: Codable, Identifiable, Hashable {
             self.id = 0
         }
         self.batchNo = try? c.decodeIfPresent(String.self, forKey: .batchNo)
+        self.locationCode = try? c.decodeIfPresent(String.self, forKey: .locationCode)
         self.locationName = try? c.decodeIfPresent(String.self, forKey: .locationName)
         self.productionDate = try? c.decodeIfPresent(String.self, forKey: .productionDate)
         self.expiryDate = try? c.decodeIfPresent(String.self, forKey: .expiryDate)
