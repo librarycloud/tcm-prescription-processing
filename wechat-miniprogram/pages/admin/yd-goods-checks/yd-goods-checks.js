@@ -5,6 +5,7 @@ import {
   getGoodsCheckCandidates,
   getGoodsChecks,
   getStores,
+  getE6PharmacyLocations,
   recountGoodsCheckItem
 } from '../../../api/admin';
 import { getUser } from '../../../utils/auth';
@@ -97,6 +98,7 @@ Page({
     isSuperAdmin: false,
     isStoreStaff: false,
     stores: [],
+    locations: [],
     createStoreIndex: 0,
     createStoreId: null,
     createStoreName: '请选择门店',
@@ -119,7 +121,7 @@ Page({
     selectedProduct: null,
     selectedInventories: [],
     countVisible: false,
-    countForm: { mode: 'initial', itemId: null, product: null, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: false },
+    countForm: { mode: 'initial', itemId: null, product: null, batchNo: '', locationCode: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', manualBatch: false },
     saving: false
   },
 
@@ -209,6 +211,7 @@ Page({
   openCheckById(checkId) {
     const selectedCheck = this.data.checks.find((item) => Number(item.id) === Number(checkId));
     if (!selectedCheck) return Promise.resolve();
+    this.loadLocations(selectedCheck.storeId);
     return new Promise((resolve) => this.setData({
       selectedCheck,
       keyword: '',
@@ -220,6 +223,15 @@ Page({
       selectedProduct: null,
       selectedInventories: []
     }, resolve));
+  },
+
+  async loadLocations(storeId) {
+    try {
+      const data = await getE6PharmacyLocations({ storeId });
+      this.setData({ locations: (data || []).map(loc => ({ ...loc, displayLabel: `${loc.code}-${loc.name}` })) });
+    } catch (err) {
+      console.error('Failed to load locations', err);
+    }
   },
 
   backToChecks() {
@@ -417,6 +429,7 @@ Page({
         itemId: row.checkItemId || null,
         product: row.product,
         batchNo: row.batchNo || '',
+        locationCode: row.countLocationCode || row.locationCode || '',
         locationName: row.countLocationName || row.locationName || '',
         locationEditing: false,
         systemQty: numberText(systemQty),
@@ -430,7 +443,7 @@ Page({
   openManualCount() {
     const product = this.data.selectedProduct;
     if (!product) return;
-    this.setData({ countVisible: true, countForm: { mode: 'initial', itemId: null, product, batchNo: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', editing: false, manualBatch: true } });
+    this.setData({ countVisible: true, countForm: { mode: 'initial', itemId: null, product, batchNo: '', locationCode: '', locationName: '', locationEditing: false, systemQty: '0', countQty: '', editing: false, manualBatch: true } });
   },
 
   closeCount() {
@@ -439,8 +452,14 @@ Page({
 
   noop() {},
 
-  editLocation() {
-    this.setData({ 'countForm.locationEditing': true });
+  onLocationChange(e) {
+    const loc = this.data.locations[e.detail.value];
+    if (loc) {
+      this.setData({
+        'countForm.locationCode': loc.code,
+        'countForm.locationName': loc.name
+      });
+    }
   },
 
   onCountFieldChange(e) {
@@ -460,7 +479,7 @@ Page({
           ...(form.editing ? { itemId: form.itemId } : {}),
           productId: form.product.id,
           batchNo: form.batchNo,
-          locationName: form.locationName || undefined,
+          locationCode: form.locationCode || undefined,
           firstCountQty: Number(form.countQty)
         });
       }

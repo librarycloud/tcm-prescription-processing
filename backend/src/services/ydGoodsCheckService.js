@@ -82,7 +82,9 @@ function normalizeItem(item, counted = true, actor = null) {
       ? (item.product?.retailPrice === null || item.product?.retailPrice === undefined ? null : Number(item.product.retailPrice))
       : Number(item.price),
     batchNo: item.batchNo || "",
+    systemLocationCode: item.systemLocationCode || "",
     systemLocationName: item.systemLocationName || "",
+    countLocationCode: item.countLocationCode || null,
     countLocationName: item.countLocationName || null,
     systemQty: Number(item.systemQty || 0),
     firstCountQty: item.firstCountQty === null || item.firstCountQty === undefined ? null : Number(item.firstCountQty),
@@ -404,13 +406,13 @@ async function adjustmentItemIds(prisma, checkId, storeId, offset, pageSize) {
   return rows.map((row) => Number(row.id));
 }
 
-async function inventorySnapshot(prisma, check, productId, batchNo, locationName) {
+async function inventorySnapshot(prisma, check, productId, batchNo, locationCode) {
   const where = { storeId: check.storeId, productId, batchNo };
-  if (locationName !== undefined && locationName !== null) where.locationName = text(locationName);
+  if (locationCode !== undefined && locationCode !== null) where.locationCode = text(locationCode);
   const rows = await prisma.e6PharmacyInventoryBatch.findMany({ where, orderBy: { id: "asc" } });
-  if (!rows.length) return { quantity: 0, locationName: text(locationName) };
-  if (rows.length === 1) return { quantity: Number(rows[0].quantity || 0), locationName: rows[0].locationName || "" };
-  return { quantity: rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0), locationName: "" };
+  if (!rows.length) return { quantity: 0, locationCode: text(locationCode) || "", locationName: "" };
+  if (rows.length === 1) return { quantity: Number(rows[0].quantity || 0), locationCode: rows[0].locationCode || "", locationName: rows[0].locationName || "" };
+  return { quantity: rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0), locationCode: rows[0].locationCode || "", locationName: rows[0].locationName || "" };
 }
 
 function checkStatusForInitial(systemQty, countedQty) {
@@ -438,12 +440,31 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   if (!product) throw new AppError("商品不存在或不属于该门店", 404);
   const batchNo = text(payload.batchNo ?? requestedItem?.batchNo);
   if (requestedItem && batchNo !== text(requestedItem.batchNo)) throw new AppError("不能修改盘点记录的批号", 400);
-  const requestedLocation = requestedItem
+  const requestedLocationCode = requestedItem
+    ? requestedItem.systemLocationCode
+    : payload.locationCode === undefined ? undefined : text(payload.locationCode);
+  const requestedLocationName = requestedItem
     ? requestedItem.systemLocationName
     : payload.locationName === undefined ? undefined : text(payload.locationName);
-  const snapshot = await inventorySnapshot(prisma, check, productId, batchNo, requestedLocation);
+    
+  let snapshot;
+  if (requestedLocationCode !== undefined) {
+    snapshot = await inventorySnapshot(prisma, check, productId, batchNo, requestedLocationCode);
+  } else if (requestedLocationName !== undefined) {
+    // legacy support
+    const where = { storeId: check.storeId, productId, batchNo };
+    if (requestedLocationName !== null) where.locationName = requestedLocationName;
+    const rows = await prisma.e6PharmacyInventoryBatch.findMany({ where, orderBy: { id: "asc" } });
+    if (!rows.length) snapshot = { quantity: 0, locationCode: "", locationName: requestedLocationName || "" };
+    else if (rows.length === 1) snapshot = { quantity: Number(rows[0].quantity || 0), locationCode: rows[0].locationCode || "", locationName: rows[0].locationName || "" };
+    else snapshot = { quantity: rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0), locationCode: rows[0].locationCode || "", locationName: rows[0].locationName || "" };
+  } else {
+    snapshot = await inventorySnapshot(prisma, check, productId, batchNo, undefined);
+  }
   if (snapshot.quantity <= 0) throw new AppError("当前批次无库存，无需盘点", 400);
-  const systemLocationName = snapshot.locationName;
+  
+  const systemLocationCode = snapshot.locationCode || "";
+  const systemLocationName = snapshot.locationName || "";
   const existing = requestedItem || await prisma.ydGoodsCheckItem.findFirst({ where: { checkId: check.id, productId, batchNo, systemLocationName } });
   if (existing?.firstCountQty !== null && existing?.firstCountQty !== undefined) {
     if (Number(existing.reviewStatus || 0) !== 0 || Number(existing.firstCountedBy) !== Number(actor.id)) {
@@ -454,18 +475,44 @@ export async function addInitialCount(prisma, actor, checkId, payload = {}) {
   const systemQty = payload.systemQty === undefined || payload.systemQty === null || payload.systemQty === ""
     ? snapshot.quantity
     : quantity(payload.systemQty);
-  const requestedCountLocation = text(payload.countLocationName);
-  const countLocationName = requestedItem
-    ? (payload.countLocationName === undefined && payload.locationName === undefined
-      ? requestedItem.countLocationName
-      : requestedCountLocation && requestedCountLocation !== systemLocationName ? requestedCountLocation : null)
-    : requestedCountLocation && requestedCountLocation !== systemLocationName ? requestedCountLocation : null;
+    
+  let countLocationCode = requestedItem ? requestedItem.countLocationCode : null;
+  let countLocationName = requestedItem ? requestedItem.countLocationName : null;
+  
+  const requestedCountLocationCode = text(payload.countLocationCode);
+  const requestedCountLocationName = text(payload.countLocationName);
+  
+  if (requestedCountLocationCode !== null && requestedCountLocationCode !== undefined) {
+    countLocationCode = requestedCountLocationCode !== systemLocationCode ? requestedCountLocationCode : null;
+    if (countLocationCode) {
+      let loc = await prisma.e6PharmacyLocation.findFirst({ where: { storeId: check.storeId, code: countLocationCode } });
+      if (!loc && countLocationCode.includes('-')) {
+        const parsedCode = countLocationCode.split('-')[0];
+        loc = await prisma.e6PharmacyLocation.findFirst({ where: { storeId: check.storeId, code: parsedCode } });
+        if (loc) countLocationCode = loc.code;
+      }
+      countLocationName = loc ? loc.name : "";
+    } else {
+      countLocationName = null;
+    }
+  } else if (requestedCountLocationName !== null && requestedCountLocationName !== undefined) {
+    countLocationName = requestedCountLocationName !== systemLocationName ? requestedCountLocationName : null;
+    if (countLocationName) {
+      const loc = await prisma.e6PharmacyLocation.findFirst({ where: { storeId: check.storeId, name: countLocationName } });
+      countLocationCode = loc ? loc.code : null;
+    } else {
+      countLocationCode = null;
+    }
+  }
+
   const data = {
-    checkId: check.id, storeId: check.storeId, productId, batchNo, systemLocationName,
-    countLocationName, systemQty, firstCountQty,
+    checkId: check.id, storeId: check.storeId, productId, batchNo,
+    systemLocationCode, systemLocationName,
+    countLocationCode, countLocationName,
+    systemQty, firstCountQty,
     firstCountedAt: new Date(), firstCountedBy: Number(actor.id),
     recountQty: null, recountSystemQty: null, recountedAt: null, recountedBy: null,
-    locationStatus: countLocationName && countLocationName !== systemLocationName ? 1 : 0,
+    locationStatus: countLocationCode && countLocationCode !== systemLocationCode ? 1 : 0,
     checkStatus: checkStatusForInitial(snapshot.quantity, firstCountQty), reviewStatus: 0,
     reviewedBy: null, reviewedAt: null,
   };
@@ -517,9 +564,36 @@ export async function updateGoodsCheckLocation(prisma, actor, itemId, payload = 
   const check = await getCheck(prisma, actor, item.checkId);
   if (Number(check.status) === 2) throw new AppError("盘点单已完成", 400);
   if (Number(item.reviewStatus || 0) === 1) throw new AppError("该记录已复核，不能修改货位", 403);
-  const location = text(payload.countLocationName ?? payload.locationName);
-  const changed = Boolean(location) && location !== text(item.systemLocationName);
-  const updated = await prisma.ydGoodsCheckItem.update({ where: { id }, data: { countLocationName: changed ? location : null, locationStatus: changed ? 1 : 0 }, include: { product: productInclude } });
+  
+  let locationCode = text(payload.countLocationCode ?? payload.locationCode);
+  let locationName = null;
+  const legacyLocationName = text(payload.countLocationName ?? payload.locationName);
+  
+  if (locationCode) {
+    const loc = await prisma.e6PharmacyLocation.findFirst({ where: { storeId: check.storeId, code: locationCode } });
+    locationName = loc ? loc.name : "";
+  } else if (legacyLocationName) {
+    locationName = legacyLocationName;
+  }
+  
+  const changed = locationCode 
+    ? locationCode !== text(item.systemLocationCode)
+    : locationName !== text(item.systemLocationName);
+    
+  if (changed && !locationCode && locationName) {
+    const loc = await prisma.e6PharmacyLocation.findFirst({ where: { storeId: check.storeId, name: locationName } });
+    if (loc) locationCode = loc.code;
+  }
+  
+  const updated = await prisma.ydGoodsCheckItem.update({
+    where: { id },
+    data: {
+      countLocationCode: changed ? locationCode : null,
+      countLocationName: changed ? locationName : null,
+      locationStatus: changed ? 1 : 0
+    },
+    include: { product: productInclude }
+  });
   return normalizeItem(updated, true, actor);
 }
 
@@ -609,15 +683,16 @@ async function missingCandidates(prisma, check, rows, keyword, actor = null) {
   const categoryCodes = normalizeCategoryCodes(check.categoryCodes);
   const productWhere = productFilter(categoryCodes, keyword);
   const inventories = await prisma.e6PharmacyInventoryBatch.findMany({ where: { storeId: check.storeId, quantity: { gt: 0 }, ...(Object.keys(productWhere).length ? { product: productWhere } : {}) }, include: { product: productInclude }, orderBy: [{ productId: "asc" }, { batchNo: "asc" }] });
-  const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationName)));
+  const counted = new Set(rows.map((row) => itemKey(row.productId, row.batchNo, row.systemLocationCode)));
   return inventories
-    .filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationName)))
+    .filter((row) => !counted.has(itemKey(row.productId, row.batchNo, row.locationCode)))
     .map((row) => normalizeItem({
       checkId: check.id,
       storeId: check.storeId,
       productId: row.productId,
       product: row.product,
       batchNo: row.batchNo,
+      systemLocationCode: row.locationCode,
       systemLocationName: row.locationName,
       systemQty: row.quantity,
       firstCountQty: null,
@@ -635,8 +710,8 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   const rows = await prisma.ydGoodsCheckItem.findMany({
     where: { checkId: check.id },
     select: {
-      id: true, productId: true, batchNo: true, systemLocationName: true,
-      countLocationName: true, systemQty: true, firstCountQty: true,
+      id: true, productId: true, batchNo: true, systemLocationCode: true, systemLocationName: true,
+      countLocationCode: true, countLocationName: true, systemQty: true, firstCountQty: true,
       recountQty: true, recountSystemQty: true, checkStatus: true, reviewStatus: true,
       firstCountedBy: true, recountedBy: true,
       product: { select: productInclude.select },
@@ -645,15 +720,18 @@ export async function listGoodsCheckCandidates(prisma, actor, checkId, query = {
   const visibleRows = myCounted
     ? rows.filter((row) => Number(row.firstCountedBy) === Number(actor.id) || Number(row.recountedBy) === Number(actor.id))
     : rows;
-  const itemsByKey = new Map(visibleRows.map((row) => [itemKey(row.productId, row.batchNo, row.systemLocationName), row]));
+  const itemsByKey = new Map(visibleRows.map((row) => [itemKey(row.productId, row.batchNo, row.systemLocationCode), row]));
   const result = inventories.flatMap((row) => {
-    const item = itemsByKey.get(itemKey(row.productId, row.batchNo, row.locationName));
+    const item = itemsByKey.get(itemKey(row.productId, row.batchNo, row.locationCode));
     if ((myCounted || countedOnly) && !item) return [];
     return {
       ...row,
       quantity: Number(row.quantity || 0),
       counted: Boolean(item && item.firstCountQty !== null && item.firstCountQty !== undefined),
       checkItemId: item?.id || null,
+      systemLocationCode: item?.systemLocationCode || row.locationCode || "",
+      systemLocationName: item?.systemLocationName || row.locationName || "",
+      countLocationCode: item?.countLocationCode || null,
       countLocationName: item?.countLocationName || null,
       systemQty: item ? Number(item.systemQty || 0) : Number(row.quantity || 0),
       firstCountQty: item?.firstCountQty === null || item?.firstCountQty === undefined ? null : Number(item.firstCountQty),
@@ -702,7 +780,7 @@ export async function exportGoodsCheck(prisma, actor, checkId, type = "all") {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("盘点记录");
   sheet.columns = ["商品编号", "商品名称", "条形码", "规格", "单位", "价格", "批号", "系统货位", "盘点货位", "初盘系统数量", "初盘数量", "初盘人", "复盘系统数量", "复盘数量", "复盘人", "差异", "状态", "复核状态", "复核人"].map((header) => ({ header, width: 16 }));
-  list.forEach((row) => sheet.addRow([row.product?.productCode || "", row.product?.name || "", row.product?.barcode || "", row.product?.specification || "", row.product?.unit || "", row.price, row.batchNo, row.systemLocationName, row.countLocationName || "", row.systemQty, row.firstCountQty, userNames.get(row.firstCountedBy) || "", row.recountSystemQty, row.recountQty, userNames.get(row.recountedBy) || "", row.difference, checkStatusText(row), reviewStatusText(row.reviewStatus), userNames.get(row.reviewedBy) || ""]));
+  list.forEach((row) => sheet.addRow([row.product?.productCode || "", row.product?.name || "", row.product?.barcode || "", row.product?.specification || "", row.product?.unit || "", row.price, row.batchNo, `${row.systemLocationCode ? row.systemLocationCode + '-' : ''}${row.systemLocationName}`, row.countLocationName ? `${row.countLocationCode ? row.countLocationCode + '-' : ''}${row.countLocationName}` : "", row.systemQty, row.firstCountQty, userNames.get(row.firstCountedBy) || "", row.recountSystemQty, row.recountQty, userNames.get(row.recountedBy) || "", row.difference, checkStatusText(row), reviewStatusText(row.reviewStatus), userNames.get(row.reviewedBy) || ""]));
   const priceColumn = sheet.getColumn(6);
   priceColumn.numFmt = '0.00';
   return { buffer: await workbook.xlsx.writeBuffer(), filename: `${check.checkName}-盘点${type === "adjustment" ? "需调整库存" : type === "recount" ? "待复盘" : "全部"}.xlsx` };

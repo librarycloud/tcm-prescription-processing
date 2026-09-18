@@ -1117,7 +1117,9 @@ public struct StocktakingItemModel: Codable, Identifiable, Equatable {
     public let productId: Int?
     public let batchNo: String?
     public let locationCode: String?
+    public let systemLocationCode: String?
     public let systemLocationName: String?
+    public let countLocationCode: String?
     public let countLocationName: String?
     public let systemQty: Double?
     public let firstCountQty: Double?
@@ -1155,8 +1157,12 @@ public struct StocktakingItemModel: Codable, Identifiable, Equatable {
     }
     
     public var displayLocation: String {
-        if let loc = countLocationName, !loc.isEmpty { return loc }
-        if let loc = systemLocationName, !loc.isEmpty { return loc }
+        if let loc = countLocationName, !loc.isEmpty {
+            return (countLocationCode?.isEmpty == false ? "\(countLocationCode!)-" : "") + loc
+        }
+        if let loc = systemLocationName, !loc.isEmpty {
+            return (systemLocationCode?.isEmpty == false ? "\(systemLocationCode!)-" : "") + loc
+        }
         if let loc = locationCode, !loc.isEmpty { return loc }
         return ""
     }
@@ -1177,7 +1183,8 @@ public struct StocktakingItemModel: Codable, Identifiable, Equatable {
         case rawId = "id"
         case itemId, checkItemId
         case checkId, productId, batchNo, locationCode
-        case systemLocationName, countLocationName
+        case systemLocationCode, systemLocationName
+        case countLocationCode, countLocationName
         case systemQty, firstCountQty, recountQty, diffQty, difference
         case checkStatus, reviewStatus, product
     }
@@ -1197,23 +1204,25 @@ public struct StocktakingItemModel: Codable, Identifiable, Equatable {
         }
         
         self.checkId = try? c.decodeIfPresent(Int.self, forKey: .checkId)
-        self.productId = (try? c.decodeIfPresent(Int.self, forKey: .productId))
+        self.productId = try? c.decodeIfPresent(Int.self, forKey: .productId)
         self.batchNo = try? c.decodeIfPresent(String.self, forKey: .batchNo)
         self.locationCode = try? c.decodeIfPresent(String.self, forKey: .locationCode)
+        self.systemLocationCode = try? c.decodeIfPresent(String.self, forKey: .systemLocationCode)
         self.systemLocationName = try? c.decodeIfPresent(String.self, forKey: .systemLocationName)
+        self.countLocationCode = try? c.decodeIfPresent(String.self, forKey: .countLocationCode)
         self.countLocationName = try? c.decodeIfPresent(String.self, forKey: .countLocationName)
         
         func decodeDouble(_ key: CodingKeys) -> Double? {
             if let val = try? c.decodeIfPresent(Double.self, forKey: key) { return val }
             if let val = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(val) }
-            if let s = try? c.decodeIfPresent(String.self, forKey: key), let val = Double(s) { return val }
+            if let valStr = try? c.decodeIfPresent(String.self, forKey: key), let val = Double(valStr) { return val }
             return nil
         }
         
         self.systemQty = decodeDouble(.systemQty)
         self.firstCountQty = decodeDouble(.firstCountQty)
         self.recountQty = decodeDouble(.recountQty)
-        self.diffQty = decodeDouble(.diffQty)
+        self.diffQty = decodeDouble(.diffQty) ?? decodeDouble(.difference)
         self.difference = decodeDouble(.difference)
         self.checkStatus = try? c.decodeIfPresent(Int.self, forKey: .checkStatus)
         self.reviewStatus = try? c.decodeIfPresent(Int.self, forKey: .reviewStatus)
@@ -1227,7 +1236,9 @@ public struct StocktakingItemModel: Codable, Identifiable, Equatable {
         try c.encodeIfPresent(productId, forKey: .productId)
         try c.encodeIfPresent(batchNo, forKey: .batchNo)
         try c.encodeIfPresent(locationCode, forKey: .locationCode)
+        try c.encodeIfPresent(systemLocationCode, forKey: .systemLocationCode)
         try c.encodeIfPresent(systemLocationName, forKey: .systemLocationName)
+        try c.encodeIfPresent(countLocationCode, forKey: .countLocationCode)
         try c.encodeIfPresent(countLocationName, forKey: .countLocationName)
         try c.encodeIfPresent(systemQty, forKey: .systemQty)
         try c.encodeIfPresent(firstCountQty, forKey: .firstCountQty)
