@@ -33,6 +33,12 @@
           placeholder="编号、商品名称或条形码"
           @keyup.enter="search"
         />
+        <el-input
+          v-model.trim="query.locationCode"
+          clearable
+          placeholder="货位编号"
+          @keyup.enter="search"
+        />
         <el-select v-model="query.categoryCode" clearable placeholder="全部分类" @change="search">
           <el-option
             v-for="item in categoryMappings"
@@ -360,6 +366,7 @@ const {
   async (params) => {
     const data = await getE6PharmacyProducts({
       keyword: params.keyword || undefined,
+      locationCode: params.locationCode || undefined,
       storeId: params.storeId || undefined,
       categoryCode: params.categoryCode || undefined,
       stockStatus: params.stockStatus || 'all',
@@ -373,6 +380,7 @@ const {
   },
   {
     keyword: '',
+    locationCode: '',
     storeId: undefined,
     categoryCode: undefined,
     stockStatus: undefined,
