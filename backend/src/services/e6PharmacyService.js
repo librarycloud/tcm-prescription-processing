@@ -128,6 +128,7 @@ function normalizeBatch(batch) {
   return {
     id: batch.id,
     batchNo: batch.batchNo || "-",
+    locationCode: batch.locationCode || "",
     locationName: batch.locationName || "-",
     productionDate: batch.productionDate,
     expiryDate: batch.expiryDate,
