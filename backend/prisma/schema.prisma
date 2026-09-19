@@ -1110,11 +1110,11 @@ model OperationLog {
 model SystemConfig {
   id        Int      @id @default(autoincrement())
   item      String   @unique @db.VarChar(255)
-  value     String   @default("") @db.VarChar(2048)
+  value     String   @default("") @db.Text
   class     String   @default("") @db.VarChar(16)
   isPublic  Boolean  @default(false) @map("is_public")
   type      String   @default("string") @db.VarChar(16)
-  default   String   @default("") @db.VarChar(2048)
+  default   String   @default("") @db.Text
   mark      String   @default("") @db.VarChar(255)
 
   @@index([class])
