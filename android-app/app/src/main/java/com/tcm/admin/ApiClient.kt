@@ -74,7 +74,13 @@ object ApiClient {
             }
         }
         
-        // 2. 若无 Query，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
+        // 2. 如果是直接扫描的标准后端 HTTP/HTTPS API 根地址 (无 Query 参数)
+        val scheme = uri.scheme?.lowercase()
+        if (targetServer == null && (scheme == "http" || scheme == "https")) {
+            targetServer = uri.toString()
+        }
+        
+        // 3. 若以上都不符合，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
         if (targetServer == null) {
             val host = uri.host
             if (!host.isNullOrBlank() && host != "config" && host != "server") {
