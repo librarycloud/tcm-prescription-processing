@@ -10,9 +10,33 @@ import { ElMessage } from 'element-plus';
 export function useTable(apiFunc, defaultQuery = {}, options = {}) {
   const list = ref([]);
   const loading = ref(false);
-  
-  const query = reactive({ ...defaultQuery });
-  
+
+  const queryRef = ref({ ...defaultQuery });
+  const query = new Proxy(queryRef, {
+    get(target, prop, receiver) {
+      if (prop === 'value') return target.value;
+      if (prop in target) return Reflect.get(target, prop, receiver);
+      return target.value[prop];
+    },
+    set(target, prop, val, receiver) {
+      if (prop === 'value') {
+        target.value = val;
+        return true;
+      }
+      if (prop in target) {
+        return Reflect.set(target, prop, val, receiver);
+      }
+      target.value[prop] = val;
+      return true;
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target.value);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      return Object.getOwnPropertyDescriptor(target.value, prop);
+    }
+  });
+
   const pagination = reactive({
     page: 1,
     pageSize: options.pageSize || 10,
@@ -23,18 +47,18 @@ export function useTable(apiFunc, defaultQuery = {}, options = {}) {
     loading.value = true;
     try {
       const params = {
-        ...query,
+        ...queryRef.value,
         page: pagination.page,
         pageSize: pagination.pageSize
       };
-      
+
       // Hook: before fetch
       if (options.beforeFetch) {
         options.beforeFetch(params);
       }
 
       const res = await apiFunc(params);
-      
+
       // Handle standard list/total format
       if (res && res.list !== undefined) {
         list.value = res.list;
@@ -43,12 +67,11 @@ export function useTable(apiFunc, defaultQuery = {}, options = {}) {
         list.value = res;
         pagination.total = res.length;
       }
-      
+
       // Hook: after fetch
       if (options.afterFetch) {
         options.afterFetch(res);
       }
-      
     } catch (error) {
       console.error('Failed to fetch table data:', error);
       if (options.onError) {
@@ -68,7 +91,7 @@ export function useTable(apiFunc, defaultQuery = {}, options = {}) {
 
   const reset = () => {
     Object.keys(defaultQuery).forEach((key) => {
-      query[key] = defaultQuery[key];
+      queryRef.value[key] = defaultQuery[key];
     });
     search();
   };

@@ -28,7 +28,12 @@
           />
         </el-form-item>
         <el-form-item v-if="userStore.isSuperAdmin" label="门店">
-          <el-select v-model="query.storeId" clearable placeholder="全部门店" @change="handleSearch">
+          <el-select
+            v-model="query.storeId"
+            clearable
+            placeholder="全部门店"
+            @change="handleSearch"
+          >
             <el-option
               v-for="store in stores"
               :key="store.id"
@@ -50,7 +55,9 @@
         class="ready-pickup-table"
         :data="list"
         row-key="id"
-        border table-layout="auto">
+        border
+        table-layout="auto"
+      >
         <template #empty>
           <EmptyView description="暂无加工领取任务" />
         </template>
@@ -60,11 +67,7 @@
             <div class="secondary-text">{{ row.receiverPhone || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column
-          v-if="userStore.isSuperAdmin"
-          label="所属门店"
-          align="center"
-        >
+        <el-table-column v-if="userStore.isSuperAdmin" label="所属门店" align="center">
           <template #default="{ row }">{{ row.store?.name || '-' }}</template>
         </el-table-column>
         <el-table-column label="加工方式" align="center">
@@ -107,9 +110,7 @@
                   @click="showQrCode(row)"
                 />
               </el-tooltip>
-              <el-button link type="primary" @click="openDetail(row)">
-                详情
-              </el-button>
+              <el-button link type="primary" @click="openDetail(row)"> 详情 </el-button>
               <el-button v-if="!isPicked(row.status)" link type="success" @click="openVerify(row)">
                 核销
               </el-button>
@@ -126,13 +127,16 @@
     </el-card>
 
     <el-dialog v-model="qrVisible" title="领取二维码" width="380px">
-      <QRCodeCard v-if="selectedPackage" :content="selectedPackage.pickupQrContent || selectedPackage.pickupCode" />
+      <QRCodeCard
+        v-if="selectedPackage"
+        :content="selectedPackage.pickupQrContent || selectedPackage.pickupCode"
+      />
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Grid, Refresh, Search } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
@@ -151,6 +155,10 @@ const props = defineProps({
   embedded: {
     type: Boolean,
     default: false
+  },
+  storeId: {
+    type: [Number, String],
+    default: ''
   }
 });
 const emit = defineEmits(['detail', 'verify']);
@@ -182,8 +190,16 @@ const {
     }
     return data;
   },
-  { keyword: '', storeId: '' },
+  { keyword: '', storeId: props.storeId ? Number(props.storeId) : '' },
   { pageSize: 10 }
+);
+
+watch(
+  () => props.storeId,
+  (val) => {
+    query.storeId = val ? Number(val) : '';
+    handleSearch();
+  }
 );
 
 function showQrCode(row) {
@@ -216,6 +232,9 @@ onMounted(async () => {
   if (userStore.isSuperAdmin) {
     const data = await getStores({ page: 1, pageSize: 100 });
     stores.value = data?.list || [];
+    if (props.storeId) {
+      query.storeId = Number(props.storeId);
+    }
   }
   await loadData();
 });

@@ -6,6 +6,17 @@
         <p class="page-subtitle">按日期、通知状态与加工顺序统一调度任务</p>
       </div>
       <div class="page-actions">
+        <el-select
+          v-if="userStore.isSuperAdmin"
+          v-model="query.storeId"
+          clearable
+          placeholder="全部门店"
+          class="header-store-select"
+          style="width: 160px"
+          @change="handleStoreChange"
+        >
+          <el-option v-for="item in stores" :key="item.id" :label="item.name" :value="item.id" />
+        </el-select>
         <el-radio-group v-model="mode" @change="changeMode">
           <el-radio-button value="list">列表</el-radio-button>
           <el-radio-button value="calendar">日历</el-radio-button>
@@ -121,7 +132,12 @@
             </el-select>
           </el-form-item>
           <el-form-item label="加工方式">
-            <el-select v-model="query.processTypeId" clearable placeholder="全部方式" @change="search">
+            <el-select
+              v-model="query.processTypeId"
+              clearable
+              placeholder="全部方式"
+              @change="search"
+            >
               <el-option
                 v-for="item in processTypes"
                 :key="item.id"
@@ -131,7 +147,13 @@
             </el-select>
           </el-form-item>
           <el-form-item label="医生">
-            <el-select v-model="query.doctorId" clearable filterable placeholder="全部医生" @change="search">
+            <el-select
+              v-model="query.doctorId"
+              clearable
+              filterable
+              placeholder="全部医生"
+              @change="search"
+            >
               <el-option
                 v-for="item in doctors"
                 :key="item.id"
@@ -206,6 +228,7 @@
     <ReadyPickup
       v-else
       embedded
+      :store-id="query.storeId"
       @detail="openPickupPackageDrawer('detail', $event)"
       @verify="openPickupPackageDrawer('verify', $event)"
     />
@@ -386,7 +409,9 @@
                   :stroke-width="6"
                   :show-text="false"
                 />
-                <span>{{ detailPhotoUploadProgress ? `上传中 ${detailPhotoUploadProgress}%` : '准备上传...' }}</span>
+                <span>{{
+                  detailPhotoUploadProgress ? `上传中 ${detailPhotoUploadProgress}%` : '准备上传...'
+                }}</span>
               </div>
             </div>
           </div>
@@ -984,10 +1009,7 @@
                 <span class="batch-field-label">服用方法</span>
                 <UsageMethodInput v-model="batchForm.usageMethod" />
               </div>
-              <div
-                v-if="[1, 2].includes(Number(batchForm.pickupMethod))"
-                class="batch-field"
-              >
+              <div v-if="[1, 2].includes(Number(batchForm.pickupMethod))" class="batch-field">
                 <span class="batch-field-label">地址</span>
                 <el-input
                   v-model.trim="batchForm.expressAddress"
@@ -1232,8 +1254,8 @@
 </template>
 
 <script setup>
-import { defineAsyncComponent } from "vue";
-import { ElButton, ElInputNumber, ElTable, ElTableColumn, ElTag, ElTooltip } from "element-plus";
+import { defineAsyncComponent } from 'vue';
+import { ElButton, ElInputNumber, ElTable, ElTableColumn, ElTag, ElTooltip } from 'element-plus';
 import {
   computed,
   defineComponent,
@@ -1257,7 +1279,9 @@ import {
   Upload
 } from '@element-plus/icons-vue';
 import EmptyView from '@/components/EmptyView.vue';
-const ProcessingPrintDialog = defineAsyncComponent(() => import('@/components/ProcessingPrintDialog.vue'));
+const ProcessingPrintDialog = defineAsyncComponent(
+  () => import('@/components/ProcessingPrintDialog.vue')
+);
 import UsageMethodInput from '@/components/UsageMethodInput.vue';
 import Pagination from '@/components/Pagination.vue';
 import StatisticCard from '@/components/StatisticCard.vue';
@@ -1946,7 +1970,9 @@ const {
 } = useTable(
   async (params) => {
     const data = await getProcessingPlans({
-      ...(activeView.value === 'all' ? params : { storeId: currentStoreId(), page: params.page, pageSize: params.pageSize }),
+      ...(activeView.value === 'all'
+        ? params
+        : { storeId: currentStoreId(), page: params.page, pageSize: params.pageSize }),
       view: activeView.value
     });
     await nextTick();
@@ -2155,7 +2181,7 @@ const canEditQueue = computed(
   () =>
     mode.value === 'list' &&
     activeView.value === 'today-waiting' &&
-    (!userStore.isSuperAdmin || Boolean(query.value.storeId))
+    (!userStore.isSuperAdmin || Boolean(query.storeId))
 );
 const scheduleDialogTitle = '修改计划开工 / 延期';
 const pickupDrawerTitle = computed(() => {
@@ -2201,7 +2227,7 @@ function monthText(value) {
   return dateText(value).slice(0, 7);
 }
 function currentStoreId() {
-  return userStore.isSuperAdmin ? query.value.storeId || undefined : undefined;
+  return userStore.isSuperAdmin ? query.storeId || undefined : undefined;
 }
 function notifyTypeText(value) {
   return notifyTypes.value.find((item) => item.value === value)?.label || value || '不提醒';
@@ -2299,7 +2325,7 @@ function resetBatchForm() {
     notifyType: null,
     paymentStatus: PAYMENT_STATUS.PAID,
     prescription: {
-      storeId: null,
+      storeId: userStore.isSuperAdmin ? query.storeId || null : null,
       customerName: '',
       phone: '',
       doctorId: null,
@@ -2398,6 +2424,17 @@ function search() {
 function resetFilters() {
   handleReset();
   loadStats();
+}
+
+function handleStoreChange() {
+  if (mode.value === 'calendar') {
+    loadStats();
+    loadCalendar();
+  } else if (mode.value === 'list') {
+    search();
+  } else {
+    loadStats();
+  }
 }
 
 function resetForm() {
@@ -2947,7 +2984,6 @@ function bindDragRows() {
   });
 }
 
-
 watch(calendarDate, (current, previous) => {
   monthText(current) === monthText(previous) ? loadCalendarDay() : loadCalendar();
 });
@@ -2965,7 +3001,7 @@ onMounted(async () => {
   doctors.value = doctorData || [];
   sources.value = sourceData || [];
   stores.value = storeData?.list || [];
-  if (userStore.isSuperAdmin && route.query.storeId) query.value.storeId = Number(route.query.storeId);
+  if (userStore.isSuperAdmin && route.query.storeId) query.storeId = Number(route.query.storeId);
   const mappedNotifyTypes = (notifyData || []).map((item) => ({
     label: item.name,
     value: item.id,

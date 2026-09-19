@@ -13,7 +13,7 @@ export function isStoreStaff(user) {
 }
 
 export function isManager(user) {
-  return isSuperAdmin(user) || isStoreAdmin(user);
+  return isSuperAdmin(user) || isStoreAdmin(user) || isStoreStaff(user);
 }
 
 export function roleText(user) {
@@ -24,5 +24,7 @@ export function roleText(user) {
 }
 
 export function getHomePath(user) {
-  return isManager(user) ? '/admin/dashboard' : '/login';
+  if (isSuperAdmin(user) || isStoreAdmin(user)) return '/admin/dashboard';
+  if (isStoreStaff(user)) return '/admin/yd-goods-checks';
+  return '/login';
 }
