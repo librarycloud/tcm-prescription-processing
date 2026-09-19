@@ -169,18 +169,18 @@ import {
   mergeImportsController as mergeE6ImportsController,
   createDoctorMappingController as createE6DoctorMappingController,
   deleteDoctorMappingController as deleteE6DoctorMappingController,
-  deleteOperatorMappingController as deleteE6OperatorMappingController,
+  deleteUserMappingController as deleteE6UserMappingController,
   getStoreConfigController as getE6StoreConfigController,
   importDetailController as e6ImportDetailController,
   listDoctorMappingsController as listE6DoctorMappingsController,
-  listOperatorMappingsController as listE6OperatorMappingsController,
+  listUserMappingsController as listE6UserMappingsController,
   listImportsController as listE6ImportsController,
   rejectImportController as rejectE6ImportController,
   revalidateImportController as revalidateE6ImportController,
   saveStoreConfigController as saveE6StoreConfigController,
   updateDoctorMappingController as updateE6DoctorMappingController,
-  createOperatorMappingController as createE6OperatorMappingController,
-  updateOperatorMappingController as updateE6OperatorMappingController,
+  createUserMappingController as createE6UserMappingController,
+  updateUserMappingController as updateE6UserMappingController,
 } from "../controllers/e6IntegrationController.js";
 import {
   createE6PharmacyCategoryMappingController,
@@ -281,10 +281,10 @@ export default async function adminRoutes(fastify, options) {
   fastify.post("/e6/doctor-mappings", createE6DoctorMappingController);
   fastify.put("/e6/doctor-mappings/:id", updateE6DoctorMappingController);
   fastify.delete("/e6/doctor-mappings/:id", deleteE6DoctorMappingController);
-  fastify.get("/e6/operator-mappings", listE6OperatorMappingsController);
-  fastify.post("/e6/operator-mappings", createE6OperatorMappingController);
-  fastify.put("/e6/operator-mappings/:id", updateE6OperatorMappingController);
-  fastify.delete("/e6/operator-mappings/:id", deleteE6OperatorMappingController);
+  fastify.get("/e6/user-mappings", listE6UserMappingsController);
+  fastify.post("/e6/user-mappings", createE6UserMappingController);
+  fastify.put("/e6/user-mappings/:id", updateE6UserMappingController);
+  fastify.delete("/e6/user-mappings/:id", deleteE6UserMappingController);
   fastify.get("/e6-pharmacy/products", storeStaffRoute, listE6PharmacyProductsController);
   fastify.get("/e6-pharmacy/locations", storeStaffRoute, listE6PharmacyLocationsController);
   fastify.get("/e6-pharmacy/category-mappings", storeStaffRoute, listE6PharmacyCategoryMappingsController);

@@ -11,7 +11,7 @@ namespace E6Sync.Models
         public string CustomerName { get; set; }
         public string CustomerPhone { get; set; }
         public string CashierName { get; set; }
-        public string DoctorName { get; set; }
+        public string SalespersonCode { get; set; }
         public string PrescriptionRemark { get; set; }
         public bool IsPaid { get; set; }
         public bool IsCancelled { get; set; }

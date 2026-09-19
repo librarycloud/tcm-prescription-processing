@@ -26,7 +26,7 @@ namespace E6Sync.Services
             client.DefaultRequestHeaders.ConnectionClose = true;
         }
 
-        public async Task<ApiResult> SendAsync(E6Order order, string doctorCode, CancellationToken cancellationToken)
+        public async Task<ApiResult> SendAsync(E6Order order, CancellationToken cancellationToken)
         {
             var requestBody = new PrescriptionRequest
             {
@@ -35,7 +35,7 @@ namespace E6Sync.Services
                 customerName = order.CustomerName ?? "",
                 phone = order.CustomerPhone ?? "",
                 cashierName = LimitLength(order.CashierName, 200),
-                e6DoctorCode = doctorCode,
+                salespersonCode = order.SalespersonCode,
                 totalPrice = order.TotalPrice.ToString("0.00", CultureInfo.InvariantCulture),
                 doseCount = order.DoseCount > 0 ? order.DoseCount : 1,
                 paymentStatus = order.IsPaid ? "PAID" : "UNPAID",

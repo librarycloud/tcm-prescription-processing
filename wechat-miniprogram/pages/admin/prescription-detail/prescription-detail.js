@@ -102,7 +102,7 @@ Page({
       const isPaid = Number(imp.isPaid) === 1;
       const operatorName =
         imp.operatorName ||
-        imp.operatorMapping?.operatorName ||
+        imp.operatorUserMapping?.operatorName ||
         imp.cashierName ||
         '-';
       return {

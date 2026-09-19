@@ -81,14 +81,10 @@
           ><template #default="{ row }">{{ maskPhone(row.phone) }}</template></el-table-column
         >
         <el-table-column label="操作员" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.operatorMapping?.operatorName || row.cashierName || '-' }}</template>
+          <template #default="{ row }">{{ row.operatorUserMapping?.userName || row.cashierName || '-' }}</template>
         </el-table-column>
-        <el-table-column label="系统医生">
-          <template #default="{ row }">
-            <span :class="{ 'mapping-missing': !row.prescription?.doctor && !row.doctorMapping }">{{
-              row.prescription?.doctor?.name || row.doctorMapping?.doctor?.name || '未映射'
-            }}</span>
-          </template>
+        <el-table-column label="销售员">
+          <template #default="{ row }">{{ row.salespersonUserMapping?.userName || row.salespersonCode || '-' }}</template>
         </el-table-column>
         <el-table-column label="总价"
           ><template #default="{ row }">¥{{ money(row.totalPrice) }}</template></el-table-column
@@ -175,15 +171,15 @@
           </div>
           <div class="detail-item">
             <div class="detail-label">操作员</div>
-            <div class="detail-value">{{ detail.operatorMapping?.operatorName || detail.cashierName || '-' }}</div>
+            <div class="detail-value">{{ detail.operatorUserMapping?.userName || detail.cashierName || '-' }}</div>
           </div>
           <div class="detail-item">
-            <div class="detail-label">E6医师编码</div>
-            <div class="detail-value">{{ detail.e6DoctorCode }}</div>
+            <div class="detail-label">销售员号</div>
+            <div class="detail-value">{{ detail.salespersonCode }}</div>
           </div>
           <div class="detail-item">
-            <div class="detail-label">系统医生</div>
-            <div class="detail-value">{{ detail.prescription?.doctor?.name || detail.doctorMapping?.doctor?.name || '未映射' }}</div>
+            <div class="detail-label">销售员</div>
+            <div class="detail-value">{{ detail.salespersonUserMapping?.userName || '-' }}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">总价</div>
@@ -439,7 +435,7 @@ import {
   confirmE6Import,
   getE6Import,
   getE6Imports,
-  getE6OperatorMappings,
+  getE6UserMappings,
   mergeE6Imports,
   rejectE6Import,
   revalidateE6Import
@@ -694,10 +690,10 @@ async function loadReferences() {
 }
 
 async function loadOperatorOptions() {
-  const result = await getE6OperatorMappings(
+  const result = await getE6UserMappings(
     userStore.isSuperAdmin && query.storeId ? { storeId: query.storeId } : undefined
   );
-  const mappedNames = new Map((result?.list || []).map((item) => [item.e6OperatorName, item.operatorName]));
+  const mappedNames = new Map((result?.list || []).map((item) => [item.e6UserCode, item.userName]));
   operatorOptions.value = (result?.operators || []).map((name) => ({
     value: name,
     label: mappedNames.get(name) || name

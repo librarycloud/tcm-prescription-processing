@@ -129,23 +129,18 @@ private fun e6DateMillis(value: String): Long? = runCatching {
 private fun e6DateFromMillis(value: Long?): String? = value?.let {
     Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
 }
-private fun e6DoctorName(item: JSONObject): String? {
-    val doctors = listOf(
-        item.optJSONObject("prescription")?.optJSONObject("doctor"),
-        item.optJSONObject("doctorMapping")?.optJSONObject("doctor"),
-    )
-    return doctors.asSequence()
-        .mapNotNull { doctor -> doctor?.displayField("name", "")?.trim() }
-        .firstOrNull { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+private fun e6SalespersonName(item: JSONObject): String? {
+    val mapping = item.optJSONObject("salespersonUserMapping")
+    return mapping?.optString("userName", "")?.takeIf { it.isNotBlank() } ?: item.optString("salespersonCode", "").takeIf { it.isNotBlank() }
 }
 
 private fun e6OperatorName(item: JSONObject): String {
-    val mapped = item.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty()
+    val mapped = item.optJSONObject("operatorUserMapping")?.displayField("userName", "")?.trim().orEmpty()
     return mapped.ifBlank { item.displayField("cashierName", "-") }
 }
 
 private fun e6OperatorMapped(item: JSONObject): Boolean =
-    item.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty().isNotBlank()
+    item.optJSONObject("operatorUserMapping")?.displayField("userName", "")?.trim().orEmpty().isNotBlank()
 private fun e6Batches(totalDose: Int, count: Int): JSONArray {
     val result = JSONArray()
     val safeCount = count.coerceIn(1, totalDose)
@@ -568,13 +563,13 @@ private fun E6ImportCard(
                     fontSize = 12.sp,
                 )
                 Text(
-                    "操作员：${e6OperatorName(item)}　·　系统医生：${e6DoctorName(item) ?: "-"}",
+                    "操作员：${e6OperatorName(item)}　·　销售员：${e6SalespersonName(item) ?: "-"}",
                     color = Muted,
                     fontSize = 12.sp,
                     maxLines = 1,
                 )
                 if (item.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(item)) {
-                    Text("未配置操作员映射，请在门店 E6 配置中维护", color = Danger, fontSize = 12.sp)
+                    Text("未配置用户映射，请在门店 E6 配置中维护", color = Danger, fontSize = 12.sp)
                 }
                 val errorMessage = item.displayField("errorMessage", "")
                 if (errorMessage.isNotBlank()) {
@@ -657,11 +652,11 @@ internal fun E6ImportDetailScreen(
                     DetailLine("顾客", value.displayField("customerName"))
                     DetailLine("手机号", maskPhone(value.optString("phone")))
                     DetailLine("操作员", e6OperatorName(value))
-                    DetailLine("系统医生", e6DoctorName(value) ?: "-")
+                    DetailLine("销售员", e6SalespersonName(value) ?: "-")
                     if (value.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(value)) {
-                        DetailLine("操作员映射", "未配置，请在门店 E6 配置中维护", Danger)
+                        DetailLine("用户映射", "未配置，请在门店 E6 配置中维护", Danger)
                     }
-                    DetailLine("医师编码", value.displayField("e6DoctorCode"))
+                    DetailLine("医师编码", value.displayField("salespersonCode"))
                     DetailLine("剂数", "${value.optInt("doseCount", 0)}剂")
                     DetailLine(
                         "付款",
