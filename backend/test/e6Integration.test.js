@@ -22,7 +22,7 @@ const payload = {
   customerName: "张三",
   phone: "13800138000",
   cashierName: "收银员甲",
-  e6DoctorCode: "D001",
+  salespersonCode: "D001",
   totalPrice: "268.00",
   doseCount: 7,
   paymentStatus: "PAID",
@@ -194,25 +194,25 @@ test("a sole active server mapping supplies a missing E6 doctor code", async () 
   const { apiKey, prisma, state } = await syncFixture({ mapped: true, fallbackCodes: ["D001"] });
   const result = await receiveE6Prescription(
     prisma,
-    { ...payload, e6DoctorCode: "" },
+    { ...payload, salespersonCode: "" },
     apiKey,
   );
 
   assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_PENDING);
-  assert.equal(state.import.e6DoctorCode, "D001");
+  assert.equal(state.import.salespersonCode, "D001");
 });
 
 test("an unmapped E6 order can omit both customer name and doctor code", async () => {
   const { apiKey, prisma, state } = await syncFixture({ fallbackCodes: ["D001", "D002"] });
   const result = await receiveE6Prescription(
     prisma,
-    { ...payload, customerName: "", e6DoctorCode: "" },
+    { ...payload, customerName: "", salespersonCode: "" },
     apiKey,
   );
 
   assert.equal(result.status, E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED);
   assert.equal(state.import.customerName, "");
-  assert.equal(state.import.e6DoctorCode, "");
+  assert.equal(state.import.salespersonCode, "");
 });
 
 test("listing E6 imports filters and sorts by E6 order time", async () => {
@@ -248,7 +248,7 @@ function confirmFixture({ mapped = true } = {}) {
       customerName: payload.customerName,
       phone: payload.phone,
       cashierName: payload.cashierName,
-      e6DoctorCode: payload.e6DoctorCode,
+      salespersonCode: payload.salespersonCode,
       totalPrice: payload.totalPrice,
       doseCount: payload.doseCount,
       remark: payload.remark,
