@@ -158,12 +158,12 @@
 
         <section class="config-section">
           <div class="section-heading">
-            <div><h3>医师编码映射</h3><p>E6只传医师编码，确认导入时映射为系统医生。</p></div>
+            <div><h3>医师映射</h3><p>E6只传销售员号，确认导入时映射为系统医生。</p></div>
             <el-button type="primary" :icon="Plus" @click="openMapping()">新增映射</el-button>
           </div>
           <el-table :data="e6Mappings" border row-key="id" table-layout="auto">
             <template #empty><EmptyView description="暂无医师映射" /></template>
-            <el-table-column prop="e6DoctorCode" label="E6医师编码" />
+            <el-table-column prop="e6DoctorCode" label="E6销售员号" />
             <el-table-column prop="doctor.name" label="系统医生" />
             <el-table-column label="状态">
               <template #default="{ row }">
@@ -231,7 +231,7 @@
 
     <el-dialog v-model="mappingVisible" :title="mappingForm.id ? '编辑医师映射' : '新增医师映射'" width="460px" append-to-body align-center>
       <el-form label-position="top">
-        <el-form-item label="E6医师编码" required><el-input v-model.trim="mappingForm.e6DoctorCode" maxlength="100" /></el-form-item>
+        <el-form-item label="E6销售员号" required><el-input v-model.trim="mappingForm.e6DoctorCode" maxlength="100" /></el-form-item>
         <el-form-item label="系统医生" required>
           <el-select v-model="mappingForm.doctorId" filterable placeholder="请选择系统医生" style="width: 100%">
             <el-option v-for="doctor in e6Doctors" :key="doctor.id" :label="doctor.name" :value="doctor.id" :disabled="Number(doctor.status) !== 1" />
@@ -518,7 +518,7 @@ function openMapping(row) {
 
 async function saveMapping() {
   if (!e6Store.value || !mappingForm.e6DoctorCode || !mappingForm.doctorId) {
-    return ElMessage.warning('请填写E6医师编码并选择系统医生');
+    return ElMessage.warning('请填写E6销售员号并选择系统医生');
   }
   mappingSaving.value = true;
   try {
@@ -545,7 +545,7 @@ async function toggleMapping(row, status) {
 }
 
 async function removeMapping(row) {
-  await ElMessageBox.confirm(`确认删除医师编码“${row.e6DoctorCode}”的映射吗？`, '删除映射', { type: 'warning' });
+  await ElMessageBox.confirm(`确认删除销售员号“${row.e6DoctorCode}”的映射吗？`, '删除映射', { type: 'warning' });
   await deleteE6DoctorMapping(row.id);
   ElMessage.success('医师映射已删除');
   await loadE6Config();

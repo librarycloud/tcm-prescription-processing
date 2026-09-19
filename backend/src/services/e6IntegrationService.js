@@ -44,7 +44,7 @@ function clean(value, max, label, required = true) {
 }
 
 function normalizeDoctorCode(value, required = true) {
-  return clean(value, 100, "E6医师编码", required)?.toUpperCase() || null;
+  return clean(value, 100, "E6销售员号", required)?.toUpperCase() || null;
 }
 
 function dateOrNull(value, label) {
@@ -275,7 +275,7 @@ export async function saveE6DoctorMapping(
     },
     select: { id: true },
   });
-  if (duplicate) throw new AppError("该门店的E6医师编码已配置", 409);
+  if (duplicate) throw new AppError("该门店的E6销售员号已配置", 409);
   if (id) data.updatedBy = Number(actor.id);
   else data.createdBy = Number(actor.id);
   const saved = id
@@ -302,7 +302,7 @@ export async function saveE6DoctorMapping(
     storeId: saved.storeId,
     description: id
       ? describeChanges(current, saved, [
-          { key: "e6DoctorCode", label: "E6医师编码" },
+          { key: "e6DoctorCode", label: "E6销售员号" },
           { key: "doctorId", label: "系统医生" },
           { key: "status", label: "状态", values: { 0: "停用", 1: "启用" } },
         ])
@@ -330,7 +330,7 @@ export async function deleteE6DoctorMapping(prisma, actor, idValue) {
       data: {
         status: E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED,
         errorCode: E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
-        errorMessage: "E6医师编码尚未映射系统医生",
+        errorMessage: "E6销售员号尚未映射系统医生",
       },
     });
     await recordOperation(tx, actor, {
@@ -541,7 +541,7 @@ async function persistImport(prisma, store, normalized, actor) {
     ? { errorCode: null, errorMessage: null }
     : {
         errorCode: E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
-        errorMessage: "E6医师编码尚未映射系统医生",
+        errorMessage: "E6销售员号尚未映射系统医生",
       };
   return prisma.$transaction(async (tx) => {
     const existing = await tx.e6Import.findUnique({
@@ -624,7 +624,7 @@ async function persistImport(prisma, store, normalized, actor) {
       action,
       targetId: record.id,
       storeId: store.id,
-      description: `E6订单 ${record.externalOrderNo}，顾客 ${record.customerName}，医师编码 ${record.salespersonCode}`,
+      description: `E6订单 ${record.externalOrderNo}，顾客 ${record.customerName}，销售员号 ${record.salespersonCode}`,
     });
     return importResult(record, Boolean(existing));
   });
@@ -1182,7 +1182,7 @@ export async function revalidateE6Import(prisma, actor, idValue) {
     data: {
       status,
       errorCode: mapping ? null : E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED,
-      errorMessage: mapping ? null : "E6医师编码尚未映射系统医生",
+      errorMessage: mapping ? null : "E6销售员号尚未映射系统医生",
     },
     include: importInclude(),
   });

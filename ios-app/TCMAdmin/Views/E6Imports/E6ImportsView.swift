@@ -1044,9 +1044,6 @@ public struct E6ImportDetailView: View {
                             InfoRowItem(label: "操作员", value: item.displayOperator)
                             InfoRowItem(label: "销售员", value: item.displaySalesperson)
                             
-                            if let docCode = item.salespersonCode, !docCode.isEmpty {
-                                InfoRowItem(label: "销售员号", value: docCode)
-                            }
                             InfoRowItem(label: "剂数", value: "\(item.displayDose)剂")
                             InfoRowItem(label: "付款", value: item.isPaidBool ? "已付款" : "未付款", valueColor: item.isPaidBool ? .success : .orange, isBold: true)
                             InfoRowItem(label: "总价", value: "¥\(String(format: "%.2f", item.displayPrice))", valueColor: .danger, isBold: true)

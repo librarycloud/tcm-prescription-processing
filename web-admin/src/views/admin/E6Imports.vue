@@ -13,7 +13,7 @@
         <el-input
           v-model.trim="query.keyword"
           clearable
-          placeholder="订单号、顾客、电话或医师编码"
+          placeholder="订单号、顾客、电话或销售员号"
         />
         <el-date-picker
           v-model="query.orderDate"

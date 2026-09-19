@@ -321,7 +321,7 @@ internal fun E6ImportsScreen(
                             scope.launch { refreshFromServer() }
                         }
                     },
-                    placeholder = "搜索订单号、顾客、电话或医师编码",
+                    placeholder = "搜索订单号、顾客、电话或销售员号",
                     onSearch = {
                         page = 1
                         lastLoadedPage = 1
@@ -656,7 +656,6 @@ internal fun E6ImportDetailScreen(
                     if (value.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(value)) {
                         DetailLine("用户映射", "未配置，请在门店 E6 配置中维护", Danger)
                     }
-                    DetailLine("医师编码", value.displayField("salespersonCode"))
                     DetailLine("剂数", "${value.optInt("doseCount", 0)}剂")
                     DetailLine(
                         "付款",
