@@ -25,7 +25,7 @@ model User {
   createdBy       Int?      @map("created_by")
   updatedBy       Int?      @map("updated_by")
 
-  emailVerificationCodes         EmailVerificationCode[]
+  emailVerificationCodes EmailVerificationCode[]
 
   @@index([status])
   @@map("users")
@@ -111,15 +111,15 @@ model Store {
   printTemplates      PrintTemplate[]
   loginLogs           LoginLog[]
   operationLogs       OperationLog[]
-  transfersOut        StoreTransfer[]       @relation("StoreTransferFromStore")
-  transfersIn         StoreTransfer[]       @relation("StoreTransferToStore")
+  transfersOut        StoreTransfer[]            @relation("StoreTransferFromStore")
+  transfersIn         StoreTransfer[]            @relation("StoreTransferToStore")
   herbs               Herb[]
   herbLocations       HerbLocation[]
   robotConfigs        RobotConfig[]
   products            Product[]
   productDiffLogs     ProductsDiffLog[]
   e6DoctorMappings    E6DoctorMapping[]
-  e6OperatorMappings  E6OperatorMapping[]
+  e6UserMappings      E6UserMapping[]
   e6Imports           E6Import[]
   e6PharmacyInventory E6PharmacyInventoryBatch[]
   e6PharmacyLocations E6PharmacyLocation[]
@@ -180,20 +180,19 @@ model Product {
 }
 
 model E6PharmacyLocation {
-  id           Int      @id @default(autoincrement())
-  storeId      Int      @map("store_id")
-  code         String   @map("code") @db.VarChar(100)
-  name         String   @map("name") @db.VarChar(120)
-  isDisabled   Boolean  @default(false) @map("is_disabled")
-  receivedAt   DateTime @default(now()) @map("received_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id         Int      @id @default(autoincrement())
+  storeId    Int      @map("store_id")
+  code       String   @map("code") @db.VarChar(100)
+  name       String   @map("name") @db.VarChar(120)
+  isDisabled Boolean  @default(false) @map("is_disabled")
+  receivedAt DateTime @default(now()) @map("received_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, code])
   @@map("e6_pharmacy_locations")
 }
-
 
 model E6PharmacyProduct {
   id                  Int       @id @default(autoincrement())
@@ -259,19 +258,19 @@ model E6PharmacyInventoryBatch {
 }
 
 model YdGoodsCheck {
-  id        Int       @id @default(autoincrement())
-  storeId   Int       @map("store_id")
-  checkName String    @map("check_name") @db.VarChar(150)
-  checkType Int       @default(1) @map("check_type") @db.TinyInt
-  categoryCodes Json?  @map("category_codes")
-  status    Int       @default(0) @db.TinyInt
-  createdBy Int       @map("created_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  startedAt DateTime? @map("started_at")
-  finishedAt DateTime? @map("finished_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id            Int       @id @default(autoincrement())
+  storeId       Int       @map("store_id")
+  checkName     String    @map("check_name") @db.VarChar(150)
+  checkType     Int       @default(1) @map("check_type") @db.TinyInt
+  categoryCodes Json?     @map("category_codes")
+  status        Int       @default(0) @db.TinyInt
+  createdBy     Int       @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  startedAt     DateTime? @map("started_at")
+  finishedAt    DateTime? @map("finished_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  store Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
   items YdGoodsCheckItem[]
 
   @@index([storeId, status])
@@ -306,9 +305,9 @@ model YdGoodsCheckItem {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  check   YdGoodsCheck       @relation(fields: [checkId], references: [id], onDelete: Cascade)
-  store   Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  product E6PharmacyProduct  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  check   YdGoodsCheck      @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  store   Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product E6PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([storeId, checkId])
   @@index([storeId, checkStatus])
@@ -710,22 +709,22 @@ model E6DoctorMapping {
   @@map("e6_doctor_mappings")
 }
 
-model E6OperatorMapping {
-  id             Int      @id @default(autoincrement())
-  storeId        Int      @map("store_id")
-  e6OperatorName String   @map("e6_operator_name") @db.VarChar(100)
-  operatorName   String   @map("operator_name") @db.VarChar(100)
-  status         Int      @default(1) @db.TinyInt
-  createdBy      Int?     @map("created_by")
-  updatedBy      Int?     @map("updated_by")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+model E6UserMapping {
+  id         Int      @id @default(autoincrement())
+  storeId    Int      @map("store_id")
+  e6UserCode String   @map("e6_user_code") @db.VarChar(100)
+  userName   String   @map("user_name") @db.VarChar(100)
+  status     Int      @default(1) @db.TinyInt
+  createdBy  Int?     @map("created_by")
+  updatedBy  Int?     @map("updated_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  @@unique([storeId, e6OperatorName])
+  @@unique([storeId, e6UserCode])
   @@index([storeId, status])
-  @@map("e6_operator_mappings")
+  @@map("e6_user_mappings")
 }
 
 model E6Import {
@@ -735,7 +734,7 @@ model E6Import {
   customerName     String    @map("customer_name") @db.VarChar(64)
   phone            String?   @db.VarChar(20)
   cashierName      String?   @map("cashier_name") @db.VarChar(200)
-  e6DoctorCode     String    @map("e6_doctor_code") @db.VarChar(100)
+  salespersonCode  String    @map("salesperson_code") @db.VarChar(100)
   totalPrice       Decimal   @map("total_price") @db.Decimal(14, 2)
   doseCount        Int       @map("dose_count")
   isPaid           Int       @default(0) @map("is_paid") @db.TinyInt
@@ -766,13 +765,11 @@ model E6Import {
 
   @@unique([storeId, externalOrderNo])
   @@index([storeId, status, syncedAt])
-  @@index([e6DoctorCode])
+  @@index([salespersonCode])
   @@index([lastSyncedAt])
   @@index([isPaid])
   @@map("e6_imports")
 }
-
-
 
 model SmsTemplate {
   id              Int      @id @default(autoincrement())
@@ -818,18 +815,18 @@ model NotificationLog {
 }
 
 model LoginLog {
-  id        Int      @id @default(autoincrement())
-  userId    Int?     @map("user_id")
-  accountType String  @default("user") @map("account_type") @db.VarChar(10)
-  phone     String?  @db.VarChar(20)
-  loginType String   @map("login_type") @db.VarChar(20)
-  success   Int      @db.TinyInt
-  ip        String   @db.VarChar(45)
-  userAgent String?  @map("user_agent") @db.VarChar(500)
-  message   String?  @db.VarChar(255)
-  createdAt DateTime @default(now()) @map("created_at")
-  storeId   Int?     @map("store_id")
-  store     Store?   @relation(fields: [storeId], references: [id])
+  id          Int      @id @default(autoincrement())
+  userId      Int?     @map("user_id")
+  accountType String   @default("user") @map("account_type") @db.VarChar(10)
+  phone       String?  @db.VarChar(20)
+  loginType   String   @map("login_type") @db.VarChar(20)
+  success     Int      @db.TinyInt
+  ip          String   @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+  message     String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+  storeId     Int?     @map("store_id")
+  store       Store?   @relation(fields: [storeId], references: [id])
 
   @@index([userId])
   @@index([phone])
@@ -840,8 +837,6 @@ model LoginLog {
   @@index([storeId, createdAt])
   @@map("login_logs")
 }
-
-
 
 model EmailTemplate {
   id        Int      @id @default(autoincrement())
@@ -986,7 +981,7 @@ model PrintTemplate {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   creator Admin? @relation("PrintTemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
-  store   Store @relation(fields: [storeId], references: [id])
+  store   Store  @relation(fields: [storeId], references: [id])
 
   @@unique([storeId, templateType, name])
   @@index([storeId, templateType, enabled])
@@ -1108,14 +1103,14 @@ model OperationLog {
 }
 
 model SystemConfig {
-  id        Int      @id @default(autoincrement())
-  item      String   @unique @db.VarChar(255)
-  value     String   @default("") @db.Text
-  class     String   @default("") @db.VarChar(16)
-  isPublic  Boolean  @default(false) @map("is_public")
-  type      String   @default("string") @db.VarChar(16)
-  default   String   @default("") @db.Text
-  mark      String   @default("") @db.VarChar(255)
+  id       Int     @id @default(autoincrement())
+  item     String  @unique @db.VarChar(255)
+  value    String  @default("") @db.Text
+  class    String  @default("") @db.VarChar(16)
+  isPublic Boolean @default(false) @map("is_public")
+  type     String  @default("string") @db.VarChar(16)
+  default  String  @default("") @db.Text
+  mark     String  @default("") @db.VarChar(255)
 
   @@index([class])
   @@index([isPublic])

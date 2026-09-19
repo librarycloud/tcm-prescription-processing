@@ -51,7 +51,7 @@ public struct E6ImportsView: View {
                     
                     SearchBarField(
                         text: $searchText,
-                        placeholder: "搜索订单号、顾客、电话或医师编码",
+                        placeholder: "搜索订单号、顾客、电话或销售员号",
                         onSearch: { Task { await loadE6Imports() } },
                         onScan: { router.isScannerPresented = true }
                     )
@@ -188,7 +188,7 @@ public struct E6ImportsView: View {
                                             .scaledFont(12)
                                             .foregroundStyle(Color.muted)
                                         
-                                        Text("操作员：\(item.displayOperator)  ·  系统医生：\(item.displayDoctor)")
+                                        Text("操作员：\(item.displayOperator)  ·  销售员：\(item.displaySalesperson)")
                                             .scaledFont(12)
                                             .foregroundStyle(Color.muted)
                                             .lineLimit(1)
@@ -567,9 +567,9 @@ struct E6ConfirmFormSheet: View {
                                 )
                             }
                             
-                            // 系统医生选择
+                            // 销售员选择
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("系统医生\(hasPrescription ? "" : " *")")
+                                Text("销售员\(hasPrescription ? "" : " *")")
                                     .scaledFont(13, weight: .medium)
                                     .foregroundStyle(Color.ink)
                                 
@@ -1042,10 +1042,10 @@ public struct E6ImportDetailView: View {
                             let maskedPhone = phoneStr.count == 11 ? "\(phoneStr.prefix(3))****\(phoneStr.suffix(4))" : phoneStr
                             InfoRowItem(label: "手机号", value: maskedPhone.isEmpty ? "-" : maskedPhone)
                             InfoRowItem(label: "操作员", value: item.displayOperator)
-                            InfoRowItem(label: "系统医生", value: item.displayDoctor)
+                            InfoRowItem(label: "销售员", value: item.displaySalesperson)
                             
-                            if let docCode = item.e6DoctorCode, !docCode.isEmpty {
-                                InfoRowItem(label: "医师编码", value: docCode)
+                            if let docCode = item.salespersonCode, !docCode.isEmpty {
+                                InfoRowItem(label: "销售员号", value: docCode)
                             }
                             InfoRowItem(label: "剂数", value: "\(item.displayDose)剂")
                             InfoRowItem(label: "付款", value: item.isPaidBool ? "已付款" : "未付款", valueColor: item.isPaidBool ? .success : .orange, isBold: true)

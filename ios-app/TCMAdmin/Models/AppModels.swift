@@ -388,7 +388,7 @@ public struct ProcessingStepItem: Codable, Identifiable , Equatable {
     public let id: Int
     public let stepName: String
     public let status: Int? // 0:未开始, 1:进行中, 2:已完成
-    public let operatorName: String?
+    public let userName: String?
     public let startTime: String?
     public let finishTime: String?
     public let equipmentName: String?
@@ -772,20 +772,21 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
     public let createdAt: String?
     public let sourceCreatedAt: String?
     public let cashierName: String?
-    public let operatorName: String?
-    public let e6DoctorCode: String?
+    public let userName: String?
+    public let salespersonCode: String?
     public let remark: String?
     public let errorMessage: String?
     public let prescriptionId: Int?
     public let processingPlanId: Int?
     public let prescription: PrescriptionItem?
     public let processingPlan: ProcessingPlanItem?
-    public let operatorMapping: E6OperatorMapping?
+    public let operatorUserMapping: E6UserMapping?
+    public let salespersonUserMapping: E6UserMapping?
     public let doctorMapping: E6DoctorMapping?
     public let rawPayload: E6RawPayload?
     
-    public struct E6OperatorMapping: Codable , Equatable {
-        public let operatorName: String?
+    public struct E6UserMapping: Codable , Equatable {
+        public let userName: String?
     }
     
     public struct E6DoctorMapping: Codable , Equatable {
@@ -802,8 +803,8 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
     enum CodingKeys: String, CodingKey {
         case id, orderNo, externalOrderNo, patientName, customerName, patientGender, patientAge, phone, clinicName
         case doseCount, isPaid, totalAmount, totalPrice, status, createdAt, sourceCreatedAt
-        case cashierName, operatorName, e6DoctorCode, remark, errorMessage, prescriptionId, processingPlanId
-        case prescription, processingPlan, operatorMapping, doctorMapping, rawPayload
+        case cashierName, userName, salespersonCode, remark, errorMessage, prescriptionId, processingPlanId
+        case prescription, processingPlan, operatorUserMapping, doctorMapping, rawPayload
     }
     
     public init(from decoder: Decoder) throws {
@@ -877,8 +878,8 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
         self.createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
         self.sourceCreatedAt = try? c.decodeIfPresent(String.self, forKey: .sourceCreatedAt)
         self.cashierName = try? c.decodeIfPresent(String.self, forKey: .cashierName)
-        self.operatorName = try? c.decodeIfPresent(String.self, forKey: .operatorName)
-        self.e6DoctorCode = try? c.decodeIfPresent(String.self, forKey: .e6DoctorCode)
+        self.userName = try? c.decodeIfPresent(String.self, forKey: .userName)
+        self.salespersonCode = try? c.decodeIfPresent(String.self, forKey: .salespersonCode)
         self.remark = try? c.decodeIfPresent(String.self, forKey: .remark)
         self.errorMessage = try? c.decodeIfPresent(String.self, forKey: .errorMessage)
         
@@ -900,7 +901,7 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
         
         self.prescription = try? c.decodeIfPresent(PrescriptionItem.self, forKey: .prescription)
         self.processingPlan = try? c.decodeIfPresent(ProcessingPlanItem.self, forKey: .processingPlan)
-        self.operatorMapping = try? c.decodeIfPresent(E6OperatorMapping.self, forKey: .operatorMapping)
+        self.operatorUserMapping = try? c.decodeIfPresent(E6UserMapping.self, forKey: .operatorUserMapping)
         self.doctorMapping = try? c.decodeIfPresent(E6DoctorMapping.self, forKey: .doctorMapping)
         
         if let direct = try? c.decodeIfPresent(E6RawPayload.self, forKey: .rawPayload) {
@@ -924,15 +925,15 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
     public var isPaidBool: Bool { isPaid == 1 }
     
     public var displayOperator: String {
-        let mapped = operatorMapping?.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let mapped = operatorUserMapping?.userName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !mapped.isEmpty { return mapped }
-        let op = operatorName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let op = userName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !op.isEmpty { return op }
         return cashierName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "-"
     }
     
-    public var displayDoctor: String {
-        doctorMapping?.doctor?.name ?? prescription?.doctor?.name ?? "-"
+    public var displaySalesperson: String {
+        salespersonUserMapping?.userName ?? salespersonCode ?? "-"
     }
     
     public var statusText: String {

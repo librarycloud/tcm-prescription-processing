@@ -324,7 +324,7 @@ export async function deleteE6DoctorMapping(prisma, actor, idValue) {
     await tx.e6Import.updateMany({
       where: {
         storeId: current.storeId,
-        e6DoctorCode: current.e6DoctorCode,
+        salespersonCode: current.e6DoctorCode,
         status: E6_IMPORT_STATUS.IMPORT_PENDING,
       },
       data: {
@@ -344,11 +344,11 @@ export async function deleteE6DoctorMapping(prisma, actor, idValue) {
   return { id };
 }
 
-function operatorMappingInclude() {
+function userMappingInclude() {
   return { store: { select: { id: true, name: true, code: true } } };
 }
 
-async function validateOperatorMappingData(prisma, actor, payload = {}, current = null) {
+async function validateUserMappingData(prisma, actor, payload = {}, current = null) {
   const storeId = Number(payload.storeId ?? current?.storeId ?? actor?.storeId);
   if (!Number.isInteger(storeId) || storeId <= 0) throw new AppError("门店参数不正确", 400);
   await scopedStore(prisma, actor, storeId);
@@ -357,26 +357,26 @@ async function validateOperatorMappingData(prisma, actor, payload = {}, current 
     throw new AppError("映射状态不正确", 400);
   return {
     storeId,
-    e6OperatorName: clean(payload.e6OperatorName ?? current?.e6OperatorName, 100, "E6操作员"),
-    operatorName: clean(payload.operatorName ?? current?.operatorName, 100, "显示操作员"),
+    e6UserCode: clean(payload.e6UserCode ?? current?.e6UserCode, 100, "E6操作员"),
+    userName: clean(payload.userName ?? current?.userName, 100, "显示操作员"),
     status,
   };
 }
 
-export async function listE6OperatorMappings(prisma, actor, query = {}) {
+export async function listE6UserMappings(prisma, actor, query = {}) {
   const where = businessScope(actor, isSuperAdmin(actor) ? query.storeId : undefined);
   if (query.keyword) {
     const keyword = String(query.keyword).trim();
     where.OR = [
-      { e6OperatorName: { contains: keyword } },
-      { operatorName: { contains: keyword } },
+      { e6UserCode: { contains: keyword } },
+      { userName: { contains: keyword } },
     ];
   }
   const [list, imports] = await Promise.all([
-    prisma.e6OperatorMapping.findMany({
+    prisma.e6UserMapping.findMany({
       where,
-      include: operatorMappingInclude(),
-      orderBy: [{ storeId: "asc" }, { e6OperatorName: "asc" }],
+      include: userMappingInclude(),
+      orderBy: [{ storeId: "asc" }, { e6UserCode: "asc" }],
     }),
     prisma.e6Import.findMany({
       where,
@@ -388,50 +388,50 @@ export async function listE6OperatorMappings(prisma, actor, query = {}) {
   return { list, operators: imports.map((item) => item.cashierName).filter(Boolean) };
 }
 
-export async function saveE6OperatorMapping(prisma, actor, idValue, payload = {}) {
+export async function saveE6UserMapping(prisma, actor, idValue, payload = {}) {
   const id = idValue ? positiveInteger(idValue, "映射ID") : null;
-  const current = id ? await prisma.e6OperatorMapping.findUnique({ where: { id } }) : null;
-  if (id && !current) throw new AppError("操作员映射不存在", 404);
+  const current = id ? await prisma.e6UserMapping.findUnique({ where: { id } }) : null;
+  if (id && !current) throw new AppError("用户映射不存在", 404);
   if (current) await scopedStore(prisma, actor, current.storeId);
-  const data = await validateOperatorMappingData(prisma, actor, payload, current);
-  const duplicate = await prisma.e6OperatorMapping.findFirst({
+  const data = await validateUserMappingData(prisma, actor, payload, current);
+  const duplicate = await prisma.e6UserMapping.findFirst({
     where: {
       storeId: data.storeId,
-      e6OperatorName: data.e6OperatorName,
+      e6UserCode: data.e6UserCode,
       ...(id ? { id: { not: id } } : {}),
     },
   });
   if (duplicate) throw new AppError("该门店的E6操作员已配置", 409);
   const saved = id
-    ? await prisma.e6OperatorMapping.update({ where: { id }, data: { ...data, updatedBy: Number(actor.id) }, include: operatorMappingInclude() })
-    : await prisma.e6OperatorMapping.create({ data: { ...data, createdBy: Number(actor.id) }, include: operatorMappingInclude() });
+    ? await prisma.e6UserMapping.update({ where: { id }, data: { ...data, updatedBy: Number(actor.id) }, include: userMappingInclude() })
+    : await prisma.e6UserMapping.create({ data: { ...data, createdBy: Number(actor.id) }, include: userMappingInclude() });
   await recordOperation(prisma, actor, {
     module: "e6-integration",
     action: id ? "operator_mapping_update" : "operator_mapping_create",
     targetId: saved.id,
     storeId: saved.storeId,
-    description: `${id ? "更新" : "新增"}E6操作员映射：${saved.e6OperatorName} → ${saved.operatorName}`,
+    description: `${id ? "更新" : "新增"}E6用户映射：${saved.e6UserCode} → ${saved.userName}`,
   });
   return saved;
 }
 
-export async function deleteE6OperatorMapping(prisma, actor, idValue) {
+export async function deleteE6UserMapping(prisma, actor, idValue) {
   const id = positiveInteger(idValue, "映射ID");
-  const current = await prisma.e6OperatorMapping.findUnique({ where: { id }, include: operatorMappingInclude() });
-  if (!current) throw new AppError("操作员映射不存在", 404);
+  const current = await prisma.e6UserMapping.findUnique({ where: { id }, include: userMappingInclude() });
+  if (!current) throw new AppError("用户映射不存在", 404);
   await scopedStore(prisma, actor, current.storeId);
-  await prisma.e6OperatorMapping.delete({ where: { id } });
+  await prisma.e6UserMapping.delete({ where: { id } });
   await recordOperation(prisma, actor, {
     module: "e6-integration",
     action: "operator_mapping_delete",
     targetId: id,
     storeId: current.storeId,
-    description: `删除E6操作员映射：${current.e6OperatorName} → ${current.operatorName}`,
+    description: `删除E6用户映射：${current.e6UserCode} → ${current.userName}`,
   });
   return { id };
 }
 
-function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode) {
+function normalizeImportPayload(payload = {}, salespersonCode = payload.salespersonCode) {
   const storeCode = clean(payload.storeCode, 50, "门店编码").toUpperCase();
   const paymentStatus = normalizePaymentStatus(payload.paymentStatus);
   const sourceStatus = normalizeSourceStatus(payload.sourceStatus);
@@ -441,7 +441,7 @@ function normalizeImportPayload(payload = {}, doctorCode = payload.e6DoctorCode)
     customerName: clean(payload.customerName, 64, "顾客姓名", false) || "",
     phone: normalizeOptionalPhone(payload.phone),
     cashierName: clean(payload.cashierName, 200, "操作员", false),
-    e6DoctorCode: normalizeDoctorCode(doctorCode, false) || "",
+    salespersonCode: clean(salespersonCode, 100, "销售员号", false) || "",
     totalPrice: decimal(payload.totalPrice, "总价"),
     doseCount: positiveInteger(payload.doseCount, "剂数"),
     isPaid: paymentStatus === "PAID" ? 1 : 0,
@@ -528,7 +528,7 @@ async function persistImport(prisma, store, normalized, actor) {
   const mapping = await activeDoctorMapping(
     prisma,
     store.id,
-    normalized.e6DoctorCode,
+    normalized.salespersonCode,
   );
   const desiredStatus = normalized.isCancelled
     ? E6_IMPORT_STATUS.IMPORT_CANCELLED
@@ -556,7 +556,7 @@ async function persistImport(prisma, store, normalized, actor) {
       customerName: normalized.customerName,
       phone: normalized.phone,
       cashierName: normalized.cashierName,
-      e6DoctorCode: normalized.e6DoctorCode,
+      salespersonCode: normalized.salespersonCode,
       totalPrice: normalized.totalPrice,
       doseCount: normalized.doseCount,
       isPaid: normalized.isPaid,
@@ -624,7 +624,7 @@ async function persistImport(prisma, store, normalized, actor) {
       action,
       targetId: record.id,
       storeId: store.id,
-      description: `E6订单 ${record.externalOrderNo}，顾客 ${record.customerName}，医师编码 ${record.e6DoctorCode}`,
+      description: `E6订单 ${record.externalOrderNo}，顾客 ${record.customerName}，医师编码 ${record.salespersonCode}`,
     });
     return importResult(record, Boolean(existing));
   });
@@ -641,7 +641,7 @@ export async function receiveE6Prescription(
   const doctorCode = await resolveImportDoctorCode(
     prisma,
     store.id,
-    payload?.e6DoctorCode,
+    payload?.salespersonCode,
   );
   const normalized = normalizeImportPayload(payload, doctorCode);
   const actor = {
@@ -709,7 +709,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     const selectedDoctorId = mergedPayload.doctorId === undefined || mergedPayload.doctorId === null || mergedPayload.doctorId === ""
       ? null
       : positiveInteger(mergedPayload.doctorId, "医生");
-    const mapping = selectedDoctorId ? null : await activeDoctorMapping(tx, primary.storeId, primary.e6DoctorCode);
+    const mapping = selectedDoctorId ? null : await activeDoctorMapping(tx, primary.storeId, primary.salespersonCode);
     const doctorId = selectedDoctorId ?? mapping?.doctorId;
     if (!doctorId) throw conversionError("请先配置该门店的E6医师映射，或在确认时选择系统医生", E6_IMPORT_STATUS.IMPORT_MAPPING_REQUIRED, E6_ERROR_CODE.DOCTOR_MAPPING_REQUIRED);
     const source = await tx.dictionary.findFirst({ where: { type: DICTIONARY_TYPES.PRESCRIPTION_SOURCE, code: E6_SOURCE_CODE, status: RECORD_STATUS.ENABLED, deletedAt: null } });
@@ -814,18 +814,18 @@ async function attachMappedDoctors(prisma, list) {
   if (!list.length) return list;
   const pairs = list.map((item) => ({
     storeId: item.storeId,
-    e6DoctorCode: item.e6DoctorCode,
+    e6DoctorCode: item.salespersonCode,
   }));
   const mappings = await prisma.e6DoctorMapping.findMany({
     where: { OR: pairs, status: E6_MAPPING_STATUS.ENABLED },
     include: { doctor: { select: { id: true, name: true, status: true } } },
   });
   const byKey = new Map(
-    mappings.map((item) => [`${item.storeId}:${item.e6DoctorCode}`, item]),
+    mappings.map((item) => [`${item.storeId}:${item.salespersonCode}`, item]),
   );
   return list.map((item) => ({
     ...item,
-    doctorMapping: byKey.get(`${item.storeId}:${item.e6DoctorCode}`) || null,
+    doctorMapping: byKey.get(`${item.storeId}:${item.salespersonCode}`) || null,
   }));
 }
 
@@ -883,7 +883,7 @@ export async function listE6Imports(prisma, actor, query = {}) {
     prisma.e6Import.count({ where }),
   ]);
   return {
-    list: await attachOperatorMappings(prisma, await attachMappedDoctors(prisma, list)),
+    list: await attachUserMappings(prisma, await attachMappedDoctors(prisma, list)),
     pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
   };
 }
@@ -900,7 +900,7 @@ async function findScopedImport(prisma, actor, idValue) {
 
 export async function getE6Import(prisma, actor, idValue) {
   const item = await findScopedImport(prisma, actor, idValue);
-  const [result] = await attachOperatorMappings(prisma, await attachMappedDoctors(prisma, [item]));
+  const [result] = await attachUserMappings(prisma, await attachMappedDoctors(prisma, [item]));
   try {
     return { ...result, rawPayload: JSON.parse(result.rawPayload) };
   } catch {
@@ -908,19 +908,22 @@ export async function getE6Import(prisma, actor, idValue) {
   }
 }
 
-async function attachOperatorMappings(prisma, list) {
+async function attachUserMappings(prisma, list) {
   if (!list.length) return list;
-  const pairs = list
-    .filter((item) => item.cashierName)
-    .map((item) => ({ storeId: item.storeId, e6OperatorName: item.cashierName }));
+  const pairs = [];
+  for (const item of list) {
+    if (item.cashierName) pairs.push({ storeId: item.storeId, e6UserCode: item.cashierName });
+    if (item.salespersonCode) pairs.push({ storeId: item.storeId, e6UserCode: item.salespersonCode });
+  }
   if (!pairs.length) return list;
-  const mappings = await prisma.e6OperatorMapping.findMany({
+  const mappings = await prisma.e6UserMapping.findMany({
     where: { OR: pairs, status: E6_MAPPING_STATUS.ENABLED },
   });
-  const byKey = new Map(mappings.map((item) => [`${item.storeId}:${item.e6OperatorName}`, item]));
+  const byKey = new Map(mappings.map((item) => [`${item.storeId}:${item.e6UserCode}`, item]));
   return list.map((item) => ({
     ...item,
-    operatorMapping: byKey.get(`${item.storeId}:${item.cashierName}`) || null,
+    operatorUserMapping: byKey.get(`${item.storeId}:${item.cashierName}`) || null,
+    salespersonUserMapping: byKey.get(`${item.storeId}:${item.salespersonCode}`) || null,
   }));
 }
 
@@ -1008,7 +1011,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
       } else {
         const mapping = selectedDoctorId
           ? null
-          : await activeDoctorMapping(tx, item.storeId, item.e6DoctorCode);
+          : await activeDoctorMapping(tx, item.storeId, item.salespersonCode);
         const doctorId = selectedDoctorId ?? mapping?.doctorId;
         if (!doctorId) {
           throw conversionError(
@@ -1169,7 +1172,7 @@ export async function revalidateE6Import(prisma, actor, idValue) {
   const mapping = await activeDoctorMapping(
     prisma,
     current.storeId,
-    current.e6DoctorCode,
+    current.salespersonCode,
   );
   const status = mapping
     ? E6_IMPORT_STATUS.IMPORT_PENDING

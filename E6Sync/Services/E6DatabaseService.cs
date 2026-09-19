@@ -66,7 +66,7 @@ namespace E6Sync.Services
     counter.[总额] AS [收款金额],
     counter.[购药人],
     counter.[购药人电话],
-    counter.[处方药师],
+    detail.[销售员号],
     counter.[处方备注],
     cashier.[操作员],
     counter.[_proofstate],
@@ -106,7 +106,7 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
                         var customerOrdinal = reader.GetOrdinal("购药人");
                         var phoneOrdinal = reader.GetOrdinal("购药人电话");
                         var cashierOrdinal = reader.GetOrdinal("操作员");
-                        var doctorOrdinal = reader.GetOrdinal("处方药师");
+                        var salespersonOrdinal = reader.GetOrdinal("销售员号");
                         var remarkOrdinal = reader.GetOrdinal("处方备注");
                         var proofStateOrdinal = reader.GetOrdinal("_proofstate");
                         var itemNameOrdinal = reader.GetOrdinal("商品名称");
@@ -131,7 +131,7 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
                                     CustomerName = reader.IsDBNull(customerOrdinal) ? "" : Convert.ToString(reader.GetValue(customerOrdinal)),
                                     CustomerPhone = reader.IsDBNull(phoneOrdinal) ? "" : Convert.ToString(reader.GetValue(phoneOrdinal)),
                                     CashierName = reader.IsDBNull(cashierOrdinal) ? "" : Convert.ToString(reader.GetValue(cashierOrdinal)),
-                                    DoctorName = reader.IsDBNull(doctorOrdinal) ? "" : Convert.ToString(reader.GetValue(doctorOrdinal)),
+                                    SalespersonCode = reader.IsDBNull(salespersonOrdinal) ? "" : Convert.ToString(reader.GetValue(salespersonOrdinal)),
                                     PrescriptionRemark = reader.IsDBNull(remarkOrdinal) ? "" : Convert.ToString(reader.GetValue(remarkOrdinal)),
                                     IsPaid = proofState == "结单",
                                     IsCancelled = proofState == "作废"

@@ -312,10 +312,7 @@ namespace E6Sync.Services
                 log.Error("单据 " + order.ExternalOrderNo + " 同步失败：" + order.ValidationError);
                 return "失败：" + order.ValidationError;
             }
-            var doctorCode = string.IsNullOrWhiteSpace(order.DoctorName)
-                ? (config.E6.DefaultDoctorCode ?? "").Trim()
-                : order.DoctorName.Trim();
-            var result = await api.SendAsync(order, doctorCode, cancellationToken).ConfigureAwait(false);
+            var result = await api.SendAsync(order, cancellationToken).ConfigureAwait(false);
             if (!result.Success)
             {
                 stats.FailureCount++;
