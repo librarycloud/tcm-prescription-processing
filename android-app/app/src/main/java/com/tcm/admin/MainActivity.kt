@@ -58,6 +58,7 @@ import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -788,6 +789,53 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
         }
     }
 
+    var showConfigDialog by remember { mutableStateOf(false) }
+    var configInput by remember { mutableStateOf("") }
+
+    if (showConfigDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showConfigDialog = false },
+            title = { Text("配置服务器地址", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("您可以手动输入服务器地址，或者点击右侧扫码按钮扫描二维码进行配置。", fontSize = 13.sp, color = Muted, modifier = Modifier.padding(bottom = 12.dp))
+                    OutlinedTextField(
+                        value = configInput,
+                        onValueChange = { configInput = it },
+                        placeholder = { Text("如: https://api.yourdomain.com") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            androidx.compose.material3.IconButton(onClick = {
+                                showConfigDialog = false
+                                scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                            }) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan config", tint = Primary)
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (configInput.isNotBlank()) {
+                        val result = ApiClient.importServerConfig(context, android.net.Uri.parse(configInput))
+                        Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
+                        if (result.first) {
+                            showConfigDialog = false
+                        }
+                    }
+                }) {
+                    Text("保存", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfigDialog = false }) {
+                    Text("取消", color = Muted)
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -894,7 +942,8 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
         // 服务器配置快速入口
         Card(
             modifier = Modifier.fillMaxWidth().clickable {
-                scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                configInput = baseUrl
+                showConfigDialog = true
             },
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -915,10 +964,10 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                     Text(baseUrl, fontSize = 12.sp, color = Muted, maxLines = 1)
                 }
                 Icon(
-                    Icons.Default.QrCodeScanner,
-                    contentDescription = "Scan config",
+                    Icons.Default.Edit,
+                    contentDescription = "Edit config",
                     tint = Primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

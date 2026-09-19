@@ -1248,26 +1248,79 @@ internal fun SettingsScreen(
             }
         }
         
+        var showEditDialog by remember { mutableStateOf(false) }
+        var urlInput by remember { mutableStateOf(baseUrl) }
+
+        if (showEditDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showEditDialog = false },
+                title = { Text("修改服务器地址", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text("手动输入新的服务器地址：", fontSize = 13.sp, color = Muted, modifier = Modifier.padding(bottom = 12.dp))
+                        OutlinedTextField(
+                            value = urlInput,
+                            onValueChange = { urlInput = it },
+                            placeholder = { Text("如: https://api.yourdomain.com") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (urlInput.isNotBlank()) {
+                            val result = ApiClient.importServerConfig(context, android.net.Uri.parse(urlInput))
+                            Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
+                            if (result.first) {
+                                baseUrl = ApiClient.currentBaseUrl
+                                showEditDialog = false
+                            }
+                        }
+                    }) {
+                        Text("保存", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditDialog = false }) {
+                        Text("取消", color = Muted)
+                    }
+                }
+            )
+        }
+
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().clickable {
+                urlInput = baseUrl
+                showEditDialog = true
+            }
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CloudQueue,
+                            contentDescription = null,
+                            tint = Primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("当前服务器地址", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                    }
                     Icon(
-                        Icons.Default.CloudQueue,
-                        contentDescription = null,
+                        Icons.Default.Edit,
+                        contentDescription = "Edit Server",
                         tint = Primary,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text("当前服务器地址", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1278,7 +1331,7 @@ internal fun SettingsScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "如需切换服务器，请使用系统相机扫描配置二维码，或通过其他应用打开专属配置链接 (tcmadmin://config?server=...) 进行自动导入。",
+                    text = "点击此卡片可手动修改服务器地址。也可使用扫码或通过专属配置链接自动导入。",
                     fontSize = 12.sp,
                     color = Muted,
                     lineHeight = 17.sp,
