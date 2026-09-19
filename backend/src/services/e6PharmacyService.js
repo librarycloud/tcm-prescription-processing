@@ -215,6 +215,7 @@ export async function listE6PharmacyLocations(prisma, actor, query = {}) {
   };
   return prisma.e6PharmacyLocation.findMany({
     where,
+    distinct: ['code'],
     orderBy: { code: 'asc' },
     select: {
       code: true,

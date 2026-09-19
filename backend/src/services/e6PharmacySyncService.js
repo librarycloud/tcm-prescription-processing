@@ -21,7 +21,8 @@ function productChanged(existing, incoming) {
 }
 
 function text(value, max, field, required = false) {
-  const result = String(value ?? "").trim();
+  // 过滤常见的不可见字符（零宽空格等）
+  const result = String(value ?? "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
   if (required && !result) throw new AppError(`${field}不能为空`, 400);
   if (result.length > max) throw new AppError(`${field}不能超过${max}个字符`, 400);
   return result || null;
