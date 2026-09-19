@@ -454,8 +454,8 @@ internal fun StocktakingDetailScreen(
                     val effectiveQty = recountQty ?: firstQty
                     val systemQty = if (recountQty != null) item.optDouble("recountSystemQty", item.optDouble("systemQty", 0.0)) else item.optDouble("systemQty", 0.0)
                     val diffQty = if (isStoreStaff) null else effectiveQty?.let { item.optDouble("difference", it - systemQty) }
-                    val systemLocation = item.displayField("systemLocationName", "")
-                    val countLocation = item.displayField("countLocationName", "")
+                    val systemLocation = item.displayField("systemLocationCode", "").let { if (it.isNotEmpty()) "$it-" else "" } + item.displayField("systemLocationName", "")
+                    val countLocation = item.displayField("countLocationCode", "").let { if (it.isNotEmpty()) "$it-" else "" } + item.displayField("countLocationName", "")
                     val retailPrice = product.opt("retailPrice")?.toString()
                         ?.takeIf { it.isNotBlank() && it != "null" }
                         ?: item.opt("retailPrice")?.toString()?.takeIf { it.isNotBlank() && it != "null" }
@@ -898,8 +898,8 @@ internal fun StocktakingEntryScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                         Column(Modifier.weight(1f)) {
                             Text("批号：${candidate.displayField("batchNo", "-")}", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                            Text("系统货位：${candidate.displayField("systemLocationName", candidate.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
-                            Text("盘点货位：${candidate.displayField("countLocationName", "未设置")}", color = Muted, fontSize = 12.sp)
+                            Text("系统货位：${candidate.displayField("systemLocationCode", "").let { if (it.isNotEmpty()) "$it-" else "" }}${candidate.displayField("systemLocationName", candidate.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
+                            Text("盘点货位：${candidate.displayField("countLocationCode", "").let { if (it.isNotEmpty()) "$it-" else "" }}${candidate.displayField("countLocationName", "未设置")}", color = Muted, fontSize = 12.sp)
                             Text("生产日期：${serverDateOnly(candidate.displayField("productionDate", ""), "-")}　有效期：${serverDateOnly(candidate.displayField("expiryDate", ""), "-")}", color = Muted, fontSize = 12.sp)
                             if (!isStoreStaff) {
                                 Text("系统库存：${quantityText(candidate.opt("systemQty"), "0")} ${candidateProduct.displayField("unit", "")}", color = Muted, fontSize = 12.sp)
@@ -933,7 +933,7 @@ internal fun StocktakingEntryScreen(
                     Spacer(Modifier.height(6.dp))
                     Text("规格：${product.displayField("specification", "-")}　单位：${product.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
                     Text("生产厂商：${product.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp)
-                    Text("系统货位：${selectedItem!!.displayField("systemLocationName", selectedItem!!.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
+                    Text("系统货位：${selectedItem!!.displayField("systemLocationCode", "").let { if (it.isNotEmpty()) "$it-" else "" }}${selectedItem!!.displayField("systemLocationName", selectedItem!!.displayField("locationName", "未设置"))}", color = Muted, fontSize = 12.sp)
                     Text("生产日期：${serverDateOnly(selectedItem!!.displayField("productionDate", ""), "-")}　有效期：${serverDateOnly(selectedItem!!.displayField("expiryDate", ""), "-")}", color = Muted, fontSize = 12.sp)
                     if (!isStoreStaff) {
                         Text("系统库存：${quantityText(selectedItem!!.optDouble("systemQty", 0.0), "0")} ${product.displayField("unit")}", color = Muted, fontSize = 12.sp)

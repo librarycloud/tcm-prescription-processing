@@ -2,10 +2,12 @@ import { receivePrescriptionController } from "../controllers/e6IntegrationContr
 import {
   uploadInventoryController,
   uploadProductsController,
+  uploadLocationsController,
 } from "../controllers/e6PharmacySyncController.js";
 
 export default async function e6IntegrationRoutes(fastify) {
   fastify.post("/prescriptions", receivePrescriptionController);
+  fastify.post("/pharmacy-locations", uploadLocationsController);
   fastify.post("/pharmacy/products", uploadProductsController);
   fastify.post("/pharmacy/inventory", uploadInventoryController);
 }

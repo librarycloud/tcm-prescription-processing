@@ -3,6 +3,9 @@ import request from './request';
 export const getE6PharmacyProducts = (params) =>
   request.get('/admin/e6-pharmacy/products', { params });
 
+export const getE6PharmacyLocations = (params) =>
+  request.get('/admin/e6-pharmacy/locations', { params });
+
 export const downloadE6PharmacyBarcodeTemplate = () =>
   request.get('/admin/e6-pharmacy/barcode-template', { responseType: 'blob' });
 

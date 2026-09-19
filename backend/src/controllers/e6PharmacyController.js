@@ -4,6 +4,7 @@ import {
   e6PharmacyBarcodeTemplate,
   importE6PharmacyBarcodes,
   listE6PharmacyProducts,
+  listE6PharmacyLocations,
 } from "../services/e6PharmacyService.js";
 import {
   deleteE6PharmacyCategoryMapping,
@@ -15,6 +16,17 @@ export async function listE6PharmacyProductsController(request, reply) {
   return ok(
     reply,
     await listE6PharmacyProducts(
+      request.server.prisma,
+      request.user,
+      request.query || {},
+    ),
+  );
+}
+
+export async function listE6PharmacyLocationsController(request, reply) {
+  return ok(
+    reply,
+    await listE6PharmacyLocations(
       request.server.prisma,
       request.user,
       request.query || {},

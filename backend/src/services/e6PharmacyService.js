@@ -128,6 +128,7 @@ function normalizeBatch(batch) {
   return {
     id: batch.id,
     batchNo: batch.batchNo || "-",
+    locationCode: batch.locationCode || "",
     locationName: batch.locationName || "-",
     productionDate: batch.productionDate,
     expiryDate: batch.expiryDate,
@@ -182,7 +183,7 @@ const SUPPORTED_SORT_FIELDS = new Set([
   "e6ModifiedAt",
 ]);
 
-function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, stockStatus }) {
+function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, locationCode, expiryBefore, stockStatus }) {
   const filters = [];
   if (scope.storeId) {
     filters.push(Prisma.sql`i.store_id = ${scope.storeId}`);
@@ -196,6 +197,9 @@ function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, s
   if (categoryCode) {
     filters.push(Prisma.sql`p.category_code = ${categoryCode}`);
   }
+  if (locationCode) {
+    filters.push(Prisma.sql`i.location_code = ${locationCode}`);
+  }
   if (keyword) {
     const escaped = keyword.replace(/[%_\\]/g, "\\$&");
     const value = `%${escaped}%`;
@@ -204,12 +208,29 @@ function buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, s
   return filters.length ? Prisma.join(filters, " AND ") : Prisma.sql`1=1`;
 }
 
+export async function listE6PharmacyLocations(prisma, actor, query = {}) {
+  const scope = businessScope(actor, query.storeId);
+  const where = {
+    ...(scope.storeId ? { storeId: scope.storeId } : {}),
+  };
+  return prisma.e6PharmacyLocation.findMany({
+    where,
+    orderBy: { code: 'asc' },
+    select: {
+      code: true,
+      name: true,
+      storeId: true,
+    }
+  });
+}
+
 export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);
   const scope = businessScope(actor, query.storeId);
   const keyword = String(query.keyword || "").trim();
   const categoryCode = String(query.categoryCode || "").trim();
+  const locationCode = String(query.locationCode || "").trim();
   const expiryWithinMonths = query.expiryWithinMonths === undefined || query.expiryWithinMonths === ""
     ? null
     : toPositiveInt(query.expiryWithinMonths, 0);
@@ -248,13 +269,17 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   }
 
   const storeFilter = scope.storeId ? { storeId: scope.storeId } : {};
+  const locationFilter = locationCode ? { locationCode } : {};
+  
   const positiveBatchWhere = {
     quantity: { gt: 0 },
     ...storeFilter,
+    ...locationFilter,
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
   const storeBatchWhere = {
     ...storeFilter,
+    ...locationFilter,
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
 
@@ -277,6 +302,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   const inventoryWhere = {
     ...(stockStatus === "nonZero" ? { quantity: { gt: 0 } } : {}),
     ...storeFilter,
+    ...locationFilter,
     ...(expiryBefore ? { expiryDate: { lt: expiryBefore } } : {}),
   };
   const where = {
@@ -309,7 +335,7 @@ export async function listE6PharmacyProducts(prisma, actor, query = {}) {
   if (isAggregateOrJoinedSort) {
     if (typeof prisma.$queryRaw === "function") {
       const offset = (page - 1) * pageSize;
-      const whereSql = buildE6PharmacySqlWhere({ scope, keyword, categoryCode, expiryBefore, stockStatus });
+      const whereSql = buildE6PharmacySqlWhere({ scope, keyword, categoryCode, locationCode, expiryBefore, stockStatus });
       const havingSql = stockStatus === "zero"
         ? Prisma.sql`HAVING MAX(i.quantity) <= 0`
         : Prisma.empty;

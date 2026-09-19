@@ -18,7 +18,7 @@
           v-model="query.storeId"
           clearable
           placeholder="全部门店"
-          @change="search"
+          @change="handleStoreChange"
         >
           <el-option
             v-for="store in stores"
@@ -33,6 +33,20 @@
           placeholder="编号、商品名称或条形码"
           @keyup.enter="search"
         />
+        <el-select
+          v-model="query.locationCode"
+          clearable
+          filterable
+          placeholder="全部货位"
+          @change="search"
+        >
+          <el-option
+            v-for="loc in locations"
+            :key="loc.code"
+            :label="`${loc.code}-${loc.name}`"
+            :value="loc.code"
+          />
+        </el-select>
         <el-select v-model="query.categoryCode" clearable placeholder="全部分类" @change="search">
           <el-option
             v-for="item in categoryMappings"
@@ -93,7 +107,11 @@
                   <template #default="{ row: batch }">{{ batch.store?.name || '-' }}</template>
                 </el-table-column>
                 <el-table-column prop="batchNo" label="批号" min-width="140" />
-                <el-table-column prop="locationName" label="货位" min-width="140" />
+                <el-table-column label="货位" min-width="140">
+                  <template #default="{ row: batch }">
+                    {{ batch.locationCode ? `${batch.locationCode}-` : '' }}{{ batch.locationName || '-' }}
+                  </template>
+                </el-table-column>
                 <el-table-column label="生产日期" width="130">
                   <template #default="{ row: batch }">{{
                     dateText(batch.productionDate)
@@ -278,6 +296,7 @@ import { getProductStores } from '@/api/productDifference';
 import {
   downloadE6PharmacyBarcodeTemplate,
   getE6PharmacyCategoryMappings,
+  getE6PharmacyLocations,
   getE6PharmacyProducts,
   importE6PharmacyBarcodes
 } from '@/api/e6Pharmacy';
@@ -287,6 +306,7 @@ const userStore = useUserStore();
 const tableRef = ref();
 const stores = ref([]);
 const categoryMappings = ref([]);
+const locations = ref([]);
 const barcodeImportVisible = ref(false);
 const barcodeImporting = ref(false);
 const barcodeFile = ref(null);
@@ -356,6 +376,7 @@ const {
   async (params) => {
     const data = await getE6PharmacyProducts({
       keyword: params.keyword || undefined,
+      locationCode: params.locationCode || undefined,
       storeId: params.storeId || undefined,
       categoryCode: params.categoryCode || undefined,
       stockStatus: params.stockStatus || 'all',
@@ -369,6 +390,7 @@ const {
   },
   {
     keyword: '',
+    locationCode: '',
     storeId: undefined,
     categoryCode: undefined,
     stockStatus: undefined,
@@ -462,9 +484,19 @@ async function submitBarcodeImport() {
   }
 }
 
+async function loadLocations() {
+  locations.value = await getE6PharmacyLocations({ storeId: query.storeId });
+}
+
+function handleStoreChange() {
+  query.locationCode = '';
+  loadLocations();
+  search();
+}
+
 onMounted(async () => {
   await loadStores();
-  await Promise.all([loadCategoryMappings(), load()]);
+  await Promise.all([loadCategoryMappings(), loadLocations(), load()]);
 });
 </script>
 

@@ -110,7 +110,9 @@ public struct InventoryDetailView: View {
                                                     .scaledFont(14)
                                                     .foregroundStyle(Color.muted)
                                                 
-                                                let loc = batch.locationName ?? ""
+                                                let locName = batch.locationName ?? ""
+                                                let locCode = batch.locationCode ?? ""
+                                                let loc = !locCode.isEmpty && !locName.isEmpty ? "\(locCode)-\(locName)" : (!locCode.isEmpty ? locCode : (!locName.isEmpty ? locName : ""))
                                                 Text(loc.isEmpty ? "未分配" : loc)
                                                     .scaledFont(16, weight: .black)
                                                     .foregroundStyle(loc.isEmpty ? Color.muted : Color.appPrimaryDark)

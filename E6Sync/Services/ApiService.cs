@@ -117,6 +117,11 @@ namespace E6Sync.Services
             }
         }
 
+        public Task<ApiResult> SendPharmacyLocationsAsync(System.Collections.Generic.IList<E6PharmacyLocationUpload> locations, CancellationToken cancellationToken)
+        {
+            return PostPharmacyAsync("/integrations/e6/v1/pharmacy-locations", new { storeCode = config.StoreCode, locations = locations }, cancellationToken);
+        }
+
         public Task<ApiResult> SendPharmacyProductsAsync(System.Collections.Generic.IList<E6PharmacyProductUpload> products, CancellationToken cancellationToken)
         {
             return PostPharmacyAsync("/integrations/e6/v1/pharmacy/products", new { storeCode = config.StoreCode, products = products }, cancellationToken);

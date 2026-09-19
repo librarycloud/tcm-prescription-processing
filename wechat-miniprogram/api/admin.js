@@ -391,3 +391,7 @@ export function updateProfile(data) {
   return request({ url: '/user/me', method: 'PUT', data });
 }
 
+
+export function getE6PharmacyLocations(params) {
+  return get('/admin/e6-pharmacy/locations', params);
+}

@@ -589,7 +589,14 @@ internal fun InventoryScreen(
                     val storeName = item.optJSONObject("store")?.displayField("name", "")
                         ?: item.displayField("storeName", "")
                     val batchNo = item.displayField("batchNo")
-                    val location = item.displayField("locationName", "").ifBlank { formatLocationCode(item.displayField("locationCode")) }
+                    val locName = item.displayField("locationName", "")
+                    val locCode = item.displayField("locationCode", "")
+                    val location = when {
+                        locCode.isNotBlank() && locName.isNotBlank() -> "$locCode-$locName"
+                        locCode.isNotBlank() -> locCode
+                        locName.isNotBlank() -> locName
+                        else -> "-"
+                    }
                     val qty = item.optDouble("quantity", 0.0)
                     val prodDate = inventoryDate(item, "productionDate")
                     val expDate = inventoryDate(item, "expiryDate", "expirationDate", "expireDate")

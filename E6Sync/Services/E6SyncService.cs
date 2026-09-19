@@ -180,6 +180,17 @@ namespace E6Sync.Services
         private async Task<SyncStats> SyncPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
         {
             var stats = new SyncStats();
+            var locationSnapshot = await Task.Run(() => database.QueryPharmacyLocations(fullSync ? "" : config.Sync.LastPharmacyLocationTableCursor), cancellationToken).ConfigureAwait(false);
+            var locations = locationSnapshot.Locations;
+            stats.QueryCount += locations.Count;
+            foreach (var locationBatch in SplitBatches(locations, 1000))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var locationResult = await api.SendPharmacyLocationsAsync(locationBatch, cancellationToken).ConfigureAwait(false);
+                if (!locationResult.Success) throw new InvalidOperationException("货位同步失败：" + locationResult.Message);
+                stats.SuccessCount++;
+            }
+
             var productSnapshot = await Task.Run(() => database.QueryPharmacyProducts(fullSync ? "" : config.Sync.LastPharmacyProductCursor), cancellationToken).ConfigureAwait(false);
             var products = productSnapshot.Products;
             stats.QueryCount += products.Count;
@@ -246,6 +257,8 @@ namespace E6Sync.Services
                 inventoryBatchCount++;
                 log.Info(string.Format("药店库存上传批次 {0}/{1}：{2} 条", index + 1, inventoryBatches.Count, inventoryBatches[index].Count));
             }
+            if (!string.IsNullOrWhiteSpace(locationSnapshot.Cursor))
+                config.Sync.LastPharmacyLocationTableCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyLocationTableCursor, locationSnapshot.Cursor);
             if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor))
                 config.Sync.LastPharmacyProductCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyProductCursor, productSnapshot.Cursor);
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor))
