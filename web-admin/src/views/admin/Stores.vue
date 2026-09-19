@@ -183,13 +183,13 @@
 
         <section class="config-section">
           <div class="section-heading">
-            <div><h3>用户映射</h3><p>每个门店独立配置，用于 E6 导入列表的操作员显示与筛选。</p></div>
+            <div><h3>用户映射</h3><p>每个门店独立配置，用于 E6 导入列表的操作员及销售员显示与筛选。</p></div>
             <el-button type="primary" :icon="Plus" @click="openUserMapping()">新增映射</el-button>
           </div>
           <el-table :data="e6UserMappings" border row-key="id" table-layout="auto">
             <template #empty><EmptyView description="暂无用户映射" /></template>
-            <el-table-column prop="e6UserCode" label="E6操作员" />
-            <el-table-column prop="userName" label="显示操作员" />
+            <el-table-column prop="e6UserCode" label="E6用户" />
+            <el-table-column prop="userName" label="显示姓名" />
             <el-table-column label="状态">
               <template #default="{ row }">
                 <el-switch :model-value="row.status" :active-value="1" :inactive-value="0" @change="(status) => toggleUserMapping(row, status)" />
@@ -214,8 +214,8 @@
 
     <el-dialog v-model="userMappingVisible" :title="userMappingForm.id ? '编辑用户映射' : '新增用户映射'" width="460px" append-to-body align-center>
       <el-form label-position="top">
-        <el-form-item label="E6操作员" required><el-input v-model.trim="userMappingForm.e6UserCode" maxlength="100" /></el-form-item>
-        <el-form-item label="显示操作员" required><el-input v-model.trim="userMappingForm.userName" maxlength="100" /></el-form-item>
+        <el-form-item label="E6用户" required><el-input v-model.trim="userMappingForm.e6UserCode" maxlength="100" /></el-form-item>
+        <el-form-item label="显示姓名" required><el-input v-model.trim="userMappingForm.userName" maxlength="100" /></el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="userMappingForm.status">
             <el-radio-button :value="1">启用</el-radio-button>
@@ -560,7 +560,7 @@ function openUserMapping(row) {
 
 async function saveUserMapping() {
   if (!e6Store.value || !userMappingForm.e6UserCode || !userMappingForm.userName) {
-    return ElMessage.warning('请填写E6操作员和显示操作员');
+    return ElMessage.warning('请填写E6用户和显示姓名');
   }
   userMappingSaving.value = true;
   try {
@@ -587,7 +587,7 @@ async function toggleUserMapping(row, status) {
 }
 
 async function removeUserMapping(row) {
-  await ElMessageBox.confirm(`确认删除操作员“${row.e6UserCode}”的映射吗？`, '删除映射', { type: 'warning' });
+  await ElMessageBox.confirm(`确认删除用户“${row.e6UserCode}”的映射吗？`, '删除映射', { type: 'warning' });
   await deleteE6UserMapping(row.id);
   ElMessage.success('用户映射已删除');
   await loadE6Config();
