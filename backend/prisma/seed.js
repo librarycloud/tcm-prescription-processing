@@ -1,7 +1,15 @@
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import 'dotenv/config'; // 加载 .env 文件中的 DATABASE_URL
 
-const prisma = new PrismaClient();
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL is not set in environment variables');
+}
+
+const adapter = new PrismaMariaDb(databaseUrl);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const password = await bcrypt.hash('123456', 10);
@@ -24,7 +32,7 @@ async function main() {
     })
   ]);
 
-  await prisma.user.upsert({
+  await prisma.admin.upsert({
     where: { phone: '13800000000' },
     update: {
       username: null,
