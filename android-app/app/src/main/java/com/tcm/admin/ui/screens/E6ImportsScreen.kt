@@ -349,6 +349,7 @@ internal fun E6ImportsScreen(
                         centerLabel = true,
                     )
                 }
+
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -529,53 +530,59 @@ private fun E6ImportCard(
     val phone = maskPhone(item.optString("phone"))
 
     AppCard(onClick = onDetail) {
-        Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
-            if (canManage) {
-                androidx.compose.material3.Checkbox(checked = selected, enabled = selectable, onCheckedChange = onSelect)
-            }
-            Column(Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (canManage) {
+                        androidx.compose.material3.Checkbox(
+                            checked = selected,
+                            enabled = selectable,
+                            onCheckedChange = onSelect,
+                            modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     Text(
                         text = item.displayField("customerName", "未填写顾客"),
                         color = Ink,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        StatusPill(paidText)
-                        StatusPill(e6StatusLabel(item.optInt("status", -1)))
-                    }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    StatusPill(paidText)
+                    StatusPill(e6StatusLabel(item.optInt("status", -1)))
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "$phone  ·  单号：$orderNo",
+                color = RegularText,
+                fontSize = 12.5.sp,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "${e6Date(item.optString("sourceCreatedAt"))}  ·  ${item.optInt("doseCount", 0)}剂  ·  ¥${e6Money(item.opt("totalPrice"))}",
+                color = Muted,
+                fontSize = 12.sp,
+            )
+            Text(
+                "操作员：${e6OperatorName(item)}　·　销售员：${e6SalespersonName(item) ?: "-"}",
+                color = Muted,
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+            if (item.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(item)) {
+                Text("未配置用户映射，请在门店 E6 配置中维护", color = Danger, fontSize = 12.sp)
+            }
+            val errorMessage = item.displayField("errorMessage", "")
+            if (errorMessage.isNotBlank()) {
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "$phone  ·  单号：$orderNo",
-                    color = RegularText,
-                    fontSize = 12.5.sp,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "${e6Date(item.optString("sourceCreatedAt"))}  ·  ${item.optInt("doseCount", 0)}剂  ·  ¥${e6Money(item.opt("totalPrice"))}",
-                    color = Muted,
-                    fontSize = 12.sp,
-                )
-                Text(
-                    "操作员：${e6OperatorName(item)}　·　销售员：${e6SalespersonName(item) ?: "-"}",
-                    color = Muted,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                )
-                if (item.displayField("cashierName", "").isNotBlank() && !e6OperatorMapped(item)) {
-                    Text("未配置用户映射，请在门店 E6 配置中维护", color = Danger, fontSize = 12.sp)
-                }
-                val errorMessage = item.displayField("errorMessage", "")
-                if (errorMessage.isNotBlank()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(errorMessage, color = Danger, fontSize = 12.sp, maxLines = 2)
-                }
+                Text(errorMessage, color = Danger, fontSize = 12.sp, maxLines = 2)
             }
         }
         if (canManage) {
@@ -603,6 +610,7 @@ private data class E6BatchDraft(
     val dose: String,
     val date: String,
     val scheduleType: Int = 1,
+    val processTypeId: Int = 0,
 )
 
 private fun e6DraftBatches(totalDose: Int, count: Int): List<E6BatchDraft> {
@@ -835,7 +843,7 @@ internal fun E6ImportConfirmScreen(
             Spacer(Modifier.height(14.dp)); Text("系统医生${if (hasPrescription) "" else " *"}", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) { doctors.forEach { doctor -> SegmentedButton(doctor.displayField("name", "医生"), doctorId == doctor.optInt("id"), { doctorId = doctor.optInt("id") }) } }
             Spacer(Modifier.height(14.dp)); Text("加工方式 *", color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
-            Spacer(Modifier.height(6.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) { processTypes.forEach { type -> SegmentedButton(type.displayField("name", "加工"), processTypeId == type.optInt("id"), { processTypeId = type.optInt("id") }) } }
+            Spacer(Modifier.height(6.dp)); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) { processTypes.forEach { type -> SegmentedButton(type.displayField("name", "加工"), processTypeId == type.optInt("id"), { processTypeId = type.optInt("id"); batches = batches.map { it.copy(processTypeId = 0) } }) } }
         }
         Spacer(Modifier.height(12.dp))
         AppCard {
@@ -878,6 +886,15 @@ internal fun E6ImportConfirmScreen(
                         modifier = Modifier.weight(1f),
                         centerLabel = true,
                     )
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("加工", color = Muted, fontSize = 12.sp)
+                    processTypes.forEach { type ->
+                        val typeId = type.optInt("id")
+                        val isSelected = batch.processTypeId == typeId || (batch.processTypeId == 0 && processTypeId == typeId)
+                        SegmentedButton(type.displayField("name", "加工"), isSelected, { batches = batches.toMutableList().also { it[index] = batch.copy(processTypeId = typeId) } })
+                    }
                 }
                 if (batch.scheduleType == 1) {
                     Spacer(Modifier.height(6.dp))
@@ -923,6 +940,7 @@ internal fun E6ImportConfirmScreen(
                         .put("totalDose", batchDose)
                         .put("scheduleType", batch.scheduleType)
                         .put("processDate", if (batch.scheduleType == 1) batch.date.trim() else JSONObject.NULL)
+                    if (batch.processTypeId > 0) batchPayload.put("processTypeId", batch.processTypeId)
                     if (isDecoction) {
                         batchPayload
                             .put("bagCount", batchDose * (bagsPerDose.toIntOrNull() ?: 2))

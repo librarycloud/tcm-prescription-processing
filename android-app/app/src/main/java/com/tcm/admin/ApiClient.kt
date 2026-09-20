@@ -102,12 +102,16 @@ object ApiClient {
         finalURL = finalURL.trimEnd('/')
         
         currentBaseUrl = finalURL
-        getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
+        runCatching {
+            getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
+        }.onFailure { Log.w(LOG_TAG, "无法保存自定义服务器地址到加密存储", it) }
         return true to "成功导入服务器地址:\n\n$finalURL"
     }
 
     fun initBaseUrl(context: Context) {
-        val saved = getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
+        val saved = runCatching {
+            getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
+        }.getOrNull()
         if (!saved.isNullOrBlank()) {
             currentBaseUrl = saved
         }
@@ -946,11 +950,18 @@ object ApiClient {
         val strategyData = strategyRes?.optJSONObject("data")
         val uploadUrl = strategyData?.optString("uploadUrl")
         
+        val isLanUploadUrl = !uploadUrl.isNullOrEmpty() && (
+            uploadUrl.startsWith("http://192.168.", ignoreCase = true) ||
+            uploadUrl.startsWith("http://10.", ignoreCase = true) ||
+            uploadUrl.startsWith("http://172.", ignoreCase = true) ||
+            uploadUrl.startsWith("http://localhost", ignoreCase = true) ||
+            uploadUrl.startsWith("http://127.0.0.1", ignoreCase = true)
+        )
         val directUploadAllowed = !uploadUrl.isNullOrEmpty() &&
             (uploadUrl.startsWith("https://", ignoreCase = true) ||
-                (BuildConfig.DEBUG && uploadUrl.startsWith("http://", ignoreCase = true)))
+                BuildConfig.DEBUG || isLanUploadUrl)
         if (!uploadUrl.isNullOrEmpty() && !directUploadAllowed) {
-            Log.w(LOG_TAG, "Ignoring non-HTTPS OSS upload URL in release build")
+            Log.w(LOG_TAG, "Ignoring non-HTTPS/non-LAN OSS upload URL in release build")
         }
         if (directUploadAllowed) {
             // 使用 S3/OSS PUT 直传 (兼容 SeaweedFS)

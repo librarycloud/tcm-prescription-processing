@@ -141,6 +141,7 @@ internal fun ProcessingScreenV2(
     val reloadRevision = rememberListReloadRevision("processing")
     LaunchedEffect(reloadRevision) {
         if (reloadRevision > 0) {
+            com.tcm.admin.ApiClient.clearResponseCache(context)
             plansItems.refresh()
             pickupItems.refresh()
             viewModel.refreshStats(selectedStoreId)
@@ -532,15 +533,28 @@ internal fun ProcessingScreenV2(
                                     InfoRowItem("加工备注", it, verticalPadding = 0.dp)
                                 }
 
+                                Spacer(Modifier.height(6.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                 Spacer(Modifier.height(8.dp))
 
                                 // Plan Actions
                                 @OptIn(ExperimentalLayoutApi::class)
-                                FlowRow(
+                                Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom,
                                 ) {
+                                    Text(
+                                        text = "创建时间: ${serverDateTime(plan.optString("createdAt", ""))}",
+                                        fontSize = 12.sp,
+                                        color = Muted,
+                                        modifier = Modifier.weight(1f).padding(bottom = 8.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
                                     val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
                                     if (prescriptionId > 0) {
                                         OutlinedButton(
@@ -642,6 +656,7 @@ internal fun ProcessingScreenV2(
                                             Text("取消", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
+                                }
                                 }
                             }
                         }

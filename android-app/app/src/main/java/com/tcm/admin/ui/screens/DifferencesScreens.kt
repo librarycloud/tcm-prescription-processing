@@ -90,6 +90,7 @@ internal fun DifferencesScreen(
     val reloadRevision = rememberListReloadRevision("differences")
     LaunchedEffect(reloadRevision) {
         if (reloadRevision > 0) {
+            com.tcm.admin.ApiClient.clearResponseCache(context)
             items.refresh()
         }
     }

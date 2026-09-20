@@ -145,11 +145,15 @@ import dagger.hilt.android.AndroidEntryPoint
 
 object ServerConfigNotifier {
     val importResult = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Boolean, String>>(
+        replay = 1,
         extraBufferCapacity = 1,
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
     )
     fun notify(success: Boolean, message: String) {
         importResult.tryEmit(success to message)
+    }
+    fun consume() {
+        importResult.resetReplayCache()
     }
 }
 
@@ -186,9 +190,6 @@ class MainActivity : ComponentActivity() {
                         sharedPrefs.edit().putBoolean("agreed_privacy", true).apply()
                         hasAgreedPrivacy = true
                         // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
-                    },
-                    onDisagree = {
-                        finish()
                     }
                 )
             } else {
@@ -236,6 +237,7 @@ private fun TcmAdminApp() {
             importAlertSuccess = success
             importAlertMessage = message
             showImportAlert = true
+            ServerConfigNotifier.consume()
         }
     }
     var session by remember { mutableStateOf(restoredSession) }
