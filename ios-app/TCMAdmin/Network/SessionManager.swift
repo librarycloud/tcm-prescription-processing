@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Network
 
 @Observable
 @MainActor
@@ -59,3 +60,29 @@ public class SessionManager {
         ApiClient.shared.clearResponseCache()
     }
 }
+
+// MARK: - 网络状态监听器 (全局感知无网络/弱网)
+@Observable
+@MainActor
+public class NetworkMonitor {
+    public static let shared = NetworkMonitor()
+    
+    public var isConnected: Bool = true
+    public var isExpensive: Bool = false
+    
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "com.tcm.admin.networkmonitor")
+    
+    private init() {
+        monitor.pathUpdateHandler = { path in
+            let isConnected = (path.status == .satisfied)
+            let isExpensive = path.isExpensive
+            Task { @MainActor in
+                NetworkMonitor.shared.isConnected = isConnected
+                NetworkMonitor.shared.isExpensive = isExpensive
+            }
+        }
+        monitor.start(queue: queue)
+    }
+}
+

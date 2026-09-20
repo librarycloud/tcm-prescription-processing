@@ -2,6 +2,7 @@ import SwiftUI
 
 @MainActor
 struct ProfileView: View {
+    @Bindable private var router = Router.shared
     var session = SessionManager.shared
     var updateManager = UpdateManager.shared
     
@@ -9,7 +10,9 @@ struct ProfileView: View {
         AppScrollView {
             VStack(spacing: 16) {
                 // Header: User Info Card
-                NavigationLink(destination: ProfileDetailView()) {
+                Button(action: {
+                    router.navigate(to: .profileDetail)
+                }) {
                     AppCard(padding: 20) {
                         HStack(spacing: 16) {
                             // Avatar
@@ -38,11 +41,14 @@ struct ProfileView: View {
                         }
                     }
                 }
+                .buttonStyle(PlainButtonStyle())
                 
                 Spacer().frame(height: 4)
                 
                 // Settings Button
-                NavigationLink(destination: SettingsView()) {
+                Button(action: {
+                    router.navigate(to: .settings)
+                }) {
                     HStack {
                         Image(systemName: "gearshape")
                             .scaledFont(16)
@@ -59,9 +65,12 @@ struct ProfileView: View {
                             .stroke(Color.cardBorder, lineWidth: 1)
                     )
                 }
+                .buttonStyle(PlainButtonStyle())
                 
                 // Update Button
-                NavigationLink(destination: AboutView()) {
+                Button(action: {
+                    router.navigate(to: .about)
+                }) {
                     HStack {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .scaledFont(16)
@@ -85,6 +94,7 @@ struct ProfileView: View {
                             .stroke(Color.cardBorder, lineWidth: 1)
                     )
                 }
+                .buttonStyle(PlainButtonStyle())
                 
                 Spacer().frame(height: 24)
             }

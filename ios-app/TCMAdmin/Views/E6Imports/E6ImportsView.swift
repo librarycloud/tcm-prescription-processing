@@ -6,6 +6,8 @@ public struct E6ImportsView: View {
     @State private var searchText = ""
     @State private var selectedStatus: Int? = nil
     @State private var orderDate: String = "" // "" for all, or yyyy-MM-dd
+    @State private var showDatePicker = false
+    @State private var tempPickerDate = Date()
     @State private var e6Imports: [E6ImportItem] = []
     @State private var selectedIds: Set<Int> = []
     @State private var isLoading = false
@@ -41,12 +43,17 @@ public struct E6ImportsView: View {
                     SectionHeader(title: "E6诊所处方导入", subtitle: "核对E6订单，确认后生成处方与加工计划") {
                         Button(action: { Task { await loadE6Imports() } }) {
                             HStack(spacing: 4) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                Text("同步")
+                                if isLoading {
+                                    ProgressView().scaleEffect(0.7).tint(.appPrimary)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                }
+                                Text(isLoading ? "同步中" : "同步")
                             }
                             .scaledFont(13, weight: .semibold)
-                            .foregroundStyle(Color.appPrimary)
+                            .foregroundStyle(isLoading ? Color.muted : Color.appPrimary)
                         }
+                        .disabled(isLoading)
                     }
                     
                     SearchBarField(
@@ -59,14 +66,6 @@ public struct E6ImportsView: View {
                     // 日期快捷切换
                     HStack(spacing: 8) {
                         SegmentedButton(
-                            label: "今日订单",
-                            isSelected: orderDate == todayString,
-                            action: {
-                                orderDate = orderDate == todayString ? "" : todayString
-                                Task { await loadE6Imports() }
-                            }
-                        )
-                        SegmentedButton(
                             label: "全部日期",
                             isSelected: orderDate.isEmpty,
                             action: {
@@ -74,25 +73,54 @@ public struct E6ImportsView: View {
                                 Task { await loadE6Imports() }
                             }
                         )
+                        SegmentedButton(
+                            label: "今日订单",
+                            isSelected: orderDate == todayString,
+                            action: {
+                                orderDate = orderDate == todayString ? "" : todayString
+                                Task { await loadE6Imports() }
+                            }
+                        )
+                        
+                        if !orderDate.isEmpty && orderDate != todayString {
+                            Button(action: {
+                                orderDate = ""
+                                Task { await loadE6Imports() }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text(orderDate)
+                                    Image(systemName: "xmark.circle.fill")
+                                }
+                                .scaledFont(12, weight: .semibold)
+                                .foregroundStyle(Color.appPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.appPrimarySoft)
+                                .clipShape(.rect(cornerRadius: 6))
+                            }
+                        }
                         
                         Spacer()
                         
-                        // 自定义日期选择器
-                        DatePicker("", selection: Binding(
-                            get: {
-                                let formatter = DateFormatter()
-                                formatter.dateFormat = "yyyy-MM-dd"
-                                return formatter.date(from: orderDate) ?? Date()
-                            },
-                            set: { newValue in
-                                let formatter = DateFormatter()
-                                formatter.dateFormat = "yyyy-MM-dd"
-                                orderDate = formatter.string(from: newValue)
-                                Task { await loadE6Imports() }
+                        // 自定义日期选择按钮
+                        Button(action: {
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            tempPickerDate = formatter.date(from: orderDate) ?? Date()
+                            showDatePicker = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "calendar")
+                                Text("选择日期")
                             }
-                        ), displayedComponents: .date)
-                        .labelsHidden()
-                        .frame(width: 120)
+                            .scaledFont(12, weight: .medium)
+                            .foregroundStyle(Color.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.surface)
+                            .clipShape(.rect(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cardBorder, lineWidth: 1))
+                        }
                     }
                     
                     // 状态筛选 Chips
@@ -184,7 +212,7 @@ public struct E6ImportsView: View {
                                             .scaledFont(12.5)
                                             .foregroundStyle(Color.ink)
                                         
-                                        Text("\(formatDateOnly(item.displayDate))  ·  \(item.displayDose)剂  ·  ¥\(String(format: "%.2f", item.displayPrice))")
+                                        Text("\(formatDateTimeToMinute(item.displayDate))  ·  \(item.displayDose)剂  ·  ¥\(String(format: "%.2f", item.displayPrice))")
                                             .scaledFont(12)
                                             .foregroundStyle(Color.muted)
                                         
@@ -228,7 +256,7 @@ public struct E6ImportsView: View {
                                                 }
                                             }
                                             
-                                            if item.status == 2 || item.status == 6 {
+                                            if item.canReview {
                                                 Button(action: { revalidate(id: item.id) }) {
                                                     Text("重新校验")
                                                         .scaledFont(12, weight: .medium)
@@ -270,8 +298,10 @@ public struct E6ImportsView: View {
                         .padding(.bottom, selectedIds.isEmpty ? 0 : 64)
                     }
                     .refreshable {
+            ApiClient.shared.clearResponseCache()
                         await loadE6Imports()
                     }
+                .id("e6_\(selectedStatus ?? -1)_\(orderDate)")
                     .background(Color.pageBackground)
                 }
             }
@@ -342,6 +372,34 @@ public struct E6ImportsView: View {
                 confirmTargetItems = nil
                 Task { await loadE6Imports() }
             }
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack(spacing: 16) {
+                    DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding()
+                    Spacer()
+                }
+                .navigationTitle("选择订单日期")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { showDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("确认") {
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            orderDate = formatter.string(from: tempPickerDate)
+                            showDatePicker = false
+                            Task { await loadE6Imports() }
+                        }
+                        .fontWeight(.bold)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
@@ -426,6 +484,7 @@ private struct E6ConfirmItemsWrapper: Identifiable {
 struct BatchDraft: Identifiable {
     let id: UUID
     var dose: String
+    var processTypeId: Int = 0
     var scheduleType: Int // 1: 指定日期, 2: 等待通知
     var processDate: Date
     
@@ -602,6 +661,9 @@ struct E6ConfirmFormSheet: View {
                                                 isSelected: selectedProcessTypeId == pt.id
                                             ) {
                                                 selectedProcessTypeId = pt.id
+                                                for i in batchDrafts.indices {
+                                                    batchDrafts[i].processTypeId = 0
+                                                }
                                             }
                                         }
                                     }
@@ -688,6 +750,26 @@ struct E6ConfirmFormSheet: View {
                                         }
                                         .frame(maxWidth: .infinity)
                                     }
+                                    
+                                    HStack(spacing: 6) {
+                                        Text("加工")
+                                            .scaledFont(12)
+                                            .foregroundStyle(Color.muted)
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 6) {
+                                                ForEach(processTypes, id: \.id) { type in
+                                                    let isSelected = batchDrafts[index].processTypeId == type.id || (batchDrafts[index].processTypeId == 0 && selectedProcessTypeId == type.id)
+                                                    SegmentedButton(
+                                                        label: type.name.isEmpty ? "加工" : type.name,
+                                                        isSelected: isSelected
+                                                    ) {
+                                                        batchDrafts[index].processTypeId = type.id
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .padding(.top, 4)
                                     
                                     if batchDrafts[index].scheduleType == 1 {
                                         DatePicker(
@@ -908,6 +990,9 @@ struct E6ConfirmFormSheet: View {
                 "totalDose": bDose,
                 "scheduleType": draft.scheduleType
             ]
+            if draft.processTypeId > 0 {
+                b["processTypeId"] = draft.processTypeId
+            }
             if draft.scheduleType == 1 {
                 b["processDate"] = dateFormatter.string(from: draft.processDate)
             }
@@ -1033,26 +1118,26 @@ public struct E6ImportDetailView: View {
                             
                             Divider().foregroundStyle(Color.cardBorder)
                             
-                            InfoRowItem(label: "E6订单号", value: item.displayOrderNo)
+                            E6DetailLine(label: "E6订单号", value: item.displayOrderNo)
                             // 日期不带时间
-                            InfoRowItem(label: "订单时间", value: formatDateOnly(item.displayDate))
-                            InfoRowItem(label: "顾客", value: item.displayCustomer)
+                            E6DetailLine(label: "订单时间", value: formatDateTimeToMinute(item.displayDate))
+                            E6DetailLine(label: "顾客", value: item.displayCustomer)
                             
                             let phoneStr = item.displayPhone
                             let maskedPhone = phoneStr.count == 11 ? "\(phoneStr.prefix(3))****\(phoneStr.suffix(4))" : phoneStr
-                            InfoRowItem(label: "手机号", value: maskedPhone.isEmpty ? "-" : maskedPhone)
-                            InfoRowItem(label: "操作员", value: item.displayOperator)
-                            InfoRowItem(label: "销售员", value: item.displaySalesperson)
+                            E6DetailLine(label: "手机号", value: maskedPhone.isEmpty ? "-" : maskedPhone)
+                            E6DetailLine(label: "操作员", value: item.displayOperator)
+                            E6DetailLine(label: "销售员", value: item.displaySalesperson)
                             
-                            InfoRowItem(label: "剂数", value: "\(item.displayDose)剂")
-                            InfoRowItem(label: "付款", value: item.isPaidBool ? "已付款" : "未付款", valueColor: item.isPaidBool ? .success : .orange, isBold: true)
-                            InfoRowItem(label: "总价", value: "¥\(String(format: "%.2f", item.displayPrice))", valueColor: .danger, isBold: true)
+                            E6DetailLine(label: "剂数", value: "\(item.displayDose)剂")
+                            E6DetailLine(label: "付款", value: item.isPaidBool ? "已付款" : "未付款", valueColor: item.isPaidBool ? .success : .orange, isBold: true)
+                            E6DetailLine(label: "总价", value: "¥\(String(format: "%.2f", item.displayPrice))", valueColor: .danger, isBold: true)
                             
                             if let rem = item.remark, !rem.isEmpty {
-                                InfoRowItem(label: "备注", value: rem)
+                                E6DetailLine(label: "备注", value: rem)
                             }
                             if let err = item.errorMessage, !err.isEmpty {
-                                InfoRowItem(label: "错误信息", value: err, valueColor: .danger, isBold: true)
+                                E6DetailLine(label: "错误信息", value: err, valueColor: .danger, isBold: true)
                             }
                         }
                     }
@@ -1067,8 +1152,8 @@ public struct E6ImportDetailView: View {
                                 
                                 Divider().foregroundStyle(Color.cardBorder)
                                 
-                                InfoRowItem(label: "处方号", value: rx.prescriptionNo ?? "CF-\(rx.id)")
-                                InfoRowItem(label: "状态", value: rx.statusText)
+                                E6DetailLine(label: "处方号", value: rx.prescriptionNo ?? "CF-\(rx.id)")
+                                E6DetailLine(label: "状态", value: rx.statusText)
                                 
                                 Button(action: {
                                     router.navigate(to: .prescriptionDetail(id: rx.id))
@@ -1163,6 +1248,30 @@ public struct E6ImportDetailView: View {
                         }
                         .padding(.top, 6)
                     }
+                    
+                    if item.canReview {
+                        Button(action: {
+                            Task {
+                                do {
+                                    try await ApiClient.shared.revalidateE6Import(id: item.id)
+                                    await loadDetail()
+                                } catch {
+                                    await MainActor.run {
+                                        self.errorMessage = "重新校验失败: \(error.localizedDescription)"
+                                    }
+                                }
+                            }
+                        }) {
+                            Text("重新校验")
+                                .scaledFont(15, weight: .bold)
+                                .foregroundStyle(Color.appPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                                .background(Color.appPrimarySoft)
+                                .clipShape(.rect(cornerRadius: 10))
+                        }
+                        .padding(.top, 6)
+                    }
                 }
             }
             .padding(16)
@@ -1180,7 +1289,10 @@ public struct E6ImportDetailView: View {
             }
         }
         .task { await loadDetail() }
-        .refreshable { await loadDetail() }
+        .refreshable {
+            ApiClient.shared.clearResponseCache()
+            await loadDetail()
+        }
     }
     
     private func loadDetail() async {
@@ -1224,5 +1336,26 @@ public struct E6ImportDetailView: View {
                 }
             }
         }
+    }
+}
+
+struct E6DetailLine: View {
+    var label: String
+    var value: String
+    var valueColor: Color = .ink
+    var isBold: Bool = false
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .scaledFont(14)
+                .foregroundStyle(Color.muted)
+                .frame(width: 76, alignment: .leading)
+            Text(value)
+                .scaledFont(14, weight: isBold ? .semibold : .regular)
+                .foregroundStyle(valueColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 3)
     }
 }

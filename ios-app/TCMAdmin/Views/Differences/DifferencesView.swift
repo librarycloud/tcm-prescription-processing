@@ -32,7 +32,7 @@ public struct DifferencesView: View {
     public init() {}
     
     public var body: some View {
-        ScrollView {
+        AppScrollView {
             VStack(spacing: 16) {
                 // 顶部标题与操作栏
                 HStack(alignment: .center) {
@@ -276,8 +276,10 @@ public struct DifferencesView: View {
             await loadData()
         }
         .refreshable {
+            ApiClient.shared.clearResponseCache()
             await loadData()
         }
+        .id("diff_\(selectedTab)")
         .sheet(item: $writeOffProduct) { prod in
             NavigationStack {
                 VStack(spacing: 16) {

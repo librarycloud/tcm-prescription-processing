@@ -19,6 +19,9 @@ public struct WorkflowOperationView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isUploadingPhoto = false
     @State private var uploadProgress: Double = 0.0
+    @State private var uploadTask: Task<Void, Never>? = nil
+    @State private var photoViewerScale: CGFloat = 1.0
+    @State private var photoViewerOffset: CGSize = .zero
     
     // 设备扫码/手动录入弹窗
     @State private var isInputtingEquipment = false
@@ -82,6 +85,57 @@ public struct WorkflowOperationView: View {
         usages.filter { $0.stage == 5 && $0.status == 1 }
     }
     
+    private func formatWorkflowTime(_ raw: String?) -> String {
+        return formatDateTimeToMinute(raw, defaultVal: "")
+    }
+
+    private func latestStageCompletedAt(_ stage: Int) -> String {
+        let completed = usages.filter { $0.stage == stage && $0.status == 2 }.compactMap { $0.endedAt ?? $0.finishedAt }
+        return formatWorkflowTime(completed.max())
+    }
+
+    private func earliestStageStartedAt(_ stage: Int) -> String {
+        let started = usages.filter { $0.stage == stage && ($0.status == 1 || $0.status == 2) }.compactMap { $0.startedAt }
+        return formatWorkflowTime(started.min())
+    }
+    
+    private var dispensingStartedAt: String {
+        let s1 = workflow?.startDate ?? ""
+        let s2 = workflow?.plans?.first?.startDate ?? ""
+        return formatWorkflowTime(s1.isEmpty ? s2 : s1)
+    }
+
+    private var dispensingCompletedAt: String {
+        let c1 = workflow?.dispensingCompletedAt ?? ""
+        let c2 = photos.max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") })?.createdAt ?? ""
+        return formatWorkflowTime(c1.isEmpty ? c2 : c1)
+    }
+    
+    private var dispensingTimeLabel: String {
+        let isCompleted = status == 2 || !photos.isEmpty
+        if isCompleted && !dispensingCompletedAt.isEmpty { return dispensingCompletedAt }
+        if status == 1 && !dispensingStartedAt.isEmpty { return dispensingStartedAt }
+        return ""
+    }
+    
+    private var soakingTimeLabel: String {
+        if status == 2 { return latestStageCompletedAt(3) }
+        if !activeSoakings.isEmpty { return earliestStageStartedAt(3) }
+        return ""
+    }
+    
+    private var decoctionTimeLabel: String {
+        if status == 2 { return latestStageCompletedAt(4) }
+        if !activeDecoctions.isEmpty { return earliestStageStartedAt(4) }
+        return ""
+    }
+    
+    private var packagingTimeLabel: String {
+        if status == 2 { return latestStageCompletedAt(5) }
+        if !activePackagings.isEmpty { return earliestStageStartedAt(5) }
+        return ""
+    }
+
     public var body: some View {
         ZStack {
             ScrollView {
@@ -101,6 +155,20 @@ public struct WorkflowOperationView: View {
                                     .foregroundStyle(Color.appPrimary)
                             }
                         }
+                    }
+                    
+                    // 设备占用卡片 (对齐 Android OccupyingPlanCard)
+                    if let occEquip = occupiedEquipmentInfo, let usage = occEquip.currentUsage, let occPlanId = usage.processingPlanId, occPlanId > 0 {
+                        OccupyingPlanCard(
+                            equipmentName: occEquip.name,
+                            equipmentNo: occEquip.equipmentNo ?? "",
+                            planCode: usage.planCode ?? "计划 #\(occPlanId)",
+                            patientName: usage.patientName ?? "患者",
+                            onClick: {
+                                let code = usage.planCode ?? ""
+                                router.navigate(to: .workflowOperation(planId: occPlanId, planCode: code))
+                            }
+                        )
                     }
                     
                     // 2. 顶部计划信息卡片
@@ -162,6 +230,7 @@ public struct WorkflowOperationView: View {
                 await loadWorkflow()
             }
             .refreshable {
+                ApiClient.shared.clearResponseCache()
                 await loadWorkflow()
             }
             
@@ -171,7 +240,11 @@ public struct WorkflowOperationView: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Button(action: { selectedPhotoData = nil }) {
+                        Button(action: {
+                            selectedPhotoData = nil
+                            photoViewerScale = 1.0
+                            photoViewerOffset = .zero
+                        }) {
                             Image(systemName: "xmark.circle.fill")
                                 .scaledFont(28)
                                 .foregroundStyle(Color.white)
@@ -182,6 +255,30 @@ public struct WorkflowOperationView: View {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFit()
+                        .scaleEffect(photoViewerScale)
+                        .offset(photoViewerOffset)
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    photoViewerScale = max(1.0, value)
+                                }
+                                .onEnded { _ in
+                                    if photoViewerScale < 1.0 { photoViewerScale = 1.0 }
+                                }
+                        )
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if photoViewerScale > 1.0 {
+                                        photoViewerOffset = value.translation
+                                    }
+                                }
+                                .onEnded { _ in
+                                    if photoViewerScale == 1.0 {
+                                        photoViewerOffset = .zero
+                                    }
+                                }
+                        )
                         .padding()
                     Spacer()
                 }
@@ -238,6 +335,13 @@ public struct WorkflowOperationView: View {
         }
         // 设备被占用警告弹窗
         .alert("设备使用中", isPresented: $showOccupiedDialog) {
+            if let targetPlanId = occupiedEquipmentInfo?.currentUsage?.processingPlanId, targetPlanId > 0 {
+                Button("前往该计划") {
+                    let code = occupiedEquipmentInfo?.currentUsage?.planCode ?? ""
+                    pendingScanAction = nil
+                    router.navigate(to: .workflowOperation(planId: targetPlanId, planCode: code))
+                }
+            }
             Button("知道了", role: .cancel) {
                 pendingScanAction = nil
             }
@@ -313,6 +417,13 @@ public struct WorkflowOperationView: View {
                         .scaledFont(12, weight: .semibold)
                         .foregroundStyle(status == 2 || photos.count > 0 ? Color.success : Color.appPrimary)
                 }
+                .overlay(alignment: .center) {
+                    if !dispensingTimeLabel.isEmpty {
+                        Text(dispensingTimeLabel)
+                            .scaledFont(11.5)
+                            .foregroundStyle(Color.muted)
+                    }
+                }
                 
                 Text("称量调配完成后拍照或从相册上传留存凭证")
                     .scaledFont(12)
@@ -325,6 +436,14 @@ public struct WorkflowOperationView: View {
                             Text("上传中 \(Int(uploadProgress * 100))%").scaledFont(12).foregroundStyle(Color.muted)
                         } else {
                             Text("准备上传...").scaledFont(12).foregroundStyle(Color.muted)
+                        }
+                        Spacer()
+                        if uploadTask != nil {
+                            Button("取消") {
+                                uploadTask?.cancel()
+                            }
+                            .scaledFont(11)
+                            .foregroundStyle(Color.danger)
                         }
                     }
                     .padding(.vertical, 4)
@@ -420,6 +539,13 @@ public struct WorkflowOperationView: View {
                         .scaledFont(12, weight: .semibold)
                         .foregroundStyle(!activeSoakings.isEmpty ? Color.appPrimary : Color.muted)
                 }
+                .overlay(alignment: .center) {
+                    if !soakingTimeLabel.isEmpty {
+                        Text(soakingTimeLabel)
+                            .scaledFont(11.5)
+                            .foregroundStyle(Color.muted)
+                    }
+                }
                 
                 // 进行中的浸泡设备
                 if !activeSoakings.isEmpty {
@@ -489,6 +615,13 @@ public struct WorkflowOperationView: View {
                     Text(stateText)
                         .scaledFont(12, weight: .semibold)
                         .foregroundStyle(!activeDecoctions.isEmpty ? Color.appPrimary : Color.muted)
+                }
+                .overlay(alignment: .center) {
+                    if !decoctionTimeLabel.isEmpty {
+                        Text(decoctionTimeLabel)
+                            .scaledFont(11.5)
+                            .foregroundStyle(Color.muted)
+                    }
                 }
                 
                 // 等待转煎煮的分组
@@ -576,6 +709,13 @@ public struct WorkflowOperationView: View {
                         .scaledFont(12, weight: .semibold)
                         .foregroundStyle(!activePackagings.isEmpty ? Color.appPrimary : Color.muted)
                 }
+                .overlay(alignment: .center) {
+                    if !packagingTimeLabel.isEmpty {
+                        Text(packagingTimeLabel)
+                            .scaledFont(11.5)
+                            .foregroundStyle(Color.muted)
+                    }
+                }
                 
                 // 等待打包的分组
                 if status == 1 && !activeDecoctions.isEmpty {
@@ -655,15 +795,33 @@ public struct WorkflowOperationView: View {
                     
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text("\(stageName) · 第 \(item.portionNo ?? 1) 组 · \(item.equipment?.name ?? "设备")")
-                                .scaledFont(13, weight: .semibold)
-                                .foregroundStyle(Color.ink)
+                            HStack(spacing: 6) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(isRunning ? Color.appPrimary : (isSuccess ? Color.success : Color.danger))
+                                    .frame(width: 3.5, height: 14)
+                                
+                                Text("\(stageName) · 第 \(item.portionNo ?? 1) 组 · \(item.equipment?.name ?? "设备")")
+                                    .scaledFont(13, weight: .semibold)
+                                    .foregroundStyle(Color.ink)
+                            }
                             Spacer()
                             StatusPill(text: isRunning ? "进行中" : (isSuccess ? "已完成" : (isVoid ? "已作废" : "未知")))
                         }
-                        Text("操作人：\(item.operatorUser?.displayName ?? "-") · 时段：\(formatDateTimeToMinute(item.startedAt)) → \(isRunning ? "进行中" : formatDateTimeToMinute(item.endedAt))")
-                            .scaledFont(11)
+                        Text("时段：\(formatDateTimeToMinute(item.startedAt)) → \(isRunning ? "进行中" : formatDateTimeToMinute(item.endedAt))")
+                            .scaledFont(11.5)
                             .foregroundStyle(Color.muted)
+                        
+                        HStack {
+                            Text("操作人：\(item.operatorUser?.displayName ?? "-")")
+                                .scaledFont(11.5)
+                                .foregroundStyle(Color.muted)
+                            
+                            Spacer()
+                            
+                            Text(isRunning ? "已用时 \(processingDuration(start: item.startedAt, end: nil))" : "用时 \(processingDuration(start: item.startedAt, end: item.endedAt))")
+                                .scaledFont(11.5, weight: .medium)
+                                .foregroundStyle(isRunning ? Color.appPrimary : Color.ink)
+                        }
                         
                         if let reason = item.voidReason, !reason.isEmpty {
                             Text("作废原因：\(reason)")
@@ -691,7 +849,7 @@ public struct WorkflowOperationView: View {
                             .scaledFont(12, weight: .semibold)
                             .foregroundStyle(Color.danger)
                         Text("操作人：\(ex.operatorUser?.displayName ?? "-") · \(formatDateTimeToMinute(ex.createdAt))")
-                            .scaledFont(10)
+                            .scaledFont(11.5)
                             .foregroundStyle(Color.muted)
                     }
                     .padding(8)
@@ -802,6 +960,7 @@ public struct WorkflowOperationView: View {
         Task {
             do {
                 try await ApiClient.shared.transitionPlan(id: planId, status: 1)
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
                 errorMessage = "启动调配失败: \(error.localizedDescription)"
@@ -814,7 +973,7 @@ public struct WorkflowOperationView: View {
         guard let data = image.jpegData(compressionQuality: 0.8) else { return }
         isUploadingPhoto = true
         uploadProgress = 0.0
-        Task { @MainActor in
+        uploadTask = Task { @MainActor in
             do {
                 let fileName = "dispensing_\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
                 try await ApiClient.shared.completeDispensing(planId: planId, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
@@ -822,11 +981,15 @@ public struct WorkflowOperationView: View {
                         self.uploadProgress = max(0, min(1, progress))
                     }
                 }
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
-                errorMessage = "上传凭证照片失败: \(error.localizedDescription)"
+                if !(error is CancellationError) {
+                    errorMessage = "上传凭证照片失败: \(error.localizedDescription)"
+                }
             }
             isUploadingPhoto = false
+            uploadTask = nil
         }
     }
     
@@ -855,6 +1018,7 @@ public struct WorkflowOperationView: View {
         Task {
             do {
                 try await ApiClient.shared.deleteProcessingPhoto(planId: planId, photoId: photoId)
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
                 errorMessage = "删除照片失败: \(error.localizedDescription)"
@@ -890,6 +1054,7 @@ public struct WorkflowOperationView: View {
                     let usageId = Int(action.replacingOccurrences(of: "packaging_", with: "")) ?? 0
                     try await ApiClient.shared.startPackaging(planId: planId, usageId: usageId, equipmentCode: code)
                 }
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
                 errorMessage = "设备流转失败: \(error.localizedDescription)"
@@ -906,6 +1071,7 @@ public struct WorkflowOperationView: View {
         Task {
             do {
                 try await ApiClient.shared.voidEquipmentUsage(planId: planId, usageId: target.id, reason: exceptionReason.isEmpty ? "误扫撤销" : exceptionReason)
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
                 errorMessage = "撤销失败: \(error.localizedDescription)"
@@ -921,6 +1087,7 @@ public struct WorkflowOperationView: View {
         Task {
             do {
                 try await ApiClient.shared.transitionPlan(id: planId, status: 2, createPackage: createPackage)
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
                 errorMessage = "完成加工失败: \(error.localizedDescription)"
@@ -935,6 +1102,7 @@ public struct WorkflowOperationView: View {
         Task {
             do {
                 try await ApiClient.shared.generatePlanPackage(id: planId)
+                NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
                 await loadWorkflow()
             } catch {
                 errorMessage = "生成包裹失败: \(error.localizedDescription)"
@@ -943,3 +1111,50 @@ public struct WorkflowOperationView: View {
         }
     }
 }
+
+// MARK: - 设备被占用提示卡片 (对标 Android OccupyingPlanCard)
+public struct OccupyingPlanCard: View {
+    public let equipmentName: String
+    public let equipmentNo: String
+    public let planCode: String
+    public let patientName: String
+    public let onClick: () -> Void
+    
+    public var body: some View {
+        Button(action: onClick) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("设备占用计划")
+                            .scaledFont(11, weight: .bold)
+                            .foregroundStyle(Color.blue)
+                        let equipLabel = equipmentName.isEmpty ? equipmentNo : "\(equipmentName) (\(equipmentNo))"
+                        Text(equipLabel)
+                            .scaledFont(11, weight: .medium)
+                            .foregroundStyle(Color.blue)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.blue.opacity(0.12))
+                            .clipShape(.rect(cornerRadius: 4))
+                    }
+                    Text("\(patientName) · \(planCode)")
+                        .scaledFont(13, weight: .bold)
+                        .foregroundStyle(Color.ink)
+                        .lineLimit(1)
+                    Text("👉 点击直达该计划工序详情")
+                        .scaledFont(11, weight: .medium)
+                        .foregroundStyle(Color.appPrimary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .scaledFont(12, weight: .bold)
+                    .foregroundStyle(Color.blue)
+            }
+            .padding(12)
+            .background(Color.blue.opacity(0.08))
+            .clipShape(.rect(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.3), lineWidth: 1))
+        }
+    }
+}
+

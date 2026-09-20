@@ -329,6 +329,7 @@ public struct HerbLocationAssignView: View {
                 
                 await MainActor.run {
                     isSubmitting = false
+                    NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Herbs"), object: nil)
                     successAlert = true
                 }
             } catch {

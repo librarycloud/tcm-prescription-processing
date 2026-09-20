@@ -260,9 +260,11 @@ public struct TransfersView: View {
             }
             .background(Color.pageBackground)
             .refreshable {
+                ApiClient.shared.clearResponseCache()
                 await loadTransfers()
                 await loadStats()
             }
+            .id("trans_\(selectedStatus ?? -1)_\(overdueOnly ? 1 : 0)")
         }
         .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("门店调拨")
@@ -865,6 +867,7 @@ public struct TransferDetailView: View {
             await loadDetail()
         }
         .refreshable {
+            ApiClient.shared.clearResponseCache()
             await loadDetail()
         }
         .sheet(item: $returnDialogItem) { item in

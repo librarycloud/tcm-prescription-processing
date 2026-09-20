@@ -60,20 +60,19 @@ public struct PackagesView: View {
                 
                 SearchBarField(
                     text: $searchText,
-                    placeholder: "搜索包裹号、处方号、收件人或手机号",
+                    placeholder: "输入收件人、取货码、手机号或单号查询",
                     onSearch: {
                         Task { await loadPackages() }
                     },
-                    onScan: {
-                        router.isScannerPresented = true
-                    }
+                    onScan: { router.isScannerPresented = true }
                 )
                 .onChange(of: searchText) {
                     searchTask?.cancel()
                     searchTask = Task {
                         do {
-                            try await Task.sleep(nanoseconds: 500_000_000)
+                            try await Task.sleep(nanoseconds: 600_000_000)
                             if !Task.isCancelled {
+                                isLoading = false
                                 await loadPackages()
                             }
                         } catch {}
@@ -238,8 +237,10 @@ public struct PackagesView: View {
                     .padding(16)
                 }
                 .refreshable {
+                    ApiClient.shared.clearResponseCache()
                     await loadPackages()
                 }
+                .id("pkgs_\(selectedStatus ?? -1)_\(selectedSortBy)_\(selectedStoreId ?? -1)")
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 8) }
                 .background(Color.pageBackground)
             }

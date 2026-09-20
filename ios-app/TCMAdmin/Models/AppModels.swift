@@ -804,7 +804,7 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
         case id, orderNo, externalOrderNo, patientName, customerName, patientGender, patientAge, phone, clinicName
         case doseCount, isPaid, totalAmount, totalPrice, status, createdAt, sourceCreatedAt
         case cashierName, userName, salespersonCode, remark, errorMessage, prescriptionId, processingPlanId
-        case prescription, processingPlan, operatorUserMapping, doctorMapping, rawPayload
+        case prescription, processingPlan, operatorUserMapping, salespersonUserMapping, doctorMapping, rawPayload
     }
     
     public init(from decoder: Decoder) throws {
@@ -902,6 +902,7 @@ public struct E6ImportItem: Codable, Identifiable , Equatable {
         self.prescription = try? c.decodeIfPresent(PrescriptionItem.self, forKey: .prescription)
         self.processingPlan = try? c.decodeIfPresent(ProcessingPlanItem.self, forKey: .processingPlan)
         self.operatorUserMapping = try? c.decodeIfPresent(E6UserMapping.self, forKey: .operatorUserMapping)
+        self.salespersonUserMapping = try? c.decodeIfPresent(E6UserMapping.self, forKey: .salespersonUserMapping)
         self.doctorMapping = try? c.decodeIfPresent(E6DoctorMapping.self, forKey: .doctorMapping)
         
         if let direct = try? c.decodeIfPresent(E6RawPayload.self, forKey: .rawPayload) {

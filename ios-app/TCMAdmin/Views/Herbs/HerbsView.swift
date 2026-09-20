@@ -61,9 +61,7 @@ struct HerbsView: View {
                 SearchBarField(
                     text: $searchText,
                     placeholder: "搜索药材名称、拼音或位置编码",
-                    onSearch: {
-                        Task { await loadData() }
-                    }
+                    onSearch: nil
                 )
                 
                 if isSuperAdmin && !stores.isEmpty {
@@ -215,10 +213,16 @@ struct HerbsView: View {
                     } // End VStack
                 }
                 .refreshable {
+                    ApiClient.shared.clearResponseCache()
                     await loadData()
                 }
+                .id("herbs_\(type)_\(selectedStoreId ?? -1)")
                 .background(Color.pageBackground)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Herbs"))) { _ in
+            ApiClient.shared.clearResponseCache()
+            Task { await loadData() }
         }
         .scrollDismissesKeyboard(.interactively)
         .task {

@@ -380,6 +380,7 @@ public struct PrescriptionEditView: View {
                 }
                 await MainActor.run {
                     isSubmitting = false
+                    NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Prescriptions"), object: nil)
                     dismiss()
                 }
             } catch {

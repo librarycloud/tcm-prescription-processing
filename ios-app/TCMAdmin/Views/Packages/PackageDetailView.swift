@@ -81,24 +81,6 @@ public struct QRCodeView: View {
             return nil
         }.value
     }
-    
-    // Kept for backward compatibility if used synchronously elsewhere (but we replaced it)
-    private func generateQRCode(from string: String) -> UIImage? {
-        guard !string.isEmpty else { return nil }
-        let context = CIContext()
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(string.utf8)
-        filter.correctionLevel = "M"
-        
-        if let outputImage = filter.outputImage {
-            let transform = CGAffineTransform(scaleX: 10, y: 10)
-            let scaledImage = outputImage.transformed(by: transform)
-            if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-        }
-        return nil
-    }
 }
 
 // MARK: - 条码/单号轻量扫描弹窗
@@ -716,6 +698,7 @@ public struct PackageDetailView: View {
             await loadDetail()
         }
         .refreshable {
+            ApiClient.shared.clearResponseCache()
             await loadDetail()
         }
         .sheet(isPresented: $isEditSheetShowing) {
