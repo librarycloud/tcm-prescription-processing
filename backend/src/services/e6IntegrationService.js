@@ -680,7 +680,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     doseCount: first.doseCount,
     batches: payload.batches,
     bagsPerDose: payload.bagsPerDose,
-    processTypeId: payload.processTypeId,
+    processTypeId: batch.processTypeId ?? payload.processTypeId,
     scheduleType: payload.scheduleType,
     processDate: payload.processDate,
     pickupMethod: payload.pickupMethod,
@@ -821,7 +821,7 @@ async function attachMappedDoctors(prisma, list) {
     include: { doctor: { select: { id: true, name: true, status: true } } },
   });
   const byKey = new Map(
-    mappings.map((item) => [`${item.storeId}:${item.salespersonCode}`, item]),
+    mappings.map((item) => [`${item.storeId}:${item.e6DoctorCode}`, item]),
   );
   return list.map((item) => ({
     ...item,
@@ -1061,7 +1061,7 @@ export async function confirmE6Import(prisma, actor, idValue, payload = {}) {
           {
             prescriptionId: prescription.id,
             batchNo: index + 1,
-            processTypeId: payload.processTypeId,
+            processTypeId: batch.processTypeId ?? payload.processTypeId,
             totalDose: batch.totalDose,
             bagCount: batch.bagCount ?? (payload.bagsPerDose
               ? batch.totalDose * Number(payload.bagsPerDose)
