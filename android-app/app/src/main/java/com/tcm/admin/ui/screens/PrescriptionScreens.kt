@@ -143,6 +143,7 @@ internal fun PrescriptionsScreen(
     val reloadRevision = rememberListReloadRevision("prescriptions")
     LaunchedEffect(reloadRevision) {
         if (reloadRevision > 0) {
+            com.tcm.admin.ApiClient.clearResponseCache(context)
             items.refresh()
         }
     }
@@ -499,19 +500,19 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                         Text(p.displayField("customerName", "患者"), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
                         Text(p.displayField("prescriptionNo"), color = Muted, fontSize = 12.sp)
                     }
-                    StatusPill(prescriptionStatusLabel(p.optInt("status")))
-                }
-                if (!readOnly && p.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
-                        onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(p))) },
-                        shape = FieldShape,
-                        modifier = Modifier.heightIn(min = 32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                    ) {
-                        Icon(Icons.Default.Edit, null, Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("编辑处方", fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!readOnly && p.optInt("status") != com.tcm.admin.PrescriptionStatus.COMPLETED.code) {
+                            OutlinedButton(
+                                onClick = { onNavigate(Route.PrescriptionEdit(RouteParams.put(p))) },
+                                shape = FieldShape,
+                                modifier = Modifier.heightIn(min = 26.dp).defaultMinSize(minWidth = 44.dp, minHeight = 26.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("编辑", fontSize = 11.5.sp)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        StatusPill(prescriptionStatusLabel(p.optInt("status")))
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -705,14 +706,11 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
             }
 
             // Pickup Records (领取记录)
-            Spacer(Modifier.height(14.dp))
-            AppCard {
-                SectionHeader("领取记录", "共 ${pickupPlans.size} 批")
-                if (pickupPlans.isEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("暂无领取记录", color = Muted, fontSize = 13.sp)
-                }
-                pickupPlans.forEachIndexed { index, plan ->
+            if (pickupPlans.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                AppCard {
+                    SectionHeader("领取记录", "共 ${pickupPlans.size} 批")
+                    pickupPlans.forEachIndexed { index, plan ->
                     val processType = plan.optJSONObject("processType")
                     val pkg = plan.optJSONObject("package")
                     val isPicked = plan.optInt("status") == 4
@@ -779,6 +777,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                         }
                     }
                 }
+            }
             }
 
             // E6 Import Details (E6导入处方明细)

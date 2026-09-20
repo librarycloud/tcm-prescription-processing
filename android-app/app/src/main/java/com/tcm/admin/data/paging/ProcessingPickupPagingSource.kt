@@ -36,6 +36,7 @@ internal class ProcessingPickupPagingSource(
                 nextKey = if (items.isEmpty() || items.size < 20) null else page + 1
             )
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             LoadResult.Error(e)
         }
     }

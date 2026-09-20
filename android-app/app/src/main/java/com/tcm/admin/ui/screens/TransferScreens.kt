@@ -124,6 +124,7 @@ internal fun TransfersScreen(
     val reloadRevision = rememberListReloadRevision("transfers")
     LaunchedEffect(reloadRevision) {
         if (reloadRevision > 0) {
+            com.tcm.admin.ApiClient.clearResponseCache(context)
             transfers.refresh()
             viewModel.refreshStats(selectedStoreId)
         }

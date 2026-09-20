@@ -43,37 +43,42 @@ object BsPatch {
             throw IOException("Patch file does not exist or cannot be read: ${patchFile.absolutePath}")
         }
 
-        FileInputStream(patchFile).use { patchIn ->
-            val header = ByteArray(HEADER_SIZE)
-            readFully(patchIn, header, HEADER_SIZE)
+        val header = ByteArray(HEADER_SIZE)
+        RandomAccessFile(patchFile, "r").use { headerRaf ->
+            headerRaf.readFully(header)
+        }
 
-            val magic = String(header, 0, 8, Charsets.US_ASCII)
-            if (magic != HEADER_MAGIC) {
-                throw IOException("Corrupt patch: invalid magic '$magic' (expected $HEADER_MAGIC)")
-            }
+        val magic = String(header, 0, 8, Charsets.US_ASCII)
+        if (magic != HEADER_MAGIC) {
+            throw IOException("Corrupt patch: invalid magic '$magic' (expected $HEADER_MAGIC)")
+        }
 
-            val bzCtrlLen = readOffT(header, 8)
-            val bzDataLen = readOffT(header, 16)
-            val newSize = readOffT(header, 24)
+        val bzCtrlLen = readOffT(header, 8)
+        val bzDataLen = readOffT(header, 16)
+        val newSize = readOffT(header, 24)
 
-            if (bzCtrlLen < 0 || bzDataLen < 0 || newSize < 0) {
-                throw IOException("Corrupt patch: negative lengths in header")
-            }
+        if (bzCtrlLen < 0 || bzDataLen < 0 || newSize < 0) {
+            throw IOException("Corrupt patch: negative lengths in header")
+        }
 
-            val ctrlBytes = ByteArray(bzCtrlLen.toInt())
-            readFully(patchIn, ctrlBytes, ctrlBytes.size)
+        val extraOffset = HEADER_SIZE + bzCtrlLen + bzDataLen
+        val extraLen = patchFile.length() - extraOffset
+        if (extraLen < 0) {
+            throw IOException("Corrupt patch: patch file size is smaller than header offsets")
+        }
 
-            val diffBytes = ByteArray(bzDataLen.toInt())
-            readFully(patchIn, diffBytes, diffBytes.size)
-
-            val extraBytes = patchIn.readBytes()
-
-            RandomAccessFile(oldFile, "r").use { oldRaf ->
-                FileOutputStream(newFile).use { fos ->
-                    BufferedOutputStream(fos).use { newOut ->
-                        BZip2CompressorInputStream(ByteArrayInputStream(ctrlBytes)).use { ctrlStream ->
-                            BZip2CompressorInputStream(ByteArrayInputStream(diffBytes)).use { diffStream ->
-                                BZip2CompressorInputStream(ByteArrayInputStream(extraBytes)).use { extraStream ->
+        RandomAccessFile(patchFile, "r").use { ctrlRaf ->
+            ctrlRaf.seek(HEADER_SIZE.toLong())
+            RandomAccessFile(patchFile, "r").use { diffRaf ->
+                diffRaf.seek(HEADER_SIZE + bzCtrlLen)
+                RandomAccessFile(patchFile, "r").use { extraRaf ->
+                    extraRaf.seek(extraOffset)
+                    RandomAccessFile(oldFile, "r").use { oldRaf ->
+                        FileOutputStream(newFile).use { fos ->
+                            BufferedOutputStream(fos).use { newOut ->
+                                BZip2CompressorInputStream(RafInputStream(ctrlRaf, bzCtrlLen)).use { ctrlStream ->
+                                    BZip2CompressorInputStream(RafInputStream(diffRaf, bzDataLen)).use { diffStream ->
+                                        BZip2CompressorInputStream(RafInputStream(extraRaf, extraLen)).use { extraStream ->
                                     var newPos = 0L
                                     val oldBuf = ByteArray(8192)
                                     val diffBuf = ByteArray(8192)
@@ -136,8 +141,10 @@ object BsPatch {
                     runCatching { fos.fd.sync() }
                 }
             }
-            runCatching { newFile.setReadable(true, false) }
         }
+    }
+        }
+        runCatching { newFile.setReadable(true, false) }
     }
 
     /**
@@ -180,5 +187,27 @@ object BsPatch {
         val buf = ByteArray(8)
         readFully(stream, buf, 8)
         return readOffT(buf, 0)
+    }
+
+    private class RafInputStream(
+        private val raf: RandomAccessFile,
+        private var remaining: Long
+    ) : InputStream() {
+        override fun read(): Int {
+            if (remaining <= 0) return -1
+            val b = raf.read()
+            if (b != -1) remaining--
+            return b
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (remaining <= 0) return -1
+            val toRead = minOf(len.toLong(), remaining).toInt()
+            val read = raf.read(b, off, toRead)
+            if (read > 0) remaining -= read
+            return read
+        }
+
+        override fun available(): Int = minOf(remaining, Int.MAX_VALUE.toLong()).toInt()
     }
 }

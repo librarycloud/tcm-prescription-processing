@@ -199,6 +199,7 @@ class ScannerActivity : ComponentActivity() {
         if (isGranted) {
             startCamera()
         } else {
+            Toast.makeText(this, "需要相机权限才能使用扫码功能", Toast.LENGTH_SHORT).show()
             finish()
         }
     }

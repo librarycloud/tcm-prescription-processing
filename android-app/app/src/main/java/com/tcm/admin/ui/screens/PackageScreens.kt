@@ -159,6 +159,7 @@ internal fun PackagesScreen(
     val reloadRevision = rememberListReloadRevision("packages")
     LaunchedEffect(reloadRevision) {
         if (reloadRevision > 0) {
+            com.tcm.admin.ApiClient.clearResponseCache(context)
             items.refresh()
         }
     }

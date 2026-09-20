@@ -80,6 +80,18 @@ private const val LAST_UPDATE_CHECK_AT = "last_update_check_at"
 private const val CACHED_UPDATE = "cached_update"
 private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
 
+private fun isAllowedDownloadUrl(url: String): Boolean {
+    if (BuildConfig.DEBUG) return true
+    if (url.startsWith("https://", ignoreCase = true)) return true
+    val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+    val host = uri.host?.lowercase() ?: return false
+    return host == "localhost" || host == "127.0.0.1" ||
+        host.startsWith("192.168.") || host.startsWith("10.") ||
+        host.startsWith("172.16.") || host.startsWith("172.17.") ||
+        host.startsWith("172.18.") || host.startsWith("172.19.") ||
+        host.startsWith("172.2") || host.startsWith("172.30.") || host.startsWith("172.31.")
+}
+
 @Composable
 internal fun AboutScreen(
     onUpdateAvailabilityChanged: (Boolean) -> Unit = {},
@@ -167,8 +179,8 @@ internal fun AboutScreen(
         } else {
             updateBase + "/" + rawUrl.trimStart('/')
         }
-        if (!BuildConfig.DEBUG && !url.startsWith("https://", ignoreCase = true)) {
-            downloadError = "生产环境只允许通过 HTTPS 下载更新"
+        if (!isAllowedDownloadUrl(url)) {
+            downloadError = "生产环境公网更新只允许通过 HTTPS 下载"
             return
         }
         runCatching {
@@ -224,8 +236,8 @@ internal fun AboutScreen(
         } else {
             updateBase + "/" + rawPatchUrl.trimStart('/')
         }
-        if (!BuildConfig.DEBUG && !patchUrl.startsWith("https://", ignoreCase = true)) {
-            downloadError = "生产环境只允许通过 HTTPS 下载增量补丁"
+        if (!isAllowedDownloadUrl(patchUrl)) {
+            downloadError = "生产环境公网更新只允许通过 HTTPS 下载增量补丁"
             return
         }
         val patchSha256 = version.displayField("patchSha256", "").lowercase()
@@ -667,6 +679,7 @@ internal fun AboutScreen(
                                 android.webkit.WebView(ctx).apply {
                                     webViewClient = android.webkit.WebViewClient()
                                     settings.javaScriptEnabled = true
+                                    val baseUrl = com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')
                                     val htmlData = """
                                         <!DOCTYPE html>
                                         <html lang="zh-CN">
@@ -679,17 +692,32 @@ internal fun AboutScreen(
                                                 img { max-width: 100%; height: auto; }
                                                 pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
                                                 blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
+                                                li { margin: 4px 0; }
                                             </style>
                                         </head>
                                         <body>
                                             <div id="content"><div class="loading">加载中...</div></div>
                                             <script>
-                                                fetch('${com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
+                                                function parseMarkdown(text) {
+                                                    if (window.marked && typeof window.marked.parse === 'function') {
+                                                        try { return window.marked.parse(text); } catch (e) {}
+                                                    }
+                                                    return '<p>' + text
+                                                        .replace(/^### (.*$)/gim, '<h3>${'$'}1</h3>')
+                                                        .replace(/^## (.*$)/gim, '<h2>${'$'}1</h2>')
+                                                        .replace(/^# (.*$)/gim, '<h1>${'$'}1</h1>')
+                                                        .replace(/\*\*(.*?)\*\*/gim, '<strong>${'$'}1</strong>')
+                                                        .replace(/\*(.*?)\*/gim, '<em>${'$'}1</em>')
+                                                        .replace(/^\s*-\s+(.*$)/gim, '<li>${'$'}1</li>')
+                                                        .replace(/\n\n+/g, '</p><p>')
+                                                        .replace(/\n/g, '<br/>') + '</p>';
+                                                }
+                                                fetch('${'$'}{baseUrl}/app/legal-docs')
                                                     .then(res => res.json())
                                                     .then(json => {
                                                         const data = json.code === 0 ? json.data : (json || {});
                                                         const md = data.${if(webUrlToShow == "privacy_policy") "privacy_policy" else "user_agreement"} || '暂无内容';
-                                                        document.getElementById('content').innerHTML = marked.parse(md);
+                                                        document.getElementById('content').innerHTML = parseMarkdown(md);
                                                     })
                                                     .catch(e => {
                                                         document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络并重试</div>';
@@ -698,7 +726,7 @@ internal fun AboutScreen(
                                         </body>
                                         </html>
                                     """.trimIndent()
-                                    loadDataWithBaseURL(null, htmlData, "text/html", "utf-8", null)
+                                    loadDataWithBaseURL(baseUrl, htmlData, "text/html", "utf-8", null)
                                 }
                             },
                             modifier = Modifier.fillMaxSize()

@@ -108,6 +108,7 @@ internal fun StocktakingScreen(
     val reloadRevision = rememberListReloadRevision("stocktaking")
     LaunchedEffect(reloadRevision) {
         if (reloadRevision > 0) {
+            com.tcm.admin.ApiClient.clearResponseCache(context)
             checks.refresh()
         }
     }
@@ -652,7 +653,12 @@ internal fun StocktakingEntryScreen(
             val result = (0 until values.length()).map { values.getJSONObject(it) }
             candidates = result
             val groups = candidateProductGroups(result)
-            selectedProductGroup = groups.singleOrNull()
+            if (result.size == 1) {
+                selectedItem = result.first()
+                addingBatch = false
+            } else {
+                selectedProductGroup = groups.singleOrNull()
+            }
         }.onFailure { error = it.message ?: "搜索商品失败" }
         loading = false
     }
