@@ -132,7 +132,7 @@ public class ApiClient {
         case "/admin/doctors", "/admin/dictionaries", "/stores", "/admin/store-transfers/stores", "/admin/herb-locations/stores": return 24 * 60 * 60
         case "/admin/herb-locations": return 24 * 60 * 60
         case "/admin/prescriptions", "/admin/processing-plans", "/admin/packages", "/admin/store-transfers", "/admin/store-transfers/stats": return 15 * 60
-        case "/admin/e6-pharmacy/products": return 5 * 60
+        // NOTE: /admin/e6-pharmacy/products is deliberately NOT cached so barcode scan and inventory search always fetch live inventory!
         case "/admin/stats", "/admin/products", "/admin/product-differences/stats", "/admin/product-differences/logs", "/admin/yd-goods-check": return 30
         default:
             if route.hasPrefix("/admin/prescriptions/") || route.hasPrefix("/admin/processing-plans/") || route.hasPrefix("/admin/packages/") || route.hasPrefix("/admin/store-transfers/") || route.hasPrefix("/admin/herb-locations/") || route.hasPrefix("/admin/e6/imports/") {
@@ -188,7 +188,8 @@ public class ApiClient {
         body: [String: Any]? = nil,
         queryParams: [String: String]? = nil
     ) async throws -> T {
-        let cacheKey = path + (queryParams?.description ?? "")
+        let queryString = queryParams?.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: "&") ?? ""
+        let cacheKey = path + (queryString.isEmpty ? "" : "?\(queryString)")
         
         if method == "GET" {
             if let ttl = getCacheTTL(for: path) {

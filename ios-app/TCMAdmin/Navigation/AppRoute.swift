@@ -37,6 +37,7 @@ public enum AppRoute: Hashable {
     case settings
     case themeAppearance
     case about
+    case profileDetail
 }
 
 @Observable

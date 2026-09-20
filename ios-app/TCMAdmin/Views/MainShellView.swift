@@ -5,6 +5,7 @@ public struct MainShellView: View {
     @State private var isMenuShowing = false
     @State private var selectedTab = 0
     @Bindable private var router = Router.shared
+    var networkMonitor = NetworkMonitor.shared
     
     public init() {
         let appearance = UITabBarAppearance()
@@ -15,8 +16,8 @@ public struct MainShellView: View {
     }
     
     public var body: some View {
-        NavigationStack(path: $router.navPath) {
-            ZStack(alignment: .leading) {
+        ZStack(alignment: .leading) {
+            NavigationStack(path: $router.navPath) {
                 // 主 Tab 导航区
                 TabView(selection: $selectedTab) {
                     // Tab 1: 库存
@@ -54,9 +55,30 @@ public struct MainShellView: View {
                         }
                         .tag(4)
                 }
-                .navigationTitle(navTitle(for: selectedTab))
+                .safeAreaInset(edge: .top) {
+                    if !networkMonitor.isConnected {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wifi.slash")
+                                .scaledFont(12)
+                            Text("当前网络不可用，请检查网络设置")
+                                .scaledFont(12, weight: .medium)
+                        }
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Color.danger)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    // 中间：标题 (强制居中)
+                    ToolbarItem(placement: .principal) {
+                        Text(navTitle(for: selectedTab))
+                            .font(.headline)
+                            .foregroundStyle(Color.ink)
+                    }
+                    
                     // 左侧：菜单按钮
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button(action: {
@@ -82,11 +104,8 @@ public struct MainShellView: View {
                 // 抽屉打开时禁用底层手势
                 .disabled(isMenuShowing)
                 
-                // 侧滑抽屉
-                SideMenuView(isShowing: $isMenuShowing, selectedTab: $selectedTab)
-            }
-            .navigationDestination(for: AppRoute.self) { route in
-                switch route {
+                .navigationDestination(for: AppRoute.self) { route in
+                    switch route {
                 case .prescriptions:
                     PrescriptionsView()
                 case .prescriptionDetail(let id):
@@ -123,11 +142,19 @@ public struct MainShellView: View {
                     ThemeAppearanceView()
                 case .about:
                     AboutView()
+                case .profileDetail:
+                    ProfileDetailView()
                 }
             }
+            }
             
+            // 侧滑抽屉覆盖在整个 NavigationStack (包括 NavigationBar) 之上
+            SideMenuView(isShowing: $isMenuShowing, selectedTab: $selectedTab)
+        }
+
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { _ in
             self.selectedTab = 0
+            self.router.popToRoot()
         }
         .fullScreenCover(isPresented: $router.isScannerPresented) {
                 LiveScannerView(enableOCR: router.scannerEnableOCR)
@@ -137,7 +164,6 @@ public struct MainShellView: View {
                     TabBarDoubleTapHandler.shared.setup()
                 }
             }
-        }
     }
     
     private func navTitle(for tab: Int) -> String {

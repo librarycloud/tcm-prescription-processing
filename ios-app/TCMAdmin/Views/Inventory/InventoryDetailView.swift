@@ -2,14 +2,14 @@ import SwiftUI
 
 @MainActor
 public struct InventoryDetailView: View {
-    public let item: InventoryItem
+    @State public var item: InventoryItem
     
     public init(item: InventoryItem) {
-        self.item = item
+        self._item = State(initialValue: item)
     }
     
     public var body: some View {
-        ScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Section Header
                 Text("商品信息")
@@ -58,14 +58,14 @@ public struct InventoryDetailView: View {
                         }
                         
                         // 高亮总库存 Banner
-                        HStack {
+                        HStack(alignment: .firstTextBaseline) {
                             Text("总库存：")
                                 .scaledFont(13)
                                 .foregroundStyle(Color.ink)
                             Text("\(String(format: "%g", item.displayStock))")
-                                .scaledFont(16, weight: .bold)
+                                .scaledFont(24, weight: .bold)
                                 .foregroundStyle(item.displayStock > 0 ? Color.appPrimary : Color.danger)
-                            Text(" \(item.displayUnit)")
+                            Text(item.displayUnit)
                                 .scaledFont(13)
                                 .foregroundStyle(Color.ink)
                             
@@ -75,7 +75,7 @@ public struct InventoryDetailView: View {
                                 .scaledFont(13)
                                 .foregroundStyle(Color.ink)
                             Text("\(item.inventories?.count ?? 0)")
-                                .scaledFont(16, weight: .bold)
+                                .scaledFont(20, weight: .bold)
                                 .foregroundStyle(Color.appPrimary)
                             Text(" 个库存批次")
                                 .scaledFont(13)
@@ -184,6 +184,18 @@ public struct InventoryDetailView: View {
                 }
             }
             .padding(16)
+        }
+        .refreshable {
+            ApiClient.shared.clearResponseCache()
+            if let keyword = item.productCode ?? item.barcode {
+                if let res = try? await ApiClient.shared.fetchInventory(
+                    keyword: keyword
+                ) {
+                    if let updated = res.first(where: { $0.id == item.id }) {
+                        self.item = updated
+                    }
+                }
+            }
         }
         .background(Color.pageBackground)
         .navigationTitle("商品详情")

@@ -140,8 +140,10 @@ public struct StocktakingView: View {
                     .padding(16)
                 }
                 .refreshable {
+                    ApiClient.shared.clearResponseCache()
                     await loadStocktakings()
                 }
+                .id("stock_\(selectedStoreId ?? -1)")
             }
         }
         .sheet(isPresented: $isCreateSheetPresented) {
@@ -320,7 +322,7 @@ public struct StocktakingDetailView: View {
     }
     
     public var body: some View {
-        ScrollView {
+        AppScrollView {
             VStack(spacing: 14) {
                 if isLoading && detail == nil {
                     ProgressView("正在加载盘点明细...")
@@ -329,13 +331,13 @@ public struct StocktakingDetailView: View {
                 } else if let err = errorMessage, detail == nil {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 44))
+                            .scaledFont(44)
                             .foregroundStyle(Color.orange)
                         Text("加载盘点明细失败")
-                            .font(.system(size: 16, weight: .bold))
+                            .scaledFont(16, weight: .bold)
                             .foregroundStyle(Color.ink)
                         Text(err)
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Color.muted)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
@@ -346,7 +348,7 @@ public struct StocktakingDetailView: View {
                                 Image(systemName: "arrow.clockwise")
                                 Text("点击重试")
                             }
-                            .font(.system(size: 14, weight: .medium))
+                            .scaledFont(14, weight: .medium)
                             .foregroundStyle(Color.white)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
@@ -362,7 +364,7 @@ public struct StocktakingDetailView: View {
                             Image(systemName: "exclamationmark.circle.fill")
                                 .foregroundStyle(Color.danger)
                             Text(err)
-                                .font(.system(size: 12))
+                                .scaledFont(12)
                                 .foregroundStyle(Color.danger)
                             Spacer()
                             Button(action: { errorMessage = nil }) {
@@ -570,20 +572,22 @@ public struct StocktakingDetailView: View {
                                         HStack(spacing: 12) {
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text("系统账面").scaledFont(11).foregroundStyle(Color.muted)
-                                                Text("\(formatQty(row.systemQty)) \(row.productUnit)").scaledFont(13, weight: .medium)
+                                                Text("\(formatQty(row.systemQty)) \(row.productUnit)").scaledFont(16, weight: .bold)
                                             }
                                             Spacer()
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text("初盘实物").scaledFont(11).foregroundStyle(Color.muted)
                                                 Text(row.firstCountQty.map { "\(formatQty($0)) \(row.productUnit)" } ?? "-")
-                                                    .scaledFont(13, weight: .medium)
+                                                    .scaledFont(16, weight: .bold)
+                                                    .foregroundStyle(Color.appPrimary)
                                             }
                                             Spacer()
                                             if row.recountQty != nil {
                                                 VStack(alignment: .leading, spacing: 2) {
                                                     Text("复盘实物").scaledFont(11).foregroundStyle(Color.muted)
                                                     Text("\(formatQty(row.recountQty)) \(row.productUnit)")
-                                                        .scaledFont(13, weight: .medium)
+                                                        .scaledFont(16, weight: .bold)
+                                                        .foregroundStyle(Color.appPrimaryDark)
                                                 }
                                                 Spacer()
                                             }
@@ -591,7 +595,7 @@ public struct StocktakingDetailView: View {
                                                 Text("差异").scaledFont(11).foregroundStyle(Color.muted)
                                                 let diff = row.displayDiff
                                                 Text("\(diff > 0 ? "+" : "")\(formatQty(diff))")
-                                                    .scaledFont(14, weight: .bold)
+                                                    .scaledFont(18, weight: .bold)
                                                     .foregroundStyle(diff == 0 ? Color.success : Color.danger)
                                             }
                                         }
@@ -729,7 +733,10 @@ public struct StocktakingDetailView: View {
         .navigationTitle("盘点明细")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadDetail() }
-        .refreshable { await loadDetail() }
+        .refreshable {
+            ApiClient.shared.clearResponseCache()
+            await loadDetail()
+        }
     }
     
     private func filterCell(title: String, count: Int, key: String, isWarning: Bool = false, isDanger: Bool = false) -> some View {
@@ -769,7 +776,14 @@ public struct StocktakingDetailView: View {
     private func searchCandidates() {
         guard !candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         Task {
-            candidates = (try? await ApiClient.shared.fetchGoodsCheckCandidates(checkId: checkId, keyword: candidateKeyword)) ?? []
+            let res = (try? await ApiClient.shared.fetchGoodsCheckCandidates(checkId: checkId, keyword: candidateKeyword)) ?? []
+            await MainActor.run {
+                self.candidates = res
+                if res.count == 1 {
+                    self.selectedCandidate = res.first
+                    self.countInputQty = ""
+                }
+            }
         }
     }
     

@@ -90,6 +90,7 @@ public struct ProcessingView: View {
                         action: {
                             withAnimation {
                                 mode = "plans"
+                                isLoading = false
                                 Task { await loadData() }
                             }
                         }
@@ -102,6 +103,7 @@ public struct ProcessingView: View {
                         action: {
                             withAnimation {
                                 mode = "pickup"
+                                isLoading = false
                                 Task { await loadData() }
                             }
                         }
@@ -208,6 +210,10 @@ public struct ProcessingView: View {
         }
         .background(Color.pageBackground)
         .scrollDismissesKeyboard(.interactively)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
+            ApiClient.shared.clearResponseCache()
+            Task { await loadData() }
+        }
         .task {
             if isSuperAdmin && stores.isEmpty {
                 if let sts = try? await ApiClient.shared.fetchStores() {
@@ -302,8 +308,10 @@ public struct ProcessingView: View {
                 .padding(16)
             }
             .refreshable {
+                ApiClient.shared.clearResponseCache()
                 await loadData()
             }
+            .id("plans_\(activeView)_\(selectedStoreId ?? -1)")
             .background(Color.pageBackground)
         }
     }
@@ -352,8 +360,10 @@ public struct ProcessingView: View {
                 .padding(16)
             }
             .refreshable {
+                ApiClient.shared.clearResponseCache()
                 await loadData()
             }
+            .id("pickups_\(pickupStatus)_\(selectedStoreId ?? -1)")
             .background(Color.pageBackground)
         }
     }
@@ -525,29 +535,38 @@ struct ProcessingPlanCard: View {
         AppCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 // 卡片 Header
-                HStack {
-                    Image(systemName: "gearshape.fill")
-                        .foregroundStyle(Color.appPrimary)
-                    Text("\(plan.patientName ?? "-") · \(plan.method ?? "加工")")
-                        .scaledFont(15, weight: .bold)
-                    Spacer()
-                    if plan.isUrgent == true {
-                        UrgentBadge()
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .center, spacing: 6) {
+                            Image(systemName: "gearshape.fill")
+                                .foregroundStyle(Color.appPrimary)
+                                .font(.system(size: 14))
+                            Text("\(plan.patientName ?? "-") · \(plan.method ?? "加工")")
+                                .scaledFont(15, weight: .bold)
+                                .foregroundStyle(Color.ink)
+                        }
+                        
+                        Text("\(maskPhone(plan.prescription?.phone)) · 医生：\(plan.doctorName ?? "-")")
+                            .scaledFont(12)
+                            .foregroundStyle(Color.muted)
                     }
-                    StatusPill(text: plan.statusText)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 6) {
+                        if plan.isUrgent == true {
+                            UrgentBadge()
+                        }
+                        StatusPill(text: plan.statusText)
+                    }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color(UIColor.systemGray6).opacity(0.6))
+                .padding(.vertical, 12)
                 
                 Divider().foregroundStyle(Color.cardBorder)
                 
                 // 卡片内容区
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("\(maskPhone(plan.prescription?.phone)) · 医生：\(plan.doctorName ?? "-")")
-                        .scaledFont(13)
-                        .foregroundStyle(Color.muted)
-                    
                     InfoRowItem(label: "批次剂数", value: "第 \(plan.batchNo ?? 1) 批 · \(plan.totalDose ?? 0) 剂")
                     if let bagCount = plan.bagCount, bagCount > 0 {
                         InfoRowItem(label: "代煎规格", value: "\(bagCount) 袋 · \(plan.volumeMl ?? 0)ml")
@@ -576,7 +595,7 @@ struct ProcessingPlanCard: View {
                 // 底部操作行
                 HStack(spacing: 8) {
                     Text("创建时间: \(formatDateTimeToMinute(plan.createdAt))")
-                        .scaledFont(11)
+                        .scaledFont(12)
                         .foregroundStyle(Color.muted)
                     
                     Spacer()
@@ -709,7 +728,7 @@ struct ProcessingPickupPackageCard: View {
                         .foregroundStyle(Color.ink)
                     Spacer()
                     StatusPill(text: pkg.method)
-                    StatusPill(text: pkg.status)
+                    StatusPill(text: pkg.statusText)
                 }
                 
                 HStack {

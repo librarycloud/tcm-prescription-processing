@@ -193,6 +193,8 @@ public struct ProcessingPlanFormView: View {
             }
             .alert(planToEdit != nil ? "修改成功" : "创建成功", isPresented: $successAlert) {
                 Button("确定", role: .cancel) {
+                    NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Processing"), object: nil)
+                    NotificationCenter.default.post(name: NSNotification.Name("ListNeedsRefresh_Prescriptions"), object: nil)
                     dismiss()
                 }
             } message: {

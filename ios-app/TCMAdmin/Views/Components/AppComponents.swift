@@ -65,6 +65,8 @@ struct StatusPill: View {
             return (.success, .successSoft)
         case "自提":
             return (.appPrimary, .appPrimarySoft)
+        case "部分归还":
+            return (.warning, .warningSoft)
         case "跑腿", "快递":
             // 简单起见，这里借用 Primary / 也可以自定义 RunnerColor
             return (.purple, .purple.opacity(0.15))
@@ -194,7 +196,7 @@ struct InfoRowItem: View {
             Text(label)
                 .scaledFont(14)
                 .foregroundStyle(Color.muted)
-            Spacer()
+            Spacer(minLength: 12)
             Text(value)
                 .scaledFont(14, weight: isBold ? .semibold : .regular)
                 .foregroundStyle(valueColor)
@@ -439,40 +441,28 @@ struct HighlightedText: View, Equatable {
     
     var body: some View {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || !text.localizedCaseInsensitiveContains(trimmed) {
-            Text(text).font(font).fontWeight(weight).foregroundStyle(regularColor)
+        if trimmed.isEmpty {
+            Text(text)
+                .font(font)
+                .fontWeight(weight)
+                .foregroundStyle(regularColor)
         } else {
-            buildHighlightedText(for: trimmed)
+            Text(buildAttributedString(trimmed: trimmed))
+                .font(font)
+                .fontWeight(weight)
+                .foregroundStyle(regularColor)
         }
     }
     
-    private func buildHighlightedText(for trimmedKey: String) -> Text {
-        var result = Text("")
-        let lowerText = text.lowercased()
-        let lowerKey = trimmedKey.lowercased()
-        
-        var currentIndex = text.startIndex
-        var searchStartIndex = lowerText.startIndex
-        
-        while let range = lowerText.range(of: lowerKey, range: searchStartIndex..<lowerText.endIndex) {
-            let beforeText = String(text[currentIndex..<range.lowerBound])
-            if !beforeText.isEmpty {
-                result = Text("\(result)\(Text(beforeText).font(font).fontWeight(weight).foregroundStyle(regularColor))")
-            }
-            
-            let matchedText = String(text[range])
-            result = Text("\(result)\(Text(matchedText).font(font).fontWeight(.bold).foregroundStyle(highlightColor))")
-            
-            currentIndex = range.upperBound
-            searchStartIndex = range.upperBound
+    private func buildAttributedString(trimmed: String) -> AttributedString {
+        var attributed = AttributedString(text)
+        var searchRange = attributed.startIndex..<attributed.endIndex
+        while let range = attributed[searchRange].range(of: trimmed, options: .caseInsensitive) {
+            attributed[range].foregroundColor = highlightColor
+            attributed[range].inlinePresentationIntent = .stronglyEmphasized
+            searchRange = range.upperBound..<attributed.endIndex
         }
-        
-        let remainingText = String(text[currentIndex..<text.endIndex])
-        if !remainingText.isEmpty {
-            result = Text("\(result)\(Text(remainingText).font(font).fontWeight(weight).foregroundStyle(regularColor))")
-        }
-        
-        return result
+        return attributed
     }
 }
 
@@ -718,10 +708,12 @@ struct InlineWebView: UIViewRepresentable {
 // MARK: - 隐私政策提示弹窗
 public struct PrivacyPolicyView: View {
     public var onAgree: () -> Void
-    public var onDisagree: () -> Void
+    public var onDisagree: (() -> Void)? = nil
     @State private var webUrlToShow: String?
+    @State private var showDisagreeAlert = false
+    @State private var isRejected = false
 
-    public init(onAgree: @escaping () -> Void, onDisagree: @escaping () -> Void) {
+    public init(onAgree: @escaping () -> Void, onDisagree: (() -> Void)? = nil) {
         self.onAgree = onAgree
         self.onDisagree = onDisagree
     }
@@ -730,40 +722,89 @@ public struct PrivacyPolicyView: View {
         ZStack {
             Color.black.opacity(0.4).ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Text("隐私政策与用户协议")
-                    .font(.headline)
-                    .fontWeight(.bold)
+            if isRejected {
+                // 拒绝后友好禁用态，杜绝 exit(0) 导致苹果拒审
+                VStack(spacing: 20) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Color.appPrimary)
 
-                Text("感谢您使用本应用！我们非常重视您的个人信息和隐私保护。在您使用本应用前，请仔细阅读[《隐私政策》](privacy_policy)和[《用户协议》](user_agreement)。\n\n我们将在获得您的明确同意后，收集必要的设备信息、网络信息等，并初始化相关第三方 SDK 以提供服务。")
-                    .font(.body)
-                    .tint(.blue)
-                    .environment(\.openURL, OpenURLAction { url in
-                        self.webUrlToShow = url.absoluteString
-                        return .handled
-                    })
+                    Text("服务暂未开启")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.ink)
 
-                HStack(spacing: 40) {
-                    Button(action: onDisagree) {
-                        Text("暂不同意/退出")
-                            .foregroundStyle(Color.gray)
-                    }
+                    Text("由于您暂未同意《隐私政策》与《用户协议》，药房助手暂无法向您提供处方管理及加工流转服务。\n\n如需继续使用，请点击下方按钮重新阅读并同意协议。若暂不使用，可直接上滑或按 Home 键退出。")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.muted)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
 
-                    Button(action: onAgree) {
-                        Text("同 意")
+                    Button(action: {
+                        isRejected = false
+                    }) {
+                        Text("重新阅读协议并同意")
                             .bold()
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 8)
-                            .background(Color.blue)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.appPrimary)
                             .foregroundStyle(Color.white)
-                            .clipShape(.rect(cornerRadius: 8))
+                            .clipShape(.rect(cornerRadius: 10))
+                    }
+                    .padding(.top, 8)
+                }
+                .padding(28)
+                .background(Color(UIColor.systemBackground))
+                .clipShape(.rect(cornerRadius: 16))
+                .padding(32)
+                .shadow(radius: 12)
+            } else {
+                VStack(spacing: 20) {
+                    Text("隐私政策与用户协议")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    Text("感谢您使用本应用！我们非常重视您的个人信息和隐私保护。在您使用本应用前，请仔细阅读[《隐私政策》](privacy_policy)和[《用户协议》](user_agreement)。\n\n我们将在获得您的明确同意后，收集必要的设备信息、网络信息等，并初始化相关第三方 SDK 以提供服务。")
+                        .font(.body)
+                        .tint(.blue)
+                        .environment(\.openURL, OpenURLAction { url in
+                            self.webUrlToShow = url.absoluteString
+                            return .handled
+                        })
+
+                    HStack(spacing: 40) {
+                        Button(action: {
+                            showDisagreeAlert = true
+                        }) {
+                            Text("暂不同意")
+                                .foregroundStyle(Color.gray)
+                        }
+
+                        Button(action: onAgree) {
+                            Text("同 意")
+                                .bold()
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                                .background(Color.blue)
+                                .foregroundStyle(Color.white)
+                                .clipShape(.rect(cornerRadius: 8))
+                        }
                     }
                 }
+                .padding(24)
+                .background(Color(UIColor.systemBackground))
+                .clipShape(.rect(cornerRadius: 16))
+                .padding(32)
             }
-            .padding(24)
-            .background(Color(UIColor.systemBackground))
-            .clipShape(.rect(cornerRadius: 16))
-            .padding(32)
+        }
+        .alert("温馨提示", isPresented: $showDisagreeAlert) {
+            Button("重新阅读", role: .cancel) {}
+            Button("暂不使用", role: .destructive) {
+                isRejected = true
+                onDisagree?()
+            }
+        } message: {
+            Text("若不同意《隐私政策》和《用户协议》，应用将无法提供相关核心服务。您可以按手机 Home 键退出应用或重新阅读协议。")
         }
         .sheet(item: Binding<String?>(
             get: { webUrlToShow },
@@ -790,13 +831,12 @@ extension String: @retroactive Identifiable {
 
 // MARK: - AppScrollView (带双击 Tab 栏及悬浮按钮回到顶部)
 public struct AppScrollView<Content: View>: View {
-    @ViewBuilder let content: Content
+    private let content: () -> Content
     @State private var showScrollToTop = false
-    @State private var scrollProxy: ScrollViewProxy? = nil
     @State private var hideTask: Task<Void, Never>? = nil
 
-    public init(@ViewBuilder content: () -> Content) {
-        self.content = content()
+    public init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
     }
 
     public var body: some View {
@@ -807,7 +847,7 @@ public struct AppScrollView<Content: View>: View {
                     .frame(height: 0)
                     .id("SCROLL_TOP_ANCHOR")
 
-                content
+                content()
             }
             // iOS 17+ 原生滚动距离监听，最可靠
             .onScrollGeometryChange(for: CGFloat.self) { geo in
@@ -869,5 +909,40 @@ public struct AppScrollView<Content: View>: View {
                 }
             }
         }
+    }
+}
+
+public func parseDateSafely(_ dateString: String?) -> Date? {
+    guard let raw = dateString?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty, raw != "null", raw != "-" else {
+        return nil
+    }
+    
+    if let d = _isoFractionalFormatter.date(from: raw) { return d }
+    if let d = _isoStandardFormatter.date(from: raw) { return d }
+    for df in _fallbackUtcFormatters {
+        if let d = df.date(from: raw) { return d }
+    }
+    return nil
+}
+
+public func processingDuration(start: String?, end: String?) -> String {
+    guard let startDate = parseDateSafely(start) else { return "-" }
+    
+    let endDate: Date
+    if let ed = parseDateSafely(end) {
+        endDate = ed
+    } else {
+        endDate = Date()
+    }
+    
+    let timeInterval = endDate.timeIntervalSince(startDate)
+    let minutes = max(0, Int(timeInterval / 60))
+    
+    if minutes < 60 {
+        return "\(minutes)分钟"
+    } else {
+        let hours = minutes / 60
+        let mins = minutes % 60
+        return "\(hours)小时\(mins)分钟"
     }
 }

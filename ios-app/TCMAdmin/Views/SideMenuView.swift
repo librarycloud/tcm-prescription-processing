@@ -106,6 +106,7 @@ public struct SideMenuView: View {
                 .transition(.move(edge: .leading))
             }
         }
+        .allowsHitTesting(isShowing)
     }
     
     private func selectTab(_ index: Int) {

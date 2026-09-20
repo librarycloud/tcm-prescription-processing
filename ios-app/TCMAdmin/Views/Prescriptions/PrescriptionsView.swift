@@ -153,6 +153,14 @@ public struct PrescriptionsView: View {
                 Spacer()
                 ProgressView("正在加载处方记录...")
                 Spacer()
+            } else if let error = errorMessage, !error.isEmpty {
+                Spacer()
+                VStack(spacing: 8) {
+                    Text(error).foregroundStyle(Color.danger).scaledFont(14).multilineTextAlignment(.center)
+                    Button("点击重试") { Task { await loadPrescriptions() } }.foregroundStyle(Color.appPrimary).scaledFont(14, weight: .bold)
+                }
+                .padding(.horizontal, 16)
+                Spacer()
             } else if prescriptions.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
@@ -273,10 +281,16 @@ public struct PrescriptionsView: View {
                     .padding(16)
                 }
                 .refreshable {
+                    ApiClient.shared.clearResponseCache()
                     await loadPrescriptions()
                 }
+                .id("rx_\(selectedStatus ?? -1)_\(selectedDoctorId ?? -1)_\(selectedStoreId ?? -1)")
                 .background(Color.pageBackground)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Prescriptions"))) { _ in
+            ApiClient.shared.clearResponseCache()
+            Task { await loadPrescriptions() }
         }
         .sheet(item: $planPrescription) { rx in
             ProcessingPlanFormView(initialPrescriptionId: rx.id)
@@ -285,8 +299,12 @@ public struct PrescriptionsView: View {
             Button("确认删除", role: .destructive) {
                 if let target = itemToDelete {
                     Task {
-                        try? await ApiClient.shared.deletePrescription(id: target.id)
-                        await loadPrescriptions()
+                        do {
+                            try await ApiClient.shared.deletePrescription(id: target.id)
+                            await loadPrescriptions()
+                        } catch {
+                            self.errorMessage = "删除失败: \(error.localizedDescription)"
+                        }
                     }
                 }
             }
@@ -329,6 +347,9 @@ public struct PrescriptionDetailView: View {
     public let id: Int
     @Bindable private var router = Router.shared
     @Environment(\.dismiss) private var dismiss
+    
+    @Environment(SessionManager.self) var session
+    private var isStoreStaff: Bool { session.currentUser?.role == 3 }
     
     @State private var prescription: PrescriptionItem? = nil
     @State private var isLoading = false
@@ -386,7 +407,7 @@ public struct PrescriptionDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(16)
                 } else if let rx = prescription {
-                    ScrollView {
+                    AppScrollView {
                         VStack(spacing: 16) {
                             if let err = errorMessage {
                                 AppCard(padding: 12) {
@@ -413,7 +434,22 @@ public struct PrescriptionDetailView: View {
                                                 .foregroundStyle(Color.muted)
                                         }
                                         Spacer()
-                                        StatusPill(text: rx.statusText)
+                                        HStack(alignment: .center, spacing: 8) {
+                                            if !isStoreStaff && rx.status != 1 {
+                                                Button(action: {
+                                                    router.navigate(to: .prescriptionEdit(id: rx.id))
+                                                }) {
+                                                    Text("编辑")
+                                                        .scaledFont(12, weight: .medium)
+                                                        .foregroundStyle(Color.ink)
+                                                        .padding(.horizontal, 10)
+                                                        .padding(.vertical, 4)
+                                                        .background(Color.gray.opacity(0.12))
+                                                        .clipShape(.rect(cornerRadius: 6))
+                                                }
+                                            }
+                                            StatusPill(text: rx.statusText)
+                                        }
                                     }
                                     
                                     Divider().foregroundStyle(Color.cardBorder).padding(.vertical, 2)
@@ -432,7 +468,7 @@ public struct PrescriptionDetailView: View {
                                     InfoRowItem(label: "剂数进度", value: "\(taken) / \(total) 剂，剩余 \(remaining) 剂", valueColor: .appPrimaryDark, isBold: true)
                                     
                                     // 日期不带时间
-                                    InfoRowItem(label: "录入时间", value: formatDateOnly(rx.createdAt))
+                                    InfoRowItem(label: "录入时间", value: formatDateTimeToMinute(rx.createdAt))
                                     
                                     if let creatorName = rx.creator?.nickname ?? rx.creator?.username, !creatorName.isEmpty {
                                         InfoRowItem(label: "录入人", value: creatorName)
@@ -586,7 +622,6 @@ public struct PrescriptionDetailView: View {
                                 }
                             }
                             
-                            // 4. 领取记录 (对齐 Android)
                             let pickupPlans = plansList.filter { $0.package != nil || $0.status == 4 }
                             if !pickupPlans.isEmpty {
                                 AppCard(padding: 16) {
@@ -633,7 +668,7 @@ public struct PrescriptionDetailView: View {
                                                 }
                                                 
                                                 // 日期不带时间
-                                                Text("操作员：\(imp.displayOperator)  ·  订单时间：\(formatDateOnly(imp.displayDate))")
+                                                Text("操作员：\(imp.displayOperator)  ·  订单时间：\(formatDateTimeToMinute(imp.displayDate))")
                                                     .scaledFont(12)
                                                     .foregroundStyle(Color.muted)
                                                 
@@ -706,39 +741,6 @@ public struct PrescriptionDetailView: View {
                                             }
                                         }
                                     }
-                                }
-                            }
-                            
-                            // 7. 操作管理按钮
-                            VStack(spacing: 10) {
-                                Button(action: {
-                                    router.navigate(to: .prescriptionEdit(id: rx.id))
-                                }) {
-                                    HStack {
-                                        Image(systemName: "pencil")
-                                        Text("编辑处方信息")
-                                    }
-                                    .scaledFont(15, weight: .semibold)
-                                    .foregroundStyle(Color.ink)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 46)
-                                    .background(Color.surface)
-                                    .clipShape(.rect(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.cardBorder, lineWidth: 1))
-                                }
-                                
-                                Button(action: { showDeleteConfirm = true }) {
-                                    HStack {
-                                        Image(systemName: "trash")
-                                        Text("删除处方")
-                                    }
-                                    .scaledFont(15, weight: .semibold)
-                                    .foregroundStyle(Color.danger)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 46)
-                                    .background(Color.surface)
-                                    .clipShape(.rect(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.danger.opacity(0.3), lineWidth: 1))
                                 }
                             }
                         }
@@ -850,6 +852,7 @@ public struct PrescriptionDetailView: View {
     private func reloadDetail() async {
         guard !isLoading else { return }
         isLoading = true
+        ApiClient.shared.clearResponseCache()
         prescription = try? await ApiClient.shared.fetchPrescriptionDetail(id: id)
         isLoading = false
     }
@@ -997,7 +1000,7 @@ public struct PrescriptionDetailView: View {
                     }
                 }
                 
-                if pStatus != 3 && pStatus != 4 {
+                if pStatus == 0 || pStatus == 1 {
                     Button(action: {
                         self.confirmCancelPlanId = plan.id
                         self.showCancelPlanDialog = true
@@ -1051,8 +1054,8 @@ public struct PrescriptionDetailView: View {
                 .scaledFont(12)
                 .foregroundStyle(Color.ink.opacity(0.8))
             
-            let finishDate = plan.finishDate ?? "-"
-            Text("完成时间：\(finishDate)")
+
+            Text("完成时间：\(formatDateTimeToMinute(plan.finishDate, defaultVal: "-"))")
                 .scaledFont(12)
                 .foregroundStyle(Color.muted)
                 .padding(.top, 2)
