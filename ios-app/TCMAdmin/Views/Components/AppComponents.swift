@@ -841,7 +841,6 @@ extension String: @retroactive Identifiable {
 public struct AppScrollView<Content: View>: View {
     private let content: () -> Content
     @State private var showScrollToTop = false
-    @State private var hideTask: Task<Void, Never>? = nil
 
     public init(@ViewBuilder content: @escaping () -> Content) {
         self.content = content
@@ -866,33 +865,15 @@ public struct AppScrollView<Content: View>: View {
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y
             } action: { _, newY in
-                let isPastThreshold = newY > 1200.0
+                let isPastThreshold = newY > 800.0
                 
-                if isPastThreshold {
-                    if !showScrollToTop {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showScrollToTop = true
-                        }
+                if isPastThreshold && !showScrollToTop {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showScrollToTop = true
                     }
-                    
-                    hideTask?.cancel()
-                    hideTask = Task {
-                        do {
-                            // 停止滑动 2.5 秒后自动隐藏
-                            try await Task.sleep(nanoseconds: 2_500_000_000)
-                            if !Task.isCancelled {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showScrollToTop = false
-                                }
-                            }
-                        } catch {}
-                    }
-                } else {
-                    if showScrollToTop {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showScrollToTop = false
-                        }
-                        hideTask?.cancel()
+                } else if !isPastThreshold && showScrollToTop {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showScrollToTop = false
                     }
                 }
             }
