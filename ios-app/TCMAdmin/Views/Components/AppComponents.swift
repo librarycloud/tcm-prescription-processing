@@ -855,11 +855,16 @@ public struct AppScrollView<Content: View>: View {
 
                 content()
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScrollToTop"))) { _ in
+                withAnimation {
+                    proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
+                }
+            }
             // iOS 17+ 原生滚动距离监听，最可靠
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y
             } action: { _, newY in
-                let isPastThreshold = newY > UIScreen.main.bounds.height * 2.0
+                let isPastThreshold = newY > 1200.0
                 
                 if isPastThreshold {
                     if !showScrollToTop {

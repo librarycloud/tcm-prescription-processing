@@ -499,7 +499,8 @@ public struct TransferFormView: View {
                     Button("取消") { dismiss() }
                 }
             }
-            .onAppear {
+            .onChange(of: selectedStoreId) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .onAppear {
                 if let userStoreId = session.currentUser?.storeId, userStoreId > 0 {
                     fromStoreId = userStoreId
                 } else if let firstStore = stores.first {

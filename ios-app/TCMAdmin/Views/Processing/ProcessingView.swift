@@ -209,6 +209,8 @@ public struct ProcessingView: View {
                 pickupContentView
             }
         }
+        .onChange(of: filterStatus) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .onChange(of: activeTab) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
         .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
@@ -586,6 +588,16 @@ struct ProcessingPlanCard: View {
                     if let finishDate = plan.finishDate {
                         InfoRowItem(label: "完成时间", value: formatDateTimeToMinute(finishDate))
                     }
+                    
+                    if let startDate = plan.startDate {
+                        let durationStr = processingDuration(start: startDate, end: plan.finishDate)
+                        if plan.finishDate != nil {
+                            InfoRowItem(label: "总用时", value: durationStr)
+                        } else {
+                            InfoRowItem(label: "已用时", value: durationStr)
+                        }
+                    }
+                    
                     InfoRowItem(label: "创建时间", value: formatDateTimeToMinute(plan.createdAt))
                     if let remark = plan.remark, !remark.isEmpty {
                         InfoRowItem(label: "备注", value: remark)

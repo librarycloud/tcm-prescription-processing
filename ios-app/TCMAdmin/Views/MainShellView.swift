@@ -150,6 +150,7 @@ public struct MainShellView: View {
             
             // 侧滑抽屉覆盖在整个 NavigationStack (包括 NavigationBar) 之上
             SideMenuView(isShowing: $isMenuShowing, selectedTab: $selectedTab)
+                .zIndex(100)
         }
 
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { _ in
