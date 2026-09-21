@@ -841,6 +841,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                         val result = ApiClient.importServerConfig(context, android.net.Uri.parse(configInput))
                         Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
                         if (result.first) {
+                            baseUrl = ApiClient.currentBaseUrl
                             showConfigDialog = false
                         }
                     }

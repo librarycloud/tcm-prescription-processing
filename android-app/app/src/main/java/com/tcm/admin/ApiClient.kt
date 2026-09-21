@@ -101,6 +101,14 @@ object ApiClient {
             }
         }
         
+        // 4. 若传入的是纯 IP/域名 (如 192.168.1.100:3000)，直接使用
+        if (targetServer == null) {
+            val rawString = uri.toString()
+            if (!rawString.contains("://") && rawString.isNotBlank()) {
+                targetServer = "http://$rawString"
+            }
+        }
+        
         val serverStr = targetServer?.trim()
         if (serverStr.isNullOrBlank()) {
             return false to "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=http://...)"
