@@ -548,10 +548,11 @@ internal fun ProcessingScreenV2(
                                         text = "创建时间: ${serverDateTime(plan.optString("createdAt", ""))}",
                                         fontSize = 12.sp,
                                         color = Muted,
-                                        modifier = Modifier.weight(1f).padding(bottom = 8.dp)
+                                        modifier = Modifier.padding(bottom = 8.dp)
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     FlowRow(
+                                        modifier = Modifier.weight(1f),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
                                         verticalArrangement = Arrangement.spacedBy(6.dp),
                                     ) {
