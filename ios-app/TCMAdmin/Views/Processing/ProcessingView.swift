@@ -588,16 +588,6 @@ struct ProcessingPlanCard: View {
                     if let finishDate = plan.finishDate {
                         InfoRowItem(label: "完成时间", value: formatDateTimeToMinute(finishDate))
                     }
-                    
-                    if let startDate = plan.startDate {
-                        let durationStr = processingDuration(start: startDate, end: plan.finishDate)
-                        if plan.finishDate != nil {
-                            InfoRowItem(label: "总用时", value: durationStr)
-                        } else {
-                            InfoRowItem(label: "已用时", value: durationStr)
-                        }
-                    }
-                    
                     InfoRowItem(label: "创建时间", value: formatDateTimeToMinute(plan.createdAt))
                     if let remark = plan.remark, !remark.isEmpty {
                         InfoRowItem(label: "备注", value: remark)
