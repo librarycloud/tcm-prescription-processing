@@ -127,6 +127,28 @@ internal fun AboutScreen(
     var synthesizeProgress by remember { mutableStateOf(0) }
     var fallbackVersion by remember { mutableStateOf<JSONObject?>(null) }
 
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                downloadManager.query(DownloadManager.Query()).use { cursor ->
+                    if (cursor != null && cursor.moveToFirst()) {
+                        do {
+                            val id = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
+                            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                            if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING) {
+                                val uriString = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_URI))
+                                if (uriString != null && uriString.contains("versionCode=")) {
+                                    downloadId = id
+                                    break
+                                }
+                            }
+                        } while (cursor.moveToNext())
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun fetchLatest(): JSONObject? {
         checking = true
         error = null
@@ -354,6 +376,18 @@ internal fun AboutScreen(
     fun startUpdate(version: JSONObject) {
         scope.launch {
             withContext(Dispatchers.IO) {
+                // Clear any stuck/failed DownloadManager tasks to prevent ERROR_FILE_ALREADY_EXISTS
+                runCatching {
+                    downloadManager.query(DownloadManager.Query()).use { cursor ->
+                        if (cursor != null && cursor.moveToFirst()) {
+                            do {
+                                val id = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
+                                downloadManager.remove(id)
+                            } while (cursor.moveToNext())
+                        }
+                    }
+                }
+                
                 CacheManager.cleanObsoleteApksAndPatches(context)
                 val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 if (destDir != null) {
