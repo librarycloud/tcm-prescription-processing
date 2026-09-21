@@ -554,6 +554,11 @@ private fun TcmAdminApp() {
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
+                            onLogout = {
+                                ApiClient.clearSession(appContext)
+                                session = null
+                                navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
+                            }
                         )
                     }
                 }

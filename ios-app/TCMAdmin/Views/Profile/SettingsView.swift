@@ -9,6 +9,8 @@ public struct SettingsView: View {
     @State private var isClearingCache = false
     @State private var isShowingServerConfig = false
     @State private var configuredBaseURL = ApiClient.shared.baseURL
+    @State private var isShowingServerChangeAlert = false
+    @State private var pendingBaseURL = ""
     
     public init() {}
     
@@ -87,13 +89,39 @@ public struct SettingsView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("保存") {
-                            ApiClient.shared.baseURL = configuredBaseURL
-                            isShowingServerConfig = false
+                            let trimmed = configuredBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard trimmed != ApiClient.shared.baseURL else {
+                                isShowingServerConfig = false
+                                return
+                            }
+                            if SessionManager.shared.isAuthenticated {
+                                // 已登录状态切换服务器 → 弹出确认框
+                                pendingBaseURL = trimmed
+                                isShowingServerChangeAlert = true
+                            } else {
+                                ApiClient.shared.baseURL = trimmed
+                                isShowingServerConfig = false
+                            }
                         }
                         .fontWeight(.bold)
                     }
                 }
             }
+        }
+        .alert("切换服务器需要重新登录", isPresented: $isShowingServerChangeAlert) {
+            Button("取消", role: .cancel) {}
+            Button("确认切换", role: .destructive) {
+                ApiClient.shared.baseURL = pendingBaseURL
+                isShowingServerConfig = false
+                Task { @MainActor in
+                    // 通知旧服务器退出当前 session（best-effort，失败不阻断）
+                    struct EmptyResponse: Decodable {}
+                    _ = try? await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                    SessionManager.shared.clearSession()
+                }
+            }
+        } message: {
+            Text("切换到新的服务器地址后，当前账号登录状态将被清除，需要重新登录。\n\n新地址：\(pendingBaseURL)")
         }
     }
 }

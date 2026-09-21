@@ -1061,6 +1061,7 @@ internal fun SettingsScreen(
     selectedTheme: String,
     themeAccentKey: String,
     textScale: Float,
+    onLogout: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var cacheSizeBytes by remember { mutableStateOf(-1L) }
@@ -1250,6 +1251,42 @@ internal fun SettingsScreen(
         
         var showEditDialog by remember { mutableStateOf(false) }
         var urlInput by remember { mutableStateOf(baseUrl) }
+        var showServerChangeConfirmDialog by remember { mutableStateOf(false) }
+        var pendingServerUrl by remember { mutableStateOf("") }
+
+        // Confirmation dialog for server change while logged in
+        if (showServerChangeConfirmDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showServerChangeConfirmDialog = false },
+                title = { Text("切换服务器需要重新登录", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text("切换到新的服务器地址后，当前账号的登录状态将被清除，需要重新登录。", fontSize = 14.sp, color = Ink)
+                        Spacer(Modifier.height(8.dp))
+                        Text("新地址：$pendingServerUrl", fontSize = 13.sp, color = Muted)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showServerChangeConfirmDialog = false
+                        scope.launch {
+                            runCatching { ApiClient.request("/auth/logout", "POST") }
+                            ApiClient.importServerConfig(context, android.net.Uri.parse(pendingServerUrl))
+                            baseUrl = ApiClient.currentBaseUrl
+                            ApiClient.clearSession(context)
+                            onLogout?.invoke()
+                        }
+                    }) {
+                        Text("确认切换", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showServerChangeConfirmDialog = false }) {
+                        Text("取消", color = Muted)
+                    }
+                }
+            )
+        }
 
         if (showEditDialog) {
             androidx.compose.material3.AlertDialog(
@@ -1270,11 +1307,23 @@ internal fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         if (urlInput.isNotBlank()) {
-                            val result = ApiClient.importServerConfig(context, android.net.Uri.parse(urlInput))
-                            Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
-                            if (result.first) {
-                                baseUrl = ApiClient.currentBaseUrl
+                            val newUrl = urlInput.trim().trimEnd('/')
+                            if (newUrl == ApiClient.currentBaseUrl) {
                                 showEditDialog = false
+                                return@TextButton
+                            }
+                            if (ApiClient.token != null) {
+                                // Logged in — show confirmation first
+                                pendingServerUrl = newUrl
+                                showEditDialog = false
+                                showServerChangeConfirmDialog = true
+                            } else {
+                                val result = ApiClient.importServerConfig(context, android.net.Uri.parse(urlInput))
+                                Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
+                                if (result.first) {
+                                    baseUrl = ApiClient.currentBaseUrl
+                                    showEditDialog = false
+                                }
                             }
                         }
                     }) {
