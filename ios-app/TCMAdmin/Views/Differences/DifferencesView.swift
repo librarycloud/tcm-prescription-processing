@@ -273,7 +273,6 @@ public struct DifferencesView: View {
         .background(Color.pageBackground)
         .navigationTitle("库存差异")
         .navigationBarTitleDisplayMode(.inline)
-        .scrollDismissesKeyboard(.interactively)
         .task {
             await loadData()
         }

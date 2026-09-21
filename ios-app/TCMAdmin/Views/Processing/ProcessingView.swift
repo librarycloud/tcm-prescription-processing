@@ -214,7 +214,6 @@ public struct ProcessingView: View {
         .onChange(of: activeView) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .onChange(of: mode) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
-        .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
             ApiClient.shared.clearResponseCache()
             Task { await loadData() }

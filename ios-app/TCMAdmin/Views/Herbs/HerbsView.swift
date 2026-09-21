@@ -226,7 +226,6 @@ struct HerbsView: View {
             ApiClient.shared.clearResponseCache()
             Task { await loadData() }
         }
-        .scrollDismissesKeyboard(.interactively)
         .task {
             if isSuperAdmin {
                 if let sts = try? await ApiClient.shared.fetchStores() {

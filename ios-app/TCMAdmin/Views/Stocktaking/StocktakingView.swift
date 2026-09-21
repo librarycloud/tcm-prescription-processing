@@ -152,7 +152,6 @@ public struct StocktakingView: View {
                 Task { await loadStocktakings() }
             }
         }
-        .scrollDismissesKeyboard(.interactively)
         .task {
             async let fetchedStores: () = loadStores()
             async let fetchedChecks: () = loadStocktakings()

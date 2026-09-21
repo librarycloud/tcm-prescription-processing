@@ -279,7 +279,6 @@ public struct TransfersView: View {
             }
         }
         .background(Color.pageBackground.ignoresSafeArea(.all))
-        .scrollDismissesKeyboard(.interactively)
         .task {
             stores = (try? await ApiClient.shared.fetchStores()) ?? []
             await loadStats()

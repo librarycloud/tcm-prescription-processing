@@ -251,7 +251,6 @@ public struct PackagesView: View {
                 Task { await loadPackages() }
             }
         }
-        .scrollDismissesKeyboard(.interactively)
         .task {
             if showStore && stores.isEmpty {
                 if let sts = try? await ApiClient.shared.fetchStores() {

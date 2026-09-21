@@ -286,7 +286,6 @@ struct InventoryView: View {
             }
         }
         .background(Color.pageBackground)
-        .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { notif in
             if let code = notif.object as? String, !code.isEmpty {
                 ApiClient.shared.clearResponseCache()

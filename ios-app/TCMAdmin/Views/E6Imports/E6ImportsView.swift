@@ -407,7 +407,6 @@ public struct E6ImportsView: View {
             }
             .presentationDetents([.medium])
         }
-        .scrollDismissesKeyboard(.interactively)
         .task {
             await loadE6Imports()
         }

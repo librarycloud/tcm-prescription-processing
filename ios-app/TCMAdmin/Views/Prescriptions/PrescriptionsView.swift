@@ -221,7 +221,6 @@ public struct PrescriptionsView: View {
         } message: {
             Text("确定要删除 \(itemToDelete?.patientName ?? "患者") 的处方吗？此操作不可撤销。")
         }
-        .scrollDismissesKeyboard(.interactively)
         .task {
             async let fetchedDocs = ApiClient.shared.fetchDoctors()
             async let fetchedStores = ApiClient.shared.fetchStores()
