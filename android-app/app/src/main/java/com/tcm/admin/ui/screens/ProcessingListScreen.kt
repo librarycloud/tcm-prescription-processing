@@ -320,7 +320,7 @@ internal fun ProcessingScreenV2(
                         // In "pickup" mode, show pickup stats
                         val pickupStatItems = listOf(
                             "待领取" to (stat(stats, "pickupWaitingCount") to 0),
-                            "已领取" to (stat(stats, "pickupReceivedCount") to 1),
+                            "已领取" to ("" to 1),
                         )
 
                         Row(
@@ -358,18 +358,20 @@ internal fun ProcessingScreenV2(
                                             .padding(horizontal = 10.dp, vertical = 6.dp),
                                         verticalArrangement = Arrangement.Center,
                                     ) {
-                                        Text(
-                                            text = value,
-                                            fontSize = 17.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = accentColor,
-                                        )
-                                        Spacer(Modifier.height(2.dp))
+                                        if (value.isNotBlank()) {
+                                            Text(
+                                                text = value,
+                                                fontSize = 17.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentColor,
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                        }
                                         Text(
                                             text = label,
                                             color = if (isSelected) accentColor else Muted,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                            fontSize = if (value.isNotBlank()) 11.sp else 15.sp,
+                                            fontWeight = if (isSelected || value.isBlank()) FontWeight.SemiBold else FontWeight.Normal,
                                         )
                                     }
                                 }

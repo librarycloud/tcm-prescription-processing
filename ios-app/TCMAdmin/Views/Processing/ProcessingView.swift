@@ -161,7 +161,7 @@ public struct ProcessingView: View {
                         
                         statPickupCard(
                             label: "已领取",
-                            value: "\(stats?.pickupReceivedCount ?? 0)",
+                            value: "",
                             isSelected: pickupStatus == 1,
                             color: .success,
                             softColor: .successSoft
@@ -377,14 +377,16 @@ public struct ProcessingView: View {
     private func statPickupCard(label: String, value: String, isSelected: Bool, color: Color, softColor: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(value)
-                    .scaledFont(18, weight: .bold)
-                    .foregroundStyle(color)
+                if !value.isEmpty {
+                    Text(value)
+                        .scaledFont(18, weight: .bold)
+                        .foregroundStyle(color)
+                }
                 Text(label)
-                    .scaledFont(12, weight: isSelected ? .bold : .regular)
+                    .scaledFont(value.isEmpty ? 15 : 12, weight: (isSelected || value.isEmpty) ? .bold : .regular)
                     .foregroundStyle(isSelected ? color : Color.muted)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: value.isEmpty ? .center : .leading)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(isSelected ? softColor : Color.surface)
