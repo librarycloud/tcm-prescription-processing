@@ -41,8 +41,7 @@ struct InventoryView: View {
         if text.isEmpty { return false }
         let chineseCount = text.filter { $0 >= "\u{4E00}" && $0 <= "\u{9FA5}" }.count
         let digitCount = text.filter { $0.isNumber }.count
-        let hasLatinLetter = text.contains(where: { $0.isLetter && $0.isASCII })
-        return chineseCount >= 2 || digitCount >= 4 || hasLatinLetter
+        return chineseCount >= 2 || digitCount >= 4
     }
 
     private func clearSearchHistory() {
@@ -104,7 +103,6 @@ struct InventoryView: View {
                                 try await Task.sleep(nanoseconds: 500_000_000)
                                 if !Task.isCancelled {
                                     ApiClient.shared.clearResponseCache()
-                                    addSearchHistory(term)
                                     lastSearchedTerm = term
                                     await loadInventory(allowAutoNavigate: true)
                                 }
