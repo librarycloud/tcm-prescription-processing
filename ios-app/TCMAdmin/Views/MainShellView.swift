@@ -138,6 +138,8 @@ public struct MainShellView: View {
                     TransferDetailView(id: id)
                 case .settings:
                     SettingsView()
+                case .securityPrivacy:
+                    SecurityPrivacyView()
                 case .themeAppearance:
                     ThemeAppearanceView()
                 case .about:
@@ -147,9 +149,9 @@ public struct MainShellView: View {
                 }
             }
             }
-            
-            // 侧滑抽屉覆盖在整个 NavigationStack (包括 NavigationBar) 之上
-            SideMenuView(isShowing: $isMenuShowing, selectedTab: $selectedTab)
+            .overlay(alignment: .leading) {
+                SideMenuView(isShowing: $isMenuShowing, selectedTab: $selectedTab)
+            }
         }
 
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { _ in

@@ -177,106 +177,14 @@ public struct PrescriptionsView: View {
                 AppScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(prescriptions) { item in
-                            AppCard(padding: 16) {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack(alignment: .top) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack(alignment: .center, spacing: 6) {
-                                                Image(systemName: "cross.case.fill")
-                                                    .foregroundStyle(Color.appPrimary)
-                                                    .scaledFont(14)
-                                                Text(item.patientName ?? "-")
-                                                    .scaledFont(16, weight: .bold)
-                                                    .foregroundStyle(Color.ink)
-                                            }
-                                            Text(item.prescriptionNo ?? "-")
-                                                .scaledFont(12)
-                                                .foregroundStyle(Color.muted)
-                                        }
-                                        Spacer()
-                                        StatusPill(text: item.statusText)
-                                    }
-                                    
-                                    Spacer().frame(height: 2)
-                                    
-                                    VStack(spacing: 6) {
-                                        InfoRowItem(label: "联系电话", value: maskPhone(item.patientPhone))
-                                        InfoRowItem(label: "主治医生", value: item.doctorName ?? "-")
-                                        
-                                        let taken = item.dose ?? 0
-                                        let total = item.totalDose ?? 0
-                                        InfoRowItem(label: "剂数进度", value: "\(taken) / \(total) 剂（余 \(max(0, total - taken)) 剂）")
-                                        
-                                        let planCount = item.plans?.count ?? 0
-                                        InfoRowItem(label: "加工批次", value: "\(planCount) 批")
-                                        
-                                        if let sName = item.storeName {
-                                            InfoRowItem(label: "所属门店", value: sName)
-                                        }
-                                    }
-                                    
-                                    // 底部操作按钮行 (对标 Android PrescriptionScreens.kt)
-                                    if !isStoreStaff {
-                                        Divider().foregroundStyle(Color.cardBorder.opacity(0.6)).padding(.top, 4)
-                                        
-                                        HStack(spacing: 8) {
-                                            Spacer()
-                                            
-                                            // 进行中处方可新增加工
-                                            if item.status == 0 {
-                                                Button(action: {
-                                                    planPrescription = item
-                                                }) {
-                                                    Text("新增加工")
-                                                        .scaledFont(12, weight: .bold)
-                                                        .foregroundStyle(Color.white)
-                                                        .padding(.horizontal, 10)
-                                                        .padding(.vertical, 5)
-                                                        .background(Color.appPrimary)
-                                                        .clipShape(.rect(cornerRadius: 6))
-                                                }
-                                            }
-                                            
-                                            // 非已完成处方可编辑
-                                            if item.status != 1 {
-                                                Button(action: {
-                                                    router.navigate(to: .prescriptionEdit(id: item.id))
-                                                }) {
-                                                    Text("编辑")
-                                                        .scaledFont(12)
-                                                        .foregroundStyle(Color.ink)
-                                                        .padding(.horizontal, 10)
-                                                        .padding(.vertical, 5)
-                                                        .background(Color.surface)
-                                                        .clipShape(.rect(cornerRadius: 6))
-                                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cardBorder, lineWidth: 1))
-                                                }
-                                            }
-                                            
-                                            // 无加工计划时可删除
-                                            if (item.plans?.count ?? 0) == 0 {
-                                                Button(action: {
-                                                    itemToDelete = item
-                                                    showDeleteAlert = true
-                                                }) {
-                                                    Text("删除")
-                                                        .scaledFont(12)
-                                                        .foregroundStyle(Color.danger)
-                                                        .padding(.horizontal, 10)
-                                                        .padding(.vertical, 5)
-                                                        .background(Color.surface)
-                                                        .clipShape(.rect(cornerRadius: 6))
-                                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.danger.opacity(0.4), lineWidth: 1))
-                                                }
-                                            }
-                                        }
-                                        .padding(.top, 2)
-                                    }
-                                }
-                            }
-                            .onTapGesture {
-                                router.navigate(to: .prescriptionDetail(id: item.id))
-                            }
+                            PrescriptionCardView(
+                                item: item,
+                                isStoreStaff: isStoreStaff,
+                                onAddPlan: { planPrescription = item },
+                                onEdit: { router.navigate(to: .prescriptionEdit(id: item.id)) },
+                                onDelete: { itemToDelete = item; showDeleteAlert = true },
+                                onTap: { router.navigate(to: .prescriptionDetail(id: item.id)) }
+                            )
                         }
                     }
                     .padding(16)
@@ -1102,5 +1010,107 @@ public struct PrescriptionDetailView: View {
                 }
             }
         }
+    }
+}
+
+
+struct PrescriptionCardView: View {
+    let item: PrescriptionItem
+    let isStoreStaff: Bool
+    let onAddPlan: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            AppCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .center, spacing: 6) {
+                                Image(systemName: "cross.case.fill")
+                                    .foregroundStyle(Color.appPrimary)
+                                    .scaledFont(14)
+                                Text(item.patientName ?? "-")
+                                    .scaledFont(16, weight: .bold)
+                                    .foregroundStyle(Color.ink)
+                            }
+                            Text(item.prescriptionNo ?? "-")
+                                .scaledFont(12)
+                                .foregroundStyle(Color.muted)
+                        }
+                        Spacer()
+                        StatusPill(text: item.statusText)
+                    }
+                    
+                    Spacer().frame(height: 2)
+                    
+                    VStack(spacing: 6) {
+                        InfoRowItem(label: "联系电话", value: maskPhone(item.patientPhone))
+                        InfoRowItem(label: "主治医生", value: item.doctorName ?? "-")
+                        
+                        let taken = item.dose ?? 0
+                        let total = item.totalDose ?? 0
+                        InfoRowItem(label: "剂数进度", value: "\(taken) / \(total) 剂（余 \(max(0, total - taken)) 剂）")
+                        
+                        let planCount = item.plans?.count ?? 0
+                        InfoRowItem(label: "加工批次", value: "\(planCount) 批")
+                        
+                        if let sName = item.storeName {
+                            InfoRowItem(label: "所属门店", value: sName)
+                        }
+                    }
+                    
+                    if !isStoreStaff {
+                        Divider().foregroundStyle(Color.cardBorder.opacity(0.6)).padding(.top, 4)
+                        
+                        HStack(spacing: 8) {
+                            Spacer()
+                            
+                            if item.status == 0 {
+                                Button(action: onAddPlan) {
+                                    Text("新增加工")
+                                        .scaledFont(12, weight: .bold)
+                                        .foregroundStyle(Color.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.appPrimary)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                }
+                            }
+                            
+                            if item.status != 1 {
+                                Button(action: onEdit) {
+                                    Text("编辑")
+                                        .scaledFont(12)
+                                        .foregroundStyle(Color.ink)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.surface)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cardBorder, lineWidth: 1))
+                                }
+                            }
+                            
+                            if (item.plans?.count ?? 0) == 0 {
+                                Button(action: onDelete) {
+                                    Text("删除")
+                                        .scaledFont(12)
+                                        .foregroundStyle(Color.danger)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.surface)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.danger.opacity(0.4), lineWidth: 1))
+                                }
+                            }
+                        }
+                        .padding(.top, 2)
+                    }
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }

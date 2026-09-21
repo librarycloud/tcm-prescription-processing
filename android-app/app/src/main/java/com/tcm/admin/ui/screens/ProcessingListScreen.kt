@@ -319,8 +319,8 @@ internal fun ProcessingScreenV2(
                     } else {
                         // In "pickup" mode, show pickup stats
                         val pickupStatItems = listOf(
-                            "等待药材" to (stat(stats, "pickupWaitingCount") to 0),
-                            "已领取药材" to (stat(stats, "pickupReceivedCount") to 1),
+                            "待领取" to (stat(stats, "pickupWaitingCount") to 0),
+                            "已领取" to ("" to 1),
                         )
 
                         Row(
@@ -330,17 +330,20 @@ internal fun ProcessingScreenV2(
                             pickupStatItems.forEach { (label, pair) ->
                                 val (value, status) = pair
                                 val isSelected = pickupStatus == status
+                                val accentColor = if (status == 1) Success else Primary
+                                val accentSoftColor = if (status == 1) SuccessSoft else PrimarySoft
+                                
                                 Card(
                                     modifier = Modifier
                                         .weight(1f)
                                         .heightIn(min = 64.dp),
                                     shape = CardShape,
                                     colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) PrimarySoft else MaterialTheme.colorScheme.surface,
+                                        containerColor = if (isSelected) accentSoftColor else MaterialTheme.colorScheme.surface,
                                     ),
                                     border = BorderStroke(
                                         if (isSelected) 1.5.dp else 1.dp,
-                                        if (isSelected) Primary else CardBorderColor,
+                                        if (isSelected) accentColor else CardBorderColor,
                                     ),
                                     onClick = {
                                         if (pickupStatus != status) {
@@ -355,18 +358,20 @@ internal fun ProcessingScreenV2(
                                             .padding(horizontal = 10.dp, vertical = 6.dp),
                                         verticalArrangement = Arrangement.Center,
                                     ) {
-                                        Text(
-                                            text = value,
-                                            fontSize = 17.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) Primary else Ink,
-                                        )
-                                        Spacer(Modifier.height(2.dp))
+                                        if (value.isNotBlank()) {
+                                            Text(
+                                                text = value,
+                                                fontSize = 17.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentColor,
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                        }
                                         Text(
                                             text = label,
-                                            color = if (isSelected) Primary else Muted,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (isSelected) accentColor else Muted,
+                                            fontSize = if (value.isNotBlank()) 11.sp else 15.sp,
+                                            fontWeight = if (isSelected || value.isBlank()) FontWeight.SemiBold else FontWeight.Normal,
                                         )
                                     }
                                 }

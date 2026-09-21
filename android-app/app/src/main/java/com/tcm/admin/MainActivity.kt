@@ -535,10 +535,13 @@ private fun TcmAdminApp() {
                         ProfileDetailScreen(
                             user = session?.user,
                             onLogout = {
-                                ApiClient.clearSession(appContext)
-                                clearRetainedListValues()
-                                session = null
-                                navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
+                                scope.launch {
+                                    runCatching { ApiClient.logout() }
+                                    ApiClient.clearSession(appContext)
+                                    clearRetainedListValues()
+                                    session = null
+                                    navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
+                                }
                             },
                             onSessionUpdated = { updated ->
                                 ApiClient.saveSession(appContext, updated)
@@ -551,10 +554,24 @@ private fun TcmAdminApp() {
                     DetailShell("设置", onBack = { navigateBack() }) {
                         SettingsScreen(
                             onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
+                            onOpenSecurityPrivacy = { navigateTo(Route.SecurityPrivacy) },
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
+                            onLogout = {
+                                scope.launch {
+                                    runCatching { ApiClient.logout() }
+                                    ApiClient.clearSession(appContext)
+                                    session = null
+                                    navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
+                                }
+                            }
                         )
+                    }
+                }
+                composable<Route.SecurityPrivacy> {
+                    DetailShell("安全与隐私", onBack = { navigateBack() }) {
+                        SecurityPrivacyScreen()
                     }
                 }
                 composable<Route.ThemeAppearance> {

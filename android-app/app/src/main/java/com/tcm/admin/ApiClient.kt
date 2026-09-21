@@ -20,6 +20,17 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class AdminSession(val token: String, val user: JSONObject)
 
+data class SessionItem(
+    val jti: String,
+    val deviceName: String,
+    val ip: String,
+    val location: String,
+    val loginAt: Long,
+    val lastActiveAt: Long,
+    val expiresAt: Long,
+    val isCurrent: Boolean
+)
+
 object ApiClient {
     private const val LOG_TAG = "TcmApiClient"
     var onUnauthorized: (() -> Unit)? = null
@@ -364,6 +375,13 @@ object ApiClient {
         clearProcessingPhotoCache(context)
     }
 
+    val isAuthenticated: Boolean
+        get() = token != null
+
+    suspend fun logout() {
+        request("/auth/logout", "POST")
+    }
+
     suspend fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
@@ -381,6 +399,31 @@ object ApiClient {
     }
 
     suspend fun me(): JSONObject = request("/user/me").getJSONObject("data")
+
+    suspend fun fetchSessions(): List<SessionItem> {
+        val array = request("/auth/sessions").getJSONArray("data")
+        val result = mutableListOf<SessionItem>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            result.add(
+                SessionItem(
+                    jti = obj.getString("jti"),
+                    deviceName = obj.optString("deviceName", "未知设备"),
+                    ip = obj.optString("ip", "未知IP"),
+                    location = obj.optString("location", "未知地域"),
+                    loginAt = obj.optLong("loginAt", 0L),
+                    lastActiveAt = obj.optLong("lastActiveAt", 0L),
+                    expiresAt = obj.optLong("expiresAt", 0L),
+                    isCurrent = obj.optBoolean("isCurrent", false)
+                )
+            )
+        }
+        return result
+    }
+
+    suspend fun revokeSession(jti: String) {
+        request("/auth/sessions/$jti", "DELETE")
+    }
 
     suspend fun stats(storeId: Int? = null): JSONObject = request("/admin/stats${storeId?.let { "?storeId=$it" } ?: ""}").getJSONObject("data")
     suspend fun androidAppVersion(
@@ -933,6 +976,7 @@ object ApiClient {
             onUnauthorized?.invoke()
             throw ApiException("登录凭证异常，请重新登录", 401)
         }
+        builder.header("X-Device-Name", android.os.Build.MODEL)
     }
 
     private suspend fun requestMultipart(path: String, fieldName: String, filename: String, mimeType: String, bytes: ByteArray, category: String = "default", onProgress: ((Int) -> Unit)? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

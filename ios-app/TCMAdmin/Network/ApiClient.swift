@@ -230,6 +230,10 @@ public class ApiClient {
             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
+        #if os(iOS)
+        request.addValue(UIDevice.current.name, forHTTPHeaderField: "X-Device-Name")
+        #endif
+        
         if let body = body {
             request.addValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -329,6 +333,14 @@ public class ApiClient {
         return (res.token, res.user)
     }
     
+    public func fetchSessions() async throws -> [SessionItem] {
+        return try await request(path: "/auth/sessions")
+    }
+    
+    public func revokeSession(jti: String) async throws {
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/auth/sessions/\(jti)", method: "DELETE")
+    }
     // MARK: - 2. 处方管理接口
     public func fetchPrescriptions(
         status: Int? = nil,
@@ -748,6 +760,9 @@ public class ApiClient {
         if let token = SessionManager.shared.token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        #if os(iOS)
+        request.setValue(UIDevice.current.name, forHTTPHeaderField: "X-Device-Name")
+        #endif
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
             throw ApiError.invalidResponse(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1, message: "获取文件失败")

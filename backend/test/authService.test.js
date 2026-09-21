@@ -33,7 +33,7 @@ test('signLoginToken stores the authorization context and creates a Redis sessio
   assert.equal(signedPayload.phone, '13800000000');
   assert.match(signedPayload.jti, /^[0-9a-f-]{36}$/i);
   assert.deepEqual(createdSession, {
-    accountType: 'admin', accountId: 42, jti: signedPayload.jti
+    accountType: 'admin', accountId: 42, jti: signedPayload.jti, metadata: {}
   });
   assert.deepEqual(signedOptions, { expiresIn: '7d' });
 });

@@ -149,20 +149,22 @@ public struct ProcessingView: View {
                     // 领取列表模式下的统计卡片 (对齐 Android)
                     HStack(spacing: 10) {
                         statPickupCard(
-                            label: "等待药材",
+                            label: "待领取",
                             value: "\(stats?.pickupWaitingCount ?? 0)",
                             isSelected: pickupStatus == 0,
-                            color: .appPrimary
+                            color: .appPrimary,
+                            softColor: .appPrimarySoft
                         ) {
                             pickupStatus = 0
                             Task { await loadData() }
                         }
                         
                         statPickupCard(
-                            label: "已领取药材",
-                            value: "\(stats?.pickupReceivedCount ?? 0)",
+                            label: "已领取",
+                            value: "",
                             isSelected: pickupStatus == 1,
-                            color: .success
+                            color: .success,
+                            softColor: .successSoft
                         ) {
                             pickupStatus = 1
                             Task { await loadData() }
@@ -209,6 +211,8 @@ public struct ProcessingView: View {
                 pickupContentView
             }
         }
+        .onChange(of: activeView) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .onChange(of: mode) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
         .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
@@ -370,20 +374,22 @@ public struct ProcessingView: View {
     }
     
     // MARK: - 辅助卡片
-    private func statPickupCard(label: String, value: String, isSelected: Bool, color: Color, action: @escaping () -> Void) -> some View {
+    private func statPickupCard(label: String, value: String, isSelected: Bool, color: Color, softColor: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(value)
-                    .scaledFont(18, weight: .bold)
-                    .foregroundStyle(color)
+                if !value.isEmpty {
+                    Text(value)
+                        .scaledFont(18, weight: .bold)
+                        .foregroundStyle(color)
+                }
                 Text(label)
-                    .scaledFont(12, weight: isSelected ? .bold : .regular)
+                    .scaledFont(value.isEmpty ? 15 : 12, weight: (isSelected || value.isEmpty) ? .bold : .regular)
                     .foregroundStyle(isSelected ? color : Color.muted)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: value.isEmpty ? .center : .leading)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(isSelected ? Color.appPrimarySoft : Color.surface)
+            .background(isSelected ? softColor : Color.surface)
             .clipShape(.rect(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)

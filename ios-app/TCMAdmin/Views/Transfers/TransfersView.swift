@@ -499,7 +499,7 @@ public struct TransferFormView: View {
                     Button("取消") { dismiss() }
                 }
             }
-            .onAppear {
+        .onAppear {
                 if let userStoreId = session.currentUser?.storeId, userStoreId > 0 {
                     fromStoreId = userStoreId
                 } else if let firstStore = stores.first {
