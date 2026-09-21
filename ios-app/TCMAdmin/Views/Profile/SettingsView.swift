@@ -48,10 +48,6 @@ public struct SettingsView: View {
                             configuredBaseURL = ApiClient.shared.baseURL
                             isShowingServerConfig = true
                         }
-                        Divider().padding(.leading, 48)
-                        ProfileRow(icon: "bell.fill", title: "新消息通知", value: "已开启") {}
-                        Divider().padding(.leading, 48)
-                        ProfileRow(icon: "lock.shield.fill", title: "安全与隐私") {}
                     }
                 }
             }
@@ -119,7 +115,10 @@ public struct ThemeAppearanceView: View {
         ("琥珀黄", "#D97706"),
         ("青黛", "#0F766E"),
         ("沉香褐", "#78350F"),
-        ("胭脂红", "#BE123C")
+        ("胭脂红", "#BE123C"),
+        ("天青蓝", "#0284C7"),
+        ("石绿", "#10B981"),
+        ("水墨灰", "#475569")
     ]
     
     @State private var showCustomColorPicker = false
