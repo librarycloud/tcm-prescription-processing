@@ -625,28 +625,45 @@ public struct SecurityPrivacyView: View {
         Group {
             ScrollView {
                 VStack(spacing: 16) {
-                    Text("这些是当前登录了你账号的设备。如果有不认识的设备，或者已经不再使用的设备，请将其退出登录。")
-                        .font(.footnote)
-                        .foregroundColor(Color.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                    
-                    if isLoading {
-                        ProgressView()
-                            .padding()
-                    } else {
-                        ForEach(sessions) { session in
-                            SessionCard(
-                                session: session,
-                                isRevoking: isRevokingId == session.jti,
-                                onRevoke: {
-                                    Task {
-                                        await revokeSession(jti: session.jti)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("登录设备管理")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color.muted)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                        
+                        AppCard(padding: 0) {
+                            VStack(spacing: 0) {
+                                if isLoading {
+                                    ProgressView()
+                                        .padding(.vertical, 24)
+                                        .frame(maxWidth: .infinity)
+                                } else {
+                                    ForEach(Array(sessions.enumerated()), id: \.element.jti) { index, session in
+                                        SessionRow(
+                                            session: session,
+                                            isRevoking: isRevokingId == session.jti,
+                                            onRevoke: {
+                                                Task {
+                                                    await revokeSession(jti: session.jti)
+                                                }
+                                            }
+                                        )
+                                        
+                                        if index < sessions.count - 1 {
+                                            Divider().padding(.leading, 16)
+                                        }
                                     }
                                 }
-                            )
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        
+                        Text("这些是当前登录了你账号的设备。如果有不认识的设备，或者已经不再使用的设备，请将其退出登录。")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.muted)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
                     }
                     
                     if !isLoading && sessions.filter({ !$0.isCurrent }).count > 0 {
@@ -656,15 +673,20 @@ public struct SecurityPrivacyView: View {
                                 .foregroundColor(.red)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.red.opacity(0.1))
+                                .background(Color.surface)
                                 .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.cardBorder, lineWidth: 1)
+                                )
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 12)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
                     }
                 }
                 .padding(.bottom, 32)
             }
+            .background(Color.pageBackground.ignoresSafeArea())
         }
         .navigationTitle("安全与隐私")
         .navigationBarTitleDisplayMode(.inline)
@@ -685,7 +707,7 @@ public struct SecurityPrivacyView: View {
 }
 
 @MainActor
-struct SessionCard: View {
+struct SessionRow: View {
     let session: SessionItem
     let isRevoking: Bool
     let onRevoke: () -> Void
@@ -753,12 +775,6 @@ struct SessionCard: View {
             .padding(16)
         }
         .background(Color.surface)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.cardBorder, lineWidth: 1)
-        )
-        .padding(.horizontal)
         .alert("退出登录", isPresented: $showRevokeConfirm) {
             Button("取消", role: .cancel) {}
             Button("确认", role: .destructive) {
