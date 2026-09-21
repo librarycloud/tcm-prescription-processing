@@ -125,27 +125,25 @@ struct InventoryView: View {
                                     .foregroundStyle(Color.muted)
                             }
                         }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(searchHistory, id: \.self) { historyTerm in
-                                    Button(action: {
-                                        searchText = historyTerm
-                                        addSearchHistory(historyTerm)
-                                        hasAutoNavigated = false
-                                        lastSearchedTerm = historyTerm
-                                        selectedProduct = nil
-                                        searchTask?.cancel()
-                                        searchTask = Task { await loadInventory(allowAutoNavigate: true) }
-                                    }) {
-                                        Text(historyTerm)
-                                            .scaledFont(12)
-                                            .foregroundStyle(Color.ink)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 4)
-                                            .background(Color.surface)
-                                            .clipShape(.rect(cornerRadius: 12))
-                                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.cardBorder, lineWidth: 1))
-                                    }
+                        FlowLayout(spacing: 8, lineSpacing: 8) {
+                            ForEach(searchHistory, id: \.self) { historyTerm in
+                                Button(action: {
+                                    searchText = historyTerm
+                                    addSearchHistory(historyTerm)
+                                    hasAutoNavigated = false
+                                    lastSearchedTerm = historyTerm
+                                    selectedProduct = nil
+                                    searchTask?.cancel()
+                                    searchTask = Task { await loadInventory(allowAutoNavigate: true) }
+                                }) {
+                                    Text(historyTerm)
+                                        .scaledFont(14)
+                                        .foregroundStyle(Color.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.surface)
+                                        .clipShape(.rect(cornerRadius: 16))
+                                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.cardBorder, lineWidth: 1))
                                 }
                             }
                         }
