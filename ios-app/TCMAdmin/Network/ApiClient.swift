@@ -1154,20 +1154,12 @@ public class ApiClient {
     
     // MARK: - 基础字典与医生接口
     public func fetchDoctors() async throws -> [DoctorItem] {
-        struct DoctorListResponse: Decodable {
-            let list: [DoctorItem]?
-        }
-        let res: DoctorListResponse = try await request(path: "/admin/doctors", queryParams: ["page": "1", "pageSize": "100"])
-        return res.list ?? []
+        return try await request(path: "/admin/doctors", queryParams: ["page": "1", "pageSize": "100"])
     }
     
     public func fetchProcessTypes() async throws -> [ProcessTypeItem] {
-        struct ProcessTypeListResponse: Decodable {
-            let list: [ProcessTypeItem]?
-        }
         do {
-            let res: ProcessTypeListResponse = try await request(path: "/admin/process-types")
-            return res.list ?? []
+            return try await request(path: "/admin/process-types")
         } catch {
             return [
                 ProcessTypeItem(id: 1, name: "代煎", code: "DECOCTION"),
@@ -1177,13 +1169,8 @@ public class ApiClient {
     }
     
     public func fetchDictionaries(type: String) async throws -> [DictionaryItem] {
-        struct DictResponse: Decodable {
-            let data: [DictionaryItem]?
-            let list: [DictionaryItem]?
-        }
         do {
-            let res: DictResponse = try await request(path: "/admin/dictionaries", queryParams: ["type": type])
-            return res.data ?? res.list ?? []
+            return try await request(path: "/admin/dictionaries", queryParams: ["type": type])
         } catch {
             return []
         }
