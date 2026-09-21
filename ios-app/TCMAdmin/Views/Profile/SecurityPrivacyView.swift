@@ -43,7 +43,7 @@ public struct SecurityPrivacyView: View {
     }
     
     public var body: some View {
-        DetailShell("设备登录管理") {
+        DetailShell("安全与隐私") {
             ScrollView {
                 VStack(spacing: 16) {
                     Text("这些是当前登录了你账号的设备。如果有不认识的设备，或者已经不再使用的设备，请将其退出登录。")
@@ -113,9 +113,9 @@ struct SessionCard: View {
     
     private var timeText: String {
         let date = Date(timeIntervalSince1970: session.lastActiveAt / 1000)
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: Date())
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
     }
     
     var body: some View {

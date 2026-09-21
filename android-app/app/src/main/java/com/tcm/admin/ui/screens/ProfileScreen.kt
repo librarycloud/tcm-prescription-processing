@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -1168,7 +1169,7 @@ internal fun SettingsScreen(
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("设备登录管理", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
+                    Text("安全与隐私", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "查看和管理当前登录了账号的设备",
@@ -1176,7 +1177,7 @@ internal fun SettingsScreen(
                         fontSize = 12.sp,
                     )
                 }
-                Icon(Icons.Default.ChevronRight, contentDescription = "进入设备登录管理", tint = Muted)
+                Icon(Icons.Default.ChevronRight, contentDescription = "进入安全与隐私", tint = Muted)
             }
         }
 
@@ -1295,6 +1296,7 @@ internal fun SettingsScreen(
         var urlInput by remember { mutableStateOf(baseUrl) }
         var showServerChangeConfirmDialog by remember { mutableStateOf(false) }
         var pendingServerUrl by remember { mutableStateOf("") }
+        val scope = rememberCoroutineScope()
 
         // Confirmation dialog for server change while logged in
         if (showServerChangeConfirmDialog) {
@@ -1312,7 +1314,7 @@ internal fun SettingsScreen(
                     TextButton(onClick = {
                         showServerChangeConfirmDialog = false
                         scope.launch {
-                            runCatching { ApiClient.request("/auth/logout", "POST") }
+                            runCatching { ApiClient.logout() }
                             ApiClient.importServerConfig(context, android.net.Uri.parse(pendingServerUrl))
                             baseUrl = ApiClient.currentBaseUrl
                             ApiClient.clearSession(context)
@@ -1354,7 +1356,7 @@ internal fun SettingsScreen(
                                 showEditDialog = false
                                 return@TextButton
                             }
-                            if (ApiClient.token != null) {
+                            if (ApiClient.isAuthenticated) {
                                 // Logged in — show confirmation first
                                 pendingServerUrl = newUrl
                                 showEditDialog = false

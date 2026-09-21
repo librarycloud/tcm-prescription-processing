@@ -13,7 +13,7 @@ function requestWithToken(tokenUser, active = true) {
     user: { ...tokenUser },
     jwtVerify: async () => {},
     server: {
-      authSessions: { has: async () => active }
+      authSessions: { has: async () => active, touch: async () => {} }
     },
     ip: '127.0.0.1',
     headers: { 'user-agent': 'test-agent' }

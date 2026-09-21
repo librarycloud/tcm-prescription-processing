@@ -38,7 +38,7 @@ public struct SettingsView: View {
                 
                 AppCard(padding: 0) {
                     VStack(spacing: 0) {
-                        ProfileRow(icon: "lock.shield.fill", title: "设备登录管理", showArrow: true) {
+                        ProfileRow(icon: "lock.shield.fill", title: "安全与隐私", showArrow: true) {
                             Router.shared.navigate(to: .securityPrivacy)
                         }
                         Divider().padding(.leading, 48)

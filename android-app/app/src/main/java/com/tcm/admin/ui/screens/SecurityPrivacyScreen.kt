@@ -1,4 +1,4 @@
-package com.tcm.admin.ui.screens
+package com.tcm.admin
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -16,9 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tcm.admin.ApiClient
-import com.tcm.admin.SessionItem
-import com.tcm.admin.ui.theme.*
 import kotlinx.coroutines.launch
 import android.text.format.DateUtils
 
@@ -175,12 +172,9 @@ private fun SessionCard(session: SessionItem, isRevoking: Boolean, onRevoke: () 
                     Spacer(Modifier.width(16.dp))
                     Icon(Icons.Default.Schedule, contentDescription = null, tint = Muted, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    val timeSpan = DateUtils.getRelativeTimeSpanString(
-                        session.lastActiveAt,
-                        System.currentTimeMillis(),
-                        DateUtils.MINUTE_IN_MILLIS
-                    ).toString()
-                    Text("活跃于$timeSpan", fontSize = 12.sp, color = Muted)
+                    val formatter = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                    val timeString = formatter.format(java.util.Date(session.lastActiveAt))
+                    Text("活跃于 $timeString", fontSize = 12.sp, color = Muted)
                 }
             }
 

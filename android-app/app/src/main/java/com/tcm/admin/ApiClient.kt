@@ -374,6 +374,13 @@ object ApiClient {
         clearProcessingPhotoCache(context)
     }
 
+    val isAuthenticated: Boolean
+        get() = token != null
+
+    suspend fun logout() {
+        request("/auth/logout", "POST")
+    }
+
     suspend fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")

@@ -564,7 +564,7 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.SecurityPrivacy> {
-                    DetailShell("设备登录管理", onBack = { navigateBack() }) {
+                    DetailShell("安全与隐私", onBack = { navigateBack() }) {
                         SecurityPrivacyScreen()
                     }
                 }
