@@ -135,9 +135,7 @@ struct SearchBarField: View {
             if !text.isEmpty {
                 Button(action: {
                     text = ""
-                    // Haptic feedback (可选)
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
+                    HapticManager.shared.impact(style: .light)
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(Color.muted)
@@ -1029,7 +1027,6 @@ struct FlowLayout: Layout {
         }
     }
 }
-import UIKit
 
 public class HapticManager {
     public static let shared = HapticManager()

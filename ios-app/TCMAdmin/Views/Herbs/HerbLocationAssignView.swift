@@ -293,7 +293,7 @@ public struct HerbLocationAssignView: View {
     }
     
     private func submitForm() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact(style: .medium)
         isSubmitting = true
         errorMessage = nil
         
