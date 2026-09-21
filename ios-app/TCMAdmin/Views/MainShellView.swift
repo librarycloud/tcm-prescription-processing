@@ -138,6 +138,8 @@ public struct MainShellView: View {
                     TransferDetailView(id: id)
                 case .settings:
                     SettingsView()
+                case .securityPrivacy:
+                    SecurityPrivacyView()
                 case .themeAppearance:
                     ThemeAppearanceView()
                 case .about:

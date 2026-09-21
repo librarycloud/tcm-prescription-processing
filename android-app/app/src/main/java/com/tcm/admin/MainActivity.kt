@@ -551,6 +551,7 @@ private fun TcmAdminApp() {
                     DetailShell("设置", onBack = { navigateBack() }) {
                         SettingsScreen(
                             onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
+                            onOpenSecurityPrivacy = { navigateTo(Route.SecurityPrivacy) },
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
@@ -560,6 +561,11 @@ private fun TcmAdminApp() {
                                 navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
                             }
                         )
+                    }
+                }
+                composable<Route.SecurityPrivacy> {
+                    DetailShell("设备登录管理", onBack = { navigateBack() }) {
+                        SecurityPrivacyScreen()
                     }
                 }
                 composable<Route.ThemeAppearance> {

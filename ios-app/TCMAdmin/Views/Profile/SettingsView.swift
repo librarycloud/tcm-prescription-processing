@@ -38,6 +38,10 @@ public struct SettingsView: View {
                 
                 AppCard(padding: 0) {
                     VStack(spacing: 0) {
+                        ProfileRow(icon: "lock.shield.fill", title: "设备登录管理", showArrow: true) {
+                            Router.shared.navigate(to: .securityPrivacy)
+                        }
+                        Divider().padding(.leading, 48)
                         ProfileRow(icon: "trash.fill", title: "清除缓存", value: isClearingCache ? "清理中..." : cacheSize) {
                             isClearingCache = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

@@ -22,6 +22,7 @@ internal sealed class Route {
     @Serializable object Profile : Route()
     @Serializable object ProfileDetail : Route()
     @Serializable object Settings : Route()
+    @Serializable object SecurityPrivacy : Route()
     @Serializable object ThemeAppearance : Route()
     @Serializable object About : Route()
     @Serializable data class Inventory(val initialQuery: String = "", val scanRequestId: Long = 0L) : Route()

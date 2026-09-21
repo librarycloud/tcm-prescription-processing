@@ -32,6 +32,11 @@ export async function verifyToken(request) {
   if (!active) {
     throw new AppError('登录已失效，请重新登录', 401);
   }
+  request.server.authSessions.touch({
+    accountType,
+    accountId: Number(request.user.id),
+    jti
+  });
 
   // JWT claims are intentionally treated as a cache. Re-check the account and
   // store on every request so disabling a user/store takes effect immediately.
