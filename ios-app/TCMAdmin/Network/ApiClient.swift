@@ -334,13 +334,12 @@ public class ApiClient {
     }
     
     public func fetchSessions() async throws -> [SessionItem] {
-        let res: BaseResponse<[SessionItem]> = try await request(path: "/auth/sessions")
-        return res.data
+        return try await request(path: "/auth/sessions")
     }
     
     public func revokeSession(jti: String) async throws {
         struct EmptyResponse: Decodable {}
-        let _: BaseResponse<EmptyResponse> = try await request(path: "/auth/sessions/\(jti)", method: "DELETE")
+        let _: EmptyResponse = try await request(path: "/auth/sessions/\(jti)", method: "DELETE")
     }
     // MARK: - 2. 处方管理接口
     public func fetchPrescriptions(
