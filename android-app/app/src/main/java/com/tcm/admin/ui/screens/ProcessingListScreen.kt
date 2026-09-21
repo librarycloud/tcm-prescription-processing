@@ -526,6 +526,9 @@ internal fun ProcessingScreenV2(
                                 plan.displayField("finishDate", "").takeIf { it.isNotBlank() }?.let {
                                     InfoRowItem("完成时间", serverDateTime(it), verticalPadding = 0.dp)
                                 }
+                                plan.displayField("createdAt", "").takeIf { it.isNotBlank() }?.let {
+                                    InfoRowItem("创建时间", serverDateTime(it), verticalPadding = 0.dp)
+                                }
                                 plan.displayField("remark", "").takeIf { it.isNotBlank() }?.let {
                                     InfoRowItem("备注", it, verticalPadding = 0.dp)
                                 }
@@ -539,22 +542,11 @@ internal fun ProcessingScreenV2(
 
                                 // Plan Actions
                                 @OptIn(ExperimentalLayoutApi::class)
-                                Row(
+                                FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
-                                    Text(
-                                        text = "创建时间: ${serverDateTime(plan.optString("createdAt", ""))}",
-                                        fontSize = 12.sp,
-                                        color = Muted,
-                                        modifier = Modifier.weight(1f).padding(bottom = 8.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
                                     val prescriptionId = plan.optInt("prescriptionId", plan.optJSONObject("prescription")?.optInt("id", 0) ?: 0)
                                     if (prescriptionId > 0) {
                                         OutlinedButton(
@@ -656,7 +648,6 @@ internal fun ProcessingScreenV2(
                                             Text("取消", fontSize = 11.5.sp, maxLines = 1, softWrap = false)
                                         }
                                     }
-                                }
                                 }
                             }
                         }

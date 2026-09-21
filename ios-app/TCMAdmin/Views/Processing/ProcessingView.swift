@@ -581,6 +581,7 @@ struct ProcessingPlanCard: View {
                     if let finishDate = plan.finishDate {
                         InfoRowItem(label: "完成时间", value: formatDateTimeToMinute(finishDate))
                     }
+                    InfoRowItem(label: "创建时间", value: formatDateTimeToMinute(plan.createdAt))
                     if let remark = plan.remark, !remark.isEmpty {
                         InfoRowItem(label: "备注", value: remark)
                     }
@@ -593,14 +594,7 @@ struct ProcessingPlanCard: View {
                 Divider().foregroundStyle(Color.cardBorder)
                 
                 // 底部操作行
-                HStack(spacing: 8) {
-                    Text("创建时间: \(formatDateTimeToMinute(plan.createdAt))")
-                        .scaledFont(12)
-                        .foregroundStyle(Color.muted)
-                    
-                    Spacer()
-                    
-                    // 1. 对应处方按钮
+                FlowLayout(spacing: 8, lineSpacing: 8, alignment: .trailing) {
                     if rxId > 0 {
                         Button(action: onRxClick) {
                             Text("处方")

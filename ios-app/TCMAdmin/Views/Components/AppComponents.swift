@@ -946,3 +946,75 @@ public func processingDuration(start: String?, end: String?) -> String {
         return "\(hours)小时\(mins)分钟"
     }
 }
+import SwiftUI
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+    var alignment: HorizontalAlignment
+
+    init(spacing: CGFloat = 8, lineSpacing: CGFloat = 8, alignment: HorizontalAlignment = .leading) {
+        self.spacing = spacing
+        self.lineSpacing = lineSpacing
+        self.alignment = alignment
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(in: proposal.width ?? 0, subviews: subviews, spacing: spacing, lineSpacing: lineSpacing, alignment: alignment)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing, lineSpacing: lineSpacing, alignment: alignment)
+        for (index, subview) in subviews.enumerated() {
+            let point = result.positions[index]
+            subview.place(at: CGPoint(x: point.x + bounds.minX, y: point.y + bounds.minY), proposal: .unspecified)
+        }
+    }
+
+    struct FlowResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat, lineSpacing: CGFloat, alignment: HorizontalAlignment) {
+            var currentX: CGFloat = 0
+            var currentY: CGFloat = 0
+            var lineHeight: CGFloat = 0
+            
+            var lineItemIndices: [Int] = []
+            
+            func flushLine() {
+                if lineItemIndices.isEmpty { return }
+                let lineTotalWidth = currentX - spacing
+                let offsetX: CGFloat
+                switch alignment {
+                case .trailing: offsetX = max(0, maxWidth - lineTotalWidth)
+                case .center: offsetX = max(0, (maxWidth - lineTotalWidth) / 2)
+                default: offsetX = 0
+                }
+                for i in lineItemIndices {
+                    positions[i].x += offsetX
+                }
+                lineItemIndices.removeAll()
+            }
+
+            for (index, subview) in subviews.enumerated() {
+                let size = subview.sizeThatFits(.unspecified)
+                if currentX + size.width > maxWidth && currentX > 0 {
+                    flushLine()
+                    currentX = 0
+                    currentY += lineHeight + lineSpacing
+                    lineHeight = 0
+                }
+
+                positions.append(CGPoint(x: currentX, y: currentY))
+                lineItemIndices.append(index)
+                lineHeight = max(lineHeight, size.height)
+                currentX += size.width + spacing
+            }
+            flushLine()
+
+            size = CGSize(width: maxWidth, height: currentY + lineHeight)
+        }
+    }
+}
