@@ -622,12 +622,12 @@ public struct SecurityPrivacyView: View {
     }
     
     public var body: some View {
-        DetailShell("安全与隐私") {
+        Group {
             ScrollView {
                 VStack(spacing: 16) {
                     Text("这些是当前登录了你账号的设备。如果有不认识的设备，或者已经不再使用的设备，请将其退出登录。")
                         .font(.footnote)
-                        .foregroundColor(ThemeManager.shared.current.muted)
+                        .foregroundColor(Color.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
                         .padding(.top, 8)
@@ -666,6 +666,8 @@ public struct SecurityPrivacyView: View {
                 .padding(.bottom, 32)
             }
         }
+        .navigationTitle("安全与隐私")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             await fetchSessions()
         }
@@ -704,15 +706,15 @@ struct SessionCard: View {
                     HStack {
                         Text(session.deviceName.isEmpty ? "未知设备" : session.deviceName)
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(ThemeManager.shared.current.ink)
+                            .foregroundColor(Color.ink)
                         
                         if session.isCurrent {
                             Text("当前设备")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(ThemeManager.shared.current.success)
+                                .foregroundColor(Color.success)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(ThemeManager.shared.current.successSoft)
+                                .background(Color.success.opacity(0.1))
                                 .cornerRadius(4)
                         }
                     }
@@ -720,11 +722,11 @@ struct SessionCard: View {
                     HStack(spacing: 12) {
                         Label(session.ip.isEmpty ? "未知 IP" : session.ip, systemImage: "network")
                             .font(.caption)
-                            .foregroundColor(ThemeManager.shared.current.muted)
+                            .foregroundColor(Color.muted)
                         
                         Label("活跃于\(timeText)", systemImage: "clock")
                             .font(.caption)
-                            .foregroundColor(ThemeManager.shared.current.muted)
+                            .foregroundColor(Color.muted)
                     }
                 }
                 
@@ -750,11 +752,11 @@ struct SessionCard: View {
             }
             .padding(16)
         }
-        .background(ThemeManager.shared.current.surface)
+        .background(Color.surface)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(ThemeManager.shared.current.outlineVariant, lineWidth: 1)
+                .stroke(Color.cardBorder, lineWidth: 1)
         )
         .padding(.horizontal)
         .alert("退出登录", isPresented: $showRevokeConfirm) {
