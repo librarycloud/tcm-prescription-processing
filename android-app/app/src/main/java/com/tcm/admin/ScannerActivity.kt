@@ -633,7 +633,7 @@ class ScannerActivity : ComponentActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             Camera2Interop.Extender(analysisBuilder).setCaptureRequestOption(
                 CaptureRequest.CONTROL_AF_MODE,
-                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO,
+                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
             )
             val analysis = analysisBuilder.build()
             analysis.setAnalyzer(cameraExecutor) { proxy ->

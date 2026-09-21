@@ -35,6 +35,7 @@ public struct PrescriptionEditView: View {
     @State private var isLoading = false
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     private var isEdit: Bool {
         id != nil
@@ -278,7 +279,8 @@ public struct PrescriptionEditView: View {
     }
     
     private func loadInitialData() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         
@@ -329,7 +331,7 @@ public struct PrescriptionEditView: View {
             selectedStoreId = firstStore.id
         }
         
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
     
     private func submitForm() {

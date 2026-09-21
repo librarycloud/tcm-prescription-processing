@@ -125,6 +125,12 @@ struct SearchBarField: View {
                 .scaledFont(15)
                 .foregroundStyle(Color.ink)
                 .submitLabel(.search)
+                .autocorrectionDisabled(true)
+                #if compiler(>=5.5)
+                .textInputAutocapitalization(.never)
+                #else
+                .autocapitalization(.none)
+                #endif
             
             if !text.isEmpty {
                 Button(action: {

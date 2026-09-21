@@ -15,6 +15,7 @@ public struct PackagesView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetShowing = false
+    @State private var currentTaskID: UUID = UUID()
     
     public init() {}
     
@@ -262,10 +263,15 @@ public struct PackagesView: View {
     }
     
     private func loadPackages() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if currentTaskID == taskID {
+                isLoading = false
+            }
+        }
         do {
             let res = try await ApiClient.shared.fetchPackages(
                 status: selectedStatus,

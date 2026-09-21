@@ -100,9 +100,11 @@ object BsPatch {
                                         var diffRemaining = diffLen
                                         while (diffRemaining > 0) {
                                             val toRead = minOf(diffRemaining, oldBuf.size.toLong()).toInt()
-                                            val oldRead = oldRaf.read(oldBuf, 0, toRead)
-                                            if (oldRead < toRead) {
-                                                throw EOFException("Unexpected end of old APK while reading diff block")
+                                            var currentRead = 0
+                                            while (currentRead < toRead) {
+                                                val count = oldRaf.read(oldBuf, currentRead, toRead - currentRead)
+                                                if (count == -1) throw EOFException("Unexpected end of old APK while reading diff block")
+                                                currentRead += count
                                             }
 
                                             readFully(diffStream, diffBuf, toRead)

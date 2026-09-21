@@ -11,6 +11,7 @@ public struct LoginView: View {
     // 服务器配置弹窗
     @State private var isShowingServerConfig = false
     @State private var configuredBaseURL = ApiClient.shared.baseURL
+    @State private var currentTaskID: UUID = UUID()
     
     public init() {}
     
@@ -215,7 +216,8 @@ public struct LoginView: View {
     
     private func handleLogin() {
         guard canSubmit else { return }
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         
@@ -227,12 +229,12 @@ public struct LoginView: View {
                 )
                 await MainActor.run {
                     session.saveSession(token: res.token, user: res.user)
-                    isLoading = false
+                    if currentTaskID == taskID { isLoading = false }
                 }
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
-                    isLoading = false
+                    if currentTaskID == taskID { isLoading = false }
                 }
             }
         }

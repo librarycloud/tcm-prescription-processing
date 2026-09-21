@@ -18,6 +18,7 @@ public struct ProcessingView: View {
     
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     // 操作弹窗
     @State private var isCreatingPlan = false
@@ -393,12 +394,14 @@ public struct ProcessingView: View {
     
     // MARK: - 数据请求
     private func loadData() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
-        
         defer {
-            isLoading = false
+            if currentTaskID == taskID {
+                isLoading = false
+            }
         }
         
         do {
@@ -442,6 +445,8 @@ struct GeneratePackageDialog: View {
     @State private var remark: String = ""
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
+    
     
     init(plan: ProcessingPlanItem, onDone: @escaping () async -> Void) {
         self.plan = plan

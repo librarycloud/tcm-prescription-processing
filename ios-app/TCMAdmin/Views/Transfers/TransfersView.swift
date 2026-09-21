@@ -17,6 +17,7 @@ public struct TransfersView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetShowing = false
+    @State private var currentTaskID: UUID = UUID()
     
     public init() {}
     
@@ -313,7 +314,8 @@ public struct TransfersView: View {
     }
     
     private func loadTransfers() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         do {
@@ -326,7 +328,7 @@ public struct TransfersView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
 }
 
@@ -576,6 +578,7 @@ public struct TransferDetailView: View {
     // 申请归还弹窗
     @State private var returnDialogItem: TransferItemModel? = nil
     @State private var returnQuantityText: String = ""
+    @State private var currentTaskID: UUID = UUID()
     
     public init(id: Int) {
         self.id = id
@@ -921,7 +924,8 @@ public struct TransferDetailView: View {
     }
     
     private func loadDetail() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         do {
@@ -929,7 +933,7 @@ public struct TransferDetailView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
     
     private func confirmOutboundAction() {

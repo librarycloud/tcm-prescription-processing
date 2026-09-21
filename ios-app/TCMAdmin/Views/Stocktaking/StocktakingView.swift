@@ -9,6 +9,7 @@ public struct StocktakingView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetPresented = false
+    @State private var currentTaskID: UUID = UUID()
     
     public init() {}
     
@@ -165,18 +166,19 @@ public struct StocktakingView: View {
     private func loadStores() async {
         do {
             self.stores = try await ApiClient.shared.fetchStores()
-        } catch {}
+        } catch { print("Failed to load stores: \(error)") }
     }
     
     private func loadStocktakings() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         do {
             self.stocktakings = try await ApiClient.shared.fetchStocktakings(storeId: selectedStoreId)
         } catch {
             self.errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
 }
 
@@ -316,6 +318,7 @@ public struct StocktakingDetailView: View {
     @State private var editBatchNo = ""
     @State private var editLocationCode = ""
     @State private var isUpdatingLocation = false
+    @State private var currentTaskID: UUID = UUID()
     
     public init(checkId: Int) {
         self.checkId = checkId
@@ -762,7 +765,8 @@ public struct StocktakingDetailView: View {
     }
     
     private func loadDetail() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         do {
             let filterParam = itemFilter == "all" ? "" : (itemFilter == "diff" ? "adjustment" : itemFilter)
@@ -770,7 +774,7 @@ public struct StocktakingDetailView: View {
         } catch {
             self.errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
     
     private func searchCandidates() {

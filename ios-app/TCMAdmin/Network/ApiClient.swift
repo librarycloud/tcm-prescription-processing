@@ -862,16 +862,7 @@ public class ApiClient {
         )
     }
     
-    public func fetchProcessingEquipmentByScan(scanned: String) async throws -> EquipmentModel? {
-        struct PagedList: Decodable {
-            let list: [EquipmentModel]?
-        }
-        let res: PagedList = try await request(
-            path: "/admin/processing-equipment",
-            queryParams: ["keyword": scanned]
-        )
-        return res.list?.first
-    }
+
     
     // MARK: - 处方管理接口
     public func createPrescription(payload: [String: Any]) async throws -> PrescriptionItem {

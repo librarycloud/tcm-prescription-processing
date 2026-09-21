@@ -17,6 +17,7 @@ struct HerbsView: View {
     @State private var data: HerbLocationData? = nil
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     private var isSuperAdmin: Bool {
         SessionManager.shared.currentUser?.role == 0
@@ -236,7 +237,8 @@ struct HerbsView: View {
     }
     
     private func loadData() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         do {
@@ -244,7 +246,7 @@ struct HerbsView: View {
         } catch {
             self.errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
 
     private func positionLabel(for loc: HerbLocationItem) -> String {

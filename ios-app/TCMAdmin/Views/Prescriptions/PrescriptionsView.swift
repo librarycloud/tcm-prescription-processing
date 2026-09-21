@@ -17,6 +17,7 @@ public struct PrescriptionsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     
+    @State private var currentTaskID: UUID = UUID()
     // 操作状态
     @State private var planPrescription: PrescriptionItem? = nil
     @State private var itemToDelete: PrescriptionItem? = nil
@@ -325,7 +326,8 @@ public struct PrescriptionsView: View {
     }
     
     private func loadPrescriptions() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         do {
             self.prescriptions = try await ApiClient.shared.fetchPrescriptions(
@@ -337,7 +339,7 @@ public struct PrescriptionsView: View {
         } catch {
             self.errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
 }
 
@@ -377,6 +379,7 @@ public struct PrescriptionDetailView: View {
     // 图片缩放状态控制
     @State private var currentScale: CGFloat = 1.0
     @State private var currentOffset: CGSize = .zero
+    @State private var currentTaskID: UUID = UUID()
     
     public init(id: Int) {
         self.id = id
@@ -850,11 +853,12 @@ public struct PrescriptionDetailView: View {
     }
     
     private func reloadDetail() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         ApiClient.shared.clearResponseCache()
         prescription = try? await ApiClient.shared.fetchPrescriptionDetail(id: id)
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
     
     private func loadAndShowAttachment() {

@@ -45,6 +45,7 @@ public struct WorkflowOperationView: View {
     // 设备占用提示
     @State private var showOccupiedDialog = false
     @State private var occupiedEquipmentInfo: EquipmentModel? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     public init(planId: Int, planCode: String) {
         self.planId = planId
@@ -943,7 +944,8 @@ public struct WorkflowOperationView: View {
     }
     
     private func loadWorkflow() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         do {
@@ -951,7 +953,7 @@ public struct WorkflowOperationView: View {
         } catch {
             errorMessage = "加载工序失败: \(error.localizedDescription)"
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
     
     private func startDispensingPlan() {

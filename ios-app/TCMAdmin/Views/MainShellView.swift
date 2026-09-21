@@ -210,7 +210,6 @@ class TabBarDoubleTapHandler: NSObject, UIGestureRecognizerDelegate {
         return true
     }
 }
-import SwiftUI
 
 extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     override open func viewDidLoad() {

@@ -19,6 +19,7 @@ public struct DifferencesView: View {
     @State private var isLoading = false
     @State private var isLoadingMore = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     // 销账弹窗
     @State private var writeOffProduct: DifferenceProductModel? = nil
@@ -341,7 +342,8 @@ public struct DifferencesView: View {
     }
     
     private func loadData() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
         productsPage = 1
@@ -363,7 +365,7 @@ public struct DifferencesView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
+        if currentTaskID == taskID { isLoading = false }
     }
     
     private func loadMoreProducts() async {
@@ -441,6 +443,7 @@ public struct RegisterDifferenceSheet: View {
     @State private var isLoadingCatalog = false
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     public init(onSaved: @escaping () -> Void) {
         self.onSaved = onSaved

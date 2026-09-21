@@ -199,13 +199,6 @@ internal fun AboutScreen(
             val fileName = "update_" + versionCode + ".apk"
             downloadFileName = fileName
             val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            if (destDir != null) {
-                destDir.listFiles()?.forEach { file ->
-                    if (file.name.endsWith(".apk", ignoreCase = true) || file.name.endsWith(".tmp", ignoreCase = true)) {
-                        file.delete()
-                    }
-                }
-            }
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle("药房助手更新 v$versionName")
                 .setDescription("药房助手 v$versionName 下载完成")
@@ -261,10 +254,12 @@ internal fun AboutScreen(
             val patchFile = File(context.cacheDir, "update_patch.tmp")
             val synthesizedApk = File(destDir, "update_" + versionCode + ".apk")
             try {
-                runCatching {
-                    if (patchFile.exists()) patchFile.delete()
-                    if (synthesizedApk.exists()) synthesizedApk.delete()
-                    File(context.cacheDir, "update_" + versionCode + ".apk").delete()
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        if (patchFile.exists()) patchFile.delete()
+                        if (synthesizedApk.exists()) synthesizedApk.delete()
+                        File(context.cacheDir, "update_" + versionCode + ".apk").delete()
+                    }
                 }
 
                 // 1. Download patch
@@ -357,12 +352,24 @@ internal fun AboutScreen(
     }
 
     fun startUpdate(version: JSONObject) {
-        CacheManager.cleanObsoleteApksAndPatches(context)
-        val updateType = version.optString("updateType", "full")
-        if (updateType == "incremental") {
-            startIncrementalUpdate(version)
-        } else {
-            startFullDownload(version)
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                CacheManager.cleanObsoleteApksAndPatches(context)
+                val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                if (destDir != null) {
+                    destDir.listFiles()?.forEach { file ->
+                        if (file.name.endsWith(".apk", ignoreCase = true) || file.name.endsWith(".tmp", ignoreCase = true)) {
+                            file.delete()
+                        }
+                    }
+                }
+            }
+            val updateType = version.optString("updateType", "full")
+            if (updateType == "incremental") {
+                startIncrementalUpdate(version)
+            } else {
+                startFullDownload(version)
+            }
         }
     }
 

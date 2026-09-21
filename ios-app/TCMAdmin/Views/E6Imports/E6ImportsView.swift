@@ -12,6 +12,7 @@ public struct E6ImportsView: View {
     @State private var selectedIds: Set<Int> = []
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     @State private var successNotice: String? = nil
     
     // 驳回弹窗
@@ -28,10 +29,14 @@ public struct E6ImportsView: View {
     ]
     
     private var todayString: String {
+        return E6ImportsView.dateFormatter.string(from: Date())
+    }
+    
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
-    }
+        return formatter
+    }()
     
     public init() {}
     
@@ -410,10 +415,15 @@ public struct E6ImportsView: View {
     }
     
     private func loadE6Imports() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if currentTaskID == taskID {
+                isLoading = false
+            }
+        }
         do {
             let res = try await ApiClient.shared.fetchE6Imports(
                 keyword: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -516,6 +526,7 @@ struct E6ConfirmFormSheet: View {
     @State private var processTypes: [ProcessTypeItem] = []
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     private var isMerge: Bool { items.count > 1 }
     private var hasPrescription: Bool {
@@ -969,7 +980,7 @@ struct E6ConfirmFormSheet: View {
             if selectedDoctorId == 0, let firstDoc = docList.first {
                 self.selectedDoctorId = firstDoc.id
             }
-        } catch {}
+        } catch { errorMessage = error.localizedDescription }
     }
     
     private func submit() {
@@ -1063,6 +1074,7 @@ public struct E6ImportDetailView: View {
     @State private var isShowingConfirmSheet = false
     @State private var detail: E6ImportItem? = nil
     @State private var errorMessage: String? = nil
+    @State private var currentTaskID: UUID = UUID()
     
     public init(id: Int) {
         self.id = id
@@ -1296,10 +1308,15 @@ public struct E6ImportDetailView: View {
     }
     
     private func loadDetail() async {
-        guard !isLoading else { return }
+        let taskID = UUID()
+        currentTaskID = taskID
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if currentTaskID == taskID {
+                isLoading = false
+            }
+        }
         do {
             let res = try await ApiClient.shared.fetchE6ImportDetail(id: id)
             guard !Task.isCancelled else { return }
