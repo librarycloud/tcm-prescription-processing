@@ -147,7 +147,7 @@ public struct E6ImportsView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
-                .onChange(of: filterStatus) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+                .onChange(of: selectedStatus) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
                 
                 // 提示栏

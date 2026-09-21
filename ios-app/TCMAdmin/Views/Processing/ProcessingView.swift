@@ -209,8 +209,8 @@ public struct ProcessingView: View {
                 pickupContentView
             }
         }
-        .onChange(of: filterStatus) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
-        .onChange(of: activeTab) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .onChange(of: activeView) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .onChange(of: mode) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
         .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
