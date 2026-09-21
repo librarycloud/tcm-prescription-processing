@@ -279,12 +279,14 @@ public struct ProfileRow: View {
     var icon: String
     var title: String
     var value: String? = nil
+    var showArrow: Bool
     var action: () -> Void
     
-    public init(icon: String, title: String, value: String? = nil, action: @escaping () -> Void) {
+    public init(icon: String, title: String, value: String? = nil, showArrow: Bool = true, action: @escaping () -> Void) {
         self.icon = icon
         self.title = title
         self.value = value
+        self.showArrow = showArrow
         self.action = action
     }
     
@@ -308,9 +310,11 @@ public struct ProfileRow: View {
                         .foregroundStyle(Color.muted)
                 }
                 
-                Image(systemName: "chevron.right")
-                    .scaledFont(13, weight: .semibold)
-                    .foregroundStyle(Color.muted)
+                if showArrow {
+                    Image(systemName: "chevron.right")
+                        .scaledFont(13, weight: .semibold)
+                        .foregroundStyle(Color.muted)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -1043,5 +1047,28 @@ public class HapticManager {
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(type)
+    }
+}
+import UIKit
+
+public extension UIImage {
+    func resized(toMaxDimension maxDimension: CGFloat = 1280) -> UIImage {
+        let size = self.size
+        let maxOriginal = max(size.width, size.height)
+        
+        if maxOriginal <= maxDimension {
+            return self
+        }
+        
+        let ratio = maxDimension / maxOriginal
+        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0 // Use 1.0 so we don't multiply by screen scale
+        
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }
