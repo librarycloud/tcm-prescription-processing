@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -1058,9 +1059,11 @@ private fun TextScalingCard(
 @Composable
 internal fun SettingsScreen(
     onOpenThemeAppearance: () -> Unit,
+    onOpenSecurityPrivacy: () -> Unit,
     selectedTheme: String,
     themeAccentKey: String,
     textScale: Float,
+    onLogout: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var cacheSizeBytes by remember { mutableStateOf(-1L) }
@@ -1134,6 +1137,47 @@ internal fun SettingsScreen(
                     )
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = "进入主题与外观设置", tint = Muted)
+            }
+        }
+        
+        Spacer(Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenSecurityPrivacy)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = PrimarySoft,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("安全与隐私", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "查看和管理当前登录了账号的设备",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = "进入安全与隐私", tint = Muted)
             }
         }
 
@@ -1250,6 +1294,43 @@ internal fun SettingsScreen(
         
         var showEditDialog by remember { mutableStateOf(false) }
         var urlInput by remember { mutableStateOf(baseUrl) }
+        var showServerChangeConfirmDialog by remember { mutableStateOf(false) }
+        var pendingServerUrl by remember { mutableStateOf("") }
+        val scope = rememberCoroutineScope()
+
+        // Confirmation dialog for server change while logged in
+        if (showServerChangeConfirmDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showServerChangeConfirmDialog = false },
+                title = { Text("切换服务器需要重新登录", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text("切换到新的服务器地址后，当前账号的登录状态将被清除，需要重新登录。", fontSize = 14.sp, color = Ink)
+                        Spacer(Modifier.height(8.dp))
+                        Text("新地址：$pendingServerUrl", fontSize = 13.sp, color = Muted)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showServerChangeConfirmDialog = false
+                        scope.launch {
+                            runCatching { ApiClient.logout() }
+                            ApiClient.importServerConfig(context, android.net.Uri.parse(pendingServerUrl))
+                            baseUrl = ApiClient.currentBaseUrl
+                            ApiClient.clearSession(context)
+                            onLogout?.invoke()
+                        }
+                    }) {
+                        Text("确认切换", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showServerChangeConfirmDialog = false }) {
+                        Text("取消", color = Muted)
+                    }
+                }
+            )
+        }
 
         if (showEditDialog) {
             androidx.compose.material3.AlertDialog(
@@ -1270,11 +1351,23 @@ internal fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         if (urlInput.isNotBlank()) {
-                            val result = ApiClient.importServerConfig(context, android.net.Uri.parse(urlInput))
-                            Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
-                            if (result.first) {
-                                baseUrl = ApiClient.currentBaseUrl
+                            val newUrl = urlInput.trim().trimEnd('/')
+                            if (newUrl == ApiClient.currentBaseUrl) {
                                 showEditDialog = false
+                                return@TextButton
+                            }
+                            if (ApiClient.isAuthenticated) {
+                                // Logged in — show confirmation first
+                                pendingServerUrl = newUrl
+                                showEditDialog = false
+                                showServerChangeConfirmDialog = true
+                            } else {
+                                val result = ApiClient.importServerConfig(context, android.net.Uri.parse(urlInput))
+                                Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
+                                if (result.first) {
+                                    baseUrl = ApiClient.currentBaseUrl
+                                    showEditDialog = false
+                                }
                             }
                         }
                     }) {

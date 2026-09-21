@@ -31,7 +31,7 @@ export function publicUser(user) {
   };
 }
 
-export async function signLoginToken(jwt, authSessions, user) {
+export async function signLoginToken(jwt, authSessions, user, metadata = {}) {
   const isAdmin = user.role !== undefined;
   const accountType = isAdmin ? "admin" : "user";
   const jti = randomUUID();
@@ -46,11 +46,11 @@ export async function signLoginToken(jwt, authSessions, user) {
     },
     { expiresIn: "7d" },
   );
-  await authSessions.create({ accountType, accountId: Number(user.id), jti });
+  await authSessions.create({ accountType, accountId: Number(user.id), jti, metadata });
   return token;
 }
 
-export async function login(prisma, jwt, authSessions, payload) {
+export async function login(prisma, jwt, authSessions, payload, metadata = {}) {
   const identifier = String(payload.identifier ?? '').trim();
   const { password } = payload;
   required(identifier, '手机号或用户名');
@@ -77,12 +77,12 @@ export async function login(prisma, jwt, authSessions, payload) {
   if (!matched) throw new AppError("手机号或密码错误", 401);
 
   return {
-    token: await signLoginToken(jwt, authSessions, account),
+    token: await signLoginToken(jwt, authSessions, account, metadata),
     user: publicUser(account),
   };
 }
 
-export async function userLogin(prisma, jwt, authSessions, payload) {
+export async function userLogin(prisma, jwt, authSessions, payload, metadata = {}) {
   const identifier = String(payload.identifier ?? '').trim();
   const { password } = payload;
   required(identifier, '手机号或用户名');
@@ -100,7 +100,7 @@ export async function userLogin(prisma, jwt, authSessions, payload) {
   if (!matched) throw new AppError("手机号或密码错误", 401);
 
   return {
-    token: await signLoginToken(jwt, authSessions, user),
+    token: await signLoginToken(jwt, authSessions, user, metadata),
     user: publicUser(user),
   };
 }
@@ -163,7 +163,7 @@ async function assertWechatAvailable(prisma, account, openid, unionid) {
   }
 }
 
-export async function wechatLogin(prisma, jwt, authSessions, payload) {
+export async function wechatLogin(prisma, jwt, authSessions, payload, metadata = {}) {
   const { openid, unionid } = await codeToWechatIdentity(payload.code);
   const user = await prisma.user.findUnique({ where: { openid } });
 
@@ -171,7 +171,7 @@ export async function wechatLogin(prisma, jwt, authSessions, payload) {
     await assertEnabledAccount(user);
     return {
       requiresBind: false,
-      token: await signLoginToken(jwt, authSessions, user),
+      token: await signLoginToken(jwt, authSessions, user, metadata),
       user: publicUser(user),
     };
   }
@@ -179,7 +179,7 @@ export async function wechatLogin(prisma, jwt, authSessions, payload) {
   const admin = await prisma.admin.findUnique({ where: { openid }, include: { store: true } });
   if (admin) {
     await assertEnabledAccount(admin);
-    return { requiresBind: false, token: await signLoginToken(jwt, authSessions, admin), user: publicUser(admin) };
+    return { requiresBind: false, token: await signLoginToken(jwt, authSessions, admin, metadata), user: publicUser(admin) };
   }
 
   if (unionid) {
@@ -188,14 +188,14 @@ export async function wechatLogin(prisma, jwt, authSessions, payload) {
       await assertEnabledAccount(unionidUser);
       return {
         requiresBind: false,
-        token: await signLoginToken(jwt, authSessions, unionidUser),
+        token: await signLoginToken(jwt, authSessions, unionidUser, metadata),
         user: publicUser(unionidUser),
       };
     }
     const unionidAdmin = await prisma.admin.findUnique({ where: { unionid }, include: { store: true } });
     if (unionidAdmin) {
       await assertEnabledAccount(unionidAdmin);
-      return { requiresBind: false, token: await signLoginToken(jwt, authSessions, unionidAdmin), user: publicUser(unionidAdmin) };
+      return { requiresBind: false, token: await signLoginToken(jwt, authSessions, unionidAdmin, metadata), user: publicUser(unionidAdmin) };
     }
   }
 
@@ -252,7 +252,7 @@ export async function rebindWechat(prisma, currentUser, payload) {
   return { user: publicUser(updated) };
 }
 
-export async function bindWechatByPickupCode(prisma, jwt, authSessions, payload) {
+export async function bindWechatByPickupCode(prisma, jwt, authSessions, payload, metadata = {}) {
   const { bindToken, phone, pickupCode } = payload;
   required(bindToken, '绑定凭证');
   validatePhone(phone);
@@ -321,7 +321,7 @@ export async function bindWechatByPickupCode(prisma, jwt, authSessions, payload)
         },
       });
 
-  return { token: await signLoginToken(jwt, authSessions, user), user: publicUser(user) };
+  return { token: await signLoginToken(jwt, authSessions, user, metadata), user: publicUser(user) };
 }
 
 export async function getWechatStatus(prisma, currentUser) {

@@ -147,7 +147,8 @@ public struct E6ImportsView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
-                .background(Color.pageBackground)
+                .onChange(of: selectedStatus) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .background(Color.pageBackground)
                 
                 // 提示栏
                 if let notice = successNotice {
@@ -263,7 +264,7 @@ public struct E6ImportsView: View {
                                             
                                             if item.canReview {
                                                 Button(action: { revalidate(id: item.id) }) {
-                                                    Text("重新校验")
+                                                    Text("重校验")
                                                         .scaledFont(12, weight: .medium)
                                                         .foregroundStyle(Color.appPrimary)
                                                         .padding(.horizontal, 10)
@@ -448,7 +449,7 @@ public struct E6ImportsView: View {
             do {
                 try await ApiClient.shared.revalidateE6Import(id: id)
                 await MainActor.run {
-                    successNotice = "已完成重新校验"
+                    successNotice = "已完成重校验"
                 }
                 await loadE6Imports()
             } catch {
@@ -1269,12 +1270,12 @@ public struct E6ImportDetailView: View {
                                     await loadDetail()
                                 } catch {
                                     await MainActor.run {
-                                        self.errorMessage = "重新校验失败: \(error.localizedDescription)"
+                                        self.errorMessage = "重校验失败: \(error.localizedDescription)"
                                     }
                                 }
                             }
                         }) {
-                            Text("重新校验")
+                            Text("重校验")
                                 .scaledFont(15, weight: .bold)
                                 .foregroundStyle(Color.appPrimary)
                                 .frame(maxWidth: .infinity)

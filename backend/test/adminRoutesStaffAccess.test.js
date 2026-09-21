@@ -9,7 +9,7 @@ async function appWithStoreStaff() {
   const app = Fastify();
   await app.register(rateLimit, { global: false, max: 100, timeWindow: '1 minute' });
   await app.register(jwt, { secret: 'test-secret' });
-  app.decorate('authSessions', { has: async () => true });
+  app.decorate('authSessions', { has: async () => true, touch: async () => {} });
   await app.register(adminRoutes, { prefix: '/admin' });
   return app;
 }
@@ -27,6 +27,9 @@ test('admin route registration only admits staff to explicitly marked routes', a
   const denied = await app.inject({
     method: 'POST', url: '/admin/product-differences/register', headers: { authorization: `Bearer ${token}` }
   });
+  if (denied.statusCode === 500) {
+    console.error(denied.json());
+  }
   assert.equal(denied.statusCode, 403);
   assert.match(denied.json().message, /门店员工无权/);
 

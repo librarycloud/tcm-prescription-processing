@@ -135,9 +135,7 @@ struct SearchBarField: View {
             if !text.isEmpty {
                 Button(action: {
                     text = ""
-                    // Haptic feedback (可选)
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
+                    HapticManager.shared.impact(style: .light)
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(Color.muted)
@@ -281,12 +279,14 @@ public struct ProfileRow: View {
     var icon: String
     var title: String
     var value: String? = nil
+    var showArrow: Bool
     var action: () -> Void
     
-    public init(icon: String, title: String, value: String? = nil, action: @escaping () -> Void) {
+    public init(icon: String, title: String, value: String? = nil, showArrow: Bool = true, action: @escaping () -> Void) {
         self.icon = icon
         self.title = title
         self.value = value
+        self.showArrow = showArrow
         self.action = action
     }
     
@@ -310,9 +310,11 @@ public struct ProfileRow: View {
                         .foregroundStyle(Color.muted)
                 }
                 
-                Image(systemName: "chevron.right")
-                    .scaledFont(13, weight: .semibold)
-                    .foregroundStyle(Color.muted)
+                if showArrow {
+                    Image(systemName: "chevron.right")
+                        .scaledFont(13, weight: .semibold)
+                        .foregroundStyle(Color.muted)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -839,7 +841,6 @@ extension String: @retroactive Identifiable {
 public struct AppScrollView<Content: View>: View {
     private let content: () -> Content
     @State private var showScrollToTop = false
-    @State private var hideTask: Task<Void, Never>? = nil
 
     public init(@ViewBuilder content: @escaping () -> Content) {
         self.content = content
@@ -855,37 +856,24 @@ public struct AppScrollView<Content: View>: View {
 
                 content()
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScrollToTop"))) { _ in
+                withAnimation {
+                    proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
+                }
+            }
             // iOS 17+ 原生滚动距离监听，最可靠
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y
             } action: { _, newY in
-                let isPastThreshold = newY > UIScreen.main.bounds.height * 2.0
+                let isPastThreshold = newY > 800.0
                 
-                if isPastThreshold {
-                    if !showScrollToTop {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showScrollToTop = true
-                        }
+                if isPastThreshold && !showScrollToTop {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showScrollToTop = true
                     }
-                    
-                    hideTask?.cancel()
-                    hideTask = Task {
-                        do {
-                            // 停止滑动 2.5 秒后自动隐藏
-                            try await Task.sleep(nanoseconds: 2_500_000_000)
-                            if !Task.isCancelled {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showScrollToTop = false
-                                }
-                            }
-                        } catch {}
-                    }
-                } else {
-                    if showScrollToTop {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showScrollToTop = false
-                        }
-                        hideTask?.cancel()
+                } else if !isPastThreshold && showScrollToTop {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showScrollToTop = false
                     }
                 }
             }
@@ -1021,6 +1009,47 @@ struct FlowLayout: Layout {
             flushLine()
 
             size = CGSize(width: maxWidth, height: currentY + lineHeight)
+        }
+    }
+}
+
+public class HapticManager {
+    public static let shared = HapticManager()
+    
+    private init() {}
+    
+    public func impact(style: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred()
+    }
+    
+    public func notify(type: UINotificationFeedbackGenerator.FeedbackType) {
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(type)
+    }
+}
+import UIKit
+
+public extension UIImage {
+    func resized(toMaxDimension maxDimension: CGFloat = 1280) -> UIImage {
+        let size = self.size
+        let maxOriginal = max(size.width, size.height)
+        
+        if maxOriginal <= maxDimension {
+            return self
+        }
+        
+        let ratio = maxDimension / maxOriginal
+        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0 // Use 1.0 so we don't multiply by screen scale
+        
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: newSize))
         }
     }
 }

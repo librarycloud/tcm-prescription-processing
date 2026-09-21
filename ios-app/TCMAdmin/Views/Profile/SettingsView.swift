@@ -9,6 +9,8 @@ public struct SettingsView: View {
     @State private var isClearingCache = false
     @State private var isShowingServerConfig = false
     @State private var configuredBaseURL = ApiClient.shared.baseURL
+    @State private var isShowingServerChangeAlert = false
+    @State private var pendingBaseURL = ""
     
     public init() {}
     
@@ -36,6 +38,10 @@ public struct SettingsView: View {
                 
                 AppCard(padding: 0) {
                     VStack(spacing: 0) {
+                        ProfileRow(icon: "lock.shield.fill", title: "安全与隐私", showArrow: true) {
+                            Router.shared.navigate(to: .securityPrivacy)
+                        }
+                        Divider().padding(.leading, 48)
                         ProfileRow(icon: "trash.fill", title: "清除缓存", value: isClearingCache ? "清理中..." : cacheSize) {
                             isClearingCache = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -48,10 +54,6 @@ public struct SettingsView: View {
                             configuredBaseURL = ApiClient.shared.baseURL
                             isShowingServerConfig = true
                         }
-                        Divider().padding(.leading, 48)
-                        ProfileRow(icon: "bell.fill", title: "新消息通知", value: "已开启") {}
-                        Divider().padding(.leading, 48)
-                        ProfileRow(icon: "lock.shield.fill", title: "安全与隐私") {}
                     }
                 }
             }
@@ -91,13 +93,39 @@ public struct SettingsView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("保存") {
-                            ApiClient.shared.baseURL = configuredBaseURL
-                            isShowingServerConfig = false
+                            let trimmed = configuredBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard trimmed != ApiClient.shared.baseURL else {
+                                isShowingServerConfig = false
+                                return
+                            }
+                            if SessionManager.shared.isAuthenticated {
+                                // 已登录状态切换服务器 → 弹出确认框
+                                pendingBaseURL = trimmed
+                                isShowingServerChangeAlert = true
+                            } else {
+                                ApiClient.shared.baseURL = trimmed
+                                isShowingServerConfig = false
+                            }
                         }
                         .fontWeight(.bold)
                     }
                 }
             }
+        }
+        .alert("切换服务器需要重新登录", isPresented: $isShowingServerChangeAlert) {
+            Button("取消", role: .cancel) {}
+            Button("确认切换", role: .destructive) {
+                ApiClient.shared.baseURL = pendingBaseURL
+                isShowingServerConfig = false
+                Task { @MainActor in
+                    // 通知旧服务器退出当前 session（best-effort，失败不阻断）
+                    struct EmptyResponse: Decodable {}
+                    _ = try? await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                    SessionManager.shared.clearSession()
+                }
+            }
+        } message: {
+            Text("切换到新的服务器地址后，当前账号登录状态将被清除，需要重新登录。\n\n新地址：\(pendingBaseURL)")
         }
     }
 }
@@ -119,7 +147,10 @@ public struct ThemeAppearanceView: View {
         ("琥珀黄", "#D97706"),
         ("青黛", "#0F766E"),
         ("沉香褐", "#78350F"),
-        ("胭脂红", "#BE123C")
+        ("胭脂红", "#BE123C"),
+        ("天青蓝", "#0284C7"),
+        ("石绿", "#10B981"),
+        ("水墨灰", "#475569")
     ]
     
     @State private var showCustomColorPicker = false
@@ -543,6 +574,225 @@ public struct AboutView: View {
                     self.showingUpdateAlert = true
                 }
             }
+        }
+    }
+}
+import SwiftUI
+
+@MainActor
+public struct SecurityPrivacyView: View {
+    @State private var sessions: [SessionItem] = []
+    @State private var isLoading = true
+    @State private var isRevokingId: String? = nil
+    @State private var showRevokeAllAlert = false
+    @State private var revokeErrorMessage: String? = nil
+    
+    public init() {}
+    
+    private func fetchSessions() async {
+        do {
+            isLoading = true
+            sessions = try await ApiClient.shared.fetchSessions()
+        } catch {
+            print("Failed to fetch sessions: \(error)")
+        }
+        isLoading = false
+    }
+    
+    private func revokeSession(jti: String) async {
+        isRevokingId = jti
+        do {
+            try await ApiClient.shared.revokeSession(jti: jti)
+            // 只有后端确认成功才从本地移除，避免幽灵记录
+            sessions.removeAll { $0.jti == jti }
+        } catch {
+            revokeErrorMessage = "退出失败，请检查网络后重试"
+        }
+        isRevokingId = nil
+    }
+    
+    private func revokeAllOtherSessions() async {
+        let otherSessions = sessions.filter { !$0.isCurrent }
+        for session in otherSessions {
+            do {
+                try await ApiClient.shared.revokeSession(jti: session.jti)
+            } catch {
+                print("Failed to revoke session \(session.jti): \(error)")
+            }
+        }
+        await fetchSessions()
+    }
+    
+    public var body: some View {
+        Group {
+            ScrollView {
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("登录设备管理")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color.muted)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                        
+                        AppCard(padding: 0) {
+                            VStack(spacing: 0) {
+                                if isLoading {
+                                    ProgressView()
+                                        .padding(.vertical, 24)
+                                        .frame(maxWidth: .infinity)
+                                } else {
+                                    ForEach(Array(sessions.enumerated()), id: \.element.jti) { index, session in
+                                        SessionRow(
+                                            session: session,
+                                            isRevoking: isRevokingId == session.jti,
+                                            onRevoke: {
+                                                Task {
+                                                    await revokeSession(jti: session.jti)
+                                                }
+                                            }
+                                        )
+                                        
+                                        if index < sessions.count - 1 {
+                                            Divider().padding(.leading, 16)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        
+                        Text("这些是当前登录了你账号的设备。如果有不认识的设备，或者已经不再使用的设备，请将其退出登录。")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.muted)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
+                    }
+                    
+                    if !isLoading && sessions.filter({ !$0.isCurrent }).count > 0 {
+                        Button(action: { showRevokeAllAlert = true }) {
+                            Text("退出所有其他设备")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.surface)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.cardBorder, lineWidth: 1)
+                                )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                    }
+                }
+                .padding(.bottom, 32)
+            }
+            .background(Color.pageBackground.ignoresSafeArea())
+        }
+        .navigationTitle("安全与隐私")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await fetchSessions()
+        }
+        .alert("退出所有其他设备", isPresented: $showRevokeAllAlert) {
+            Button("取消", role: .cancel) {}
+            Button("确认退出", role: .destructive) {
+                Task {
+                    await revokeAllOtherSessions()
+                }
+            }
+        } message: {
+            Text("确认将当前账号在所有其他设备上退出登录吗？")
+        }
+        .alert("操作失败", isPresented: Binding(
+            get: { revokeErrorMessage != nil },
+            set: { if !$0 { revokeErrorMessage = nil } }
+        )) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text(revokeErrorMessage ?? "")
+        }
+    }
+}
+
+@MainActor
+struct SessionRow: View {
+    let session: SessionItem
+    let isRevoking: Bool
+    let onRevoke: () -> Void
+    
+    @State private var showRevokeConfirm = false
+    
+    private var timeText: String {
+        let date = Date(timeIntervalSince1970: session.lastActiveAt / 1000)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(session.deviceName.isEmpty ? "未知设备" : session.deviceName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Color.ink)
+                        
+                        if session.isCurrent {
+                            Text("当前设备")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color.success)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.success.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        let ipText = session.ip.isEmpty ? "未知 IP" : session.ip
+                        Label("\(ipText) (\(session.location ?? "未知地域"))", systemImage: "network")
+                            .font(.caption)
+                            .foregroundColor(Color.muted)
+                        
+                        Label("活跃于 \(timeText)", systemImage: "clock")
+                            .font(.caption)
+                            .foregroundColor(Color.muted)
+                    }
+                }
+                
+                Spacer()
+                
+                if !session.isCurrent {
+                    Button(action: { showRevokeConfirm = true }) {
+                        if isRevoking {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Text("退出")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(8)
+                        }
+                    }
+                    .disabled(isRevoking)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.surface)
+        .alert("退出登录", isPresented: $showRevokeConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确认", role: .destructive) {
+                onRevoke()
+            }
+        } message: {
+            Text("确认将当前账号在 \(session.deviceName.isEmpty ? "该设备" : session.deviceName) 上退出登录吗？")
         }
     }
 }

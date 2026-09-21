@@ -269,6 +269,7 @@ public struct DifferencesView: View {
             }
             .padding(16)
         }
+        .onChange(of: selectedTab) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
         .navigationTitle("库存差异")
         .navigationBarTitleDisplayMode(.inline)

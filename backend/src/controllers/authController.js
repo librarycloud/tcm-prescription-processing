@@ -50,23 +50,31 @@ async function runLoggedLogin(request, loginType, operation) {
   }
 }
 
+function getMetadata(request) {
+  return {
+    deviceName: String(request.headers['x-device-name'] || request.body?.deviceName || '').trim(),
+    ip: request.ip || '',
+    loginAt: Date.now()
+  };
+}
+
 export async function loginController(request, reply) {
   const data = await runLoggedLogin(request, 'admin', () =>
-    login(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
+    login(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {}, getMetadata(request))
   );
   return ok(reply, data);
 }
 
 export async function userLoginController(request, reply) {
   const data = await runLoggedLogin(request, 'user', () =>
-    userLogin(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
+    userLogin(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {}, getMetadata(request))
   );
   return ok(reply, data);
 }
 
 export async function wechatLoginController(request, reply) {
   const data = await runLoggedLogin(request, 'wechat', () =>
-    wechatLogin(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
+    wechatLogin(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {}, getMetadata(request))
   );
   return ok(reply, data);
 }
@@ -95,7 +103,7 @@ export async function rebindWechatController(request, reply) {
 
 export async function bindWechatByPickupCodeController(request, reply) {
   const data = await runLoggedLogin(request, 'wechat-bind-pickup', () =>
-    bindWechatByPickupCode(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {})
+    bindWechatByPickupCode(request.server.prisma, request.server.jwt, request.server.authSessions, request.body || {}, getMetadata(request))
   );
   return ok(reply, data, '绑定成功');
 }
@@ -128,4 +136,26 @@ export async function logoutController(request, reply) {
     description: '退出系统'
   });
   return ok(reply, null, '退出成功');
+}
+
+export async function listSessionsController(request, reply) {
+  const sessions = await request.server.authSessions.list({
+    accountType: request.user.accountType,
+    accountId: request.user.id,
+  });
+  const result = sessions.map(s => ({
+    ...s,
+    isCurrent: s.jti === request.user.jti,
+  }));
+  return ok(reply, result);
+}
+
+export async function revokeSessionController(request, reply) {
+  const { jti } = request.params;
+  await request.server.authSessions.revoke({
+    accountType: request.user.accountType,
+    accountId: request.user.id,
+    jti,
+  });
+  return ok(reply, null, '已退出该设备登录');
 }

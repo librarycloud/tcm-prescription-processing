@@ -127,7 +127,11 @@ public struct ProfileDetailView: View {
         }
         .confirmationDialog("确定要退出当前账号吗？", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
             Button("退出登录", role: .destructive) {
-                session.clearSession()
+                Task {
+                    struct EmptyResponse: Decodable {}
+                    _ = try? await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                    await MainActor.run { session.clearSession() }
+                }
             }
             Button("取消", role: .cancel) {}
         }

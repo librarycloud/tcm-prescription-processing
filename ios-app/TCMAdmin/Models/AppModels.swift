@@ -1,5 +1,17 @@
 import Foundation
 
+public struct SessionItem: Codable, Identifiable, Equatable {
+    public var id: String { jti }
+    public let jti: String
+    public let deviceName: String
+    public let ip: String
+    public let location: String?
+    public let loginAt: Double
+    public let lastActiveAt: Double
+    public let expiresAt: Double
+    public let isCurrent: Bool
+}
+
 // MARK: - 基础用户与会话模型
 public struct UserItem: Codable, Identifiable , Equatable {
     public let id: Int

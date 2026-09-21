@@ -92,7 +92,8 @@ struct HerbsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color.pageBackground)
+            .onChange(of: selectedStoreId) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
+        .background(Color.pageBackground)
             
             if isLoading && data == nil {
                 Spacer()

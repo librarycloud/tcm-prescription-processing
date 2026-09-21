@@ -7,7 +7,9 @@ import {
   unbindWechatController,
   userLoginController,
   wechatLoginController,
-  wechatStatusController
+  wechatStatusController,
+  listSessionsController,
+  revokeSessionController
 } from '../controllers/authController.js';
 import { verifyToken } from '../middlewares/auth.js';
 
@@ -27,4 +29,6 @@ export default async function authRoutes(fastify) {
   fastify.get('/wechat-status', { preHandler: verifyToken }, wechatStatusController);
   fastify.post('/wechat-unbind', { preHandler: verifyToken }, unbindWechatController);
   fastify.post('/logout', { preHandler: verifyToken }, logoutController);
+  fastify.get('/sessions', { preHandler: verifyToken }, listSessionsController);
+  fastify.delete('/sessions/:jti', { preHandler: verifyToken }, revokeSessionController);
 }
