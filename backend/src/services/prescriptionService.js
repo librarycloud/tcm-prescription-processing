@@ -221,27 +221,27 @@ export async function listPrescriptions(prisma, actor, query) {
 }
 
 async function attachOperatorMappings(prisma, list) {
-  if (!list?.length || !prisma?.e6OperatorMapping?.findMany) return list || [];
+  if (!list?.length || !prisma?.e6UserMapping?.findMany) return list || [];
   const pairs = list
     .filter((item) => item.cashierName && item.storeId)
-    .map((item) => ({ storeId: item.storeId, e6OperatorName: item.cashierName }));
+    .map((item) => ({ storeId: item.storeId, e6UserCode: item.cashierName }));
   if (!pairs.length) {
     return list.map((item) => ({
       ...item,
-      operatorMapping: null,
+      operatorUserMapping: null,
       operatorName: item.cashierName || null,
     }));
   }
-  const mappings = await prisma.e6OperatorMapping.findMany({
+  const mappings = await prisma.e6UserMapping.findMany({
     where: { OR: pairs, status: 1 },
   });
-  const byKey = new Map(mappings.map((item) => [`${item.storeId}:${item.e6OperatorName}`, item]));
+  const byKey = new Map(mappings.map((item) => [`${item.storeId}:${item.e6UserCode}`, item]));
   return list.map((item) => {
     const mapping = byKey.get(`${item.storeId}:${item.cashierName}`) || null;
     return {
       ...item,
-      operatorMapping: mapping,
-      operatorName: mapping?.operatorName || item.cashierName || null,
+      operatorUserMapping: mapping,
+      operatorName: mapping?.userName || item.cashierName || null,
     };
   });
 }

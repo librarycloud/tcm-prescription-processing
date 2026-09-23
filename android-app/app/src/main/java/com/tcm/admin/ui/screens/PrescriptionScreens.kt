@@ -814,7 +814,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                     StatusPill(if (isPaid) "已付款" else "未付款")
                                 }
                                 Spacer(Modifier.height(6.dp))
-                                val operatorName = imp.optJSONObject("operatorMapping")?.displayField("operatorName", "")?.trim().orEmpty()
+                                val operatorName = imp.optJSONObject("operatorUserMapping")?.displayField("userName", "")?.trim().orEmpty()
                                     .ifBlank { imp.displayField("operatorName", "").trim() }
                                     .ifBlank { imp.displayField("cashierName", "-") }
                                 Text(
