@@ -76,11 +76,11 @@ namespace E6Sync.Services
     detail.[单位],
     detail.[付数],
     detail.[ri]
-FROM dbo.[PF新零售收款台_处方明细] detail
-INNER JOIN dbo.[PF新零售收款台] counter ON counter.[id] = detail.[PID]
+FROM dbo.[PF新零售收款台_处方明细] detail WITH (NOLOCK)
+INNER JOIN dbo.[PF新零售收款台] counter WITH (NOLOCK) ON counter.[id] = detail.[PID]
 OUTER APPLY (
     SELECT TOP 1 CONVERT(nvarchar(200), source_receipt.[操作员]) AS [操作员]
-    FROM dbo.[AC款台_零售收款记录] source_receipt
+    FROM dbo.[AC款台_零售收款记录] source_receipt WITH (NOLOCK)
     WHERE source_receipt.[单据id] = counter.[id]
     ORDER BY source_receipt.[操作日期] DESC
 ) cashier
@@ -220,7 +220,7 @@ ORDER BY [订单日期], counter.[id], detail.[ri];";
             var cursorBytes = DecodeCursor(cursor);
             var cursorClause = cursorBytes == null ? "" : " WHERE l.[_c_] > @cursor ";
             var sql = @"SELECT l.[编号], l.[名称], l.[停用], l.[_c_]
-FROM dbo.[DC货位] l " + cursorClause + @"
+FROM dbo.[DC货位] l WITH (NOLOCK) " + cursorClause + @"
 ORDER BY l.[_c_];";
             using (var connection = new SqlConnection(BuildConnectionString(config.PharmacyE6)))
             using (var command = new SqlCommand(sql, connection))
@@ -258,7 +258,7 @@ ORDER BY l.[_c_];";
             var cursorBytes = DecodeCursor(cursor);
             var cursorClause = cursorBytes == null ? "" : " AND p.[_c_] > @cursor ";
             var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
-FROM dbo.[DC商品] p
+FROM dbo.[DC商品] p WITH (NOLOCK)
 WHERE ISNULL(p.[停用], 0) = 0
   AND ISNULL(p.[名称], '') <> '' " + cursorClause + @"
  ORDER BY p.[_c_];";
@@ -320,7 +320,7 @@ WHERE ISNULL(p.[停用], 0) = 0
                 var placeholders = new List<string>();
                 for (var index = 0; index < count; index++) placeholders.Add("@code" + index);
                 var sql = @"SELECT p.[编号], p.[名称], p.[分类], p.[分类编号], p.[条形码], p.[规格], p.[剂型], p.[生产厂商], p.[商品类别属性], p.[单位], p.[零售价], p.[创建日期], p.[修改日期], p.[_c_]
-FROM dbo.[DC商品] p
+FROM dbo.[DC商品] p WITH (NOLOCK)
 WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
   AND ISNULL(p.[停用], 0) = 0
   AND ISNULL(p.[名称], '') <> '';";
@@ -375,28 +375,43 @@ WHERE p.[编号] IN (" + string.Join(",", placeholders) + @")
             if (cursorBytes != null) batchInnerConds.Add("changed.[_c_] > @cursor");
             if (locationCursorBytes != null) batchInnerConds.Add("changedLocation.[_c_] > @locationCursor");
 
+            string batchCondition = null;
+            string stockCondition = null;
             var outerConditions = new List<string>();
             if (batchInnerConds.Count > 0)
             {
                 var joinClause = locationCursorBytes != null
-                    ? " LEFT JOIN dbo.[DC货位] changedLocation ON changedLocation.[ID] = changed.[货位id]"
+                    ? " LEFT JOIN dbo.[DC货位] changedLocation WITH (NOLOCK) ON changedLocation.[ID] = changed.[货位id]"
                     : "";
-                outerConditions.Add(@"EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] changed"
+                batchCondition = @"EXISTS (SELECT 1 FROM dbo.[AC货位商品帐] changed WITH (NOLOCK)"
                     + joinClause
-                    + @" WHERE changed.[商品id] = i.[商品id] AND (" + string.Join(" OR ", batchInnerConds) + "))");
+                    + @" WHERE changed.[商品id] = i.[商品id] AND (" + string.Join(" OR ", batchInnerConds) + "))";
+                outerConditions.Add(batchCondition);
             }
 
             // 条件2：AC商品库存帐 总库存变化（捕获货位记录被物理删除的情况，此时无法通过 _c_ 感知货位变化）
             if (stockCursorBytes != null)
-                outerConditions.Add(@"EXISTS (SELECT 1 FROM dbo.[AC商品库存帐] changedStock WHERE changedStock.[商品id] = i.[商品id] AND changedStock.[_c_] > @stockCursor)");
+            {
+                stockCondition = @"EXISTS (SELECT 1 FROM dbo.[AC商品库存帐] changedStock WITH (NOLOCK) WHERE changedStock.[商品id] = i.[商品id] AND changedStock.[_c_] > @stockCursor)";
+                outerConditions.Add(stockCondition);
+            }
 
             var cursorClause = outerConditions.Count > 0
                 ? " AND (" + string.Join(" OR ", outerConditions) + ") "
                 : "";
-            var sql = @"SELECT p.[编号] AS [商品编号], l.[编号] AS [货位编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[_c_], l.[_c_] AS [货位_c_]
-FROM dbo.[AC货位商品帐] i
-LEFT JOIN dbo.[DC商品] p ON p.[ID] = i.[商品id]
-LEFT JOIN dbo.[DC货位] l ON l.[ID] = i.[货位id]
+
+            // 触发原因列：用于日志诊断，区分是货位变动、总库存变动还是全量同步触发的
+            var triggerCaseWhen = outerConditions.Count == 0
+                ? "'全量' AS [触发条件]"
+                : "CASE"
+                    + (batchCondition != null ? " WHEN " + batchCondition + " THEN '货位_c_'" : "")
+                    + (stockCondition != null ? " WHEN " + stockCondition + " THEN '库存_c_'" : "")
+                    + " ELSE '其他' END AS [触发条件]";
+
+            var sql = @"SELECT p.[编号] AS [商品编号], l.[编号] AS [货位编号], l.[名称] AS [货位名称], i.[批号], i.[生产日期], i.[有效期至], i.[入库时间], i.[数量], i.[_c_], l.[_c_] AS [货位_c_], " + triggerCaseWhen + @"
+FROM dbo.[AC货位商品帐] i WITH (NOLOCK)
+LEFT JOIN dbo.[DC商品] p WITH (NOLOCK) ON p.[ID] = i.[商品id]
+LEFT JOIN dbo.[DC货位] l WITH (NOLOCK) ON l.[ID] = i.[货位id]
 WHERE i.[数量] > 0
   AND ISNULL(p.[停用], 0) = 0
   AND ISNULL(p.[名称], '') <> '' " + cursorClause + "ORDER BY i.[_c_];";
@@ -425,12 +440,17 @@ WHERE i.[数量] > 0
                         });
                         result.Cursor = MaxCursor(result.Cursor, reader["_c_"]);
                         if (!reader.IsDBNull(reader.GetOrdinal("货位_c_"))) result.LocationCursor = MaxCursor(result.LocationCursor, reader["货位_c_"]);
+                        // 统计触发来源
+                        var trigger = Convert.ToString(reader["触发条件"]) ?? "其他";
+                        result.TriggerCounts.TryGetValue(trigger, out var cnt);
+                        result.TriggerCounts[trigger] = cnt + 1;
                     }
                 }
             }
             QueryZeroPharmacyProducts(result, stockCursor);
             return result;
         }
+
 
         private void QueryZeroPharmacyProducts(E6PharmacyInventorySnapshot result, string cursor)
         {

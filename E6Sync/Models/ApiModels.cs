@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace E6Sync.Models
@@ -52,6 +53,8 @@ namespace E6Sync.Models
         public string Cursor { get; set; }
         public string LocationCursor { get; set; }
         public string StockCursor { get; set; }
+        /// <summary>增量触发来源统计，key 为触发原因（货位_c_ / 库存_c_ / 全量），value 为行数</summary>
+        public Dictionary<string, int> TriggerCounts { get; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
     }
 
     public sealed class E6PharmacyProductSnapshot

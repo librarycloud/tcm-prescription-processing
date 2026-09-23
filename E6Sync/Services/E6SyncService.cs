@@ -180,9 +180,11 @@ namespace E6Sync.Services
         private async Task<SyncStats> SyncPharmacyAsync(bool fullSync, CancellationToken cancellationToken)
         {
             var stats = new SyncStats();
+
             var locationSnapshot = await Task.Run(() => database.QueryPharmacyLocations(fullSync ? "" : config.Sync.LastPharmacyLocationTableCursor), cancellationToken).ConfigureAwait(false);
             var locations = locationSnapshot.Locations;
             stats.QueryCount += locations.Count;
+            if (locations.Count > 0) log.Info(string.Format("药店货位查询：{0} 条", locations.Count));
             foreach (var locationBatch in SplitBatches(locations, 1000))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -194,6 +196,7 @@ namespace E6Sync.Services
             var productSnapshot = await Task.Run(() => database.QueryPharmacyProducts(fullSync ? "" : config.Sync.LastPharmacyProductCursor), cancellationToken).ConfigureAwait(false);
             var products = productSnapshot.Products;
             stats.QueryCount += products.Count;
+            if (products.Count > 0) log.Info(string.Format("药店商品查询：{0} 条", products.Count));
             var productBatchCount = 0;
             foreach (var productBatch in SplitBatches(products, 1000))
             {
@@ -240,7 +243,11 @@ namespace E6Sync.Services
                     log.Info(string.Format("药店增量补传库存对应商品：{0} 条", supplement.Products.Count));
                 }
             }
-            log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，模式 {2}", products.Count, snapshot.Batches.Count, fullSync ? "全量" : "增量"));
+            var triggerSuffix = !fullSync && snapshot.TriggerCounts.Count > 0
+                ? "，触发来源：" + string.Join(" / ", snapshot.TriggerCounts.Keys)
+                : "";
+            log.Info(string.Format("药店本地查询：商品 {0}，库存批次 {1}，零库存品种 {2}，模式 {3}{4}", products.Count, snapshot.Batches.Count, snapshot.ZeroProductCodes.Count, fullSync ? "全量" : "增量", triggerSuffix));
+
             if (fullSync && snapshot.Batches.Count == 0 && snapshot.ZeroProductCodes.Count == 0)
                 throw new InvalidOperationException("药店货位库存查询为 0，已停止全量上传；请检查药店数据库和库存表");
             var fullSyncStartedAt = fullSync ? DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture) : null;
@@ -257,20 +264,25 @@ namespace E6Sync.Services
                 inventoryBatchCount++;
                 log.Info(string.Format("药店库存上传批次 {0}/{1}：{2} 条", index + 1, inventoryBatches.Count, inventoryBatches[index].Count));
             }
+            // 游标推进
+            var cursorAdvanced = new List<string>();
             if (!string.IsNullOrWhiteSpace(locationSnapshot.Cursor))
-                config.Sync.LastPharmacyLocationTableCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyLocationTableCursor, locationSnapshot.Cursor);
+            { config.Sync.LastPharmacyLocationTableCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyLocationTableCursor, locationSnapshot.Cursor); cursorAdvanced.Add("货位表"); }
             if (!string.IsNullOrWhiteSpace(productSnapshot.Cursor))
-                config.Sync.LastPharmacyProductCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyProductCursor, productSnapshot.Cursor);
+            { config.Sync.LastPharmacyProductCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyProductCursor, productSnapshot.Cursor); cursorAdvanced.Add("商品"); }
             if (!string.IsNullOrWhiteSpace(snapshot.Cursor))
-                config.Sync.LastPharmacyInventoryCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyInventoryCursor, snapshot.Cursor);
+            { config.Sync.LastPharmacyInventoryCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyInventoryCursor, snapshot.Cursor); cursorAdvanced.Add("货位批次"); }
             if (!string.IsNullOrWhiteSpace(snapshot.LocationCursor))
-                config.Sync.LastPharmacyLocationCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyLocationCursor, snapshot.LocationCursor);
+            { config.Sync.LastPharmacyLocationCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyLocationCursor, snapshot.LocationCursor); cursorAdvanced.Add("货位名称"); }
             if (!string.IsNullOrWhiteSpace(snapshot.StockCursor))
-                config.Sync.LastPharmacyStockCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyStockCursor, snapshot.StockCursor);
+            { config.Sync.LastPharmacyStockCursor = E6DatabaseService.MaxCursor(config.Sync.LastPharmacyStockCursor, snapshot.StockCursor); cursorAdvanced.Add("总库存"); }
             SaveConfig();
-            log.Info(string.Format("药店同步完成：商品 {0}（{1} 批），库存批次 {2}（{3} 批）{4}", products.Count, productBatchCount, snapshot.Batches.Count, inventoryBatchCount, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）"));
+            var cursorNote = cursorAdvanced.Count > 0 ? "，游标推进：" + string.Join(" / ", cursorAdvanced) : "，游标未推进";
+            log.Info(string.Format("药店同步完成：商品 {0}（{1} 批），库存批次 {2}（{3} 批）{4}{5}", products.Count, productBatchCount, snapshot.Batches.Count, inventoryBatchCount, fullSync ? "（全部货位库存全量）" : "（_c_ 增量）", cursorNote));
+
             return stats;
         }
+
 
         private static List<List<T>> SplitBatches<T>(IList<T> items, int size)
         {
