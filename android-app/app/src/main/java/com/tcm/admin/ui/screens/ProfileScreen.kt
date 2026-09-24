@@ -121,7 +121,7 @@ internal fun ProfileScreen(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetails),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Row(
@@ -182,8 +182,8 @@ private fun LiveThemePreviewCard() {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = CardShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             modifier = Modifier
@@ -232,7 +232,7 @@ private fun LiveThemePreviewCard() {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -574,7 +574,7 @@ private fun ColorPickerDialog(
                         .height(58.dp),
                     shape = RoundedCornerShape(10.dp),
                     color = currentColor,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Row(
                         modifier = Modifier
@@ -839,7 +839,7 @@ private fun ColorPickerDialog(
                 }
 
                 Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(10.dp))
 
                 // Manual HEX fine-tuning inside dialog
@@ -909,8 +909,8 @@ private fun TextScalingCard(
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = CardShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             modifier = Modifier
@@ -1105,8 +1105,8 @@ internal fun SettingsScreen(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenThemeAppearance),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -1144,8 +1144,8 @@ internal fun SettingsScreen(
 
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shape = CardShape,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenSecurityPrivacy)
         ) {
@@ -1189,8 +1189,8 @@ internal fun SettingsScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(
@@ -1385,8 +1385,8 @@ internal fun SettingsScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             modifier = Modifier.fillMaxWidth().clickable {
                 urlInput = baseUrl
                 showEditDialog = true
@@ -1497,8 +1497,8 @@ internal fun ThemeAppearanceScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -1541,8 +1541,8 @@ internal fun ThemeAppearanceScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Text("经典风格", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
@@ -1609,7 +1609,7 @@ internal fun ThemeAppearanceScreen(
                 1.dp,
                 if (isCustomActive) Primary else MaterialTheme.colorScheme.outlineVariant,
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(
@@ -1695,7 +1695,7 @@ internal fun ThemeAppearanceScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(14.dp))
 
                 Text("自定义色值（HEX）", fontSize = 12.sp, color = Muted, fontWeight = FontWeight.Medium)
@@ -1798,7 +1798,7 @@ internal fun ProfileDetailScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Row(
@@ -1841,7 +1841,7 @@ internal fun ProfileDetailScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
@@ -1850,13 +1850,13 @@ internal fun ProfileDetailScreen(
                     label = "用户名",
                     value = user?.displayField("username") ?: "-",
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ProfileDetailRow(
                     icon = Icons.Default.Phone,
                     label = "手机号",
                     value = maskPhone(user?.displayField("phone", "")),
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 if (isSuperAdmin) {
                     ProfileDetailRow(
                         icon = Icons.Default.Business,
@@ -1864,7 +1864,7 @@ internal fun ProfileDetailScreen(
                         value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
                             ?: "全部门店（全局权限）",
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
                 ProfileDetailRow(
                     icon = Icons.Default.Shield,

@@ -472,9 +472,9 @@ internal fun AppCard(
             modifier = modifier,
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(
-                defaultElevation = 1.dp,
+                defaultElevation = 0.dp,
                 pressedElevation = 2.5.dp,
                 focusedElevation = 1.5.dp,
                 hoveredElevation = 1.5.dp,
@@ -490,8 +490,8 @@ internal fun AppCard(
             modifier = modifier,
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, CardBorderColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(0.5.dp, CardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(
                 modifier = Modifier.padding(paddingValues),
@@ -555,8 +555,8 @@ internal fun SearchBarField(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = SearchControlHeight)
-            .background(MaterialTheme.colorScheme.surfaceVariant, FieldShape)
-            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), FieldShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), FieldShape)
+            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), FieldShape)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1014,7 +1014,7 @@ internal fun StatsGrid(
                             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                         ),
                         shape = CardShape,
-                        border = BorderStroke(1.dp, if (isSelected) Primary else CardBorderColor),
+                        border = BorderStroke(0.5.dp, if (isSelected) Primary else CardBorderColor),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
                     ) {
                         Column(
@@ -1061,7 +1061,7 @@ internal fun QuickAction(
             .clickable(onClick = onClick),
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, CardBorderColor),
+        border = BorderStroke(0.5.dp, CardBorderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
         Row(

@@ -589,15 +589,16 @@ internal fun AboutScreen(
                 } else {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         OutlinedButton(
                             onClick = { scope.launch { fetchLatest() } },
                             enabled = !checking,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = FieldShape,
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
+                            shape = com.tcm.admin.CardShape,
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, androidx.compose.material3.MaterialTheme.colorScheme.outlineVariant)
                         ) {
-                            Text("检查更新")
+                            Text("检查更新", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                         }
                         if (hasUpdate) {
                             Button(
@@ -610,8 +611,9 @@ internal fun AboutScreen(
                                     }
                                 },
                                 enabled = !checking,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = FieldShape,
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                shape = com.tcm.admin.CardShape,
+                                elevation = androidx.compose.material3.ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                             ) {
                                 val btnText = when {
                                     forceUpdate && isIncremental -> "立即增量更新"
@@ -620,7 +622,7 @@ internal fun AboutScreen(
                                     fullApkSize > 0L -> "下载更新 (${formatDownloadSize(fullApkSize)})"
                                     else -> "下载更新"
                                 }
-                                Text(btnText, maxLines = 1)
+                                Text(btnText, maxLines = 1, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                             }
                         }
                     }

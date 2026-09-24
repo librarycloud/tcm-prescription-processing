@@ -318,7 +318,7 @@ internal fun TransfersScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Row(

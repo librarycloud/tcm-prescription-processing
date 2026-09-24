@@ -1476,7 +1476,7 @@ internal fun WorkflowOperationScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Row(
@@ -1569,7 +1569,7 @@ internal fun WorkflowOperationScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Row(
@@ -1606,7 +1606,7 @@ internal fun WorkflowOperationScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Row(
@@ -1685,7 +1685,7 @@ internal fun WorkflowOperationScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Row(
@@ -1722,7 +1722,7 @@ internal fun WorkflowOperationScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Row(

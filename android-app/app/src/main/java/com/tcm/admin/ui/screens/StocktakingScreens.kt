@@ -935,7 +935,7 @@ internal fun StocktakingEntryScreen(
                     Spacer(Modifier.height(3.dp))
                     Text("编码：${product.displayField("productCode", "-")}　条码：${product.displayField("barcode", "-")}", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(6.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(Modifier.height(6.dp))
                     Text("规格：${product.displayField("specification", "-")}　单位：${product.displayField("unit", "-")}", color = Muted, fontSize = 12.sp)
                     Text("生产厂商：${product.displayField("manufacturer", "-")}", color = Muted, fontSize = 12.sp)

@@ -510,7 +510,7 @@ internal fun ProcessingScreenV2(
                                 }
 
                                 Spacer(Modifier.height(6.dp))
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 Spacer(Modifier.height(5.dp))
 
                                 // Detail Rows
@@ -542,7 +542,7 @@ internal fun ProcessingScreenV2(
                                 }
 
                                 Spacer(Modifier.height(6.dp))
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 Spacer(Modifier.height(8.dp))
 
                                 // Plan Actions

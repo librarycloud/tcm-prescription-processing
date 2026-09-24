@@ -363,7 +363,7 @@ internal fun E6ImportsScreen(
                             .heightIn(min = 48.dp),
                         shape = FieldShape,
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, CardBorderColor),
+                        border = BorderStroke(0.5.dp, CardBorderColor),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp),
