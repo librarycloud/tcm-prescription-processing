@@ -8,6 +8,7 @@ public struct SettingsView: View {
     @State private var cacheSize: String = "24.5 MB"
     @State private var isClearingCache = false
     @AppStorage("tcm_server_api_base_url") private var currentServerURL: String = "http://127.0.0.1:3000"
+    @AppStorage("keep_screen_awake") private var keepScreenAwake: Bool = false
     @State private var isShowingServerConfig = false
     @State private var configuredBaseURL = ""
     @State private var isShowingServerChangeAlert = false
@@ -27,6 +28,20 @@ public struct SettingsView: View {
                     VStack(spacing: 0) {
                         ProfileRow(icon: "paintpalette.fill", title: "主题与外观", value: "跟随系统") {
                             router.navigate(to: .themeAppearance)
+                        }
+                        Divider().padding(.leading, 48)
+                        HStack(spacing: 12) {
+                            Image(systemName: "lightbulb.max.fill")
+                                .foregroundStyle(Color.appPrimary)
+                                .frame(width: 20)
+                            Toggle("保持屏幕常亮", isOn: $keepScreenAwake)
+                                .scaledFont(15)
+                                .foregroundStyle(Color.ink)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(height: 52)
+                        .onChange(of: keepScreenAwake) { _, newValue in
+                            UIApplication.shared.isIdleTimerDisabled = newValue
                         }
                     }
                 }
