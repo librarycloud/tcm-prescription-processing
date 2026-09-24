@@ -839,7 +839,7 @@ private fun ColorPickerDialog(
                 }
 
                 Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(10.dp))
 
                 // Manual HEX fine-tuning inside dialog
@@ -1695,7 +1695,7 @@ internal fun ThemeAppearanceScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(14.dp))
 
                 Text("自定义色值（HEX）", fontSize = 12.sp, color = Muted, fontWeight = FontWeight.Medium)
@@ -1850,13 +1850,13 @@ internal fun ProfileDetailScreen(
                     label = "用户名",
                     value = user?.displayField("username") ?: "-",
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ProfileDetailRow(
                     icon = Icons.Default.Phone,
                     label = "手机号",
                     value = maskPhone(user?.displayField("phone", "")),
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 if (isSuperAdmin) {
                     ProfileDetailRow(
                         icon = Icons.Default.Business,
@@ -1864,7 +1864,7 @@ internal fun ProfileDetailScreen(
                         value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
                             ?: "全部门店（全局权限）",
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
                 ProfileDetailRow(
                     icon = Icons.Default.Shield,

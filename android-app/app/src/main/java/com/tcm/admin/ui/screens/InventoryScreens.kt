@@ -437,7 +437,7 @@ internal fun InventoryScreen(
                     }
 
                     Spacer(Modifier.height(6.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(Modifier.height(6.dp))
 
                     Row(
@@ -673,7 +673,7 @@ internal fun InventoryScreen(
 
                         if (prodDate.isNotBlank() || expDate.isNotBlank() || inDate.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                             Spacer(Modifier.height(4.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
