@@ -7,7 +7,6 @@ struct InventoryView: View {
     @State private var selectedStoreId: Int? = nil
     @State private var stores: [StoreItem] = []
     @State private var items: [InventoryItem] = []
-    @State private var selectedProduct: InventoryItem? = nil // 1:1 对齐 Android selectedProduct
     @State private var isLoading = false
     @State private var currentTaskID: UUID = UUID()
     @State private var errorMessage: String? = nil
@@ -70,7 +69,6 @@ struct InventoryView: View {
                         if term.isEmpty {
                             self.items = []
                             self.isLoading = false
-                            self.selectedProduct = nil
                             self.hasAutoNavigated = false
                             self.lastSearchedTerm = ""
                             return
@@ -79,7 +77,6 @@ struct InventoryView: View {
                         addSearchHistory(term)
                         lastSearchedTerm = term
                         hasAutoNavigated = false
-                        self.selectedProduct = nil
                         searchTask = Task { await loadInventory(allowAutoNavigate: true) }
                     },
                     onScan: {
@@ -93,7 +90,6 @@ struct InventoryView: View {
                     if term.isEmpty {
                         searchTask?.cancel()
                         self.items = []
-                        self.selectedProduct = nil
                         self.hasAutoNavigated = false
                         self.lastSearchedTerm = ""
                         return
@@ -120,8 +116,8 @@ struct InventoryView: View {
                     }
                 }
                 
-                // 搜索历史标签 (当搜索框为空且未选中商品时展示)
-                if searchText.isEmpty && selectedProduct == nil && !searchHistory.isEmpty {
+                // 搜索历史标签 (当搜索框为空时展示)
+                if searchText.isEmpty && !searchHistory.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text("历史搜索")
@@ -141,7 +137,6 @@ struct InventoryView: View {
                                     addSearchHistory(historyTerm)
                                     hasAutoNavigated = false
                                     lastSearchedTerm = historyTerm
-                                    selectedProduct = nil
                                     searchTask?.cancel()
                                     searchTask = Task { await loadInventory(allowAutoNavigate: true) }
                                 }) {
@@ -160,8 +155,8 @@ struct InventoryView: View {
                     .padding(.top, 2)
                 }
                 
-                // 2. 门店筛选区 (当 stores > 1 且未选中商品时展示)
-                if stores.count > 1 && selectedProduct == nil {
+                // 2. 门店筛选区 (当 stores > 1 时展示)
+                if stores.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             SegmentedButton(
@@ -201,97 +196,81 @@ struct InventoryView: View {
             .padding(.bottom, 8)
             .background(Color.pageBackground)
             
-            // 3. 核心内容区域：详情展示 / 搜索结果列表 / 空状态 (可滚动，支持下拉刷新)
+            // 3. 核心内容区域：搜索结果列表 / 空状态 (可滚动，支持下拉刷新)
             AppScrollView {
-                if let product = selectedProduct {
-                    productDetailSection(for: product)
-                } else {
-                    if isLoading && items.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer().frame(height: 60)
-                            ProgressView("正在查询药品库存...")
-                            Spacer().frame(height: 60)
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else if let error = errorMessage, !error.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer().frame(height: 40)
-                            Text(error)
-                                .foregroundStyle(Color.danger)
-                                .scaledFont(14)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 16)
-                            Button("点击重试") {
-                                ApiClient.shared.clearResponseCache()
-                                Task { await loadInventory(allowAutoNavigate: false) }
-                            }
-                            .scaledFont(14, weight: .bold)
-                            .foregroundStyle(Color.appPrimary)
-                            Spacer().frame(height: 40)
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else if items.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer().frame(height: 50)
-                            Image(systemName: "archivebox")
-                                .scaledFont(48)
-                                .foregroundStyle(Color.muted)
-                            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text("搜索或扫码查看商品库存与批次详情")
-                                    .scaledFont(15)
-                                    .foregroundStyle(Color.muted)
-                            } else {
-                                Text("暂无药品库存数据")
-                                    .scaledFont(15)
-                                    .foregroundStyle(Color.muted)
-                                
-                                Button(action: {
-                                    ApiClient.shared.clearResponseCache()
-                                    Router.shared.presentScanner(enableOCR: true)
-                                }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "qrcode.viewfinder")
-                                        Text("重新扫描")
-                                    }
-                                    .scaledFont(13, weight: .semibold)
-                                    .foregroundStyle(Color.appPrimary)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appPrimary, lineWidth: 1))
-                                }
-                            }
-                            Spacer().frame(height: 50)
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        LazyVGrid(columns: gridColumns, spacing: 12) {
-                            ForEach(items) { item in
-                                InventoryRowView(item: item, keyword: searchText)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            self.selectedProduct = item
-                                        }
-                                    }
-                            }
-                        }
-                        .padding(16)
+                if isLoading && items.isEmpty {
+                    VStack(spacing: 12) {
+                        Spacer().frame(height: 60)
+                        ProgressView("正在查询药品库存...")
+                        Spacer().frame(height: 60)
                     }
+                    .frame(maxWidth: .infinity)
+                } else if let error = errorMessage, !error.isEmpty {
+                    VStack(spacing: 12) {
+                        Spacer().frame(height: 40)
+                        Text(error)
+                            .foregroundStyle(Color.danger)
+                            .scaledFont(14)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+                        Button("点击重试") {
+                            ApiClient.shared.clearResponseCache()
+                            Task { await loadInventory(allowAutoNavigate: false) }
+                        }
+                        .scaledFont(14, weight: .bold)
+                        .foregroundStyle(Color.appPrimary)
+                        Spacer().frame(height: 40)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else if items.isEmpty {
+                    VStack(spacing: 12) {
+                        Spacer().frame(height: 50)
+                        Image(systemName: "archivebox")
+                            .scaledFont(48)
+                            .foregroundStyle(Color.muted)
+                        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("搜索或扫码查看商品库存与批次详情")
+                                .scaledFont(15)
+                                .foregroundStyle(Color.muted)
+                        } else {
+                            Text("暂无药品库存数据")
+                                .scaledFont(15)
+                                .foregroundStyle(Color.muted)
+                            
+                            Button(action: {
+                                ApiClient.shared.clearResponseCache()
+                                Router.shared.presentScanner(enableOCR: true)
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "qrcode.viewfinder")
+                                    Text("重新扫描")
+                                }
+                                .scaledFont(13, weight: .semibold)
+                                .foregroundStyle(Color.appPrimary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appPrimary, lineWidth: 1))
+                            }
+                        }
+                        Spacer().frame(height: 50)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                        ForEach(items) { item in
+                            InventoryRowView(item: item, keyword: searchText)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    Router.shared.navigate(to: .inventoryDetail(item: item))
+                                }
+                        }
+                    }
+                    .padding(16)
                 }
             }
             .refreshable {
                 ApiClient.shared.clearResponseCache()
-                if let product = selectedProduct {
-                    if let keyword = product.productCode ?? product.barcode {
-                        if let res = try? await ApiClient.shared.fetchInventory(keyword: keyword, storeId: selectedStoreId) {
-                            if let updated = res.first(where: { $0.id == product.id }) {
-                                self.selectedProduct = updated
-                            }
-                        }
-                    }
-                } else {
-                    await loadInventory(allowAutoNavigate: false)
-                }
+                await loadInventory(allowAutoNavigate: false)
             }
         }
         .background(Color.pageBackground)
@@ -299,7 +278,6 @@ struct InventoryView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { notif in
             if let code = notif.object as? String, !code.isEmpty {
                 ApiClient.shared.clearResponseCache()
-                self.selectedProduct = nil
                 self.hasAutoNavigated = false
                 self.lastSearchedTerm = code
                 self.searchText = code
@@ -313,202 +291,6 @@ struct InventoryView: View {
         .task {
             await loadInitialData()
         }
-    }
-    
-    // MARK: - 商品详情展示区 (1:1 对齐 Android 页面内展开)
-    private func productDetailSection(for item: InventoryItem) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 返回列表按钮栏
-            HStack(alignment: .center) {
-                SectionHeader(title: "商品信息")
-                Spacer()
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedProduct = nil
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.backward")
-                            .scaledFont(12)
-                        Text("返回列表")
-                            .scaledFont(12, weight: .medium)
-                    }
-                    .foregroundStyle(Color.appPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.appPrimarySoft)
-                    .clipShape(.rect(cornerRadius: 6))
-                }
-            }
-            .padding(.top, 4)
-            
-            // 基本信息卡片
-            AppCard(padding: 16) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .top) {
-                        Text(item.name)
-                            .scaledFont(16, weight: .bold)
-                            .foregroundStyle(Color.ink)
-                        Spacer()
-                        if let price = item.retailPrice, price > 0 {
-                            Text("¥\(String(format: "%.2f", price))")
-                                .scaledFont(16, weight: .bold)
-                                .foregroundStyle(Color.danger)
-                        }
-                    }
-                    
-                    Divider().foregroundStyle(Color.cardBorder)
-                    
-                    InfoRowItem(label: "商品编码", value: item.productCode?.isEmpty == false ? item.productCode! : "-")
-                    InfoRowItem(label: "商品条码", value: item.barcode?.isEmpty == false ? item.barcode! : "无条码")
-                    
-                    HStack {
-                        Text("规格：\(item.specification?.isEmpty == false ? item.specification! : "-")")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.muted)
-                        Spacer()
-                        Text("单位：\(item.unit?.isEmpty == false ? item.unit! : "-")")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.muted)
-                    }
-                    
-                    HStack {
-                        Text("生产厂商")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.muted)
-                        Spacer()
-                        Text(item.manufacturer?.isEmpty == false ? item.manufacturer! : "-")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.muted)
-                    }
-                    
-                    // 高亮总库存 Banner
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("总库存：")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.ink)
-                        Text("\(String(format: "%g", item.displayStock))")
-                            .scaledFont(24, weight: .bold)
-                            .foregroundStyle(item.displayStock > 0 ? Color.appPrimary : Color.danger)
-                        Text(item.displayUnit)
-                            .scaledFont(13)
-                            .foregroundStyle(Color.ink)
-                        
-                        Spacer()
-                        
-                        Text("共 ")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.ink)
-                        Text("\(item.inventories?.count ?? 0)")
-                            .scaledFont(20, weight: .bold)
-                            .foregroundStyle(Color.appPrimary)
-                        Text(" 个库存批次")
-                            .scaledFont(13)
-                            .foregroundStyle(Color.ink)
-                    }
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
-                    .background(Color.appPrimary.opacity(0.1))
-                    .clipShape(.rect(cornerRadius: 8))
-                }
-            }
-            
-            // 批次信息
-            Text("库存批次明细")
-                .scaledFont(14, weight: .bold)
-                .foregroundStyle(Color.ink)
-                .padding(.top, 8)
-            
-            if let batches = item.inventories, !batches.isEmpty {
-                LazyVGrid(columns: gridColumns, spacing: 12) {
-                    ForEach(batches) { batch in
-                        AppCard(padding: 16) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(alignment: .center) {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("批号：\(batch.batchNo?.isEmpty == false ? batch.batchNo! : "-")")
-                                            .scaledFont(14, weight: .semibold)
-                                            .foregroundStyle(Color.ink)
-                                        
-                                        HStack(spacing: 0) {
-                                            Text("货位：")
-                                                .scaledFont(14)
-                                                .foregroundStyle(Color.muted)
-                                            
-                                            let locName = batch.locationName ?? ""
-                                            let locCode = batch.locationCode ?? ""
-                                            let loc = !locCode.isEmpty && !locName.isEmpty ? "\(locCode)-\(locName)" : (!locCode.isEmpty ? locCode : (!locName.isEmpty ? locName : ""))
-                                            Text(loc.isEmpty ? "未分配" : loc)
-                                                .scaledFont(16, weight: .black)
-                                                .foregroundStyle(loc.isEmpty ? Color.muted : Color.appPrimaryDark)
-                                                .padding(.horizontal, loc.isEmpty ? 0 : 6)
-                                                .padding(.vertical, loc.isEmpty ? 0 : 2)
-                                                .background(loc.isEmpty ? Color.clear : Color.appPrimarySoft)
-                                                .clipShape(.rect(cornerRadius: 4))
-                                        }
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                                            let qty = batch.quantity ?? 0.0
-                                            Text(String(format: "%g", qty))
-                                                .scaledFont(24, weight: .bold)
-                                                .foregroundStyle(qty <= 0 ? Color.danger : Color.appPrimaryDark)
-                                            Text(item.displayUnit)
-                                                .scaledFont(12, weight: .medium)
-                                                .foregroundStyle(Color.muted)
-                                        }
-                                    }
-                                }
-                                
-                                let pDate = formatDateOnly(batch.productionDate)
-                                let eDate = formatDateOnly(batch.expiryDate)
-                                let iDate = formatDateOnly(batch.inboundDate)
-                                
-                                if pDate != "-" || eDate != "-" || iDate != "-" {
-                                    Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("生产日期").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(pDate).scaledFont(10).foregroundStyle(Color.ink).lineLimit(1)
-                                        }.frame(maxWidth: .infinity, alignment: .leading)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("有效期至").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(eDate).scaledFont(10).foregroundStyle(Color.ink).lineLimit(1)
-                                        }.frame(maxWidth: .infinity, alignment: .leading)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("入库日期").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(iDate).scaledFont(10).foregroundStyle(Color.muted).lineLimit(1)
-                                        }.frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .padding(.top, 2)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                AppCard(padding: 24) {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            Image(systemName: "archivebox")
-                                .scaledFont(32)
-                                .foregroundStyle(Color.muted)
-                            Text("该商品暂无库存批次")
-                                .scaledFont(14)
-                                .foregroundStyle(Color.muted)
-                        }
-                        Spacer()
-                    }
-                }
-            }
-        }
-        .padding(16)
     }
     
     private func loadInitialData() async {
@@ -532,7 +314,6 @@ struct InventoryView: View {
         if term.isEmpty {
             self.items = []
             self.errorMessage = nil
-            self.selectedProduct = nil
             return
         }
         
@@ -552,14 +333,10 @@ struct InventoryView: View {
             guard !Task.isCancelled else { return }
             self.items = res
             
-            // 1:1 对齐 Android: 如果仅有 1 条匹配且尚未自动展示过，直接展示该商品详情
-            if allowAutoNavigate && res.count == 1 && !term.isEmpty && !hasAutoNavigated && selectedProduct == nil {
+            // 如果仅有 1 条匹配且尚未自动展示过，直接展示该商品详情
+            if allowAutoNavigate && res.count == 1 && !term.isEmpty && !hasAutoNavigated {
                 hasAutoNavigated = true
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    self.selectedProduct = res.first
-                }
-            } else if res.isEmpty {
-                self.selectedProduct = nil
+                Router.shared.navigate(to: .inventoryDetail(item: res.first!))
             }
         } catch is CancellationError {
             return

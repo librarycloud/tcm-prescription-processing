@@ -113,7 +113,6 @@ public struct LiveScannerView: View {
         guard !code.isEmpty, !isResolving else { return }
         
         // 触感反馈
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         
         if let onScanned = router.scannerOnScanned {
             dismiss()
