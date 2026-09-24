@@ -113,6 +113,7 @@ public struct LiveScannerView: View {
         guard !code.isEmpty, !isResolving else { return }
         
         // 触感反馈
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         
         if let onScanned = router.scannerOnScanned {
             dismiss()
@@ -180,11 +181,24 @@ public struct LiveScannerView: View {
             }
             
             // 4. 其余所有扫码（药品条形码、商品SKU）-> 进入库存查询
-            await MainActor.run {
-                isResolving = false
-                dismiss()
-                // 触发全局库存查询路由
-                NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+            await MainActor.run { resolvingMessage = "正在查询库存..." }
+            do {
+                let items = try await ApiClient.shared.fetchInventory(keyword: code, storeId: nil)
+                await MainActor.run {
+                    isResolving = false
+                    dismiss()
+                    if items.count == 1, let firstItem = items.first {
+                        NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"), object: ["code": code, "item": firstItem])
+                    } else {
+                        NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isResolving = false
+                    dismiss()
+                    NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+                }
             }
         }
     }
@@ -228,6 +242,11 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
     private func setupCamera() {
         let session = AVCaptureSession()
+        // 提升采集分辨率，使小条码在不放大的情况下也能快速识别
+        if session.canSetSessionPreset(.hd1920x1080) {
+            session.sessionPreset = .hd1920x1080
+        }
+        
         guard let videoDevice = AVCaptureDevice.default(for: .video),
               let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
               session.canAddInput(videoInput) else {
@@ -236,6 +255,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         
         do {
             try videoDevice.lockForConfiguration()
+            // 加回近距离对焦限制，这是防拉风箱和秒扫的核心
+            if videoDevice.isAutoFocusRangeRestrictionSupported {
+                videoDevice.autoFocusRangeRestriction = .near
+            }
             if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
                 videoDevice.focusMode = .continuousAutoFocus
             }
