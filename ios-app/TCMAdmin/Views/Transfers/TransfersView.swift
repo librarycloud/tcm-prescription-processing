@@ -282,12 +282,12 @@ public struct TransfersView: View {
         .scrollDismissesKeyboard(.interactively)
         .task {
             // 三个请求完全并行：门店列表、统计数据、调拨记录
-            async let storesTask: () = {
-                self.stores = (try? await ApiClient.shared.fetchStores()) ?? []
-            }()
+            async let fetchedStores = (try? ApiClient.shared.fetchStores()) ?? []
             async let statsTask: () = loadStats()
             async let transfersTask: () = loadTransfers()
-            _ = await (storesTask, statsTask, transfersTask)
+            
+            let (storesResult, _, _) = await (fetchedStores, statsTask, transfersTask)
+            self.stores = storesResult
         }
     }
     
