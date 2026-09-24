@@ -474,7 +474,7 @@ internal fun AppCard(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(
-                defaultElevation = 1.dp,
+                defaultElevation = 0.dp,
                 pressedElevation = 2.5.dp,
                 focusedElevation = 1.5.dp,
                 hoveredElevation = 1.5.dp,
@@ -491,7 +491,7 @@ internal fun AppCard(
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(0.5.dp, CardBorderColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(
                 modifier = Modifier.padding(paddingValues),

@@ -59,7 +59,7 @@ internal fun SecurityPrivacyScreen() {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = com.tcm.admin.CardShape,
                 border = BorderStroke(0.5.dp, com.tcm.admin.CardBorderColor),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
                 Column {
