@@ -178,68 +178,9 @@ public struct PackagesView: View {
                 AppScrollView {
                     LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(packages) { pkg in
-                            AppCard(padding: 16) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Image(systemName: "shippingbox")
-                                            .foregroundStyle(Color.appPrimary)
-                                        Text(pkg.name)
-                                            .scaledFont(16, weight: .bold)
-                                            .foregroundStyle(Color.ink)
-                                        Spacer()
-                                        StatusPill(text: pkg.method)
-                                        StatusPill(text: pkg.statusText)
-                                    }
-                                    
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("取货码").scaledFont(11).foregroundStyle(Color.muted)
-                                            Text(pkg.code.formattedPickupCode).scaledFont(18, weight: .bold).foregroundStyle(Color.appPrimaryDark)
-                                        }
-                                        Spacer()
-                                        VStack(alignment: .trailing, spacing: 4) {
-                                            Text("收件人").scaledFont(11).foregroundStyle(Color.muted)
-                                            Text("\(pkg.customer) · \(maskPhone(pkg.phone))")
-                                                .scaledFont(13, weight: .semibold)
-                                                .foregroundStyle(Color.ink)
-                                        }
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color.surface)
-                                    .clipShape(.rect(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
-                                    
-                                    if showStore && !pkg.store.isEmpty {
-                                        InfoRowItem(label: "所属门店", value: pkg.store)
-                                    }
-                                    let rawTime = pkg.time.isEmpty ? (pkg.pickedAt.isEmpty ? "" : pkg.pickedAt) : pkg.time
-                                    let displayTime = (rawTime.isEmpty || rawTime == "未领取") ? "未领取" : formatDateTimeToMinute(rawTime)
-                                    InfoRowItem(label: "领取时间", value: displayTime)
-                                    if !pkg.info.isEmpty {
-                                        InfoRowItem(label: "备注", value: pkg.info)
-                                    }
-                                    
-                                    if pkg.statusCode == 0 {
-                                        HStack {
-                                            Spacer()
-                                            Button(action: {
-                                                router.navigate(to: .packageVerify(initialCode: pkg.code))
-                                            }) {
-                                                Text("快速核销")
-                                                    .scaledFont(12, weight: .bold)
-                                                    .foregroundStyle(Color.white)
-                                                    .padding(.horizontal, 14)
-                                                    .padding(.vertical, 5)
-                                                    .background(Color.success)
-                                                    .clipShape(.rect(cornerRadius: 6))
-                                            }
-                                        }
-                                        .padding(.top, 4)
-                                    }
-                                }
-                            }
-                            .onTapGesture {
+                            PackageRowCard(pkg: pkg, showStore: showStore) {
+                                router.navigate(to: .packageVerify(initialCode: pkg.code))
+                            } onTap: {
                                 router.navigate(to: .packageDetail(id: pkg.id))
                             }
                         }
@@ -262,12 +203,18 @@ public struct PackagesView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
+            // 并行加载门店列表与包裹数据，减少首屏等待时间
             if showStore && stores.isEmpty {
-                if let sts = try? await ApiClient.shared.fetchStores() {
-                    self.stores = sts
-                }
+                async let storesTask: () = {
+                    if let sts = try? await ApiClient.shared.fetchStores() {
+                        await MainActor.run { self.stores = sts }
+                    }
+                }()
+                async let packagesTask: () = loadPackages()
+                _ = await (storesTask, packagesTask)
+            } else {
+                await loadPackages()
             }
-            await loadPackages()
         }
     }
     
@@ -302,3 +249,75 @@ public struct PackagesView: View {
     }
 }
 
+
+// MARK: - 包裹行卡片（独立子视图，减少 LazyVGrid 中不必要的重渲染）
+private struct PackageRowCard: View {
+    let pkg: PackageModel
+    let showStore: Bool
+    let onVerify: () -> Void
+    let onTap: () -> Void
+    
+    var body: some View {
+        AppCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "shippingbox")
+                        .foregroundStyle(Color.appPrimary)
+                    Text(pkg.name)
+                        .scaledFont(16, weight: .bold)
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    StatusPill(text: pkg.method)
+                    StatusPill(text: pkg.statusText)
+                }
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("取货码").scaledFont(11).foregroundStyle(Color.muted)
+                        Text(pkg.code.formattedPickupCode).scaledFont(18, weight: .bold).foregroundStyle(Color.appPrimaryDark)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("收件人").scaledFont(11).foregroundStyle(Color.muted)
+                        Text("\(pkg.customer) · \(maskPhone(pkg.phone))")
+                            .scaledFont(13, weight: .semibold)
+                            .foregroundStyle(Color.ink)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.surface)
+                .clipShape(.rect(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                
+                if showStore && !pkg.store.isEmpty {
+                    InfoRowItem(label: "所属门店", value: pkg.store)
+                }
+                let rawTime = pkg.time.isEmpty ? (pkg.pickedAt.isEmpty ? "" : pkg.pickedAt) : pkg.time
+                let displayTime = (rawTime.isEmpty || rawTime == "未领取") ? "未领取" : formatDateTimeToMinute(rawTime)
+                InfoRowItem(label: "领取时间", value: displayTime)
+                if !pkg.info.isEmpty {
+                    InfoRowItem(label: "备注", value: pkg.info)
+                }
+                
+                if pkg.statusCode == 0 {
+                    HStack {
+                        Spacer()
+                        Button(action: onVerify) {
+                            Text("快速核销")
+                                .scaledFont(12, weight: .bold)
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 5)
+                                .background(Color.success)
+                                .clipShape(.rect(cornerRadius: 6))
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+    }
+}

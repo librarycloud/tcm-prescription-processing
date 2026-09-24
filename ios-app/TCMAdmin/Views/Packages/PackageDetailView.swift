@@ -711,13 +711,15 @@ public struct PackageDetailView: View {
     }
     
     private func loadDetail() async {
-        if isLoading && package != nil { return }
         isLoading = true
         errorMessage = nil
         do {
             self.package = try await ApiClient.shared.fetchPackageDetail(id: id)
         } catch {
-            errorMessage = error.localizedDescription
+            // 不覆盖已有的包裹数据，只显示错误提示
+            if package == nil {
+                errorMessage = error.localizedDescription
+            }
         }
         isLoading = false
     }
