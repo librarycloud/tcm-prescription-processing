@@ -32,12 +32,22 @@ public class ApiClient {
     // 后端服务器地址，支持运行时动态配置与持久化存储
     public var baseURL: String {
         get {
-            UserDefaults.standard.string(forKey: serverUrlKey) ?? "http://127.0.0.1:3000"
+            let url = UserDefaults.standard.string(forKey: serverUrlKey) ?? "http://127.0.0.1:3000"
+            return url.isEmpty ? "http://127.0.0.1:3000" : url
         }
         set {
-            let sanitized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            var sanitized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !sanitized.isEmpty {
+                if !sanitized.hasPrefix("http://") && !sanitized.hasPrefix("https://") {
+                    sanitized = "http://" + sanitized
+                }
+                sanitized = sanitized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            } else {
+                sanitized = "http://127.0.0.1:3000"
+            }
             UserDefaults.standard.set(sanitized, forKey: serverUrlKey)
+            clearResponseCache()
+            NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: sanitized)
         }
     }
     
@@ -167,7 +177,7 @@ public class ApiClient {
             prefixes = ["/admin/prescriptions", "/admin/processing-plans", "/admin/packages", "/admin/stats"]
         }
         
-        cacheQueue.async(flags: .barrier) {
+        cacheQueue.sync(flags: .barrier) {
             self.memoryCache = self.memoryCache.filter { entry in
                 !prefixes.contains { entry.key.starts(with: $0) }
             }
@@ -176,7 +186,7 @@ public class ApiClient {
     
 
     public func clearResponseCache() {
-        cacheQueue.async(flags: .barrier) {
+        cacheQueue.sync(flags: .barrier) {
             self.memoryCache.removeAll()
         }
     }
@@ -201,7 +211,9 @@ public class ApiClient {
                 }
                 if let data = cachedData {
                     do {
-                        return try JSONDecoder().decode(T.self, from: data)
+                        return try await Task.detached(priority: .userInitiated) {
+                            try JSONDecoder().decode(T.self, from: data)
+                        }.value
                     } catch {
                         // Ignore decode error and fallback to network
                     }
@@ -266,32 +278,36 @@ public class ApiClient {
         
         // 解析标准响应体: { code: 0, data: ..., message: "..." }
         do {
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let code = json?["code"] as? Int ?? 0
-            if code != 0 {
-                let msg = json?["message"] as? String ?? "业务处理失败"
-                throw ApiError.invalidResponse(statusCode: code, message: msg)
-            }
-            
-            // 如果泛型就是标准的无包装解码
-            let targetData: Data
-            if let payload = json?["data"], !(payload is NSNull) {
-                targetData = try JSONSerialization.data(withJSONObject: payload)
-            } else {
-                targetData = "{}".data(using: .utf8) ?? Data()
-            }
+            let (targetData, decoded): (Data, T) = try await Task.detached(priority: .userInitiated) {
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let code = json?["code"] as? Int ?? 0
+                if code != 0 {
+                    let msg = json?["message"] as? String ?? "业务处理失败"
+                    throw ApiError.invalidResponse(statusCode: code, message: msg)
+                }
+                
+                let targetData: Data
+                if let payload = json?["data"], !(payload is NSNull) {
+                    targetData = try JSONSerialization.data(withJSONObject: payload)
+                } else {
+                    targetData = "{}".data(using: .utf8) ?? Data()
+                }
+                
+                let decoded = try JSONDecoder().decode(T.self, from: targetData)
+                return (targetData, decoded)
+            }.value
             
             if method == "GET" {
-                if getCacheTTL(for: path) != nil {
-                    cacheQueue.async(flags: .barrier) {
+                if self.getCacheTTL(for: path) != nil {
+                    self.cacheQueue.async(flags: .barrier) {
                         self.memoryCache[cacheKey] = CacheEntry(data: targetData, savedAt: Date())
                     }
                 }
             } else {
-                invalidateCache(for: path)
+                self.invalidateCache(for: path)
             }
             
-            return try JSONDecoder().decode(T.self, from: targetData)
+            return decoded
         } catch let err as ApiError {
             throw err
         } catch {
@@ -1182,5 +1198,4 @@ public class ApiClient {
         return try await fetchDictionaries(type: "PrescriptionSource")
     }
 }
-
 

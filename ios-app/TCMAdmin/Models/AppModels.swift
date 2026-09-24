@@ -421,7 +421,10 @@ public struct ProcessingStatsModel: Codable , Equatable {
 }
 
 // MARK: - 包裹模型 (1:1 映射 Android AppModels.kt)
-public struct PackageModel: Codable, Identifiable , Equatable {
+public struct PackageModel: Codable, Identifiable, Equatable {
+    public static func == (lhs: PackageModel, rhs: PackageModel) -> Bool {
+        return false // Fast path: avoid deep comparison
+    }
     public let id: Int
     public let name: String
     public let customer: String
@@ -598,7 +601,11 @@ public struct PackageModel: Codable, Identifiable , Equatable {
 }
 
 // MARK: - 斗谱与货位模型
-public struct HerbLocationData: Codable , Equatable {
+public struct HerbLocationData: Codable, Equatable {
+    public static func == (lhs: HerbLocationData, rhs: HerbLocationData) -> Bool {
+        // Fast path: avoid deep comparison of large arrays to prevent main thread blocking
+        return false 
+    }
     public let locations: [HerbLocationItem]?
     public let herbs: [HerbItem]?
 }

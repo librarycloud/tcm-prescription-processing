@@ -28,6 +28,7 @@ public func extractExpressTrackingNo(_ raw: String) -> String {
 
 // MARK: - CoreImage 原生二维码生成视图
 
+nonisolated private let sharedCIContext = CIContext()
 @MainActor
 public struct QRCodeView: View {
     public let content: String
@@ -61,12 +62,9 @@ public struct QRCodeView: View {
         }
     }
     
-
-    
     private func generateQRCodeAsync(from string: String) async -> UIImage? {
         guard !string.isEmpty else { return nil }
         return await Task.detached(priority: .userInitiated) {
-            let context = CIContext()
             let filter = CIFilter.qrCodeGenerator()
             filter.message = Data(string.utf8)
             filter.correctionLevel = "M"
@@ -74,7 +72,7 @@ public struct QRCodeView: View {
             if let outputImage = filter.outputImage {
                 let transform = CGAffineTransform(scaleX: 10, y: 10)
                 let scaledImage = outputImage.transformed(by: transform)
-                if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
+                if let cgImage = sharedCIContext.createCGImage(scaledImage, from: scaledImage.extent) {
                     return UIImage(cgImage: cgImage)
                 }
             }
@@ -711,13 +709,15 @@ public struct PackageDetailView: View {
     }
     
     private func loadDetail() async {
-        if isLoading && package != nil { return }
         isLoading = true
         errorMessage = nil
         do {
             self.package = try await ApiClient.shared.fetchPackageDetail(id: id)
         } catch {
-            errorMessage = error.localizedDescription
+            // 不覆盖已有的包裹数据，只显示错误提示
+            if package == nil {
+                errorMessage = error.localizedDescription
+            }
         }
         isLoading = false
     }
