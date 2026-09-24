@@ -112,9 +112,11 @@ public struct LiveScannerView: View {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isResolving else { return }
         
-        // 触感反馈
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        // 触感反馈（唯一触发点，由 isResolving 保证只振动一次）
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         
+        
+
         if let onScanned = router.scannerOnScanned {
             dismiss()
             onScanned(code)
@@ -318,7 +320,6 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             return
         }
         hasScanned = true
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
         onScanned?(stringValue)
         
         // 延迟 1.5 秒后允许下一次扫描，避免重复触发
@@ -348,7 +349,6 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 DispatchQueue.main.async {
                     guard !self.hasScanned else { return }
                     self.hasScanned = true
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                     self.onScanned?(sku)
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -358,7 +358,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             }
         }
         request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        request.recognitionLanguages = ["en-US"]
         
         // 手机竖屏时的图像方向通常是 .right
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
