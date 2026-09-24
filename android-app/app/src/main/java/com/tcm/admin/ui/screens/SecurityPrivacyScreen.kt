@@ -57,9 +57,9 @@ internal fun SecurityPrivacyScreen() {
             
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                shape = com.tcm.admin.ui.CardShape,
+                border = BorderStroke(0.5.dp, com.tcm.admin.ui.CardBorderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
                 Column {
@@ -91,7 +91,8 @@ internal fun SecurityPrivacyScreen() {
                             if (index < sessions.size - 1) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    thickness = 0.5.dp,
+                                    color = com.tcm.admin.ui.CardBorderColor
                                 )
                             }
                         }
@@ -117,8 +118,8 @@ internal fun SecurityPrivacyScreen() {
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.error
                     ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shape = com.tcm.admin.ui.CardShape,
+                    border = BorderStroke(0.5.dp, com.tcm.admin.ui.CardBorderColor),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text("退出所有其他设备", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp))
