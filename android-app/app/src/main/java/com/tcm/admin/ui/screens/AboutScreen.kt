@@ -613,7 +613,7 @@ internal fun AboutScreen(
                                 enabled = !checking,
                                 modifier = Modifier.fillMaxWidth().height(42.dp),
                                 shape = com.tcm.admin.CardShape,
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                                elevation = androidx.compose.material3.ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                             ) {
                                 val btnText = when {
                                     forceUpdate && isIncremental -> "立即增量更新"
