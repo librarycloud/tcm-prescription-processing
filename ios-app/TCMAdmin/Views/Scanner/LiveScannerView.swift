@@ -464,6 +464,11 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         if captureSession?.isRunning == true {
             captureSession?.stopRunning()
         }
+        // AVCaptureSession 激活时系统会强制阻止熄屏，结束后需手动恢复用户设置的值
+        DispatchQueue.main.async {
+            let keepAwake = UserDefaults.standard.bool(forKey: "keep_screen_awake")
+            UIApplication.shared.isIdleTimerDisabled = keepAwake
+        }
     }
     
     deinit {
