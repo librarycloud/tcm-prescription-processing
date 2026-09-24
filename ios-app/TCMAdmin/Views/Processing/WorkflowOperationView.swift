@@ -653,7 +653,7 @@ public struct WorkflowOperationView: View {
                             .clipShape(.rect(cornerRadius: 6))
                         }
                         .padding(10)
-                        .background(Color.appPrimarySoft.opacity(0.3))
+                        .background(Color.appPrimarySoft)
                         .clipShape(.rect(cornerRadius: 8))
                     }
                 }
@@ -746,7 +746,7 @@ public struct WorkflowOperationView: View {
                             .clipShape(.rect(cornerRadius: 6))
                         }
                         .padding(10)
-                        .background(Color.appPrimarySoft.opacity(0.3))
+                        .background(Color.appPrimarySoft)
                         .clipShape(.rect(cornerRadius: 8))
                     }
                 }
@@ -972,11 +972,13 @@ public struct WorkflowOperationView: View {
     }
     
     private func handlePickedImage(_ image: UIImage) {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
         isUploadingPhoto = true
         uploadProgress = 0.0
         uploadTask = Task { @MainActor in
             do {
+                guard let data = await Task.detached(priority: .userInitiated, operation: {
+                    image.jpegData(compressionQuality: 0.8)
+                }).value else { return }
                 let fileName = "dispensing_\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
                 try await ApiClient.shared.completeDispensing(planId: planId, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
                     DispatchQueue.main.async {
@@ -1159,4 +1161,3 @@ public struct OccupyingPlanCard: View {
         }
     }
 }
-

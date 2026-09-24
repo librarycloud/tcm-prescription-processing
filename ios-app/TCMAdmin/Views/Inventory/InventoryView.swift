@@ -14,6 +14,15 @@ struct InventoryView: View {
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var hasAutoNavigated = false // 1:1 对齐 Android hasAutoNavigated
     @State private var lastSearchedTerm: String = ""
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     private var searchHistory: [String] {
         var seen = Set<String>()
@@ -100,7 +109,7 @@ struct InventoryView: View {
                     if shouldAutoSearchQuery(term) {
                         searchTask = Task {
                             do {
-                                try await Task.sleep(nanoseconds: 500_000_000)
+                                try await Task.sleep(nanoseconds: 300_000_000)
                                 if !Task.isCancelled {
                                     ApiClient.shared.clearResponseCache()
                                     lastSearchedTerm = term
@@ -193,10 +202,9 @@ struct InventoryView: View {
             .background(Color.pageBackground)
             
             // 3. 核心内容区域：详情展示 / 搜索结果列表 / 空状态 (可滚动，支持下拉刷新)
-            AppScrollView {
-                if let product = selectedProduct {
-                    productDetailSection(for: product)
-                } else {
+            ZStack(alignment: .top) {
+                // 底层：搜索结果列表
+                AppScrollView {
                     if isLoading && items.isEmpty {
                         VStack(spacing: 12) {
                             Spacer().frame(height: 60)
@@ -217,7 +225,7 @@ struct InventoryView: View {
                                 Task { await loadInventory(allowAutoNavigate: false) }
                             }
                             .scaledFont(14, weight: .bold)
-                            .foregroundStyle(Color.appPrimary)
+                            .foregroundStyle(Color.appPrimaryDark)
                             Spacer().frame(height: 40)
                         }
                         .frame(maxWidth: .infinity)
@@ -245,7 +253,7 @@ struct InventoryView: View {
                                         Text("重新扫描")
                                     }
                                     .scaledFont(13, weight: .semibold)
-                                    .foregroundStyle(Color.appPrimary)
+                                    .foregroundStyle(Color.appPrimaryDark)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
                                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appPrimary, lineWidth: 1))
@@ -255,11 +263,12 @@ struct InventoryView: View {
                         }
                         .frame(maxWidth: .infinity)
                     } else {
-                        LazyVStack(spacing: 12) {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
                             ForEach(items) { item in
                                 InventoryRowView(item: item, keyword: searchText)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
+                                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                         withAnimation(.easeInOut(duration: 0.2)) {
                                             self.selectedProduct = item
                                         }
@@ -268,6 +277,17 @@ struct InventoryView: View {
                         }
                         .padding(16)
                     }
+                }
+                .allowsHitTesting(selectedProduct == nil)
+                
+                // 顶层：详情页
+                if let product = selectedProduct {
+                    AppScrollView {
+                        productDetailSection(for: product)
+                    }
+                    .background(Color.pageBackground)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .zIndex(1)
                 }
             }
             .refreshable {
@@ -301,6 +321,19 @@ struct InventoryView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"))) { notif in
+            if let dict = notif.object as? [String: Any],
+               let code = dict["code"] as? String,
+               let item = dict["item"] as? InventoryItem {
+                ApiClient.shared.clearResponseCache()
+                self.hasAutoNavigated = true
+                self.lastSearchedTerm = code
+                self.searchText = code
+                self.addSearchHistory(code)
+                self.items = [item]
+                self.selectedProduct = item
+            }
+        }
         .task {
             await loadInitialData()
         }
@@ -313,22 +346,24 @@ struct InventoryView: View {
             HStack(alignment: .center) {
                 SectionHeader(title: "商品信息")
                 Spacer()
-                Button(action: {
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.backward")
+                        .scaledFont(12)
+                    Text("返回列表")
+                        .scaledFont(12, weight: .medium)
+                }
+                .foregroundStyle(Color.appPrimaryDark)
+                // 增大点击热区，保持 onTapGesture 以防 ScrollView 延迟
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.appPrimarySoft)
+                .clipShape(.rect(cornerRadius: 6))
+                .contentShape(Rectangle())
+                .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedProduct = nil
                     }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.backward")
-                            .scaledFont(12)
-                        Text("返回列表")
-                            .scaledFont(12, weight: .medium)
-                    }
-                    .foregroundStyle(Color.appPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.appPrimarySoft)
-                    .clipShape(.rect(cornerRadius: 6))
                 }
             }
             .padding(.top, 4)
@@ -380,7 +415,7 @@ struct InventoryView: View {
                             .foregroundStyle(Color.ink)
                         Text("\(String(format: "%g", item.displayStock))")
                             .scaledFont(24, weight: .bold)
-                            .foregroundStyle(item.displayStock > 0 ? Color.appPrimary : Color.danger)
+                            .foregroundStyle(item.displayStock > 0 ? Color.appPrimaryDark : Color.danger)
                         Text(item.displayUnit)
                             .scaledFont(13)
                             .foregroundStyle(Color.ink)
@@ -392,14 +427,14 @@ struct InventoryView: View {
                             .foregroundStyle(Color.ink)
                         Text("\(item.inventories?.count ?? 0)")
                             .scaledFont(20, weight: .bold)
-                            .foregroundStyle(Color.appPrimary)
+                            .foregroundStyle(Color.appPrimaryDark)
                         Text(" 个库存批次")
                             .scaledFont(13)
                             .foregroundStyle(Color.ink)
                     }
                     .padding(.vertical, 10)
                     .padding(.horizontal, 12)
-                    .background(Color.appPrimary.opacity(0.1))
+                    .background(Color.appPrimarySoft)
                     .clipShape(.rect(cornerRadius: 8))
                 }
             }
@@ -411,7 +446,7 @@ struct InventoryView: View {
                 .padding(.top, 8)
             
             if let batches = item.inventories, !batches.isEmpty {
-                VStack(spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(batches) { batch in
                         AppCard(padding: 16) {
                             VStack(alignment: .leading, spacing: 8) {
@@ -500,6 +535,18 @@ struct InventoryView: View {
             }
         }
         .padding(16)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    // 从左侧边缘 (X<40) 往右滑 (translation>50)
+                    if value.startLocation.x < 40 && value.translation.width > 50 {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedProduct = nil
+                        }
+                    }
+                }
+        )
     }
     
     private func loadInitialData() async {
@@ -541,16 +588,15 @@ struct InventoryView: View {
         do {
             let res = try await ApiClient.shared.fetchInventory(keyword: term, storeId: selectedStoreId)
             guard !Task.isCancelled else { return }
-            self.items = res
-            
-            // 1:1 对齐 Android: 如果仅有 1 条匹配且尚未自动展示过，直接展示该商品详情
             if allowAutoNavigate && res.count == 1 && !term.isEmpty && !hasAutoNavigated && selectedProduct == nil {
                 hasAutoNavigated = true
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    self.selectedProduct = res.first
+                self.items = res
+                self.selectedProduct = res.first
+            } else {
+                self.items = res
+                if res.isEmpty {
+                    self.selectedProduct = nil
                 }
-            } else if res.isEmpty {
-                self.selectedProduct = nil
             }
         } catch is CancellationError {
             return
@@ -576,7 +622,7 @@ struct InventoryRowView: View {
                 // Row 1: Icon, Code · Name, Price
                 HStack(alignment: .top) {
                     Image(systemName: "cross.case.fill")
-                        .foregroundStyle(Color.appPrimary)
+                        .foregroundStyle(Color.appPrimaryDark)
                         .scaledFont(14)
                         .padding(.top, 2)
                     

@@ -64,7 +64,7 @@ public struct InventoryDetailView: View {
                                 .foregroundStyle(Color.ink)
                             Text("\(String(format: "%g", item.displayStock))")
                                 .scaledFont(24, weight: .bold)
-                                .foregroundStyle(item.displayStock > 0 ? Color.appPrimary : Color.danger)
+                                .foregroundStyle(item.displayStock > 0 ? Color.appPrimaryDark : Color.danger)
                             Text(item.displayUnit)
                                 .scaledFont(13)
                                 .foregroundStyle(Color.ink)
@@ -76,14 +76,14 @@ public struct InventoryDetailView: View {
                                 .foregroundStyle(Color.ink)
                             Text("\(item.inventories?.count ?? 0)")
                                 .scaledFont(20, weight: .bold)
-                                .foregroundStyle(Color.appPrimary)
+                                .foregroundStyle(Color.appPrimaryDark)
                             Text(" 个库存批次")
                                 .scaledFont(13)
                                 .foregroundStyle(Color.ink)
                         }
                         .padding(.vertical, 10)
                         .padding(.horizontal, 12)
-                        .background(Color.appPrimary.opacity(0.1))
+                        .background(Color.appPrimarySoft)
                         .clipShape(.rect(cornerRadius: 8))
                     }
                 }

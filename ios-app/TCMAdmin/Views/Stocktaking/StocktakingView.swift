@@ -10,6 +10,7 @@ public struct StocktakingView: View {
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetPresented = false
     @State private var currentTaskID: UUID = UUID()
+    @State private var loadTask: Task<Void, Never>? = nil
     
     public init() {}
     
@@ -41,7 +42,7 @@ public struct StocktakingView: View {
                                 isSelected: selectedStoreId == nil,
                                 action: {
                                     selectedStoreId = nil
-                                    Task { await loadStocktakings() }
+                                    startLoadStocktakings()
                                 }
                             )
                             
@@ -51,7 +52,7 @@ public struct StocktakingView: View {
                                     isSelected: selectedStoreId == st.id,
                                     action: {
                                         selectedStoreId = st.id
-                                        Task { await loadStocktakings() }
+                                        startLoadStocktakings()
                                     }
                                 )
                             }
@@ -134,6 +135,7 @@ public struct StocktakingView: View {
                                 }
                             }
                             .onTapGesture {
+                                hideKeyboard()
                                 router.navigate(to: .stocktakingDetail(checkId: item.id))
                             }
                         }
@@ -144,12 +146,12 @@ public struct StocktakingView: View {
                     ApiClient.shared.clearResponseCache()
                     await loadStocktakings()
                 }
-                .id("stock_\(selectedStoreId ?? -1)")
+                
             }
         }
         .sheet(isPresented: $isCreateSheetPresented) {
             CreateGoodsCheckSheet(stores: stores) {
-                Task { await loadStocktakings() }
+                startLoadStocktakings()
             }
         }
         .scrollDismissesKeyboard(.interactively)
@@ -157,6 +159,9 @@ public struct StocktakingView: View {
             async let fetchedStores: () = loadStores()
             async let fetchedChecks: () = loadStocktakings()
             _ = await (fetchedStores, fetchedChecks)
+        }
+        .onDisappear {
+            loadTask?.cancel()
         }
         .background(Color.pageBackground)
         .navigationTitle("商品盘点")
@@ -169,13 +174,21 @@ public struct StocktakingView: View {
         } catch { print("Failed to load stores: \(error)") }
     }
     
+    private func startLoadStocktakings() {
+        loadTask?.cancel()
+        loadTask = Task { await loadStocktakings() }
+    }
+
     private func loadStocktakings() async {
         let taskID = UUID()
         currentTaskID = taskID
         isLoading = true
         do {
-            self.stocktakings = try await ApiClient.shared.fetchStocktakings(storeId: selectedStoreId)
+            let result = try await ApiClient.shared.fetchStocktakings(storeId: selectedStoreId)
+            guard !Task.isCancelled else { return }
+            self.stocktakings = result
         } catch {
+            guard !Task.isCancelled else { return }
             self.errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }
@@ -920,5 +933,4 @@ private struct CandidateRowView: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
-
 

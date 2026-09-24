@@ -7,6 +7,7 @@ struct TCMAdminApp: App {
     @State private var importedAlertMessage: String? = nil
     @State private var showImportAlert = false
     @State private var hasAgreedPrivacy: Bool = UserDefaults.standard.bool(forKey: "agreed_privacy")
+    @AppStorage("keep_screen_awake") private var keepScreenAwake: Bool = false
 
     var body: some Scene {
         WindowGroup {
@@ -45,6 +46,19 @@ struct TCMAdminApp: App {
                 Button("好的", role: .cancel) { }
             } message: {
                 Text(importedAlertMessage ?? "")
+            }
+            .onAppear {
+                UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
+            }
+            .onChange(of: keepScreenAwake) { _, newValue in
+                UIApplication.shared.isIdleTimerDisabled = newValue
+            }
+            .onChange(of: session.isAuthenticated) { _, _ in
+                UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
+            }
+            // 每次 App 回到前台时也强制重置，防止 AVCaptureSession 等系统行为修改过该值
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
             }
         }
     }

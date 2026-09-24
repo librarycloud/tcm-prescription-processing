@@ -20,6 +20,7 @@ public struct DifferencesView: View {
     @State private var isLoadingMore = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    @State private var loadTask: Task<Void, Never>? = nil
     
     // 销账弹窗
     @State private var writeOffProduct: DifferenceProductModel? = nil
@@ -112,7 +113,7 @@ public struct DifferencesView: View {
                                 .foregroundStyle(Color.danger)
                             Spacer()
                             Button("重试") {
-                                Task { await loadData() }
+                                startLoadData()
                             }
                             .scaledFont(12, weight: .bold)
                             .foregroundStyle(Color.appPrimary)
@@ -281,7 +282,7 @@ public struct DifferencesView: View {
             ApiClient.shared.clearResponseCache()
             await loadData()
         }
-        .id("diff_\(selectedTab)")
+        
         .sheet(item: $writeOffProduct) { prod in
             NavigationStack {
                 VStack(spacing: 16) {
@@ -337,9 +338,17 @@ public struct DifferencesView: View {
         }
         .sheet(isPresented: $isRegisterSheetShowing) {
             RegisterDifferenceSheet {
-                Task { await loadData() }
+                startLoadData()
             }
         }
+        .onDisappear {
+            loadTask?.cancel()
+        }
+    }
+
+    private func startLoadData() {
+        loadTask?.cancel()
+        loadTask = Task { await loadData() }
     }
     
     private func loadData() async {
@@ -358,12 +367,14 @@ public struct DifferencesView: View {
             async let fetchLgs = ApiClient.shared.fetchDifferenceLogs(page: 1)
             
             let (loadedStats, loadedProds, loadedLogs) = try await (fetchStats, fetchProds, fetchLgs)
+            guard !Task.isCancelled else { return }
             self.stats = loadedStats
             self.products = loadedProds
             self.logs = loadedLogs
             if loadedProds.count < 30 { hasMoreProducts = false }
             if loadedLogs.count < 20 { hasMoreLogs = false }
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }
@@ -419,7 +430,7 @@ public struct DifferencesView: View {
                     writeOffProduct = nil
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
-                await loadData()
+                startLoadData()
             } catch {
                 await MainActor.run {
                     isWriteOffBusy = false
@@ -526,7 +537,7 @@ public struct RegisterDifferenceSheet: View {
                                                     }
                                                 }
                                                 .padding(10)
-                                                .background(selectedProduct?.id == item.id ? Color.appPrimary.opacity(0.08) : Color.surface)
+                                                .background(selectedProduct?.id == item.id ? Color.appPrimarySoft : Color.surface)
                                                 .clipShape(.rect(cornerRadius: 6))
                                                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(selectedProduct?.id == item.id ? Color.appPrimary : Color.cardBorder, lineWidth: 1))
                                             }
@@ -639,4 +650,3 @@ public struct RegisterDifferenceSheet: View {
         }
     }
 }
-

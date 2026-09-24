@@ -19,6 +19,16 @@ public struct ProcessingView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    @State private var loadTask: Task<Void, Never>? = nil
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     // 操作弹窗
     @State private var isCreatingPlan = false
@@ -57,7 +67,7 @@ public struct ProcessingView: View {
                                 .scaledFont(13, weight: .medium)
                         }
                         .foregroundStyle(Color.appPrimary)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: sizeClass == .regular ? 250 : .infinity)
                         .frame(height: 38)
                         .background(Color.surface)
                         .clipShape(.rect(cornerRadius: 8))
@@ -75,12 +85,14 @@ public struct ProcessingView: View {
                                     .scaledFont(13, weight: .medium)
                             }
                             .foregroundStyle(Color.white)
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: sizeClass == .regular ? 250 : .infinity)
                             .frame(height: 38)
                             .background(Color.appPrimary)
                             .clipShape(.rect(cornerRadius: 8))
                         }
                     }
+                    
+                    if sizeClass == .regular { Spacer() }
                 }
                 
                 // 模式切换: 加工计划 vs 领取列表
@@ -89,10 +101,10 @@ public struct ProcessingView: View {
                         label: "加工计划",
                         isSelected: mode == "plans",
                         action: {
-                            withAnimation {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
                                 mode = "plans"
                                 isLoading = false
-                                Task { await loadData() }
+                                startLoadData()
                             }
                         }
                     )
@@ -102,10 +114,10 @@ public struct ProcessingView: View {
                         label: "领取列表",
                         isSelected: mode == "pickup",
                         action: {
-                            withAnimation {
+                            withAnimation(.easeInOut(duration: 0.15)) {
                                 mode = "pickup"
                                 isLoading = false
-                                Task { await loadData() }
+                                startLoadData()
                             }
                         }
                     )
@@ -119,9 +131,9 @@ public struct ProcessingView: View {
                             ForEach(statItems, id: \.1) { item in
                                 let isSelected = activeView == item.1
                                 Button(action: {
-                                    withAnimation {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
                                         activeView = item.1
-                                        Task { await loadData() }
+                                        startLoadData()
                                     }
                                 }) {
                                     VStack(alignment: .leading, spacing: 2) {
@@ -156,7 +168,7 @@ public struct ProcessingView: View {
                             softColor: .appPrimarySoft
                         ) {
                             pickupStatus = 0
-                            Task { await loadData() }
+                            startLoadData()
                         }
                         
                         statPickupCard(
@@ -167,7 +179,7 @@ public struct ProcessingView: View {
                             softColor: .successSoft
                         ) {
                             pickupStatus = 1
-                            Task { await loadData() }
+                            startLoadData()
                         }
                     }
                 }
@@ -177,7 +189,7 @@ public struct ProcessingView: View {
                     text: $searchText,
                     placeholder: mode == "plans" ? "搜索计划单号、患者姓名或备注" : "搜索取货码、患者姓名或手机号",
                     onSearch: {
-                        Task { await loadData() }
+                        startLoadData()
                     },
                     onScan: { router.isScannerPresented = true }
                 )
@@ -188,12 +200,12 @@ public struct ProcessingView: View {
                         HStack(spacing: 8) {
                             SegmentedButton(label: "全部门店", isSelected: selectedStoreId == nil) {
                                 selectedStoreId = nil
-                                Task { await loadData() }
+                                startLoadData()
                             }
                             ForEach(stores) { store in
                                 SegmentedButton(label: store.name, isSelected: selectedStoreId == store.id) {
                                     selectedStoreId = store.id
-                                    Task { await loadData() }
+                                    startLoadData()
                                 }
                             }
                         }
@@ -217,15 +229,23 @@ public struct ProcessingView: View {
         .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
             ApiClient.shared.clearResponseCache()
-            Task { await loadData() }
+            startLoadData()
         }
         .task {
             if isSuperAdmin && stores.isEmpty {
-                if let sts = try? await ApiClient.shared.fetchStores() {
-                    self.stores = sts
-                }
+                async let storesTask: () = {
+                    if let sts = try? await ApiClient.shared.fetchStores() {
+                        await MainActor.run { self.stores = sts }
+                    }
+                }()
+                async let dataTask: () = loadData()
+                _ = await (storesTask, dataTask)
+            } else {
+                await loadData()
             }
-            await loadData()
+        }
+        .onDisappear {
+            loadTask?.cancel()
         }
         .sheet(isPresented: $isCreatingPlan) {
             ProcessingPlanFormView()
@@ -264,7 +284,7 @@ public struct ProcessingView: View {
             Spacer()
         } else {
             AppScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(plans) { plan in
                         ProcessingPlanCard(
                             plan: plan,
@@ -277,13 +297,13 @@ public struct ProcessingView: View {
                             onStartClick: {
                                 Task {
                                     _ = try? await ApiClient.shared.transitionPlan(id: plan.id, status: 1)
-                                    await loadData()
+                                    startLoadData()
                                 }
                             },
                             onDelayClick: {
                                 Task {
                                     _ = try? await ApiClient.shared.delayPlan(id: plan.id, days: 1)
-                                    await loadData()
+                                    startLoadData()
                                 }
                             },
                             onScanClick: {
@@ -301,7 +321,7 @@ public struct ProcessingView: View {
                             onCancelClick: {
                                 Task {
                                     _ = try? await ApiClient.shared.cancelPlan(id: plan.id)
-                                    await loadData()
+                                    startLoadData()
                                 }
                             },
                             onTap: {
@@ -316,7 +336,7 @@ public struct ProcessingView: View {
                 ApiClient.shared.clearResponseCache()
                 await loadData()
             }
-            .id("plans_\(activeView)_\(selectedStoreId ?? -1)")
+            
             .background(Color.pageBackground)
         }
     }
@@ -345,7 +365,7 @@ public struct ProcessingView: View {
             Spacer()
         } else {
             AppScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(pickupPackages) { pkg in
                         ProcessingPickupPackageCard(
                             pkg: pkg,
@@ -353,7 +373,7 @@ public struct ProcessingView: View {
                             onQuickVerify: {
                                 Task {
                                     _ = try? await ApiClient.shared.verifyPackage(code: pkg.code, pickupMethod: 0)
-                                    await loadData()
+                                    startLoadData()
                                 }
                             },
                             onTap: {
@@ -368,7 +388,7 @@ public struct ProcessingView: View {
                 ApiClient.shared.clearResponseCache()
                 await loadData()
             }
-            .id("pickups_\(pickupStatus)_\(selectedStoreId ?? -1)")
+            
             .background(Color.pageBackground)
         }
     }
@@ -399,6 +419,11 @@ public struct ProcessingView: View {
     }
     
     // MARK: - 数据请求
+    private func startLoadData() {
+        loadTask?.cancel()
+        loadTask = Task { await loadData() }
+    }
+
     private func loadData() async {
         let taskID = UUID()
         currentTaskID = taskID
@@ -706,7 +731,10 @@ struct ProcessingPlanCard: View {
                 .padding(.vertical, 8)
             }
         }
-        .onTapGesture(perform: onTap)
+        .onTapGesture {
+            hideKeyboard()
+            onTap()
+        }
     }
 }
 
@@ -780,6 +808,9 @@ struct ProcessingPickupPackageCard: View {
                 }
             }
         }
-        .onTapGesture(perform: onTap)
+        .onTapGesture {
+            hideKeyboard()
+            onTap()
+        }
     }
 }

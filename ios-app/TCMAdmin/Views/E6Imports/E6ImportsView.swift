@@ -13,6 +13,7 @@ public struct E6ImportsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    @State private var loadTask: Task<Void, Never>? = nil
     @State private var successNotice: String? = nil
     
     // 驳回弹窗
@@ -46,7 +47,7 @@ public struct E6ImportsView: View {
                 // 顶部标题与搜索操作栏
                 VStack(spacing: 10) {
                     SectionHeader(title: "E6诊所处方导入", subtitle: "核对E6订单，确认后生成处方与加工计划") {
-                        Button(action: { Task { await loadE6Imports() } }) {
+                        Button(action: { startLoadE6Imports() }) {
                             HStack(spacing: 4) {
                                 if isLoading {
                                     ProgressView().scaleEffect(0.7).tint(.appPrimary)
@@ -64,7 +65,7 @@ public struct E6ImportsView: View {
                     SearchBarField(
                         text: $searchText,
                         placeholder: "搜索订单号、顾客、电话或销售员号",
-                        onSearch: { Task { await loadE6Imports() } },
+                        onSearch: { startLoadE6Imports() },
                         onScan: { router.isScannerPresented = true }
                     )
                     
@@ -75,7 +76,7 @@ public struct E6ImportsView: View {
                             isSelected: orderDate.isEmpty,
                             action: {
                                 orderDate = ""
-                                Task { await loadE6Imports() }
+                                startLoadE6Imports()
                             }
                         )
                         SegmentedButton(
@@ -83,14 +84,14 @@ public struct E6ImportsView: View {
                             isSelected: orderDate == todayString,
                             action: {
                                 orderDate = orderDate == todayString ? "" : todayString
-                                Task { await loadE6Imports() }
+                                startLoadE6Imports()
                             }
                         )
                         
                         if !orderDate.isEmpty && orderDate != todayString {
                             Button(action: {
                                 orderDate = ""
-                                Task { await loadE6Imports() }
+                                startLoadE6Imports()
                             }) {
                                 HStack(spacing: 4) {
                                     Text(orderDate)
@@ -137,7 +138,7 @@ public struct E6ImportsView: View {
                                     isSelected: selectedStatus == opt.0,
                                     action: {
                                         selectedStatus = opt.0
-                                        Task { await loadE6Imports() }
+                                        startLoadE6Imports()
                                     }
                                 )
                             }
@@ -296,6 +297,7 @@ public struct E6ImportsView: View {
                                     }
                                 }
                                 .onTapGesture {
+                                    hideKeyboard()
                                     router.navigate(to: .e6ImportDetail(id: item.id))
                                 }
                             }
@@ -307,7 +309,7 @@ public struct E6ImportsView: View {
             ApiClient.shared.clearResponseCache()
                         await loadE6Imports()
                     }
-                .id("e6_\(selectedStatus ?? -1)_\(orderDate)")
+                
                     .background(Color.pageBackground)
                 }
             }
@@ -376,7 +378,7 @@ public struct E6ImportsView: View {
             E6ConfirmFormSheet(items: wrapper.items) {
                 selectedIds.removeAll()
                 confirmTargetItems = nil
-                Task { await loadE6Imports() }
+                startLoadE6Imports()
             }
         }
         .sheet(isPresented: $showDatePicker) {
@@ -399,7 +401,7 @@ public struct E6ImportsView: View {
                             formatter.dateFormat = "yyyy-MM-dd"
                             orderDate = formatter.string(from: tempPickerDate)
                             showDatePicker = false
-                            Task { await loadE6Imports() }
+                            startLoadE6Imports()
                         }
                         .fontWeight(.bold)
                     }
@@ -411,10 +413,18 @@ public struct E6ImportsView: View {
         .task {
             await loadE6Imports()
         }
+        .onDisappear {
+            loadTask?.cancel()
+        }
         .navigationTitle("E6诊所处方导入")
         .navigationBarTitleDisplayMode(.inline)
     }
     
+    private func startLoadE6Imports() {
+        loadTask?.cancel()
+        loadTask = Task { await loadE6Imports() }
+    }
+
     private func loadE6Imports() async {
         let taskID = UUID()
         currentTaskID = taskID
@@ -451,7 +461,7 @@ public struct E6ImportsView: View {
                 await MainActor.run {
                     successNotice = "已完成重校验"
                 }
-                await loadE6Imports()
+                startLoadE6Imports()
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
@@ -470,7 +480,7 @@ public struct E6ImportsView: View {
                     rejectTargetId = nil
                     successNotice = "已成功驳回订单"
                 }
-                await loadE6Imports()
+                startLoadE6Imports()
             } catch {
                 await MainActor.run {
                     isRejecting = false

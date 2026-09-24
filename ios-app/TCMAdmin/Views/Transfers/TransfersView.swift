@@ -18,6 +18,7 @@ public struct TransfersView: View {
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetShowing = false
     @State private var currentTaskID: UUID = UUID()
+    @State private var loadTask: Task<Void, Never>? = nil
     
     public init() {}
     
@@ -56,7 +57,7 @@ public struct TransfersView: View {
                     ) {
                         selectedStatus = 0
                         overdueOnly = false
-                        Task { await loadTransfers() }
+                        startLoadTransfers()
                     }
                     
                     statCardItem(
@@ -67,7 +68,7 @@ public struct TransfersView: View {
                     ) {
                         selectedStatus = 1
                         overdueOnly = false
-                        Task { await loadTransfers() }
+                        startLoadTransfers()
                     }
                     
                     statCardItem(
@@ -78,7 +79,7 @@ public struct TransfersView: View {
                     ) {
                         selectedStatus = nil
                         overdueOnly = true
-                        Task { await loadTransfers() }
+                        startLoadTransfers()
                     }
                 }
                 
@@ -87,16 +88,16 @@ public struct TransfersView: View {
                     text: $searchText,
                     placeholder: "输入单号、门店、物品或批号",
                     onSearch: {
-                        Task { await loadTransfers() }
+                        startLoadTransfers()
                     }
                 )
                 .onChange(of: searchText) {
                     searchTask?.cancel()
                     searchTask = Task {
                         do {
-                            try await Task.sleep(nanoseconds: 500_000_000)
+                            try await Task.sleep(nanoseconds: 300_000_000)
                             if !Task.isCancelled {
-                                await loadTransfers()
+                                startLoadTransfers()
                             }
                         } catch {}
                     }
@@ -108,22 +109,22 @@ public struct TransfersView: View {
                         SegmentedButton(label: "全部状态", isSelected: selectedStatus == nil && !overdueOnly) {
                             selectedStatus = nil
                             overdueOnly = false
-                            Task { await loadTransfers() }
+                            startLoadTransfers()
                         }
                         SegmentedButton(label: "借出中", isSelected: selectedStatus == 0 && !overdueOnly) {
                             selectedStatus = 0
                             overdueOnly = false
-                            Task { await loadTransfers() }
+                            startLoadTransfers()
                         }
                         SegmentedButton(label: "部分归还", isSelected: selectedStatus == 1 && !overdueOnly) {
                             selectedStatus = 1
                             overdueOnly = false
-                            Task { await loadTransfers() }
+                            startLoadTransfers()
                         }
                         SegmentedButton(label: "已逾期", isSelected: overdueOnly) {
                             selectedStatus = nil
                             overdueOnly = true
-                            Task { await loadTransfers() }
+                            startLoadTransfers()
                         }
                     }
                 }
@@ -133,18 +134,12 @@ public struct TransfersView: View {
                         HStack(spacing: 8) {
                             SegmentedButton(label: "全部门店", isSelected: selectedStoreId == nil) {
                                 selectedStoreId = nil
-                                Task {
-                                    await loadTransfers()
-                                    await loadStats()
-                                }
+                                startReloadTransfers()
                             }
                             ForEach(stores) { store in
                                 SegmentedButton(label: store.name, isSelected: selectedStoreId == store.id) {
                                     selectedStoreId = store.id
-                                    Task {
-                                        await loadTransfers()
-                                        await loadStats()
-                                    }
+                                    startReloadTransfers()
                                 }
                             }
                         }
@@ -167,10 +162,7 @@ public struct TransfersView: View {
                                     .foregroundStyle(Color.danger)
                                 Spacer()
                                 Button("重试") {
-                                    Task {
-                                        await loadTransfers()
-                                        await loadStats()
-                                    }
+                                    startReloadTransfers()
                                 }
                                 .scaledFont(12, weight: .bold)
                                 .foregroundStyle(Color.appPrimary)
@@ -251,6 +243,7 @@ public struct TransfersView: View {
                                     }
                                 }
                                 .onTapGesture {
+                                    hideKeyboard()
                                     router.navigate(to: .transferDetail(id: item.id))
                                 }
                             }
@@ -265,25 +258,30 @@ public struct TransfersView: View {
                 await loadTransfers()
                 await loadStats()
             }
-            .id("trans_\(selectedStatus ?? -1)_\(overdueOnly ? 1 : 0)")
+            
         }
         .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("门店调拨")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isCreateSheetShowing) {
             TransferFormView(stores: stores) {
-                Task {
-                    await loadTransfers()
-                    await loadStats()
-                }
+                startReloadTransfers()
             }
         }
         .background(Color.pageBackground.ignoresSafeArea(.all))
         .scrollDismissesKeyboard(.interactively)
         .task {
-            stores = (try? await ApiClient.shared.fetchStores()) ?? []
-            await loadStats()
-            await loadTransfers()
+            // 三个请求完全并行：门店列表、统计数据、调拨记录
+            async let fetchedStores = (try? ApiClient.shared.fetchStores()) ?? []
+            async let statsTask: () = loadStats()
+            async let transfersTask: () = loadTransfers()
+            
+            let (storesResult, _, _) = await (fetchedStores, statsTask, transfersTask)
+            self.stores = storesResult
+        }
+        .onDisappear {
+            searchTask?.cancel()
+            loadTask?.cancel()
         }
     }
     
@@ -309,6 +307,20 @@ public struct TransfersView: View {
         }
     }
     
+    private func startLoadTransfers() {
+        loadTask?.cancel()
+        loadTask = Task { await loadTransfers() }
+    }
+
+    private func startReloadTransfers() {
+        loadTask?.cancel()
+        loadTask = Task {
+            async let transfersTask: () = loadTransfers()
+            async let statsTask: () = loadStats()
+            _ = await (transfersTask, statsTask)
+        }
+    }
+
     private func loadStats() async {
         stats = (try? await ApiClient.shared.fetchTransferStats(storeId: selectedStoreId)) ?? [:]
     }
@@ -319,13 +331,16 @@ public struct TransfersView: View {
         isLoading = true
         errorMessage = nil
         do {
-            self.transfers = try await ApiClient.shared.fetchTransfers(
+            let result = try await ApiClient.shared.fetchTransfers(
                 keyword: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
                 status: selectedStatus,
                 overdueOnly: overdueOnly,
                 storeId: selectedStoreId
             )
+            guard !Task.isCancelled else { return }
+            self.transfers = result
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }
@@ -1036,4 +1051,3 @@ public struct TransferDetailView: View {
         }
     }
 }
-

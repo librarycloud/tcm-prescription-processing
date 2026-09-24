@@ -9,6 +9,7 @@ public struct PackagesView: View {
     @State private var selectedSortBy: String = "createdAt" // createdAt, pickedAt
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Error>? = nil
+    @State private var loadTask: Task<Void, Never>? = nil
     @State private var packages: [PackageModel] = []
     @State private var stores: [StoreItem] = []
     @State private var selectedStoreId: Int? = nil
@@ -16,6 +17,15 @@ public struct PackagesView: View {
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetShowing = false
     @State private var currentTaskID: UUID = UUID()
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     public init() {}
     
@@ -53,7 +63,7 @@ public struct PackagesView: View {
                             .foregroundStyle(Color.appPrimary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Color.appPrimary.opacity(0.12))
+                            .background(Color.appPrimarySoft)
                             .clipShape(.rect(cornerRadius: 8))
                         }
                     }
@@ -63,7 +73,7 @@ public struct PackagesView: View {
                     text: $searchText,
                     placeholder: "输入收件人、取货码、手机号或单号查询",
                     onSearch: {
-                        Task { await loadPackages() }
+                        startLoadPackages()
                     },
                     onScan: { router.isScannerPresented = true }
                 )
@@ -71,10 +81,10 @@ public struct PackagesView: View {
                     searchTask?.cancel()
                     searchTask = Task {
                         do {
-                            try await Task.sleep(nanoseconds: 600_000_000)
+                            try await Task.sleep(nanoseconds: 350_000_000)
                             if !Task.isCancelled {
                                 isLoading = false
-                                await loadPackages()
+                                startLoadPackages()
                             }
                         } catch {}
                     }
@@ -85,15 +95,15 @@ public struct PackagesView: View {
                     HStack(spacing: 8) {
                         SegmentedButton(label: "全部包裹", isSelected: selectedStatus == nil) {
                             selectedStatus = nil
-                            Task { await loadPackages() }
+                            startLoadPackages()
                         }
                         SegmentedButton(label: "待取件", isSelected: selectedStatus == 0) {
                             selectedStatus = 0
-                            Task { await loadPackages() }
+                            startLoadPackages()
                         }
                         SegmentedButton(label: "已完成", isSelected: selectedStatus == 1) {
                             selectedStatus = 1
-                            Task { await loadPackages() }
+                            startLoadPackages()
                         }
                     }
                 }
@@ -103,11 +113,11 @@ public struct PackagesView: View {
                     HStack(spacing: 8) {
                         SegmentedButton(label: "按入库时间排序", isSelected: selectedSortBy == "createdAt") {
                             selectedSortBy = "createdAt"
-                            Task { await loadPackages() }
+                            startLoadPackages()
                         }
                         SegmentedButton(label: "按取件时间排序", isSelected: selectedSortBy == "pickedAt") {
                             selectedSortBy = "pickedAt"
-                            Task { await loadPackages() }
+                            startLoadPackages()
                         }
                     }
                 }
@@ -117,12 +127,12 @@ public struct PackagesView: View {
                         HStack(spacing: 8) {
                             SegmentedButton(label: "全部门店", isSelected: selectedStoreId == nil) {
                                 selectedStoreId = nil
-                                Task { await loadPackages() }
+                                startLoadPackages()
                             }
                             ForEach(stores) { store in
                                 SegmentedButton(label: store.name, isSelected: selectedStoreId == store.id) {
                                     selectedStoreId = store.id
-                                    Task { await loadPackages() }
+                                startLoadPackages()
                                 }
                             }
                         }
@@ -147,7 +157,7 @@ public struct PackagesView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16)
                     Button("点击重试") {
-                        Task { await loadPackages() }
+                        startLoadPackages()
                     }
                     .scaledFont(14, weight: .bold)
                     .foregroundStyle(Color.appPrimary)
@@ -167,70 +177,11 @@ public struct PackagesView: View {
                 Spacer()
             } else {
                 AppScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(packages) { pkg in
-                            AppCard(padding: 16) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Image(systemName: "shippingbox")
-                                            .foregroundStyle(Color.appPrimary)
-                                        Text(pkg.name)
-                                            .scaledFont(16, weight: .bold)
-                                            .foregroundStyle(Color.ink)
-                                        Spacer()
-                                        StatusPill(text: pkg.method)
-                                        StatusPill(text: pkg.statusText)
-                                    }
-                                    
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("取货码").scaledFont(11).foregroundStyle(Color.muted)
-                                            Text(pkg.code.formattedPickupCode).scaledFont(18, weight: .bold).foregroundStyle(Color.appPrimaryDark)
-                                        }
-                                        Spacer()
-                                        VStack(alignment: .trailing, spacing: 4) {
-                                            Text("收件人").scaledFont(11).foregroundStyle(Color.muted)
-                                            Text("\(pkg.customer) · \(maskPhone(pkg.phone))")
-                                                .scaledFont(13, weight: .semibold)
-                                                .foregroundStyle(Color.ink)
-                                        }
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color.surface)
-                                    .clipShape(.rect(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
-                                    
-                                    if showStore && !pkg.store.isEmpty {
-                                        InfoRowItem(label: "所属门店", value: pkg.store)
-                                    }
-                                    let rawTime = pkg.time.isEmpty ? (pkg.pickedAt.isEmpty ? "" : pkg.pickedAt) : pkg.time
-                                    let displayTime = (rawTime.isEmpty || rawTime == "未领取") ? "未领取" : formatDateTimeToMinute(rawTime)
-                                    InfoRowItem(label: "领取时间", value: displayTime)
-                                    if !pkg.info.isEmpty {
-                                        InfoRowItem(label: "备注", value: pkg.info)
-                                    }
-                                    
-                                    if pkg.statusCode == 0 {
-                                        HStack {
-                                            Spacer()
-                                            Button(action: {
-                                                router.navigate(to: .packageVerify(initialCode: pkg.code))
-                                            }) {
-                                                Text("快速核销")
-                                                    .scaledFont(12, weight: .bold)
-                                                    .foregroundStyle(Color.white)
-                                                    .padding(.horizontal, 14)
-                                                    .padding(.vertical, 5)
-                                                    .background(Color.success)
-                                                    .clipShape(.rect(cornerRadius: 6))
-                                            }
-                                        }
-                                        .padding(.top, 4)
-                                    }
-                                }
-                            }
-                            .onTapGesture {
+                            PackageRowCard(pkg: pkg, showStore: showStore) {
+                                router.navigate(to: .packageVerify(initialCode: pkg.code))
+                            } onTap: {
                                 router.navigate(to: .packageDetail(id: pkg.id))
                             }
                         }
@@ -241,27 +192,41 @@ public struct PackagesView: View {
                     ApiClient.shared.clearResponseCache()
                     await loadPackages()
                 }
-                .id("pkgs_\(selectedStatus ?? -1)_\(selectedSortBy)_\(selectedStoreId ?? -1)")
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 8) }
                 .background(Color.pageBackground)
             }
         }
         .sheet(isPresented: $isCreateSheetShowing) {
             PackageFormView {
-                Task { await loadPackages() }
+                startLoadPackages()
             }
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
+            // 并行加载门店列表与包裹数据，减少首屏等待时间
             if showStore && stores.isEmpty {
-                if let sts = try? await ApiClient.shared.fetchStores() {
-                    self.stores = sts
-                }
+                async let storesTask: () = {
+                    if let sts = try? await ApiClient.shared.fetchStores() {
+                        await MainActor.run { self.stores = sts }
+                    }
+                }()
+                async let packagesTask: () = loadPackages()
+                _ = await (storesTask, packagesTask)
+            } else {
+                await loadPackages()
             }
-            await loadPackages()
+        }
+        .onDisappear {
+            searchTask?.cancel()
+            loadTask?.cancel()
         }
     }
     
+    private func startLoadPackages() {
+        loadTask?.cancel()
+        loadTask = Task { await loadPackages() }
+    }
+
     private func loadPackages() async {
         let taskID = UUID()
         currentTaskID = taskID
@@ -293,3 +258,78 @@ public struct PackagesView: View {
     }
 }
 
+
+// MARK: - 包裹行卡片（独立子视图，减少 LazyVGrid 中不必要的重渲染）
+private struct PackageRowCard: View {
+    let pkg: PackageModel
+    let showStore: Bool
+    let onVerify: () -> Void
+    let onTap: () -> Void
+    
+    var body: some View {
+        AppCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "shippingbox")
+                        .foregroundStyle(Color.appPrimary)
+                    Text(pkg.name)
+                        .scaledFont(16, weight: .bold)
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    StatusPill(text: pkg.method)
+                    StatusPill(text: pkg.statusText)
+                }
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("取货码").scaledFont(11).foregroundStyle(Color.muted)
+                        Text(pkg.code.formattedPickupCode).scaledFont(18, weight: .bold).foregroundStyle(Color.appPrimaryDark)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("收件人").scaledFont(11).foregroundStyle(Color.muted)
+                        Text("\(pkg.customer) · \(maskPhone(pkg.phone))")
+                            .scaledFont(13, weight: .semibold)
+                            .foregroundStyle(Color.ink)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.surface)
+                .clipShape(.rect(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                
+                if showStore && !pkg.store.isEmpty {
+                    InfoRowItem(label: "所属门店", value: pkg.store)
+                }
+                let rawTime = pkg.time.isEmpty ? (pkg.pickedAt.isEmpty ? "" : pkg.pickedAt) : pkg.time
+                let displayTime = (rawTime.isEmpty || rawTime == "未领取") ? "未领取" : formatDateTimeToMinute(rawTime)
+                InfoRowItem(label: "领取时间", value: displayTime)
+                if !pkg.info.isEmpty {
+                    InfoRowItem(label: "备注", value: pkg.info)
+                }
+                
+                if pkg.statusCode == 0 {
+                    HStack {
+                        Spacer()
+                        Button(action: onVerify) {
+                            Text("快速核销")
+                                .scaledFont(12, weight: .bold)
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 5)
+                                .background(Color.success)
+                                .clipShape(.rect(cornerRadius: 6))
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            hideKeyboard()
+            onTap()
+        }
+    }
+}

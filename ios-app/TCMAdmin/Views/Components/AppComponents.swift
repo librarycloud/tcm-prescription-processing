@@ -1,5 +1,17 @@
 import SwiftUI
 import UIKit
+import ImageIO
+
+func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+    let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+    ]
+    guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+    return UIImage(cgImage: image)
+}
 
 // MARK: - 1. 通用标准卡片 (AppCard)
 /// 对应 Android 中的 AppCard，带有标准圆角、阴影和浅灰色描边
@@ -626,31 +638,67 @@ struct KeyboardDismissalModifier: ViewModifier {
 }
 
 struct KeyboardDismissalView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        DispatchQueue.main.async {
-            if let window = view.window {
-                let tapGesture = UITapGestureRecognizer(target: window, action: #selector(UIView.endEditing(_:)))
-                tapGesture.cancelsTouchesInView = false
-                tapGesture.delegate = context.coordinator
-                window.addGestureRecognizer(tapGesture)
-            }
-        }
+    func makeUIView(context: Context) -> KeyboardDismissalHostView {
+        let view = KeyboardDismissalHostView()
+        view.coordinator = context.coordinator
         return view
     }
-    
-    func updateUIView(_ uiView: UIView, context: Context) {}
+
+    func updateUIView(_ uiView: KeyboardDismissalHostView, context: Context) {}
+
+    static func dismantleUIView(_ uiView: KeyboardDismissalHostView, coordinator: Coordinator) {
+        coordinator.removeGesture()
+    }
     
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
+
+    final class KeyboardDismissalHostView: UIView {
+        weak var coordinator: Coordinator?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let window {
+                coordinator?.installGesture(on: window)
+            } else {
+                coordinator?.removeGesture()
+            }
+        }
+    }
     
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var window: UIWindow?
+        weak var gesture: UITapGestureRecognizer?
+
+        func installGesture(on window: UIWindow) {
+            guard self.window !== window else { return }
+            removeGesture()
+
+            let tapGesture = UITapGestureRecognizer(target: window, action: #selector(UIView.endEditing(_:)))
+            tapGesture.cancelsTouchesInView = false
+            tapGesture.requiresExclusiveTouchType = false
+            tapGesture.delegate = self
+            window.addGestureRecognizer(tapGesture)
+            self.window = window
+            self.gesture = tapGesture
+        }
+
+        func removeGesture() {
+            if let gesture, let window {
+                window.removeGestureRecognizer(gesture)
+            }
+            gesture = nil
+            window = nil
+        }
+
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            return false
+            // 允许与所有其他手势同时识别，绝不阻断侧滑返回的 pan 手势
+            return true
         }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            // UIPanGestureRecognizer (侧滑返回) 不应被 tap 识别器接收
             let view = touch.view
             if view is UIControl {
                 return false
@@ -663,6 +711,11 @@ struct KeyboardDismissalView: UIViewRepresentable {
                 current = c.superview
             }
             return true
+        }
+        
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            // 如果另一个手势是 pan（侧滑返回），让 tap 手势等其失败后才触发
+            return false
         }
     }
 }
@@ -857,7 +910,7 @@ public struct AppScrollView<Content: View>: View {
                 content()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScrollToTop"))) { _ in
-                withAnimation {
+                withAnimation(.easeOut(duration: 0.3)) {
                     proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
                 }
             }
@@ -880,7 +933,7 @@ public struct AppScrollView<Content: View>: View {
             .overlay(alignment: .bottomTrailing) {
                 if showScrollToTop {
                     Button {
-                        withAnimation(.spring()) {
+                        withAnimation(.easeOut(duration: 0.3)) {
                             proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
                         }
                     } label: {
@@ -898,7 +951,7 @@ public struct AppScrollView<Content: View>: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TabDoubleTapped"))) { _ in
-                withAnimation(.spring()) {
+                withAnimation(.easeOut(duration: 0.3)) {
                     proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
                 }
             }

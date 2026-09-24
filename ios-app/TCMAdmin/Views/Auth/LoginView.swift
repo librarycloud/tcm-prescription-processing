@@ -9,8 +9,9 @@ public struct LoginView: View {
     @State private var errorMessage: String? = nil
     
     // 服务器配置弹窗
+    @AppStorage("tcm_server_api_base_url") private var currentServerURL: String = "http://127.0.0.1:3000"
     @State private var isShowingServerConfig = false
-    @State private var configuredBaseURL = ApiClient.shared.baseURL
+    @State private var configuredBaseURL = ""
     @State private var currentTaskID: UUID = UUID()
     
     public init() {}
@@ -24,7 +25,7 @@ public struct LoginView: View {
                 HStack {
                     Spacer()
                     Button(action: {
-                        configuredBaseURL = ApiClient.shared.baseURL
+                        configuredBaseURL = currentServerURL
                         isShowingServerConfig = true
                     }) {
                         HStack(spacing: 4) {
@@ -75,7 +76,7 @@ public struct LoginView: View {
                             .foregroundStyle(Color.muted)
                         
                         // 显示当前连接的服务器
-                        Text("当前服务器: \(ApiClient.shared.baseURL)")
+                        Text("当前服务器: \(currentServerURL)")
                             .scaledFont(11)
                             .foregroundStyle(Color.appPrimary)
                             .padding(.top, 6)
@@ -166,11 +167,7 @@ public struct LoginView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TCMServerConfigImported"))) { notif in
-            if let newURL = notif.object as? String {
-                configuredBaseURL = newURL
-            }
-        }
+
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {

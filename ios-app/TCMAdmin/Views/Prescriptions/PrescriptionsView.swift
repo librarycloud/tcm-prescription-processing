@@ -16,12 +16,22 @@ public struct PrescriptionsView: View {
     @State private var prescriptions: [PrescriptionItem] = []
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
+    @State private var loadTask: Task<Void, Never>? = nil
     
     @State private var currentTaskID: UUID = UUID()
     // 操作状态
     @State private var planPrescription: PrescriptionItem? = nil
     @State private var itemToDelete: PrescriptionItem? = nil
     @State private var showDeleteAlert = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     let statusOptions = [
         (name: "全部", val: nil as Int?),
@@ -69,7 +79,7 @@ public struct PrescriptionsView: View {
                     text: $searchText,
                     placeholder: "搜索处方号、患者姓名或电话",
                     onSearch: {
-                        Task { await loadPrescriptions() }
+                        startLoadPrescriptions()
                     },
                     onScan: { router.isScannerPresented = true }
                 )
@@ -82,9 +92,9 @@ public struct PrescriptionsView: View {
                                 label: opt.name,
                                 isSelected: selectedStatus == opt.val,
                                 action: {
-                                    withAnimation {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
                                         selectedStatus = opt.val
-                                        Task { await loadPrescriptions() }
+                                        startLoadPrescriptions()
                                     }
                                 }
                             )
@@ -101,7 +111,7 @@ public struct PrescriptionsView: View {
                                 isSelected: selectedDoctorId == nil,
                                 action: {
                                     selectedDoctorId = nil
-                                    Task { await loadPrescriptions() }
+                                    startLoadPrescriptions()
                                 }
                             )
                             ForEach(doctors) { doc in
@@ -110,7 +120,7 @@ public struct PrescriptionsView: View {
                                     isSelected: selectedDoctorId == doc.id,
                                     action: {
                                         selectedDoctorId = doc.id
-                                        Task { await loadPrescriptions() }
+                                        startLoadPrescriptions()
                                     }
                                 )
                             }
@@ -127,7 +137,7 @@ public struct PrescriptionsView: View {
                                 isSelected: selectedStoreId == nil,
                                 action: {
                                     selectedStoreId = nil
-                                    Task { await loadPrescriptions() }
+                                    startLoadPrescriptions()
                                 }
                             )
                             ForEach(stores) { store in
@@ -136,7 +146,7 @@ public struct PrescriptionsView: View {
                                     isSelected: selectedStoreId == store.id,
                                     action: {
                                         selectedStoreId = store.id
-                                        Task { await loadPrescriptions() }
+                                        startLoadPrescriptions()
                                     }
                                 )
                             }
@@ -158,7 +168,7 @@ public struct PrescriptionsView: View {
                 Spacer()
                 VStack(spacing: 8) {
                     Text(error).foregroundStyle(Color.danger).scaledFont(14).multilineTextAlignment(.center)
-                    Button("点击重试") { Task { await loadPrescriptions() } }.foregroundStyle(Color.appPrimary).scaledFont(14, weight: .bold)
+                    Button("点击重试") { startLoadPrescriptions() }.foregroundStyle(Color.appPrimary).scaledFont(14, weight: .bold)
                 }
                 .padding(.horizontal, 16)
                 Spacer()
@@ -175,7 +185,7 @@ public struct PrescriptionsView: View {
                 Spacer()
             } else {
                 AppScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(prescriptions) { item in
                             PrescriptionCardView(
                                 item: item,
@@ -193,13 +203,13 @@ public struct PrescriptionsView: View {
                     ApiClient.shared.clearResponseCache()
                     await loadPrescriptions()
                 }
-                .id("rx_\(selectedStatus ?? -1)_\(selectedDoctorId ?? -1)_\(selectedStoreId ?? -1)")
+                
                 .background(Color.pageBackground)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Prescriptions"))) { _ in
             ApiClient.shared.clearResponseCache()
-            Task { await loadPrescriptions() }
+            startLoadPrescriptions()
         }
         .sheet(item: $planPrescription) { rx in
             ProcessingPlanFormView(initialPrescriptionId: rx.id)
@@ -223,28 +233,41 @@ public struct PrescriptionsView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
+            // 三个请求完全并行：医生列表、门店列表、处方列表
             async let fetchedDocs = ApiClient.shared.fetchDoctors()
             async let fetchedStores = ApiClient.shared.fetchStores()
+            async let prescriptionsTask: () = loadPrescriptions()
             if let docs = try? await fetchedDocs { self.doctors = docs }
             if let sts = try? await fetchedStores { self.stores = sts }
-            await loadPrescriptions()
+            await prescriptionsTask
+        }
+        .onDisappear {
+            loadTask?.cancel()
         }
         .navigationTitle("处方管理")
         .navigationBarTitleDisplayMode(.inline)
     }
     
+    private func startLoadPrescriptions() {
+        loadTask?.cancel()
+        loadTask = Task { await loadPrescriptions() }
+    }
+
     private func loadPrescriptions() async {
         let taskID = UUID()
         currentTaskID = taskID
         isLoading = true
         do {
-            self.prescriptions = try await ApiClient.shared.fetchPrescriptions(
+            let result = try await ApiClient.shared.fetchPrescriptions(
                 status: selectedStatus,
                 keyword: searchText,
                 storeId: selectedStoreId,
                 doctorId: selectedDoctorId
             )
+            guard !Task.isCancelled else { return }
+            self.prescriptions = result
         } catch {
+            guard !Task.isCancelled else { return }
             self.errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }
@@ -663,7 +686,8 @@ public struct PrescriptionDetailView: View {
             }
             
             // 处方全屏预览
-            if isShowingFullAttachment, let data = attachmentData, let uiImage = UIImage(data: data) {
+            if isShowingFullAttachment, let data = attachmentData,
+               let uiImage = downsampledImage(from: data, maxPixelSize: 2200) {
                 Color.black.ignoresSafeArea()
                 VStack {
                     HStack {
@@ -790,11 +814,13 @@ public struct PrescriptionDetailView: View {
     }
     
     private func uploadAttachment(image: UIImage) {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
         isUploading = true
         uploadProgress = 0.0
         Task {
             do {
+                guard let data = await Task.detached(priority: .userInitiated, operation: {
+                    image.jpegData(compressionQuality: 0.8)
+                }).value else { return }
                 let fileName = "prescription_\(id)_\(Int(Date().timeIntervalSince1970)).jpg"
                 try await ApiClient.shared.uploadPrescriptionAttachment(id: id, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
                     DispatchQueue.main.async {
@@ -1023,7 +1049,10 @@ struct PrescriptionCardView: View {
     let onTap: () -> Void
     
     var body: some View {
-        Button(action: onTap) {
+        Button(action: {
+            hideKeyboard()
+            onTap()
+        }) {
             AppCard(padding: 16) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .top) {

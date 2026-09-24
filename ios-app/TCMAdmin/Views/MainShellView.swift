@@ -82,7 +82,7 @@ public struct MainShellView: View {
                     // 左侧：菜单按钮
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button(action: {
-                            withAnimation(.spring()) {
+                            withAnimation(.easeInOut(duration: 0.22)) {
                                 isMenuShowing.toggle()
                             }
                         }) {
@@ -158,6 +158,10 @@ public struct MainShellView: View {
             self.selectedTab = 0
             self.router.popToRoot()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"))) { _ in
+            self.selectedTab = 0
+            self.router.popToRoot()
+        }
         .fullScreenCover(isPresented: $router.isScannerPresented) {
                 LiveScannerView(enableOCR: router.scannerEnableOCR)
             }
@@ -216,10 +220,18 @@ class TabBarDoubleTapHandler: NSObject, UIGestureRecognizerDelegate {
 extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     override open func viewDidLoad() {
         super.viewDidLoad()
+        // 恢复系统侧滑返回手势，并将 delegate 指向自身以精确控制何时允许
         interactivePopGestureRecognizer?.delegate = self
     }
 
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // 只有导航栈深度 > 1 时才允许侧滑手势触发，防止在根页面误触
+        guard gestureRecognizer === interactivePopGestureRecognizer else { return true }
         return viewControllers.count > 1
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // 允许侧滑返回手势与 ScrollView 内部的 pan 手势同时识别
+        return true
     }
 }

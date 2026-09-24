@@ -18,41 +18,73 @@ struct HerbsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    @State private var loadTask: Task<Void, Never>? = nil
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     private var isSuperAdmin: Bool {
         SessionManager.shared.currentUser?.role == 0
     }
     
-    var groupedUnits: [HerbUnit] {
-        guard let locs = data?.locations else { return [] }
-        
-        let locsByType = type.isEmpty ? locs : locs.filter { $0.type == type }
-        let filtered: [HerbLocationItem]
-        if searchText.isEmpty {
-            filtered = locsByType
-        } else {
-            filtered = locsByType.filter { loc in
-                (loc.code?.localizedCaseInsensitiveContains(searchText) == true) ||
-                (loc.herbs?.contains(where: {
-                    $0.name.localizedCaseInsensitiveContains(searchText) ||
-                    ($0.pinyin?.localizedCaseInsensitiveContains(searchText) == true) ||
-                    ($0.code?.localizedCaseInsensitiveContains(searchText) == true)
-                }) == true)
-            }
+    @State private var groupedUnits: [HerbUnit] = []
+    
+    private func updateGroupedUnits() {
+        guard let locs = data?.locations else {
+            groupedUnits = []
+            return
         }
         
-        var dict: [String: HerbUnit] = [:]
-        for loc in filtered {
-            let key = "\(loc.type ?? "")_\(loc.unitNo ?? 0)"
-            if dict[key] == nil {
-                dict[key] = HerbUnit(id: key, type: loc.type, typeLabel: loc.typeLabel, unitNo: loc.unitNo, locations: [])
-            }
-            dict[key]?.locations.append(loc)
-        }
+        let currentType = type
+        let currentSearchText = searchText
         
-        return dict.values.sorted { u1, u2 in
-            if u1.type != u2.type { return (u1.type ?? "") < (u2.type ?? "") }
-            return (u1.unitNo ?? 0) < (u2.unitNo ?? 0)
+        Task.detached(priority: .userInitiated) {
+            let locsByType = currentType.isEmpty ? locs : locs.filter { $0.type == currentType }
+            let filtered: [HerbLocationItem]
+            if currentSearchText.isEmpty {
+                filtered = locsByType
+            } else {
+                filtered = locsByType.filter { loc in
+                    (loc.code?.localizedCaseInsensitiveContains(currentSearchText) == true) ||
+                    (loc.herbs?.contains(where: {
+                        $0.name.localizedCaseInsensitiveContains(currentSearchText) ||
+                        ($0.pinyin?.localizedCaseInsensitiveContains(currentSearchText) == true) ||
+                        ($0.code?.localizedCaseInsensitiveContains(currentSearchText) == true)
+                    }) == true)
+                }
+            }
+            
+            var dict: [String: HerbUnit] = [:]
+            for loc in filtered {
+                let key = "\(loc.type ?? "")_\(loc.unitNo ?? 0)"
+                if dict[key] == nil {
+                    let tLabel: String
+                    switch loc.type {
+                    case "D": tLabel = "药斗"
+                    case "G": tLabel = "药柜"
+                    case "F": tLabel = "冰箱"
+                    case "C": tLabel = "仓库"
+                    default: tLabel = loc.type ?? ""
+                    }
+                    dict[key] = HerbUnit(id: key, type: loc.type, typeLabel: tLabel, unitNo: loc.unitNo, locations: [])
+                }
+                dict[key]?.locations.append(loc)
+            }
+            
+            let sorted = dict.values.sorted { u1, u2 in
+                if u1.type != u2.type { return (u1.type ?? "") < (u2.type ?? "") }
+                return (u1.unitNo ?? 0) < (u2.unitNo ?? 0)
+            }
+            
+            await MainActor.run {
+                self.groupedUnits = sorted
+            }
         }
     }
     
@@ -73,7 +105,7 @@ struct HerbsView: View {
                                 isSelected: selectedStoreId == nil,
                                 action: {
                                     selectedStoreId = nil
-                                    Task { await loadData() }
+                                    startLoadData()
                                 }
                             )
                             ForEach(stores) { store in
@@ -82,7 +114,7 @@ struct HerbsView: View {
                                     isSelected: selectedStoreId == store.id,
                                     action: {
                                         selectedStoreId = store.id
-                                        Task { await loadData() }
+                                        startLoadData()
                                     }
                                 )
                             }
@@ -102,7 +134,7 @@ struct HerbsView: View {
             } else if let error = errorMessage {
                 Spacer()
                 Text(error).foregroundStyle(Color.danger)
-                Button("重试") { Task { await loadData() } }
+                Button("重试") { startLoadData() }
                     .padding(.top, 8)
                 Spacer()
             } else {
@@ -149,7 +181,7 @@ struct HerbsView: View {
                             .padding(.bottom, 4)
                         }
                         
-                        LazyVStack(spacing: 12) {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
                             ForEach(groupedUnits) { unit in
                             AppCard(padding: 16) {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -218,23 +250,38 @@ struct HerbsView: View {
                     ApiClient.shared.clearResponseCache()
                     await loadData()
                 }
-                .id("herbs_\(type)_\(selectedStoreId ?? -1)")
+                
                 .background(Color.pageBackground)
             }
         }
+        .onChange(of: searchText) { _, _ in updateGroupedUnits() }
+        .onChange(of: type) { _, _ in updateGroupedUnits() }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Herbs"))) { _ in
             ApiClient.shared.clearResponseCache()
-            Task { await loadData() }
+            startLoadData()
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
             if isSuperAdmin {
-                if let sts = try? await ApiClient.shared.fetchStores() {
-                    self.stores = sts
-                }
+                async let storesTask: () = {
+                    if let sts = try? await ApiClient.shared.fetchStores() {
+                        await MainActor.run { self.stores = sts }
+                    }
+                }()
+                async let dataTask: () = loadData()
+                _ = await (storesTask, dataTask)
+            } else {
+                await loadData()
             }
-            await loadData()
         }
+        .onDisappear {
+            loadTask?.cancel()
+        }
+    }
+
+    private func startLoadData() {
+        loadTask?.cancel()
+        loadTask = Task { await loadData() }
     }
     
     private func loadData() async {
@@ -243,8 +290,12 @@ struct HerbsView: View {
         isLoading = true
         errorMessage = nil
         do {
-            self.data = try await ApiClient.shared.fetchHerbLocations(storeId: selectedStoreId)
+            let result = try await ApiClient.shared.fetchHerbLocations(storeId: selectedStoreId)
+            guard !Task.isCancelled else { return }
+            self.data = result
+            updateGroupedUnits()
         } catch {
+            guard !Task.isCancelled else { return }
             self.errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }

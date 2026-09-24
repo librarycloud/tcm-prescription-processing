@@ -21,7 +21,7 @@ public struct SideMenuView: View {
                     .opacity(0.35)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        withAnimation(.spring()) { isShowing = false }
+                        withAnimation(.easeInOut(duration: 0.22)) { isShowing = false }
                     }
             }
             
@@ -110,14 +110,14 @@ public struct SideMenuView: View {
     }
     
     private func selectTab(_ index: Int) {
-        withAnimation {
+        withAnimation(.easeInOut(duration: 0.22)) {
             selectedTab = index
             isShowing = false
         }
     }
     
     private func navigateTo(_ route: AppRoute) {
-        withAnimation {
+        withAnimation(.easeInOut(duration: 0.22)) {
             isShowing = false
         }
         router.navigate(to: route)
