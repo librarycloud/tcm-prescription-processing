@@ -34,12 +34,19 @@ public struct SettingsView: View {
                             Image(systemName: "lightbulb.max.fill")
                                 .foregroundStyle(Color.appPrimary)
                                 .frame(width: 20)
-                            Toggle("保持屏幕常亮", isOn: $keepScreenAwake)
-                                .scaledFont(15)
-                                .foregroundStyle(Color.ink)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Toggle("保持屏幕常亮", isOn: $keepScreenAwake)
+                                    .scaledFont(15)
+                                    .foregroundStyle(Color.ink)
+                                // 诊断行：实时显示系统当前值，上线前可删除
+                                Text("系统当前值: \(UIApplication.shared.isIdleTimerDisabled ? "常亮(true)" : "自动熄屏(false)")")
+                                    .scaledFont(11)
+                                    .foregroundStyle(Color.muted)
+                            }
                         }
                         .padding(.horizontal, 16)
-                        .frame(height: 52)
+                        .frame(minHeight: 52)
+                        .padding(.vertical, 6)
                         .onChange(of: keepScreenAwake) { _, newValue in
                             UIApplication.shared.isIdleTimerDisabled = newValue
                         }

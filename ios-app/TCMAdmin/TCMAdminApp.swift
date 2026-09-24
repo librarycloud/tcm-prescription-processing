@@ -48,14 +48,16 @@ struct TCMAdminApp: App {
                 Text(importedAlertMessage ?? "")
             }
             .onAppear {
-                // 强制按用户设置初始化，防止系统或第三方 SDK 遗留不正确的值
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
             }
             .onChange(of: keepScreenAwake) { _, newValue in
                 UIApplication.shared.isIdleTimerDisabled = newValue
             }
             .onChange(of: session.isAuthenticated) { _, _ in
-                // 切换登录状态时（登录/登出）重置为用户设定值
+                UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
+            }
+            // 每次 App 回到前台时也强制重置，防止 AVCaptureSession 等系统行为修改过该值
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
             }
         }
