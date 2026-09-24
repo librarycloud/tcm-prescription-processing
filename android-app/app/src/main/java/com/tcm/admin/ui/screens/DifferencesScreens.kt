@@ -193,7 +193,7 @@ internal fun DifferencesScreen(
                                     Surface(
                                         color = MaterialTheme.colorScheme.surfaceVariant,
                                         shape = RoundedCornerShape(6.dp),
-                                        border = BorderStroke(1.dp, CardBorderColor),
+                                        border = BorderStroke(0.5.dp, CardBorderColor),
                                         modifier = Modifier.weight(1f),
                                     ) {
                                         Row(
@@ -217,7 +217,7 @@ internal fun DifferencesScreen(
                                     Surface(
                                         color = MaterialTheme.colorScheme.surfaceVariant,
                                         shape = RoundedCornerShape(6.dp),
-                                        border = BorderStroke(1.dp, CardBorderColor),
+                                        border = BorderStroke(0.5.dp, CardBorderColor),
                                         modifier = Modifier.weight(1f),
                                     ) {
                                         Row(

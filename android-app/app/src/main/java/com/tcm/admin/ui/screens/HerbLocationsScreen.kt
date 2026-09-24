@@ -309,7 +309,7 @@ internal fun HerbsScreen(
                                         },
                                     shape = FieldShape,
                                     color = MaterialTheme.colorScheme.surfaceVariant,
-                                    border = BorderStroke(1.dp, CardBorderColor),
+                                    border = BorderStroke(0.5.dp, CardBorderColor),
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -535,7 +535,7 @@ internal fun HerbLocationAssignScreen(
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = FieldShape,
-                                border = BorderStroke(1.dp, CardBorderColor),
+                                border = BorderStroke(0.5.dp, CardBorderColor),
                             ) {
                                 Row(
                                     modifier = Modifier

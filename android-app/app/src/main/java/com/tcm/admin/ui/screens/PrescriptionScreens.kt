@@ -567,7 +567,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     Spacer(Modifier.height(6.dp))
                 }
                 if (attachment != null) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(0.5.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(attachment.displayField("originalName", "处方原件"), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
@@ -638,7 +638,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
-                        border = BorderStroke(1.dp, CardBorderColor),
+                        border = BorderStroke(0.5.dp, CardBorderColor),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onNavigate(Route.WorkflowOperation(RouteParams.put(plan), "", "open")) },
@@ -720,7 +720,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = FieldShape,
-                        border = BorderStroke(1.dp, CardBorderColor),
+                        border = BorderStroke(0.5.dp, CardBorderColor),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(Modifier.padding(12.dp)) {
@@ -794,7 +794,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = FieldShape,
-                            border = BorderStroke(1.dp, CardBorderColor),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(Modifier.padding(12.dp)) {
@@ -1095,7 +1095,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
                 }
             }
             Spacer(Modifier.height(14.dp))
-            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(1.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(0.5.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("外方处方", color = Ink, fontWeight = FontWeight.Medium)

@@ -121,7 +121,7 @@ internal fun ProfileScreen(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetails),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Row(
@@ -182,7 +182,7 @@ private fun LiveThemePreviewCard() {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = CardShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
@@ -232,7 +232,7 @@ private fun LiveThemePreviewCard() {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -574,7 +574,7 @@ private fun ColorPickerDialog(
                         .height(58.dp),
                     shape = RoundedCornerShape(10.dp),
                     color = currentColor,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Row(
                         modifier = Modifier
@@ -909,7 +909,7 @@ private fun TextScalingCard(
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = CardShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
@@ -1105,7 +1105,7 @@ internal fun SettingsScreen(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenThemeAppearance),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         ) {
             Row(
@@ -1145,7 +1145,7 @@ internal fun SettingsScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenSecurityPrivacy)
         ) {
@@ -1189,7 +1189,7 @@ internal fun SettingsScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -1385,7 +1385,7 @@ internal fun SettingsScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth().clickable {
                 urlInput = baseUrl
@@ -1497,7 +1497,7 @@ internal fun ThemeAppearanceScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         ) {
             Row(
@@ -1541,7 +1541,7 @@ internal fun ThemeAppearanceScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -1798,7 +1798,7 @@ internal fun ProfileDetailScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Row(
@@ -1841,7 +1841,7 @@ internal fun ProfileDetailScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {

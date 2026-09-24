@@ -322,7 +322,7 @@ internal fun PackageSummaryCard(
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = FieldShape,
-            border = BorderStroke(1.dp, CardBorderColor),
+            border = BorderStroke(0.5.dp, CardBorderColor),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
@@ -416,7 +416,7 @@ internal fun PackageDetailPage(
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = FieldShape,
-                border = BorderStroke(1.dp, CardBorderColor),
+                border = BorderStroke(0.5.dp, CardBorderColor),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(

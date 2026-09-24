@@ -901,7 +901,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
             modifier = Modifier.fillMaxWidth(),
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, Border),
         ) {
             Column(Modifier.padding(20.dp)) {
                 OutlinedTextField(
@@ -967,7 +967,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
             },
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, Border),
         ) {
             Row(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
