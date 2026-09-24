@@ -232,11 +232,16 @@ public struct ProcessingView: View {
         }
         .task {
             if isSuperAdmin && stores.isEmpty {
-                if let sts = try? await ApiClient.shared.fetchStores() {
-                    self.stores = sts
-                }
+                async let storesTask: () = {
+                    if let sts = try? await ApiClient.shared.fetchStores() {
+                        await MainActor.run { self.stores = sts }
+                    }
+                }()
+                async let dataTask: () = loadData()
+                _ = await (storesTask, dataTask)
+            } else {
+                await loadData()
             }
-            await loadData()
         }
         .sheet(isPresented: $isCreatingPlan) {
             ProcessingPlanFormView()

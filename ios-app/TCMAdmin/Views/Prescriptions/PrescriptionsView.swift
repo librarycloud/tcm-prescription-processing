@@ -232,11 +232,13 @@ public struct PrescriptionsView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
+            // 三个请求完全并行：医生列表、门店列表、处方列表
             async let fetchedDocs = ApiClient.shared.fetchDoctors()
             async let fetchedStores = ApiClient.shared.fetchStores()
+            async let prescriptionsTask: () = loadPrescriptions()
             if let docs = try? await fetchedDocs { self.doctors = docs }
             if let sts = try? await fetchedStores { self.stores = sts }
-            await loadPrescriptions()
+            await prescriptionsTask
         }
         .navigationTitle("处方管理")
         .navigationBarTitleDisplayMode(.inline)

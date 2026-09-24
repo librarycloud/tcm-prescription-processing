@@ -281,9 +281,13 @@ public struct TransfersView: View {
         .background(Color.pageBackground.ignoresSafeArea(.all))
         .scrollDismissesKeyboard(.interactively)
         .task {
-            stores = (try? await ApiClient.shared.fetchStores()) ?? []
-            await loadStats()
-            await loadTransfers()
+            // 三个请求完全并行：门店列表、统计数据、调拨记录
+            async let storesTask: () = {
+                self.stores = (try? await ApiClient.shared.fetchStores()) ?? []
+            }()
+            async let statsTask: () = loadStats()
+            async let transfersTask: () = loadTransfers()
+            _ = await (storesTask, statsTask, transfersTask)
         }
     }
     
