@@ -1144,9 +1144,9 @@ internal fun SettingsScreen(
 
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(12.dp),
+            shape = CardShape,
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenSecurityPrivacy)
         ) {
             Row(
