@@ -16,6 +16,15 @@ public struct PackagesView: View {
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetShowing = false
     @State private var currentTaskID: UUID = UUID()
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     public init() {}
     
@@ -167,7 +176,7 @@ public struct PackagesView: View {
                 Spacer()
             } else {
                 AppScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(packages) { pkg in
                             AppCard(padding: 16) {
                                 VStack(alignment: .leading, spacing: 8) {

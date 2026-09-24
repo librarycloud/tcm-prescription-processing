@@ -18,6 +18,15 @@ struct HerbsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     private var isSuperAdmin: Bool {
         SessionManager.shared.currentUser?.role == 0
@@ -149,7 +158,7 @@ struct HerbsView: View {
                             .padding(.bottom, 4)
                         }
                         
-                        LazyVStack(spacing: 12) {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
                             ForEach(groupedUnits) { unit in
                             AppCard(padding: 16) {
                                 VStack(alignment: .leading, spacing: 12) {

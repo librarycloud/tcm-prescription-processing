@@ -22,6 +22,15 @@ public struct PrescriptionsView: View {
     @State private var planPrescription: PrescriptionItem? = nil
     @State private var itemToDelete: PrescriptionItem? = nil
     @State private var showDeleteAlert = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     let statusOptions = [
         (name: "全部", val: nil as Int?),
@@ -175,7 +184,7 @@ public struct PrescriptionsView: View {
                 Spacer()
             } else {
                 AppScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(prescriptions) { item in
                             PrescriptionCardView(
                                 item: item,

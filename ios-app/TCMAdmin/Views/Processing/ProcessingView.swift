@@ -19,6 +19,15 @@ public struct ProcessingView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     // 操作弹窗
     @State private var isCreatingPlan = false
@@ -57,7 +66,7 @@ public struct ProcessingView: View {
                                 .scaledFont(13, weight: .medium)
                         }
                         .foregroundStyle(Color.appPrimary)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: sizeClass == .regular ? 250 : .infinity)
                         .frame(height: 38)
                         .background(Color.surface)
                         .clipShape(.rect(cornerRadius: 8))
@@ -75,12 +84,14 @@ public struct ProcessingView: View {
                                     .scaledFont(13, weight: .medium)
                             }
                             .foregroundStyle(Color.white)
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: sizeClass == .regular ? 250 : .infinity)
                             .frame(height: 38)
                             .background(Color.appPrimary)
                             .clipShape(.rect(cornerRadius: 8))
                         }
                     }
+                    
+                    if sizeClass == .regular { Spacer() }
                 }
                 
                 // 模式切换: 加工计划 vs 领取列表
@@ -264,7 +275,7 @@ public struct ProcessingView: View {
             Spacer()
         } else {
             AppScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(plans) { plan in
                         ProcessingPlanCard(
                             plan: plan,
@@ -345,7 +356,7 @@ public struct ProcessingView: View {
             Spacer()
         } else {
             AppScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(pickupPackages) { pkg in
                         ProcessingPickupPackageCard(
                             pkg: pkg,

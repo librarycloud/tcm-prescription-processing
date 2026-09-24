@@ -14,6 +14,15 @@ struct InventoryView: View {
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var hasAutoNavigated = false // 1:1 对齐 Android hasAutoNavigated
     @State private var lastSearchedTerm: String = ""
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     private var searchHistory: [String] {
         var seen = Set<String>()
@@ -255,7 +264,7 @@ struct InventoryView: View {
                         }
                         .frame(maxWidth: .infinity)
                     } else {
-                        LazyVStack(spacing: 12) {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
                             ForEach(items) { item in
                                 InventoryRowView(item: item, keyword: searchText)
                                     .contentShape(Rectangle())
@@ -411,7 +420,7 @@ struct InventoryView: View {
                 .padding(.top, 8)
             
             if let batches = item.inventories, !batches.isEmpty {
-                VStack(spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(batches) { batch in
                         AppCard(padding: 16) {
                             VStack(alignment: .leading, spacing: 8) {
