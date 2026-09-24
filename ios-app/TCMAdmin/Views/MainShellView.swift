@@ -158,6 +158,10 @@ public struct MainShellView: View {
             self.selectedTab = 0
             self.router.popToRoot()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"))) { _ in
+            self.selectedTab = 0
+            self.router.popToRoot()
+        }
         .fullScreenCover(isPresented: $router.isScannerPresented) {
                 LiveScannerView(enableOCR: router.scannerEnableOCR)
             }

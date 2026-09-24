@@ -310,6 +310,19 @@ struct InventoryView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"))) { notif in
+            if let dict = notif.object as? [String: Any],
+               let code = dict["code"] as? String,
+               let item = dict["item"] as? InventoryItem {
+                ApiClient.shared.clearResponseCache()
+                self.hasAutoNavigated = true
+                self.lastSearchedTerm = code
+                self.searchText = code
+                self.addSearchHistory(code)
+                self.items = [item]
+                self.selectedProduct = item
+            }
+        }
         .task {
             await loadInitialData()
         }
@@ -509,6 +522,18 @@ struct InventoryView: View {
             }
         }
         .padding(16)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    // 从左侧边缘 (X<40) 往右滑 (translation>50)
+                    if value.startLocation.x < 40 && value.translation.width > 50 {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedProduct = nil
+                        }
+                    }
+                }
+        )
     }
     
     private func loadInitialData() async {
