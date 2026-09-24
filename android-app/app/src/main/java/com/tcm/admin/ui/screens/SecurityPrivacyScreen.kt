@@ -57,8 +57,8 @@ internal fun SecurityPrivacyScreen() {
             
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = com.tcm.admin.ui.CardShape,
-                border = BorderStroke(0.5.dp, com.tcm.admin.ui.CardBorderColor),
+                shape = com.tcm.admin.CardShape,
+                border = BorderStroke(0.5.dp, com.tcm.admin.CardBorderColor),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
@@ -92,7 +92,7 @@ internal fun SecurityPrivacyScreen() {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = 16.dp),
                                     thickness = 0.5.dp,
-                                    color = com.tcm.admin.ui.CardBorderColor
+                                    color = com.tcm.admin.CardBorderColor
                                 )
                             }
                         }
@@ -118,8 +118,8 @@ internal fun SecurityPrivacyScreen() {
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.error
                     ),
-                    shape = com.tcm.admin.ui.CardShape,
-                    border = BorderStroke(0.5.dp, com.tcm.admin.ui.CardBorderColor),
+                    shape = com.tcm.admin.CardShape,
+                    border = BorderStroke(0.5.dp, com.tcm.admin.CardBorderColor),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text("退出所有其他设备", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp))
