@@ -32,9 +32,11 @@ public struct LiveScannerView: View {
                         Image(systemName: "xmark.circle.fill")
                             .scaledFont(32)
                             .foregroundStyle(Color.white.opacity(0.8))
+                            .padding(16)
+                            .contentShape(Rectangle())
                     }
-                    .padding(.leading, 20)
-                    .padding(.top, 20)
+                    .padding(.leading, 4)
+                    .padding(.top, 4)
                     
                     Spacer()
                     
@@ -112,9 +114,11 @@ public struct LiveScannerView: View {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isResolving else { return }
         
-        // 触感反馈
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        // 触感反馈（唯一触发点，由 isResolving 保证只振动一次）
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         
+        
+
         if let onScanned = router.scannerOnScanned {
             dismiss()
             onScanned(code)
@@ -181,11 +185,24 @@ public struct LiveScannerView: View {
             }
             
             // 4. 其余所有扫码（药品条形码、商品SKU）-> 进入库存查询
-            await MainActor.run {
-                isResolving = false
-                dismiss()
-                // 触发全局库存查询路由
-                NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+            await MainActor.run { resolvingMessage = "正在查询库存..." }
+            do {
+                let items = try await ApiClient.shared.fetchInventory(keyword: code, storeId: nil)
+                await MainActor.run {
+                    isResolving = false
+                    dismiss()
+                    if items.count == 1, let firstItem = items.first {
+                        NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"), object: ["code": code, "item": firstItem])
+                    } else {
+                        NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isResolving = false
+                    dismiss()
+                    NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+                }
             }
         }
     }
@@ -217,6 +234,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     var onScanned: ((String) -> Void)?
     var enableOCR: Bool = false
     private var captureSession: AVCaptureSession?
+    private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var hasScanned = false
     private var lastOcrScanTime: Date = Date.distantPast
@@ -229,10 +247,32 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
     private func setupCamera() {
         let session = AVCaptureSession()
+        // 提升采集分辨率，使小条码在不放大的情况下也能快速识别
+        if session.canSetSessionPreset(.hd1920x1080) {
+            session.sessionPreset = .hd1920x1080
+        }
+        
         guard let videoDevice = AVCaptureDevice.default(for: .video),
               let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
               session.canAddInput(videoInput) else {
             return
+        }
+        
+        do {
+            try videoDevice.lockForConfiguration()
+            // 加回近距离对焦限制，这是防拉风箱和秒扫的核心
+            if videoDevice.isAutoFocusRangeRestrictionSupported {
+                videoDevice.autoFocusRangeRestriction = .near
+            }
+            if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
+                videoDevice.focusMode = .continuousAutoFocus
+            }
+            if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
+                videoDevice.exposureMode = .continuousAutoExposure
+            }
+            videoDevice.unlockForConfiguration()
+        } catch {
+            print("Failed to optimize camera focus: \(error)")
         }
         
         session.addInput(videoInput)
@@ -267,7 +307,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         self.previewLayer = preview
         self.captureSession = session
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        sessionQueue.async {
             session.startRunning()
         }
     }
@@ -283,7 +323,6 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             return
         }
         hasScanned = true
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
         onScanned?(stringValue)
         
         // 延迟 1.5 秒后允许下一次扫描，避免重复触发
@@ -313,7 +352,6 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 DispatchQueue.main.async {
                     guard !self.hasScanned else { return }
                     self.hasScanned = true
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                     self.onScanned?(sku)
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -322,8 +360,11 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 }
             }
         }
-        request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        // Keep the 1080p camera stream, but limit OCR work to the aiming area.
+        request.recognitionLevel = .fast
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["en-US"]
+        request.regionOfInterest = CGRect(x: 0.1, y: 0.25, width: 0.8, height: 0.5)
         
         // 手机竖屏时的图像方向通常是 .right
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
@@ -426,8 +467,16 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
 
     func stopScanner() {
-        if captureSession?.isRunning == true {
-            captureSession?.stopRunning()
+        guard let session = captureSession else { return }
+        // AVCaptureSession 激活时系统会强制阻止熄屏，结束后需手动恢复用户设置的值
+        sessionQueue.async {
+            if session.isRunning {
+                session.stopRunning()
+            }
+            DispatchQueue.main.async {
+                let keepAwake = UserDefaults.standard.bool(forKey: "keep_screen_awake")
+                UIApplication.shared.isIdleTimerDisabled = keepAwake
+            }
         }
     }
     

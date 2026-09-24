@@ -15,21 +15,7 @@ class OCRService {
                 guard let cgImage = image.cgImage else { continue }
                 
                 // 配置文字识别请求
-                let request = VNRecognizeTextRequest { (request, error) in
-                    guard error == nil,
-                          let observations = request.results as? [VNRecognizedTextObservation] else {
-                        return
-                    }
-                    
-                    // 将一页纸里的多行文字拼接到一起
-                    let recognizedStrings = observations.compactMap { observation in
-                        // 取置信度最高的候选结果
-                        observation.topCandidates(1).first?.string
-                    }
-                    
-                    let pageText = recognizedStrings.joined(separator: "\n")
-                    extractedTexts.append(pageText)
-                }
+                let request = VNRecognizeTextRequest()
                 
                 // 设置识别参数
                 request.recognitionLevel = .accurate // 追求高精度
@@ -41,6 +27,10 @@ class OCRService {
                 // 执行请求
                 let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                 try? handler.perform([request])
+                let pageText = (request.results ?? [])
+                    .compactMap { $0.topCandidates(1).first?.string }
+                    .joined(separator: "\n")
+                extractedTexts.append(pageText)
             }
             
             DispatchQueue.main.async {
