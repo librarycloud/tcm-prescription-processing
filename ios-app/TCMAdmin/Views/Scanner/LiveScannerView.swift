@@ -113,7 +113,7 @@ public struct LiveScannerView: View {
         guard !code.isEmpty, !isResolving else { return }
         
         // 触感反馈（唯一触发点，由 isResolving 保证只振动一次）
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         
         
 
