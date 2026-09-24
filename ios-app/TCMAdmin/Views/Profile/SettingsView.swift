@@ -7,8 +7,9 @@ public struct SettingsView: View {
     
     @State private var cacheSize: String = "24.5 MB"
     @State private var isClearingCache = false
+    @AppStorage("tcm_server_api_base_url") private var currentServerURL: String = "http://127.0.0.1:3000"
     @State private var isShowingServerConfig = false
-    @State private var configuredBaseURL = ApiClient.shared.baseURL
+    @State private var configuredBaseURL = ""
     @State private var isShowingServerChangeAlert = false
     @State private var pendingBaseURL = ""
     
@@ -50,8 +51,8 @@ public struct SettingsView: View {
                             }
                         }
                         Divider().padding(.leading, 48)
-                        ProfileRow(icon: "server.rack", title: "API 服务器地址", value: ApiClient.shared.baseURL) {
-                            configuredBaseURL = ApiClient.shared.baseURL
+                        ProfileRow(icon: "server.rack", title: "API 服务器地址", value: currentServerURL) {
+                            configuredBaseURL = currentServerURL
                             isShowingServerConfig = true
                         }
                     }
@@ -62,11 +63,7 @@ public struct SettingsView: View {
         .background(Color.pageBackground)
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TCMServerConfigImported"))) { notif in
-            if let newURL = notif.object as? String {
-                configuredBaseURL = newURL
-            }
-        }
+
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {

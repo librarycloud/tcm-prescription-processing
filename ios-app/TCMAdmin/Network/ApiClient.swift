@@ -32,12 +32,22 @@ public class ApiClient {
     // 后端服务器地址，支持运行时动态配置与持久化存储
     public var baseURL: String {
         get {
-            UserDefaults.standard.string(forKey: serverUrlKey) ?? "http://127.0.0.1:3000"
+            let url = UserDefaults.standard.string(forKey: serverUrlKey) ?? "http://127.0.0.1:3000"
+            return url.isEmpty ? "http://127.0.0.1:3000" : url
         }
         set {
-            let sanitized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            var sanitized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !sanitized.isEmpty {
+                if !sanitized.hasPrefix("http://") && !sanitized.hasPrefix("https://") {
+                    sanitized = "http://" + sanitized
+                }
+                sanitized = sanitized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            } else {
+                sanitized = "http://127.0.0.1:3000"
+            }
             UserDefaults.standard.set(sanitized, forKey: serverUrlKey)
+            clearResponseCache()
+            NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: sanitized)
         }
     }
     
