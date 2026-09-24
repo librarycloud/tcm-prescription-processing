@@ -218,9 +218,9 @@ private val CourierColor: Color
 private val CourierSoftColor: Color
     @Composable
     get() = if (isAppDarkTheme) Color(0xFF2E1065) else Color(0xFFF5F3FF)
-internal val CardBorderColor: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-internal val CardShape = RoundedCornerShape(16.dp)
-internal val FieldShape = RoundedCornerShape(12.dp)
+internal val CardBorderColor: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
+internal val CardShape = RoundedCornerShape(12.dp)
+internal val FieldShape = RoundedCornerShape(8.dp)
 internal val CompactControlHeight = 40.dp
 internal val SearchControlHeight = 44.dp
 
@@ -556,7 +556,7 @@ internal fun SearchBarField(
             .fillMaxWidth()
             .heightIn(min = SearchControlHeight)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), FieldShape)
-            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), FieldShape)
+            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), FieldShape)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
