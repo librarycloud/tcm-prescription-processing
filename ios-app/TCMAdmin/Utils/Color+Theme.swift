@@ -20,11 +20,17 @@ extension Color {
     
     // 状态色 (Status)
     static let success = Color.green
-    static let successSoft = Color.green.opacity(0.15)
+    static var successSoft: Color {
+        Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemGreen.withAlphaComponent(0.25) : UIColor.systemGreen.withAlphaComponent(0.15) })
+    }
     static let warning = Color.orange
-    static let warningSoft = Color.orange.opacity(0.15)
+    static var warningSoft: Color {
+        Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemOrange.withAlphaComponent(0.25) : UIColor.systemOrange.withAlphaComponent(0.15) })
+    }
     static let danger = Color.red
-    static let dangerSoft = Color.red.opacity(0.15)
+    static var dangerSoft: Color {
+        Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemRed.withAlphaComponent(0.25) : UIColor.systemRed.withAlphaComponent(0.15) })
+    }
 }
 
 // 十六进制颜色转换辅助
@@ -69,9 +75,15 @@ extension ShapeStyle where Self == Color {
     static var cardBorder: Color { Color.gray.opacity(0.2) }
     
     static var success: Color { Color.green }
-    static var successSoft: Color { Color.green.opacity(0.15) }
+    static var successSoft: Color {
+        Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemGreen.withAlphaComponent(0.25) : UIColor.systemGreen.withAlphaComponent(0.15) })
+    }
     static var warning: Color { Color.orange }
-    static var warningSoft: Color { Color.orange.opacity(0.15) }
+    static var warningSoft: Color {
+        Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemOrange.withAlphaComponent(0.25) : UIColor.systemOrange.withAlphaComponent(0.15) })
+    }
     static var danger: Color { Color.red }
-    static var dangerSoft: Color { Color.red.opacity(0.15) }
+    static var dangerSoft: Color {
+        Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemRed.withAlphaComponent(0.25) : UIColor.systemRed.withAlphaComponent(0.15) })
+    }
 }

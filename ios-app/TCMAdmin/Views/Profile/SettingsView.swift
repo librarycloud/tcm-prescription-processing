@@ -7,8 +7,10 @@ public struct SettingsView: View {
     
     @State private var cacheSize: String = "24.5 MB"
     @State private var isClearingCache = false
+    @AppStorage("tcm_server_api_base_url") private var currentServerURL: String = "http://127.0.0.1:3000"
+    @AppStorage("keep_screen_awake") private var keepScreenAwake: Bool = false
     @State private var isShowingServerConfig = false
-    @State private var configuredBaseURL = ApiClient.shared.baseURL
+    @State private var configuredBaseURL = ""
     @State private var isShowingServerChangeAlert = false
     @State private var pendingBaseURL = ""
     
@@ -24,8 +26,26 @@ public struct SettingsView: View {
                 
                 AppCard(padding: 0) {
                     VStack(spacing: 0) {
-                        ProfileRow(icon: "paintpalette.fill", title: "主题与外观", value: "跟随系统") {
+                        let modeText = ThemeManager.shared.colorSchemeMode == 1 ? "浅色模式" : (ThemeManager.shared.colorSchemeMode == 2 ? "深色模式" : "跟随系统")
+                        ProfileRow(icon: "paintpalette.fill", title: "主题与外观", value: modeText) {
                             router.navigate(to: .themeAppearance)
+                        }
+                        Divider().padding(.leading, 48)
+                        HStack(spacing: 12) {
+                            Image(systemName: "lightbulb.max.fill")
+                                .foregroundStyle(Color.appPrimary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Toggle("保持屏幕常亮", isOn: $keepScreenAwake)
+                                    .scaledFont(15)
+                                    .foregroundStyle(Color.ink)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 52)
+                        .padding(.vertical, 6)
+                        .onChange(of: keepScreenAwake) { _, newValue in
+                            UIApplication.shared.isIdleTimerDisabled = newValue
                         }
                     }
                 }
@@ -50,8 +70,8 @@ public struct SettingsView: View {
                             }
                         }
                         Divider().padding(.leading, 48)
-                        ProfileRow(icon: "server.rack", title: "API 服务器地址", value: ApiClient.shared.baseURL) {
-                            configuredBaseURL = ApiClient.shared.baseURL
+                        ProfileRow(icon: "server.rack", title: "API 服务器地址", value: currentServerURL) {
+                            configuredBaseURL = currentServerURL
                             isShowingServerConfig = true
                         }
                     }
@@ -62,11 +82,7 @@ public struct SettingsView: View {
         .background(Color.pageBackground)
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TCMServerConfigImported"))) { notif in
-            if let newURL = notif.object as? String {
-                configuredBaseURL = newURL
-            }
-        }
+
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {
@@ -186,7 +202,7 @@ public struct ThemeAppearanceView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(isSelected ? Color.appPrimarySoft.opacity(0.3) : Color.surface)
+                            .background(isSelected ? Color.appPrimarySoft : Color.surface)
                             .clipShape(.rect(cornerRadius: 12))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
