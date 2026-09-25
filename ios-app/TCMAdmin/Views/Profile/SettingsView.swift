@@ -128,17 +128,18 @@ public struct SettingsView: View {
         .alert("切换服务器需要重新登录", isPresented: $isShowingServerChangeAlert) {
             Button("取消", role: .cancel) {}
             Button("确认切换", role: .destructive) {
-                let previousBaseURL = ApiClient.shared.baseURL
-                ApiClient.shared.baseURL = pendingBaseURL
+                let oldBaseURL = ApiClient.shared.baseURL
+                let newBaseURL = pendingBaseURL
                 isShowingServerConfig = false
                 Task { @MainActor in
                     // 通知旧服务器退出当前 session（best-effort，失败不阻断）
                     struct EmptyResponse: Decodable {}
                     _ = try? await ApiClient.shared.request(
                         path: "/auth/logout",
-                        method: "POST",
-                        baseURLOverride: previousBaseURL
+                        method: "POST"
                     ) as EmptyResponse
+                    
+                    ApiClient.shared.baseURL = newBaseURL
                     SessionManager.shared.clearSession()
                 }
             }

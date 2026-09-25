@@ -34,8 +34,10 @@ struct HerbsView: View {
     }
     
     @State private var groupedUnits: [HerbUnit] = []
+    @State private var updateTask: Task<Void, Never>? = nil
     
     private func updateGroupedUnits() {
+        updateTask?.cancel()
         guard let locs = data?.locations else {
             groupedUnits = []
             return
@@ -44,7 +46,8 @@ struct HerbsView: View {
         let currentType = type
         let currentSearchText = searchText
         
-        Task.detached(priority: .userInitiated) {
+        updateTask = Task.detached(priority: .userInitiated) {
+            if Task.isCancelled { return }
             let locsByType = currentType.isEmpty ? locs : locs.filter { $0.type == currentType }
             let filtered: [HerbLocationItem]
             if currentSearchText.isEmpty {
@@ -60,6 +63,7 @@ struct HerbsView: View {
                 }
             }
             
+            if Task.isCancelled { return }
             var dict: [String: HerbUnit] = [:]
             for loc in filtered {
                 let key = "\(loc.type ?? "")_\(loc.unitNo ?? 0)"
@@ -82,6 +86,7 @@ struct HerbsView: View {
                 return (u1.unitNo ?? 0) < (u2.unitNo ?? 0)
             }
             
+            if Task.isCancelled { return }
             await MainActor.run {
                 self.groupedUnits = sorted
             }
@@ -265,7 +270,8 @@ struct HerbsView: View {
             if isSuperAdmin {
                 async let storesTask: () = {
                     if let sts = try? await ApiClient.shared.fetchStores() {
-                        await MainActor.run { self.stores = sts }
+                        if Task.isCancelled { return }
+            await MainActor.run { self.stores = sts }
                     }
                 }()
                 async let dataTask: () = loadData()
