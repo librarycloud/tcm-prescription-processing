@@ -174,7 +174,7 @@ public struct ProcessingPlanFormView: View {
                         if self.processTypeId == 0, let first = pts.first {
                             self.processTypeId = first.id
                         }
-                        self.totalDose = "\(plan.totalDose)"
+                        self.totalDose = plan.totalDose != nil ? "\(plan.totalDose!)" : ""
                         self.pickupMethod = plan.pickupMethod ?? 0
                         self.scheduleType = plan.scheduleType ?? 1
                         self.isUrgent = (plan.priority == 1)
