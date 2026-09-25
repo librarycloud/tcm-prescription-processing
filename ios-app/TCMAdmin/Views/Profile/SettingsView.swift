@@ -153,9 +153,11 @@ public struct SettingsView: View {
             // 2. Caches 文件夹大小 (这里存放着各种图片和临时文件)
             if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
                let enumerator = FileManager.default.enumerator(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey]) {
-                for case let url as URL in enumerator {
-                    if let attr = try? url.resourceValues(forKeys: [.fileSizeKey]), let size = attr.fileSize {
-                        totalSize += size
+                if let allURLs = enumerator.allObjects as? [URL] {
+                    for url in allURLs {
+                        if let attr = try? url.resourceValues(forKeys: [.fileSizeKey]), let size = attr.fileSize {
+                            totalSize += size
+                        }
                     }
                 }
             }

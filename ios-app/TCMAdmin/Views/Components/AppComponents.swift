@@ -1089,7 +1089,7 @@ public class HapticManager {
 import UIKit
 
 public extension UIImage {
-    func resized(toMaxDimension maxDimension: CGFloat = 1280) -> UIImage {
+    nonisolated func resized(toMaxDimension maxDimension: CGFloat = 1280) -> UIImage {
         let size = self.size
         let maxOriginal = max(size.width, size.height)
         

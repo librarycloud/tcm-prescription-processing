@@ -824,9 +824,7 @@ public struct PrescriptionDetailView: View {
                 uploadTask = nil
             }
             do {
-                guard let data = await Task.detached(priority: .userInitiated, operation: {
-                    image.resized(toMaxDimension: 2560).jpegData(compressionQuality: 0.85)
-                }).value else { return }
+                guard let data = image.resized(toMaxDimension: 2560).jpegData(compressionQuality: 0.85) else { return }
                 let fileName = "prescription_\(id)_\(Int(Date().timeIntervalSince1970)).jpg"
                 try await ApiClient.shared.uploadPrescriptionAttachment(id: id, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
                     DispatchQueue.main.async {
