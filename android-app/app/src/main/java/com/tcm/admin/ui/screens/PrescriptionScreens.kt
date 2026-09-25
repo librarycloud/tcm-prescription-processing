@@ -394,41 +394,38 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     var previewScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     var previewOffset by remember { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
+    var viewingImageAttachment by remember { mutableStateOf(false) }
+
     fun viewAttachmentFile(attachment: JSONObject) {
+        val mimeType = attachment.displayField("mimeType", "").lowercase()
+        val fileName = attachment.displayField("originalName", "prescription_$id")
+        val isImg = mimeType.startsWith("image/") ||
+            listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { fileName.endsWith(it, ignoreCase = true) }
+        
+        if (isImg) {
+            viewingImageAttachment = true
+            return
+        }
+
         viewingAttachment = true
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
                     val bytes = ApiClient.prescriptionAttachment(id)
-                    val mimeType = attachment.displayField("mimeType", "").lowercase()
-                    val fileName = attachment.displayField("originalName", "prescription_$id")
-                    val isImg = mimeType.startsWith("image/") ||
-                        listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { fileName.endsWith(it, ignoreCase = true) }
-                    if (isImg) {
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    } else {
-                        val cacheDir = File(context.cacheDir, "prescriptions").apply { if (!exists()) mkdirs() }
-                        val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                        val file = File(cacheDir, safeName)
-                        file.writeBytes(bytes)
-                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            file
-                        )
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(contentUri, mimeType.ifBlank { "application/pdf" })
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                        null
+                    val cacheDir = File(context.cacheDir, "prescriptions").apply { if (!exists()) mkdirs() }
+                    val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val file = File(cacheDir, safeName)
+                    file.writeBytes(bytes)
+                    val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(contentUri, mimeType.ifBlank { "application/pdf" })
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                }
-            }.onSuccess { bmp ->
-                if (bmp != null) {
-                    previewScale = 1f
-                    previewOffset = androidx.compose.ui.geometry.Offset.Zero
-                    previewBitmap = bmp
+                    context.startActivity(intent)
                 }
             }.onFailure {
                 rethrowCancellation(it)
@@ -906,12 +903,31 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
         dismissButton = { TextButton(onClick = { deletePlan = null }) { Text("取消") } },
     ) }
 
-    previewBitmap?.let { bitmap ->
-        DisposableEffect(bitmap) {
-            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+    if (viewingImageAttachment) {
+        var loadingError by remember { mutableStateOf<String?>(null) }
+        
+        LaunchedEffect(Unit) {
+            if (previewBitmap == null) {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val bytes = ApiClient.prescriptionAttachment(id)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                }.onSuccess { bmp ->
+                    if (bmp != null) previewBitmap = bmp
+                }.onFailure { loadingError = it.message ?: "处方原件加载失败" }
+            }
         }
+        
+        DisposableEffect(Unit) {
+            onDispose {
+                previewBitmap?.let { if (!it.isRecycled) it.recycle() }
+                previewBitmap = null
+            }
+        }
+
         Dialog(
-            onDismissRequest = { previewBitmap = null },
+            onDismissRequest = { viewingImageAttachment = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false,
@@ -922,42 +938,58 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                 modifier = Modifier.fillMaxSize(),
             ) {
                 Box(Modifier.fillMaxSize()) {
-                    androidx.compose.foundation.Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "处方原件",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clipToBounds()
-                            .graphicsLayer {
-                                scaleX = previewScale
-                                scaleY = previewScale
-                                translationX = previewOffset.x
-                                translationY = previewOffset.y
-                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
-                            }
-                            .pointerInput(Unit) {
-                                detectTransformGestures { centroid, pan, zoom, _ ->
-                                    val oldScale = previewScale
-                                    previewScale = (previewScale * zoom).coerceIn(1f, 5f)
-                                    val fractional = previewScale / oldScale
-                                    previewOffset = (previewOffset - centroid) * fractional + centroid + pan
+                    if (previewBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = previewBitmap!!.asImageBitmap(),
+                            contentDescription = "处方原件",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .graphicsLayer {
+                                    scaleX = previewScale
+                                    scaleY = previewScale
+                                    translationX = previewOffset.x
+                                    translationY = previewOffset.y
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
                                 }
-                            },
-                    )
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { centroid, pan, zoom, _ ->
+                                        val oldScale = previewScale
+                                        previewScale = (previewScale * zoom).coerceIn(1f, 5f)
+                                        val fractional = previewScale / oldScale
+                                        previewOffset = (previewOffset - centroid) * fractional + centroid + pan
+                                    }
+                                },
+                        )
+                    } else if (loadingError != null) {
+                        Text(
+                            text = loadingError!!,
+                            color = Color.Red,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    } else {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+                    
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(top = 36.dp, end = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        TextButton(
-                            onClick = {
-                                previewScale = 1f
-                                previewOffset = androidx.compose.ui.geometry.Offset.Zero
-                            },
-                        ) { Text("复位", color = Color.White) }
-                        TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }
+                        if (previewBitmap != null) {
+                            TextButton(
+                                onClick = {
+                                    previewScale = 1f
+                                    previewOffset = androidx.compose.ui.geometry.Offset.Zero
+                                },
+                            ) { Text("复位", color = Color.White) }
+                        }
+                        TextButton(onClick = { viewingImageAttachment = false }) { Text("关闭", color = Color.White) }
                     }
                 }
             }
