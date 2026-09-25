@@ -73,10 +73,13 @@
         <div class="card-header">
           <div>
             <span>处方原件</span>
-            <span class="header-note">支持 JPG、PNG、GIF、WEBP、BMP 或 PDF，单个文件不超过 5MB</span>
+            <span class="header-note"
+              >支持 JPG、PNG、GIF、WEBP、BMP 或 PDF，单个文件不超过 5MB</span
+            >
           </div>
           <el-upload
             ref="attachmentUploader"
+            multiple
             :auto-upload="false"
             :show-file-list="false"
             :disabled="attachmentUploading || loading"
@@ -89,7 +92,7 @@
               :loading="attachmentUploading"
               :disabled="attachmentUploading || loading"
             >
-              {{ prescription?.attachment ? '重新上传' : '上传处方' }}
+              上传处方
             </el-button>
           </el-upload>
           <div v-if="attachmentUploading" class="upload-progress" aria-live="polite">
@@ -98,39 +101,51 @@
               :stroke-width="6"
               :show-text="false"
             />
-            <span>{{ attachmentUploadProgress ? `上传中 ${attachmentUploadProgress}%` : '准备上传...' }}</span>
+            <span>{{
+              attachmentUploadProgress ? `上传中 ${attachmentUploadProgress}%` : '准备上传...'
+            }}</span>
           </div>
         </div>
       </template>
-      <div v-if="prescription?.attachment" class="attachment-summary">
+      <div
+        v-for="attachment in prescription?.attachments || []"
+        :key="attachment.id"
+        class="attachment-summary"
+      >
         <el-icon class="attachment-icon">
-          <Picture v-if="isImageAttachment(prescription.attachment)" />
+          <Picture v-if="isImageAttachment(attachment)" />
           <Document v-else />
         </el-icon>
         <div class="attachment-info">
-          <div class="attachment-name" :title="prescription.attachment.originalName">
-            {{ prescription.attachment.originalName }}
+          <div class="attachment-name" :title="attachment.originalName">
+            {{ attachment.originalName }}
           </div>
           <div class="attachment-meta">
-            {{ formatFileSize(prescription.attachment.fileSize) }} ·
-            {{ formatDate(prescription.attachment.updatedAt || prescription.attachment.createdAt) }}
+            {{ formatFileSize(attachment.fileSize) }} ·
+            {{ formatDate(attachment.updatedAt || attachment.createdAt) }}
           </div>
         </div>
         <div class="attachment-actions">
-          <el-button link type="primary" :icon="View" @click="openAttachmentPreview">预览</el-button>
-          <el-button link :icon="Download" @click="downloadAttachment">下载</el-button>
+          <el-button link type="primary" :icon="View" @click="openAttachmentPreview(attachment)"
+            >预览</el-button
+          >
+          <el-button link :icon="Download" @click="downloadAttachment(attachment)">下载</el-button>
           <el-button
             link
             type="danger"
             :icon="Delete"
             :loading="attachmentDeleting"
-            @click="removeAttachment"
+            @click="removeAttachment(attachment)"
           >
             删除
           </el-button>
         </div>
       </div>
-      <el-empty v-else description="暂无处方原件" :image-size="72" />
+      <el-empty
+        v-if="!prescription?.attachments?.length"
+        description="暂无处方原件"
+        :image-size="72"
+      />
     </el-card>
 
     <el-dialog
@@ -141,10 +156,13 @@
       @closed="handlePreviewClosed"
     >
       <div v-loading="attachmentPreviewLoading" class="attachment-preview">
-        <img
+        <el-image
           v-if="attachmentPreviewUrl && isImageMime(attachmentPreviewMime)"
           :src="attachmentPreviewUrl"
+          :preview-src-list="[attachmentPreviewUrl]"
+          fit="contain"
           :alt="attachmentPreviewName"
+          style="width: 100%; height: 100%"
         />
         <iframe
           v-else-if="attachmentPreviewUrl"
@@ -309,9 +327,17 @@
       <div v-for="item in e6Imports" :key="item.id" class="e6-import-block">
         <div class="e6-import-summary">
           <span>订单号：{{ item.externalOrderNo || '-' }}</span>
-          <span>操作员：{{ item.operatorMapping?.operatorName || item.operatorName || item.cashierName || '-' }}</span>
+          <span
+            >操作员：{{
+              item.operatorMapping?.operatorName || item.operatorName || item.cashierName || '-'
+            }}</span
+          >
           <span>订单时间：{{ formatDate(item.sourceCreatedAt) }}</span>
-          <span>总价：{{ item.totalPrice == null ? '-' : `¥${Number(item.totalPrice).toFixed(2)}` }}</span>
+          <span
+            >总价：{{
+              item.totalPrice == null ? '-' : `¥${Number(item.totalPrice).toFixed(2)}`
+            }}</span
+          >
           <el-tag :type="Number(item.isPaid) === 1 ? 'success' : 'warning'" effect="plain">
             {{ Number(item.isPaid) === 1 ? '已付款' : '未付款' }}
           </el-tag>
@@ -325,7 +351,9 @@
             <template #default="{ row }">{{ row.quantity || '-' }}{{ row.unit || '' }}</template>
           </el-table-column>
           <el-table-column label="总量">
-            <template #default="{ row }">{{ row.totalQuantity || '-' }}{{ row.unit || '' }}</template>
+            <template #default="{ row }"
+              >{{ row.totalQuantity || '-' }}{{ row.unit || '' }}</template
+            >
           </el-table-column>
         </el-table>
         <div v-if="item.remark" class="e6-import-remark">备注：{{ item.remark }}</div>
@@ -376,10 +404,7 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item
-            v-if="[1, 2].includes(Number(planForm.pickupMethod))"
-            label="地址"
-          >
+          <el-form-item v-if="[1, 2].includes(Number(planForm.pickupMethod))" label="地址">
             <el-input
               v-model.trim="planForm.expressAddress"
               type="textarea"
@@ -431,7 +456,11 @@
               <el-radio :value="SCHEDULE_TYPES.NOTICE">等待通知</el-radio>
             </el-radio-group>
           </el-form-item>
-          <el-form-item v-if="planForm.scheduleType === SCHEDULE_TYPES.DATE" label="加工日期" required>
+          <el-form-item
+            v-if="planForm.scheduleType === SCHEDULE_TYPES.DATE"
+            label="加工日期"
+            required
+          >
             <el-date-picker
               v-model="planForm.processDate"
               type="date"
@@ -650,7 +679,9 @@ function formatFileSize(value) {
 function hasAllowedAttachmentType(file) {
   const mimeType = String(file?.type || '').toLowerCase();
   const extension = attachmentExtension(file);
-  return ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType) || ALLOWED_ATTACHMENT_EXTENSIONS.has(extension);
+  return (
+    ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType) || ALLOWED_ATTACHMENT_EXTENSIONS.has(extension)
+  );
 }
 
 function attachmentExtension(file) {
@@ -698,13 +729,9 @@ async function handleAttachmentChange(uploadFile) {
           fallbackBaseName: '处方原件'
         })
       : file;
-    await uploadPrescriptionAttachment(
-      props.id ?? route.params.id,
-      preparedFile,
-      (progress) => {
-        attachmentUploadProgress.value = progress;
-      }
-    );
+    await uploadPrescriptionAttachment(props.id ?? route.params.id, preparedFile, (progress) => {
+      attachmentUploadProgress.value = progress;
+    });
     await loadData();
     ElMessage.success(
       preparedFile === file
@@ -712,7 +739,8 @@ async function handleAttachmentChange(uploadFile) {
         : `处方原件已压缩并上传（${formatFileSize(file.size)} → ${formatFileSize(preparedFile.size)}）`
     );
   } catch (error) {
-    if (error.imageCompressionFailed) ElMessage.error(error.message || '图片压缩失败'); else ElMessage.error(error.message || '上传失败');
+    if (error.imageCompressionFailed) ElMessage.error(error.message || '图片压缩失败');
+    else ElMessage.error(error.message || '上传失败');
   } finally {
     attachmentUploading.value = false;
     attachmentUploadProgress.value = 0;
@@ -725,8 +753,7 @@ function releaseAttachmentPreviewUrl() {
   attachmentPreviewUrl.value = '';
 }
 
-async function openAttachmentPreview() {
-  const attachment = prescription.value?.attachment;
+async function openAttachmentPreview(attachment) {
   if (!attachment) return;
   const requestId = attachmentPreviewRequestId.value + 1;
   attachmentPreviewRequestId.value = requestId;
@@ -736,7 +763,7 @@ async function openAttachmentPreview() {
   attachmentPreviewVisible.value = true;
   attachmentPreviewLoading.value = true;
   try {
-    const blob = await getPrescriptionAttachment(props.id ?? route.params.id);
+    const blob = await getPrescriptionAttachment(props.id ?? route.params.id, attachment.id);
     if (requestId === attachmentPreviewRequestId.value && attachmentPreviewVisible.value) {
       attachmentPreviewUrl.value = URL.createObjectURL(blob);
     }
@@ -745,10 +772,9 @@ async function openAttachmentPreview() {
   }
 }
 
-async function downloadAttachment() {
-  const attachment = prescription.value?.attachment;
+async function downloadAttachment(attachment) {
   if (!attachment) return;
-  const blob = await getPrescriptionAttachment(props.id ?? route.params.id);
+  const blob = await getPrescriptionAttachment(props.id ?? route.params.id, attachment.id);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -759,7 +785,7 @@ async function downloadAttachment() {
   URL.revokeObjectURL(url);
 }
 
-async function removeAttachment() {
+async function removeAttachment(attachment) {
   await ElMessageBox.confirm('确认删除该处方原件？删除后无法恢复。', '删除处方原件', {
     type: 'warning',
     confirmButtonText: '删除',
@@ -767,7 +793,7 @@ async function removeAttachment() {
   });
   attachmentDeleting.value = true;
   try {
-    await deletePrescriptionAttachment(props.id ?? route.params.id);
+    await deletePrescriptionAttachment(props.id ?? route.params.id, attachment.id);
     attachmentPreviewVisible.value = false;
     handlePreviewClosed();
     await loadData();

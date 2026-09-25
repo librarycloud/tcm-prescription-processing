@@ -69,6 +69,7 @@ export async function attachmentController(request, reply) {
     request.server.prisma,
     request.user,
     request.params.id,
+    request.params.attachmentId
   );
   
   if (attachment.storagePath && !attachment.data) {
@@ -97,7 +98,8 @@ export async function deleteAttachmentController(request, reply) {
       request.server.prisma,
       request.user,
       request.params.id,
+      request.params.attachmentId
     ),
-    '处方原件已删除',
+    '处方原件已删除'
   );
 }

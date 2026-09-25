@@ -495,13 +495,13 @@ model Prescription {
   deletedAt        DateTime? @map("deleted_at")
   deletedBy        Int?      @map("deleted_by")
 
-  doctor     Doctor                  @relation(fields: [doctorId], references: [id])
-  source     Dictionary              @relation("PrescriptionSource", fields: [sourceId], references: [id])
-  store      Store                   @relation(fields: [storeId], references: [id])
-  creator    Admin                   @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
-  plans      ProcessingPlan[]
-  e6Imports  E6Import[]
-  attachment PrescriptionAttachment?
+  doctor      Doctor                   @relation(fields: [doctorId], references: [id])
+  source      Dictionary               @relation("PrescriptionSource", fields: [sourceId], references: [id])
+  store       Store                    @relation(fields: [storeId], references: [id])
+  creator     Admin                    @relation("PrescriptionCreatedBy", fields: [createdBy], references: [id])
+  plans       ProcessingPlan[]
+  e6Imports   E6Import[]
+  attachments PrescriptionAttachment[]
 
   @@index([phone])
   @@index([doctorId])
@@ -512,7 +512,7 @@ model Prescription {
 
 model PrescriptionAttachment {
   id             Int      @id @default(autoincrement())
-  prescriptionId Int      @unique @map("prescription_id")
+  prescriptionId Int      @map("prescription_id")
   originalName   String   @map("original_name") @db.VarChar(255)
   mimeType       String   @map("mime_type") @db.VarChar(100)
   fileSize       Int      @map("file_size")
