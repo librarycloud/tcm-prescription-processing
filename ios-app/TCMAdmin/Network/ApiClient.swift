@@ -219,7 +219,9 @@ public class ApiClient {
                             try JSONDecoder().decode(T.self, from: data)
                         }.value
                     } catch {
-                        // Ignore decode error and fallback to network
+                        cacheQueue.sync(flags: .barrier) {
+                            memoryCache.removeValue(forKey: cacheKey)
+                        }
                     }
                 }
             }

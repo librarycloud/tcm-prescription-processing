@@ -660,6 +660,11 @@ public struct ProcessingPlanFormView: View {
                             payload["expressAddress"] = expressAddress
                         }
                         try await ApiClient.shared.createProcessingPlan(payload: payload)
+                        await MainActor.run {
+                            if !self.batchDrafts.isEmpty {
+                                self.batchDrafts.removeAll(where: { $0.id == draft.id })
+                            }
+                        }
                     }
                 }
                 await MainActor.run {
