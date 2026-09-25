@@ -236,7 +236,7 @@ public struct WorkflowOperationView: View {
             }
             
             // 全屏放大照片查看
-            if let photoData = selectedPhotoData, let uiImage = downsampledImage(from: photoData, maxPixelSize: 2048) {
+            if let photoData = selectedPhotoData, let uiImage = downsampledImage(from: photoData, maxPixelSize: 10000) {
                 Color.black.ignoresSafeArea()
                 VStack {
                     HStack {
@@ -516,7 +516,7 @@ public struct WorkflowOperationView: View {
                         }}
                         .onChange(of: selectedPhotoItem) { _, newItem in
                             Task { @MainActor in
-                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 2560) {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 10000) {
                                     handlePickedImage(uiImage)
                                 }
                             }
