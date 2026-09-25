@@ -1155,6 +1155,7 @@ public class HapticManager {
     }
 }
 import SwiftUI
+import SwiftUI
 import UIKit
 
 public struct ZoomableImageView: UIViewRepresentable {
@@ -1164,9 +1165,8 @@ public struct ZoomableImageView: UIViewRepresentable {
         self.image = image
     }
     
-    public func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView()
-        scrollView.delegate = context.coordinator
+    public func makeUIView(context: Context) -> ZoomingScrollView {
+        let scrollView = ZoomingScrollView()
         scrollView.maximumZoomScale = 5.0
         scrollView.minimumZoomScale = 1.0
         scrollView.bouncesZoom = true
@@ -1174,68 +1174,76 @@ public struct ZoomableImageView: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.backgroundColor = .clear
         
-        let imageView = UIImageView(image: image)
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-        
-        scrollView.addSubview(imageView)
-        context.coordinator.imageView = imageView
-        
-        // Add double tap to zoom
         let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
         doubleTap.numberOfTapsRequired = 2
         scrollView.addGestureRecognizer(doubleTap)
         
+        scrollView.imageView.image = image
+        context.coordinator.scrollView = scrollView
+        
         return scrollView
     }
     
-    public func updateUIView(_ uiView: UIScrollView, context: Context) {
-        if let imageView = context.coordinator.imageView {
-            imageView.image = image
-            imageView.frame = uiView.bounds
-        }
+    public func updateUIView(_ uiView: ZoomingScrollView, context: Context) {
+        uiView.imageView.image = image
     }
     
     public func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator()
     }
     
-    public class Coordinator: NSObject, UIScrollViewDelegate {
-        var parent: ZoomableImageView
-        var imageView: UIImageView?
-        
-        init(_ parent: ZoomableImageView) {
-            self.parent = parent
-        }
-        
-        public func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-            return imageView
-        }
-        
-        public func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            guard let imageView = imageView else { return }
-            let offsetX = max((scrollView.bounds.width - scrollView.contentSize.width) * 0.5, 0)
-            let offsetY = max((scrollView.bounds.height - scrollView.contentSize.height) * 0.5, 0)
-            imageView.center = CGPoint(x: scrollView.contentSize.width * 0.5 + offsetX,
-                                     y: scrollView.contentSize.height * 0.5 + offsetY)
-        }
+    public class Coordinator: NSObject {
+        weak var scrollView: ZoomingScrollView?
         
         @objc func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
-            guard let scrollView = recognizer.view as? UIScrollView else { return }
-            
+            guard let scrollView = scrollView else { return }
             if scrollView.zoomScale > scrollView.minimumZoomScale {
                 scrollView.setZoomScale(scrollView.minimumZoomScale, animated: true)
             } else {
-                let pointInView = recognizer.location(in: imageView)
+                let pointInView = recognizer.location(in: scrollView.imageView)
                 let zoomScale = min(scrollView.maximumZoomScale, 3.0)
                 let scrollViewSize = scrollView.bounds.size
                 let w = scrollViewSize.width / zoomScale
                 let h = scrollViewSize.height / zoomScale
                 let x = pointInView.x - (w / 2.0)
                 let y = pointInView.y - (h / 2.0)
-                let rectToZoomTo = CGRect(x: x, y: y, width: w, height: h)
-                scrollView.zoom(to: rectToZoomTo, animated: true)
+                scrollView.zoom(to: CGRect(x: x, y: y, width: w, height: h), animated: true)
             }
         }
+    }
+}
+
+public class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
+    let imageView = UIImageView()
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.delegate = self
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+        addSubview(imageView)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        // If zoom scale is 1, keep frame matching bounds to allow aspect fit to work
+        if zoomScale == minimumZoomScale {
+            imageView.frame = bounds
+        }
+    }
+    
+    public func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return imageView
+    }
+    
+    public func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        let offsetX = max((bounds.width - contentSize.width) * 0.5, 0)
+        let offsetY = max((bounds.height - contentSize.height) * 0.5, 0)
+        imageView.center = CGPoint(x: contentSize.width * 0.5 + offsetX,
+                                 y: contentSize.height * 0.5 + offsetY)
     }
 }
