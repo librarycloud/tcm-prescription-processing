@@ -125,8 +125,8 @@ object ApiClient {
         }
 
         val parsed = runCatching { android.net.Uri.parse(finalURL) }.getOrNull()
-        val scheme = parsed?.scheme?.lowercase()
-        if (parsed == null || (scheme != "http" && scheme != "https") || parsed.host.isNullOrBlank() ||
+        val parsedScheme = parsed?.scheme?.lowercase()
+        if (parsed == null || (parsedScheme != "http" && parsedScheme != "https") || parsed.host.isNullOrBlank() ||
             !parsed.userInfo.isNullOrBlank() || !parsed.query.isNullOrBlank() || !parsed.fragment.isNullOrBlank()) {
             return false to "服务器地址无效，请输入不带查询参数的 HTTP/HTTPS 地址"
         }
