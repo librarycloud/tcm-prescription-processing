@@ -109,8 +109,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.LocalDate
 
-private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
-private const val MAX_SOURCE_PHOTO_BYTES = 25 * 1024 * 1024
+private const val MAX_SOURCE_PHOTO_BYTES = 100 * 1024 * 1024
 private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
 
 private fun readBytesLimited(context: android.content.Context, uri: Uri, maxBytes: Int): ByteArray {
@@ -125,7 +124,7 @@ private fun readBytesLimited(context: android.content.Context, uri: Uri, maxByte
             if (count < 0) break
             total += count
             if (total > maxBytes) {
-                throw IllegalStateException("照片过大，请选择 25MB 以内的照片")
+                throw IllegalStateException("照片过大，请选择 100MB 以内的照片")
             }
             output.write(buffer, 0, count)
         }
@@ -167,16 +166,15 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
         if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
     }
     if (reportedSize != null && reportedSize > MAX_SOURCE_PHOTO_BYTES) {
-        throw IllegalStateException("照片过大，请选择 25MB 以内的照片")
+        throw IllegalStateException("照片过大，请选择 100MB 以内的照片")
     }
     val original = readBytesLimited(context, uri, MAX_SOURCE_PHOTO_BYTES)
-    if (original.size <= MAX_PROCESSING_PHOTO_BYTES) return original
 
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
 
     var sampleSize = 1
-    val maxDim = 2048
+    val maxDim = 5712
     while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
         (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
     ) {
@@ -219,18 +217,13 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
         rotatedBitmap
     }
 
-    val qualities = intArrayOf(88, 80, 70, 60)
     try {
-        for (quality in qualities) {
-            val output = java.io.ByteArrayOutputStream()
-            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= MAX_PROCESSING_PHOTO_BYTES) {
-                return output.toByteArray()
-            }
-        }
+        val output = java.io.ByteArrayOutputStream()
+        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 85, output)
+        return output.toByteArray()
     } finally {
         finalBitmap.recycle()
     }
-    throw IllegalStateException("照片压缩后仍超过 5MB，请选择较小的照片")
 }
 
 

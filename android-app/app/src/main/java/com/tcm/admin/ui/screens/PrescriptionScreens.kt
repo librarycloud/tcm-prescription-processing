@@ -1161,7 +1161,7 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
     }
 }
 
-private const val MAX_PRESCRIPTION_FILE_BYTES = 25 * 1024 * 1024
+private const val MAX_PRESCRIPTION_FILE_BYTES = 100 * 1024 * 1024
 
 private fun readBytesLimited(context: Context, uri: Uri, maxBytes: Int): ByteArray {
     val input = context.contentResolver.openInputStream(uri)
@@ -1175,7 +1175,7 @@ private fun readBytesLimited(context: Context, uri: Uri, maxBytes: Int): ByteArr
             if (count < 0) break
             total += count
             if (total > maxBytes) {
-                throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
+                throw IllegalStateException("处方文件过大，请选择 100MB 以内的文件")
             }
             output.write(buffer, 0, count)
         }
@@ -1188,16 +1188,15 @@ private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteA
         if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
     }
     if (reportedSize != null && reportedSize > MAX_PRESCRIPTION_FILE_BYTES) {
-        throw IllegalStateException("处方文件过大，请选择 25MB 以内的图片")
+        throw IllegalStateException("处方文件过大，请选择 100MB 以内的图片")
     }
     val original = readBytesLimited(context, uri, MAX_PRESCRIPTION_FILE_BYTES)
-    if (original.size <= 2 * 1024 * 1024) return original
 
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
 
     var sampleSize = 1
-    val maxDim = 2560
+    val maxDim = 5712
     while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
         (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
     ) {
@@ -1240,18 +1239,13 @@ private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteA
         rotatedBitmap
     }
 
-    val qualities = intArrayOf(88, 80, 70)
     try {
-        for (quality in qualities) {
-            val output = java.io.ByteArrayOutputStream()
-            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= 4 * 1024 * 1024) {
-                return output.toByteArray()
-            }
-        }
+        val output = java.io.ByteArrayOutputStream()
+        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 85, output)
+        return output.toByteArray()
     } finally {
         finalBitmap.recycle()
     }
-    return original
 }
 
 private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri, onProgress: (Int) -> Unit) {
@@ -1269,7 +1263,7 @@ private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri:
             if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
         }
         if (reportedSize != null && reportedSize > MAX_PRESCRIPTION_FILE_BYTES) {
-            throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
+            throw IllegalStateException("处方文件过大，请选择 100MB 以内的文件")
         }
         readBytesLimited(context, uri, MAX_PRESCRIPTION_FILE_BYTES)
     }
