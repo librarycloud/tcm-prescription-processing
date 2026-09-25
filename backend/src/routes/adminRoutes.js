@@ -363,16 +363,16 @@ export default async function adminRoutes(fastify, options) {
   );
   fastify.get("/prescriptions", storeStaffRoute, listPrescriptionController);
   fastify.get(
-    "/prescriptions/:id/attachment",
+    "/prescriptions/:id/attachments/:attachmentId",
     storeStaffRoute,
     prescriptionAttachmentController,
   );
   fastify.post(
-    "/prescriptions/:id/attachment",
+    "/prescriptions/:id/attachments",
     uploadPrescriptionAttachmentController,
   );
   fastify.delete(
-    "/prescriptions/:id/attachment",
+    "/prescriptions/:id/attachments/:attachmentId",
     deletePrescriptionAttachmentController,
   );
   fastify.get("/prescriptions/:id", storeStaffRoute, prescriptionDetailController);

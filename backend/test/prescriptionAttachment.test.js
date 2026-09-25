@@ -30,7 +30,7 @@ function prescription() {
   };
 }
 
-test("replacing a prescription attachment stores the new file and removes the old one", async (t) => {
+test("uploading a prescription attachment stores the new file without removing existing ones", async (t) => {
   const previousUploadDir = config.uploadDir;
   const uploadDir = await mkdtemp(path.join(tmpdir(), "tcm-prescription-file-"));
   config.uploadDir = uploadDir;
@@ -43,7 +43,7 @@ test("replacing a prescription attachment stores the new file and removes the ol
   const oldFilePath = path.join(uploadDir, ...oldStoragePath.split("/"));
   await mkdir(path.dirname(oldFilePath), { recursive: true });
   await writeFile(oldFilePath, Buffer.from("old"));
-  let attachment = {
+  let attachment = { prescriptionId: 21,
     id: 5,
     prescriptionId: 21,
     originalName: "旧处方.jpg",
@@ -58,8 +58,8 @@ test("replacing a prescription attachment stores the new file and removes the ol
     prescription: { findFirst: async () => prescription() },
     prescriptionAttachment: {
       findUnique: async () => attachment,
-      upsert: async ({ update }) => {
-        attachment = { ...attachment, ...update, updatedAt: new Date() };
+      create: async ({ data }) => {
+        attachment = { id: 999, ...data, createdAt: new Date(), updatedAt: new Date() };
         return attachment;
       },
     },
@@ -75,8 +75,9 @@ test("replacing a prescription attachment stores the new file and removes the ol
 
   assert.match(attachment.storagePath, /^prescriptions\/\d{4}\/\d{2}\//);
   assert.equal(attachment.data, null);
-  await assert.rejects(access(oldFilePath), { code: "ENOENT" });
-  const downloaded = await getPrescriptionAttachment(prisma, actor, 21);
+  // Old file should still exist since we now support multiple attachments!
+  await access(oldFilePath);
+  const downloaded = await getPrescriptionAttachment(prisma, actor, 21, 999);
   assert.deepEqual(downloaded.data, image);
   assert.deepEqual(
     await readFile(path.join(uploadDir, ...attachment.storagePath.split("/"))),
@@ -89,7 +90,7 @@ test("legacy prescription attachment data remains readable before backfill", asy
   const prisma = {
     prescription: { findFirst: async () => prescription() },
     prescriptionAttachment: {
-      findUnique: async () => ({
+      findUnique: async () => ({ prescriptionId: 21,
         id: 5,
         originalName: "旧处方.pdf",
         mimeType: "application/pdf",
@@ -102,7 +103,7 @@ test("legacy prescription attachment data remains readable before backfill", asy
     },
   };
 
-  const attachment = await getPrescriptionAttachment(prisma, actor, 21);
+  const attachment = await getPrescriptionAttachment(prisma, actor, 21, 1);
   assert.deepEqual(attachment.data, legacyData);
 });
 
@@ -124,7 +125,7 @@ test("deleting a prescription attachment removes its record and local file", asy
   const prisma = {
     prescription: { findFirst: async () => prescription() },
     prescriptionAttachment: {
-      findUnique: async () => ({ id: 5, storagePath }),
+      findUnique: async () => ({ prescriptionId: 21, id: 5, storagePath }),
       delete: async ({ where }) => {
         deletedId = where.id;
         return { id: where.id };
@@ -139,7 +140,7 @@ test("deleting a prescription attachment removes its record and local file", asy
     $transaction: async (work) => work(prisma),
   };
 
-  const result = await deletePrescriptionAttachment(prisma, actor, 21);
+  const result = await deletePrescriptionAttachment(prisma, actor, 21, 1);
 
   assert.deepEqual(result, { id: 5 });
   assert.equal(deletedId, 5);

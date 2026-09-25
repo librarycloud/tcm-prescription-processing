@@ -70,7 +70,7 @@ function include({ withE6Imports = false } = {}) {
     source: true,
     store: { select: { id: true, name: true, code: true } },
     creator: { select: { id: true, nickname: true, phone: true } },
-    attachment: { select: PRESCRIPTION_ATTACHMENT_METADATA },
+    attachments: { select: PRESCRIPTION_ATTACHMENT_METADATA },
     plans: {
       where: { deletedAt: null },
       include: { processType: true, package: true },
@@ -294,24 +294,12 @@ export async function uploadPrescriptionAttachment(
     });
   }
 
-  const previous = await prisma.prescriptionAttachment.findUnique({
-    where: { prescriptionId: current.id },
-    select: { storagePath: true },
-  });
   let attachment;
   try {
     attachment = await prisma.$transaction(async (tx) => {
-      const saved = await tx.prescriptionAttachment.upsert({
-        where: { prescriptionId: current.id },
-        update: {
-          originalName: normalizeAttachmentName(file.filename),
-          mimeType: file.mimetype || 'application/octet-stream',
-          fileSize: file.buffer ? file.buffer.length : (file.size || 0),
-          storagePath: finalStoragePath,
-          data: null,
-          createdBy: Number(actor.id),
-        },
-        create: {
+      const saved = await tx.prescriptionAttachment.create({
+        data: {
+
           prescriptionId: current.id,
           originalName: normalizeAttachmentName(file.filename),
           mimeType: file.mimetype || 'application/octet-stream',
@@ -340,23 +328,16 @@ export async function uploadPrescriptionAttachment(
     }
     throw error;
   }
-  if (previous?.storagePath) {
-    try {
-      await deleteOssFile(prisma, previous.storagePath);
-      await removeUploadFile(previous.storagePath);
-    } catch {
-      // Keep the new attachment available even if removing its replaced file fails.
-    }
-  }
   return attachment;
 }
 
-export async function getPrescriptionAttachment(prisma, actor, idValue) {
+export async function getPrescriptionAttachment(prisma, actor, idValue, attachmentId) {
   const current = await getPrescription(prisma, actor, idValue);
   const attachment = await prisma.prescriptionAttachment.findUnique({
-    where: { prescriptionId: current.id },
-    select: { ...PRESCRIPTION_ATTACHMENT_METADATA, storagePath: true, data: true },
+    where: { id: Number(attachmentId) },
+    select: { ...PRESCRIPTION_ATTACHMENT_METADATA, prescriptionId: true, storagePath: true, data: true },
   });
+  if (attachment && attachment.prescriptionId !== current.id) throw new AppError("附件不属于该处方", 403);
   if (!attachment) throw new AppError("该处方暂无原件", 404);
   const { storagePath, data, ...metadata } = attachment;
   if (!storagePath) {
@@ -371,12 +352,12 @@ export async function getPrescriptionAttachment(prisma, actor, idValue) {
   }
 }
 
-export async function deletePrescriptionAttachment(prisma, actor, idValue) {
+export async function deletePrescriptionAttachment(prisma, actor, idValue, attachmentId) {
   const current = await getPrescription(prisma, actor, idValue);
   const attachment = await prisma.prescriptionAttachment.findUnique({
-    where: { prescriptionId: current.id },
-    select: { id: true, storagePath: true },
+    where: { id: Number(attachmentId) },
   });
+  if (attachment && attachment.prescriptionId !== current.id) throw new AppError("附件不属于该处方", 403);
   if (!attachment) throw new AppError("该处方暂无原件", 404);
 
   await prisma.$transaction(async (tx) => {
