@@ -144,6 +144,11 @@ import org.json.JSONObject
 import dagger.hilt.android.AndroidEntryPoint
 
 object ServerConfigNotifier {
+    val serverConfigRequest = kotlinx.coroutines.flow.MutableSharedFlow<android.net.Uri>(
+        replay = 1,
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
     val importResult = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Boolean, String>>(
         replay = 1,
         extraBufferCapacity = 1,
@@ -151,6 +156,12 @@ object ServerConfigNotifier {
     )
     fun notify(success: Boolean, message: String) {
         importResult.tryEmit(success to message)
+    }
+    fun request(uri: android.net.Uri) {
+        serverConfigRequest.tryEmit(uri)
+    }
+    fun consumeRequest() {
+        serverConfigRequest.resetReplayCache()
     }
     fun consume() {
         importResult.resetReplayCache()
@@ -169,8 +180,10 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
             val uri = intent.data!!
             if (uri.scheme == "tcmadmin" || uri.scheme == "tcm") {
-                val (success, message) = ApiClient.importServerConfig(this, uri)
-                ServerConfigNotifier.notify(success, message)
+                // Never switch the API endpoint from an external intent without an
+                // in-app confirmation. This prevents a malicious app from redirecting
+                // an authenticated session to an attacker-controlled server.
+                ServerConfigNotifier.request(uri)
             }
         }
     }
@@ -231,6 +244,14 @@ private fun TcmAdminApp() {
     var showImportAlert by remember { mutableStateOf(false) }
     var importAlertMessage by remember { mutableStateOf("") }
     var importAlertSuccess by remember { mutableStateOf(false) }
+    var pendingServerConfig by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    LaunchedEffect(Unit) {
+        ServerConfigNotifier.serverConfigRequest.collect { uri ->
+            pendingServerConfig = uri
+            ServerConfigNotifier.consumeRequest()
+        }
+    }
     
     LaunchedEffect(Unit) {
         ServerConfigNotifier.importResult.collect { (success, message) ->
@@ -411,6 +432,45 @@ private fun TcmAdminApp() {
             ),
         ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
+
+        pendingServerConfig?.let { uri ->
+            AlertDialog(
+                onDismissRequest = { pendingServerConfig = null },
+                title = { Text("确认切换服务器") },
+                text = {
+                    Text(
+                        if (session != null) {
+                            "外部链接请求切换服务器。确认后会清除当前登录状态并要求重新登录。\n\n${uri}"
+                        } else {
+                            "外部链接请求导入服务器地址，请确认地址可信。\n\n${uri}"
+                        }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val target = pendingServerConfig ?: return@TextButton
+                        pendingServerConfig = null
+                        scope.launch {
+                            if (session != null) {
+                                ApiClient.clearSession(appContext)
+                                clearRetainedListValues()
+                                session = null
+                                navController.navigate(Route.Login) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                }
+                            }
+                            val result = withContext(Dispatchers.IO) {
+                                ApiClient.importServerConfig(appContext, target)
+                            }
+                            ServerConfigNotifier.notify(result.first, result.second)
+                        }
+                    }) { Text("确认") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingServerConfig = null }) { Text("取消") }
+                },
+            )
+        }
                         
         if (showImportAlert) {
             AlertDialog(
@@ -940,7 +1000,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                 Spacer(Modifier.height(20.dp))
 
                 Button(
-                    onClick = { onLogin(identifier.trim(), password.trim()) },
+                    onClick = { onLogin(identifier.trim(), password) },
                     enabled = identifier.isNotBlank() && password.isNotBlank() && !loading,
                     modifier = Modifier
                         .fillMaxWidth()

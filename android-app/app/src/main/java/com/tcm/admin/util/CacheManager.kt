@@ -54,8 +54,9 @@ object CacheManager {
     }
 
     /**
-     * Automatically cleans up obsolete installation packages (.apk) and temporary patch files (.tmp)
-     * from previous updates. Safe to call on app startup and before starting updates.
+     * Cleans temporary update artifacts from previous attempts. APKs are kept until
+     * the user installs them or explicitly clears cache, so a pending update survives
+     * an app process restart.
      */
     fun cleanObsoleteApksAndPatches(context: Context): Long {
         var freedBytes = 0L
@@ -79,12 +80,26 @@ object CacheManager {
                 }
             }
 
-            // 3. Clean external downloads directory for update APKs from past versions
+            // 3. Keep downloaded APKs for pending updates, but delete them once installed
             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.listFiles()?.forEach { file ->
                 val name = file.name.lowercase(Locale.US)
-                if (name.endsWith(".apk") || name.endsWith(".tmp") || name.endsWith(".patch")) {
+                if (name.endsWith(".tmp") || name.endsWith(".patch")) {
                     val len = file.length()
                     if (file.delete()) freedBytes += len
+                } else if (name.endsWith(".apk")) {
+                    val match = Regex("update_(\\d+)\\.apk").find(name)
+                    val isObsolete = if (match != null) {
+                        (match.groupValues[1].toIntOrNull() ?: 0) <= com.tcm.admin.BuildConfig.VERSION_CODE
+                    } else {
+                        // For non-standard APK names, parse archive or just assume obsolete
+                        val info = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+                        info == null || info.versionCode <= com.tcm.admin.BuildConfig.VERSION_CODE
+                    }
+                    
+                    if (isObsolete) {
+                        val len = file.length()
+                        if (file.delete()) freedBytes += len
+                    }
                 }
             }
 

@@ -109,9 +109,28 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.LocalDate
 
-private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
-private const val MAX_SOURCE_PHOTO_BYTES = 25 * 1024 * 1024
+private const val MAX_SOURCE_PHOTO_BYTES = 100 * 1024 * 1024
 private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
+
+private fun readBytesLimited(context: android.content.Context, uri: Uri, maxBytes: Int): ByteArray {
+    val input = context.contentResolver.openInputStream(uri)
+        ?: throw IllegalStateException("无法读取照片")
+    input.use { stream ->
+        val output = java.io.ByteArrayOutputStream(minOf(maxBytes, 1024 * 1024))
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val count = stream.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > maxBytes) {
+                throw IllegalStateException("照片过大，请选择 100MB 以内的照片")
+            }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+}
 
 private suspend fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap = withContext(Dispatchers.IO) {
     val cacheFile = java.io.File(context.cacheDir, "processing-photos/$planId-$photoId")
@@ -121,12 +140,12 @@ private suspend fun loadProcessingPhoto(context: android.content.Context, planId
     }
     val cacheAge = System.currentTimeMillis() - cacheFile.lastModified()
     if (cacheFile.isFile && cacheAge in 0..PROCESSING_PHOTO_CACHE_TTL_MILLIS) {
-        BitmapFactory.decodeFile(cacheFile.absolutePath)?.let { return@withContext it }
+        com.tcm.admin.util.ImageUtils.decodeFileWithExif(cacheFile.absolutePath)?.let { return@withContext it }
     }
     cacheFile.delete()
 
     val bytes = ApiClient.processingPhoto(planId, photoId)
-    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    val bitmap = com.tcm.admin.util.ImageUtils.decodeByteArrayWithExif(bytes)
         ?: throw IllegalStateException("无法读取照片")
     runCatching {
         cacheFile.parentFile?.mkdirs()
@@ -147,17 +166,15 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
         if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
     }
     if (reportedSize != null && reportedSize > MAX_SOURCE_PHOTO_BYTES) {
-        throw IllegalStateException("照片过大，请选择 25MB 以内的照片")
+        throw IllegalStateException("照片过大，请选择 100MB 以内的照片")
     }
-    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        ?: throw IllegalStateException("无法读取照片")
-    if (original.size <= MAX_PROCESSING_PHOTO_BYTES) return original
+    val original = readBytesLimited(context, uri, MAX_SOURCE_PHOTO_BYTES)
 
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
 
     var sampleSize = 1
-    val maxDim = 2048
+    val maxDim = 5712
     while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
         (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
     ) {
@@ -200,18 +217,13 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
         rotatedBitmap
     }
 
-    val qualities = intArrayOf(88, 80, 70, 60)
     try {
-        for (quality in qualities) {
-            val output = java.io.ByteArrayOutputStream()
-            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= MAX_PROCESSING_PHOTO_BYTES) {
-                return output.toByteArray()
-            }
-        }
+        val output = java.io.ByteArrayOutputStream()
+        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 85, output)
+        return output.toByteArray()
     } finally {
         finalBitmap.recycle()
     }
-    throw IllegalStateException("照片压缩后仍超过 5MB，请选择较小的照片")
 }
 
 
@@ -879,7 +891,7 @@ internal fun WorkflowOperationScreen(
         busy = true
         uploadingPhoto = true
         uploadProgress = 0
-        uploadJob = kotlinx.coroutines.GlobalScope.launch {
+        uploadJob = scope.launch {
             try {
                 runCatching {
                     withContext(Dispatchers.IO) {
@@ -1905,9 +1917,8 @@ internal fun WorkflowOperationScreen(
         DisposableEffect(bitmap) {
             onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
         }
-        var previewScale by remember(previewPhotoId) { mutableStateOf(1f) }
-        var previewOffsetX by remember(previewPhotoId) { mutableStateOf(0f) }
-        var previewOffsetY by remember(previewPhotoId) { mutableStateOf(0f) }
+        var previewScale by remember(previewPhotoId) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        var previewOffset by remember(previewPhotoId) { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
         Dialog(
             onDismissRequest = { previewBitmap = null },
             properties = DialogProperties(
@@ -1930,14 +1941,16 @@ internal fun WorkflowOperationScreen(
                             .graphicsLayer {
                                 scaleX = previewScale
                                 scaleY = previewScale
-                                translationX = previewOffsetX
-                                translationY = previewOffsetY
+                                translationX = previewOffset.x
+                                translationY = previewOffset.y
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
                             }
                             .pointerInput(previewPhotoId) {
-                                detectTransformGestures { _, pan, zoom, _ ->
+                                detectTransformGestures { centroid, pan, zoom, _ ->
+                                    val oldScale = previewScale
                                     previewScale = (previewScale * zoom).coerceIn(1f, 5f)
-                                    previewOffsetX += pan.x
-                                    previewOffsetY += pan.y
+                                    val fractional = previewScale / oldScale
+                                    previewOffset = (previewOffset - centroid) * fractional + centroid + pan
                                 }
                             },
                     )
@@ -1950,8 +1963,7 @@ internal fun WorkflowOperationScreen(
                         TextButton(
                             onClick = {
                                 previewScale = 1f
-                                previewOffsetX = 0f
-                                previewOffsetY = 0f
+                                previewOffset = androidx.compose.ui.geometry.Offset.Zero
                             },
                         ) { Text("复位", color = Color.White) }
                         TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }

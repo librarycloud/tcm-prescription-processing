@@ -47,6 +47,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.UploadFile
@@ -388,55 +389,50 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     var busy by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf(0) }
     var deletePlan by remember { mutableStateOf<JSONObject?>(null) }
-    var deleteAttachment by remember { mutableStateOf(false) }
-    var viewingAttachment by remember { mutableStateOf(false) }
+    var deleteAttachmentId by remember { mutableStateOf<Int?>(null) }
+    var viewingAttachmentId by remember { mutableStateOf<Int?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var previewScale by remember { mutableStateOf(1f) }
-    var previewOffsetX by remember { mutableStateOf(0f) }
-    var previewOffsetY by remember { mutableStateOf(0f) }
+    var previewScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var previewOffset by remember { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
+    var viewingImageAttachment by remember { mutableStateOf<JSONObject?>(null) }
 
     fun viewAttachmentFile(attachment: JSONObject) {
-        viewingAttachment = true
+        val mimeType = attachment.displayField("mimeType", "").lowercase()
+        val fileName = attachment.displayField("originalName", "prescription_$id")
+        val isImg = mimeType.startsWith("image/") ||
+            listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { fileName.endsWith(it, ignoreCase = true) }
+        
+        if (isImg) {
+            viewingImageAttachment = attachment
+            return
+        }
+
+        viewingAttachmentId = attachment.optInt("id")
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val bytes = ApiClient.prescriptionAttachment(id)
-                    val mimeType = attachment.displayField("mimeType", "").lowercase()
-                    val fileName = attachment.displayField("originalName", "prescription_$id")
-                    val isImg = mimeType.startsWith("image/") ||
-                        listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { fileName.endsWith(it, ignoreCase = true) }
-                    if (isImg) {
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    } else {
-                        val cacheDir = File(context.cacheDir, "prescriptions").apply { if (!exists()) mkdirs() }
-                        val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                        val file = File(cacheDir, safeName)
-                        file.writeBytes(bytes)
-                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            file
-                        )
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(contentUri, mimeType.ifBlank { "application/pdf" })
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                        null
+                    val bytes = ApiClient.prescriptionAttachment(id, attachment.optInt("id"))
+                    val cacheDir = File(context.cacheDir, "prescriptions").apply { if (!exists()) mkdirs() }
+                    val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val file = File(cacheDir, safeName)
+                    file.writeBytes(bytes)
+                    val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(contentUri, mimeType.ifBlank { "application/pdf" })
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                }
-            }.onSuccess { bmp ->
-                if (bmp != null) {
-                    previewScale = 1f
-                    previewOffsetX = 0f
-                    previewOffsetY = 0f
-                    previewBitmap = bmp
+                    context.startActivity(intent)
                 }
             }.onFailure {
                 rethrowCancellation(it)
                 error = it.message ?: "打开处方原件失败"
             }
-            viewingAttachment = false
+            viewingAttachmentId = null
         }
     }
 
@@ -458,6 +454,57 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
             busy = false
         }
     }
+
+    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    
+    fun createPhotoUri(): Uri? {
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "tcm_prescription_${System.currentTimeMillis()}.jpg")
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/TCM")
+        }
+        return context.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+    }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = pendingPhotoUri
+        pendingPhotoUri = null
+        if (success && uri != null) {
+            scope.launch {
+                busy = true
+                uploadProgress = 0
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        uploadAttachment(context, id, uri) { progress ->
+                            scope.launch { uploadProgress = progress }
+                        }
+                    }
+                }.onSuccess { reload++ }.onFailure {
+                    rethrowCancellation(it)
+                    error = it.message ?: "上传处方照片失败"
+                }
+                busy = false
+            }
+        }
+    }
+
+    val photoPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            pendingPhotoUri = createPhotoUri()
+            pendingPhotoUri?.let { photoLauncher.launch(it) } ?: run { error = "无法打开相机" }
+        } else {
+            error = "请允许使用相机后再拍照"
+        }
+    }
+
+    fun launchPhotoCapture() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            pendingPhotoUri = createPhotoUri()
+            pendingPhotoUri?.let { photoLauncher.launch(it) } ?: run { error = "无法打开相机" }
+        } else {
+            photoPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
     LaunchedEffect(id, reload) {
         error = null
         runCatching { withContext(Dispatchers.IO) { ApiClient.prescriptionDetail(id) } }
@@ -468,7 +515,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
         error?.let { Text(it, color = Danger, fontSize = 13.sp) }
         detail?.let { p ->
             val plans = p.optJSONArray("plans") ?: JSONArray()
-            val attachment = p.optJSONObject("attachment")
+            val attachments = p.optJSONArray("attachments") ?: org.json.JSONArray()
             val totalDose = p.optInt("totalDose", 0)
             val takenDose = p.optInt("takenDose", 0)
             val remainingDose = (totalDose - takenDose).coerceAtLeast(0)
@@ -535,16 +582,29 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("处方原件", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
                     if (!readOnly) {
-                        Button(
-                            enabled = !busy,
-                            onClick = { attachmentLauncher.launch(arrayOf("image/*", "application/pdf")) },
-                            shape = FieldShape,
-                            modifier = Modifier.heightIn(min = 32.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        ) {
-                            Icon(Icons.Default.UploadFile, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(if (attachment != null) "重新上传" else "上传原件", fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                enabled = !busy,
+                                onClick = { launchPhotoCapture() },
+                                shape = FieldShape,
+                                modifier = Modifier.heightIn(min = 32.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            ) {
+                                Icon(Icons.Default.CameraAlt, null, Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("拍照", fontSize = 12.sp)
+                            }
+                            Button(
+                                enabled = !busy,
+                                onClick = { attachmentLauncher.launch(arrayOf("image/*", "application/pdf")) },
+                                shape = FieldShape,
+                                modifier = Modifier.heightIn(min = 32.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            ) {
+                                Icon(Icons.Default.UploadFile, null, Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("文件", fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -566,8 +626,9 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                     )
                     Spacer(Modifier.height(6.dp))
                 }
-                if (attachment != null) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(0.5.dp, CardBorderColor), modifier = Modifier.fillMaxWidth()) {
+                for (i in 0 until attachments.length()) {
+                    val attachment = attachments.getJSONObject(i)
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, border = BorderStroke(0.5.dp, CardBorderColor), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(attachment.displayField("originalName", "处方原件"), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Ink)
@@ -575,39 +636,36 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                             }
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 OutlinedButton(
-                                    enabled = !busy && !viewingAttachment,
+                                    enabled = !busy && viewingAttachmentId == null,
                                     onClick = { viewAttachmentFile(attachment) },
                                     shape = FieldShape,
                                     modifier = Modifier.heightIn(min = 32.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                 ) {
-                                    if (viewingAttachment) {
+                                    if (viewingAttachmentId == attachment.optInt("id")) {
                                         CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = Primary)
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("加载中...", fontSize = 12.sp)
                                     } else {
-                                        Icon(Icons.Default.Visibility, null, Modifier.size(14.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("查看", fontSize = 12.sp)
+                                        Text("预览", fontSize = 12.sp)
                                     }
                                 }
                                 if (!readOnly) {
-                                    TextButton(
-                                        enabled = !busy && !viewingAttachment,
-                                        onClick = { deleteAttachment = true },
+                                    OutlinedButton(
+                                        enabled = !busy,
+                                        onClick = { deleteAttachmentId = attachment.optInt("id") },
+                                        shape = FieldShape,
                                         modifier = Modifier.heightIn(min = 32.dp),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                    ) {
-                                        Text("删除", color = Danger, fontSize = 12.sp)
-                                    }
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                    ) { Text("删除", fontSize = 12.sp) }
                                 }
                             }
                         }
                     }
-                } else {
+                }
+                if (attachments.length() == 0) {
                     Text("暂未上传处方原件", color = Muted, fontSize = 12.sp)
                 }
-            }
+}
 
             // Processing Plans (加工批次)
             Spacer(Modifier.height(14.dp))
@@ -893,13 +951,13 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
         }
         Spacer(Modifier.height(16.dp))
     }
-    if (deleteAttachment) AlertDialog(
-        onDismissRequest = { deleteAttachment = false },
+    deleteAttachmentId?.let { attachmentId -> AlertDialog(
+        onDismissRequest = { deleteAttachmentId = null },
         title = { Text("删除处方原件") },
         text = { Text("确认删除该处方原件？") },
-        confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescriptionAttachment(id) } }.onSuccess { deleteAttachment = false; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
-        dismissButton = { TextButton(onClick = { deleteAttachment = false }) { Text("取消") } },
-    )
+        confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescriptionAttachment(id, attachmentId) } }.onSuccess { deleteAttachmentId = null; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
+        dismissButton = { TextButton(onClick = { deleteAttachmentId = null }) { Text("取消") } },
+    ) }
     deletePlan?.let { plan -> AlertDialog(
         onDismissRequest = { deletePlan = null },
         title = { Text("删除加工批次") },
@@ -908,12 +966,31 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
         dismissButton = { TextButton(onClick = { deletePlan = null }) { Text("取消") } },
     ) }
 
-    previewBitmap?.let { bitmap ->
-        DisposableEffect(bitmap) {
-            onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
+    if (viewingImageAttachment != null) {
+        var loadingError by remember { mutableStateOf<String?>(null) }
+        
+        LaunchedEffect(Unit) {
+            if (previewBitmap == null) {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val bytes = ApiClient.prescriptionAttachment(id, viewingImageAttachment?.optInt("id") ?: 0)
+                        com.tcm.admin.util.ImageUtils.decodeByteArrayWithExif(bytes)
+                    }
+                }.onSuccess { bmp ->
+                    if (bmp != null) previewBitmap = bmp
+                }.onFailure { loadingError = it.message ?: "处方原件加载失败" }
+            }
         }
+        
+        DisposableEffect(Unit) {
+            onDispose {
+                previewBitmap?.let { if (!it.isRecycled) it.recycle() }
+                previewBitmap = null
+            }
+        }
+
         Dialog(
-            onDismissRequest = { previewBitmap = null },
+            onDismissRequest = { viewingImageAttachment = null },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false,
@@ -924,41 +1001,58 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                 modifier = Modifier.fillMaxSize(),
             ) {
                 Box(Modifier.fillMaxSize()) {
-                    androidx.compose.foundation.Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "处方原件",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clipToBounds()
-                            .graphicsLayer {
-                                scaleX = previewScale
-                                scaleY = previewScale
-                                translationX = previewOffsetX
-                                translationY = previewOffsetY
-                            }
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    previewScale = (previewScale * zoom).coerceIn(1f, 5f)
-                                    previewOffsetX += pan.x
-                                    previewOffsetY += pan.y
+                    if (previewBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = previewBitmap!!.asImageBitmap(),
+                            contentDescription = "处方原件",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .graphicsLayer {
+                                    scaleX = previewScale
+                                    scaleY = previewScale
+                                    translationX = previewOffset.x
+                                    translationY = previewOffset.y
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
                                 }
-                            },
-                    )
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { centroid, pan, zoom, _ ->
+                                        val oldScale = previewScale
+                                        previewScale = (previewScale * zoom).coerceIn(1f, 5f)
+                                        val fractional = previewScale / oldScale
+                                        previewOffset = (previewOffset - centroid) * fractional + centroid + pan
+                                    }
+                                },
+                        )
+                    } else if (loadingError != null) {
+                        Text(
+                            text = loadingError!!,
+                            color = Color.Red,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    } else {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+                    
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(top = 36.dp, end = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        TextButton(
-                            onClick = {
-                                previewScale = 1f
-                                previewOffsetX = 0f
-                                previewOffsetY = 0f
-                            },
-                        ) { Text("复位", color = Color.White) }
-                        TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }
+                        if (previewBitmap != null) {
+                            TextButton(
+                                onClick = {
+                                    previewScale = 1f
+                                    previewOffset = androidx.compose.ui.geometry.Offset.Zero
+                                },
+                            ) { Text("复位", color = Color.White) }
+                        }
+                        TextButton(onClick = { viewingImageAttachment = null }) { Text("关闭", color = Color.White) }
                     }
                 }
             }
@@ -1161,22 +1255,42 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
     }
 }
 
+private const val MAX_PRESCRIPTION_FILE_BYTES = 100 * 1024 * 1024
+
+private fun readBytesLimited(context: Context, uri: Uri, maxBytes: Int): ByteArray {
+    val input = context.contentResolver.openInputStream(uri)
+        ?: throw IllegalStateException("无法读取处方文件")
+    input.use { stream ->
+        val output = java.io.ByteArrayOutputStream(minOf(maxBytes, 1024 * 1024))
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val count = stream.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > maxBytes) {
+                throw IllegalStateException("处方文件过大，请选择 100MB 以内的文件")
+            }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+}
+
 private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteArray {
     val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
         if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
     }
-    if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
-        throw IllegalStateException("处方文件过大，请选择 25MB 以内的图片")
+    if (reportedSize != null && reportedSize > MAX_PRESCRIPTION_FILE_BYTES) {
+        throw IllegalStateException("处方文件过大，请选择 100MB 以内的图片")
     }
-    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        ?: throw IllegalStateException("无法读取处方文件")
-    if (original.size <= 2 * 1024 * 1024) return original
+    val original = readBytesLimited(context, uri, MAX_PRESCRIPTION_FILE_BYTES)
 
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
 
     var sampleSize = 1
-    val maxDim = 2560
+    val maxDim = 5712
     while ((options.outWidth > 0 && options.outWidth / sampleSize > maxDim * 2) ||
         (options.outHeight > 0 && options.outHeight / sampleSize > maxDim * 2)
     ) {
@@ -1219,18 +1333,13 @@ private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteA
         rotatedBitmap
     }
 
-    val qualities = intArrayOf(88, 80, 70)
     try {
-        for (quality in qualities) {
-            val output = java.io.ByteArrayOutputStream()
-            if (finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= 4 * 1024 * 1024) {
-                return output.toByteArray()
-            }
-        }
+        val output = java.io.ByteArrayOutputStream()
+        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 85, output)
+        return output.toByteArray()
     } finally {
         finalBitmap.recycle()
     }
-    return original
 }
 
 private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri: Uri, onProgress: (Int) -> Unit) {
@@ -1247,10 +1356,10 @@ private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri:
         val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
             if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
         }
-        if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
-            throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
+        if (reportedSize != null && reportedSize > MAX_PRESCRIPTION_FILE_BYTES) {
+            throw IllegalStateException("处方文件过大，请选择 100MB 以内的文件")
         }
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+        readBytesLimited(context, uri, MAX_PRESCRIPTION_FILE_BYTES)
     }
     val uploadMime = if (isImage && !mimeType.startsWith("image/")) "image/jpeg" else mimeType
     ApiClient.uploadPrescriptionAttachment(prescriptionId, name, uploadMime, bytes, onProgress)
