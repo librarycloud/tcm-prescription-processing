@@ -66,7 +66,7 @@ public struct PrescriptionItem: Codable, Identifiable , Equatable {
     public let isExternal: Bool?
     public let source: SourceNested?
     public let creator: CreatorNested?
-    public let attachment: PrescriptionAttachmentNested?
+    public let attachments: [PrescriptionAttachmentNested]?
     public let e6Imports: [E6ImportItem]?
     public let totalPrice: Double?
     public let sourceId: Int?
@@ -82,7 +82,7 @@ public struct PrescriptionItem: Codable, Identifiable , Equatable {
     enum CodingKeys: String, CodingKey {
         case id, prescriptionNo, customerName, gender, age, phone, storeId, status
         case diagnosis, remark, dose, totalDose, plans, createdAt, herbs, isExternal
-        case source, creator, attachment, e6Imports, doctor, store
+        case source, creator, attachments, e6Imports, doctor, store
         case totalPrice, sourceId, doctorId, externalHospital, externalDoctor, externalRemark
     }
     
@@ -115,7 +115,7 @@ public struct PrescriptionItem: Codable, Identifiable , Equatable {
         
         self.source = try? c.decodeIfPresent(SourceNested.self, forKey: .source)
         self.creator = try? c.decodeIfPresent(CreatorNested.self, forKey: .creator)
-        self.attachment = try? c.decodeIfPresent(PrescriptionAttachmentNested.self, forKey: .attachment)
+        self.attachments = try? c.decodeIfPresent([PrescriptionAttachmentNested].self, forKey: .attachments)
         self.e6Imports = try? c.decodeIfPresent([E6ImportItem].self, forKey: .e6Imports)
         self.doctor = try? c.decodeIfPresent(DoctorNested.self, forKey: .doctor)
         self.store = try? c.decodeIfPresent(StoreNested.self, forKey: .store)

@@ -940,7 +940,7 @@ public class ApiClient {
     
     public func uploadPrescriptionAttachment(id: Int, fileName: String, mimeType: String, data: Data, onProgress: ((Double) -> Void)? = nil) async throws {
         _ = try await uploadMultipart(
-            path: "/admin/prescriptions/\(id)/attachment",
+            path: "/admin/prescriptions/\(id)/attachments",
             fieldName: "file",
             fileName: fileName,
             mimeType: mimeType,
@@ -950,13 +950,13 @@ public class ApiClient {
         )
     }
     
-    public func fetchPrescriptionAttachment(id: Int) async throws -> Data {
-        return try await requestBytes(path: "/admin/prescriptions/\(id)/attachment")
+    public func fetchPrescriptionAttachment(id: Int, attachmentId: Int) async throws -> Data {
+        return try await requestBytes(path: "/admin/prescriptions/\(id)/attachments/\(attachmentId)")
     }
     
-    public func deletePrescriptionAttachment(id: Int) async throws {
+    public func deletePrescriptionAttachment(id: Int, attachmentId: Int) async throws {
         struct EmptyResponse: Decodable {}
-        let _: EmptyResponse = try await request(path: "/admin/prescriptions/\(id)/attachment", method: "DELETE")
+        let _: EmptyResponse = try await request(path: "/admin/prescriptions/\(id)/attachments/\(attachmentId)", method: "DELETE")
     }
     
     // MARK: - 包裹管理接口
