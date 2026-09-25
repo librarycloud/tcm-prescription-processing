@@ -80,13 +80,26 @@ object CacheManager {
                 }
             }
 
-            // 3. Keep downloaded APKs so an update can be installed after a process
-            // restart. A new update explicitly removes stale APKs before downloading.
+            // 3. Keep downloaded APKs for pending updates, but delete them once installed
             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.listFiles()?.forEach { file ->
                 val name = file.name.lowercase(Locale.US)
                 if (name.endsWith(".tmp") || name.endsWith(".patch")) {
                     val len = file.length()
                     if (file.delete()) freedBytes += len
+                } else if (name.endsWith(".apk")) {
+                    val match = Regex("update_(\\d+)\\.apk").find(name)
+                    val isObsolete = if (match != null) {
+                        (match.groupValues[1].toIntOrNull() ?: 0) <= com.tcm.admin.BuildConfig.VERSION_CODE
+                    } else {
+                        // For non-standard APK names, parse archive or just assume obsolete
+                        val info = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+                        info == null || info.versionCode <= com.tcm.admin.BuildConfig.VERSION_CODE
+                    }
+                    
+                    if (isObsolete) {
+                        val len = file.length()
+                        if (file.delete()) freedBytes += len
+                    }
                 }
             }
 
