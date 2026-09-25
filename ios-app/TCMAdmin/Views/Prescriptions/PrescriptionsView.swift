@@ -297,7 +297,9 @@ public struct PrescriptionDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var isUploading = false
     @State private var uploadProgress: Double = 0.0
+    @State private var uploadTask: Task<Void, Never>? = nil
     @State private var showDeleteAttachmentConfirm = false
+    @State private var attachmentToDelete: Int? = nil
     
     // 加工批次操作状态
     @State private var planToCreateFor: PrescriptionItem? = nil
@@ -444,70 +446,76 @@ public struct PrescriptionDetailView: View {
                                     
                                     Divider().foregroundStyle(Color.cardBorder)
                                     
-                                    HStack(spacing: 12) {
-                                        if rx.attachment != nil {
-                                            Button(action: loadAndShowAttachment) {
+                                    VStack(spacing: 8) {
+                                        if let attachments = rx.attachments, !attachments.isEmpty {
+                                            ForEach(Array(attachments.enumerated()), id: \.element.id) { index, att in
+                                                HStack(spacing: 12) {
+                                                    Button(action: {
+                                                        if let attId = att.id { loadAndShowAttachment(attachmentId: attId) }
+                                                    }) {
+                                                        HStack(spacing: 6) {
+                                                            Image(systemName: "doc.text.magnifyingglass")
+                                                            Text(attachments.count > 1 ? "查看原件 \(index + 1)" : "查看原件照片")
+                                                        }
+                                                        .scaledFont(13, weight: .semibold)
+                                                        .foregroundStyle(Color.appPrimary)
+                                                        .frame(maxWidth: .infinity)
+                                                        .frame(height: 38)
+                                                        .background(Color.appPrimarySoft)
+                                                        .clipShape(.rect(cornerRadius: 8))
+                                                    }
+                                                    
+                                                    Button(action: {
+                                                        attachmentToDelete = att.id
+                                                        showDeleteAttachmentConfirm = true 
+                                                    }) {
+                                                        Image(systemName: "trash.fill")
+                                                            .scaledFont(16)
+                                                            .foregroundStyle(Color.danger)
+                                                            .frame(width: 44, height: 38)
+                                                            .background(Color.surface)
+                                                            .clipShape(.rect(cornerRadius: 8))
+                                                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.danger.opacity(0.4), lineWidth: 1))
+                                                    }
+                                                    .disabled(isUploading || isBusy)
+                                                }
+                                            }
+                                        }
+                                        
+                                        HStack(spacing: 12) {
+                                            Button(action: { isShowingCamera = true }) {
                                                 HStack(spacing: 6) {
-                                                    Image(systemName: "doc.text.magnifyingglass")
-                                                    Text("查看原件照片")
+                                                    Image(systemName: "camera.fill")
+                                                    Text((rx.attachments?.isEmpty ?? true) ? "拍照上传" : "继续拍照上传")
                                                 }
                                                 .scaledFont(13, weight: .semibold)
-                                                .foregroundStyle(Color.appPrimary)
+                                                .foregroundStyle(Color.white)
                                                 .frame(maxWidth: .infinity)
                                                 .frame(height: 38)
-                                                .background(Color.appPrimarySoft)
+                                                .background(isUploading ? Color.muted : Color.appPrimary)
                                                 .clipShape(.rect(cornerRadius: 8))
                                             }
-                                        }
-                                        
-                                        Button(action: { isShowingCamera = true }) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "camera.fill")
-                                                Text(rx.attachment != nil ? "重新拍照" : "拍照上传")
-                                            }
-                                            .scaledFont(13, weight: .semibold)
-                                            .foregroundStyle(Color.white)
-                                            .frame(maxWidth: .infinity)
-                                            .frame(height: 38)
-                                            .background(isUploading ? Color.muted : Color.appPrimary)
-                                            .clipShape(.rect(cornerRadius: 8))
-                                        }
-                                        .disabled(isUploading || isBusy)
-                                        
-                                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "photo.on.rectangle")
-                                                Text("相册")
-                                            }
-                                            .scaledFont(13, weight: .semibold)
-                                            .foregroundStyle(Color.ink)
-                                            .frame(maxWidth: .infinity)
-                                            .frame(height: 38)
-                                            .background(Color.surface)
-                                            .clipShape(.rect(cornerRadius: 8))
-                                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
-                                        }
-                                        .disabled(isUploading || isBusy)
-                                        
-                                        if rx.attachment != nil {
-                                            Button(action: { showDeleteAttachmentConfirm = true }) {
+                                            .disabled(isUploading || isBusy)
+                                            
+                                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                                                 HStack(spacing: 6) {
-                                                    Image(systemName: "trash.fill")
-                                                    Text("删除")
+                                                    Image(systemName: "photo.on.rectangle")
+                                                    Text("相册")
                                                 }
                                                 .scaledFont(13, weight: .semibold)
-                                                .foregroundStyle(Color.danger)
+                                                .foregroundStyle(Color.ink)
                                                 .frame(maxWidth: .infinity)
                                                 .frame(height: 38)
                                                 .background(Color.surface)
                                                 .clipShape(.rect(cornerRadius: 8))
-                                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.danger.opacity(0.4), lineWidth: 1))
+                                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                                             }
                                             .disabled(isUploading || isBusy)
-                                        }}
+                                        }
+                                    }
                                         .onChange(of: selectedPhotoItem) { _, newItem in
                                             Task {
-                                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = UIImage(data: data) {
+                                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
                                                     uploadAttachment(image: uiImage)
                                                 }
                                             }
@@ -685,53 +693,33 @@ public struct PrescriptionDetailView: View {
                 }
             }
             
-            // 处方全屏预览
-            if isShowingFullAttachment, let data = attachmentData,
-               let uiImage = downsampledImage(from: data, maxPixelSize: 2200) {
-                Color.black.ignoresSafeArea()
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: { 
-                            isShowingFullAttachment = false 
-                            currentScale = 1.0
-                            currentOffset = .zero
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .scaledFont(28)
-                                .foregroundStyle(Color.white)
-                                .padding()
-                        }
+            if isShowingFullAttachment {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    
+                    if let data = attachmentData, let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
+                        ZoomableImageView(image: uiImage)
+                            .ignoresSafeArea()
+                    } else {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
                     }
-                    Spacer()
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(currentScale)
-                        .offset(currentOffset)
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    currentScale = max(1.0, value)
-                                }
-                                .onEnded { _ in
-                                    if currentScale < 1.0 { currentScale = 1.0 }
-                                }
-                        )
-                        .simultaneousGesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if currentScale > 1.0 {
-                                        currentOffset = value.translation
-                                    }
-                                }
-                                .onEnded { _ in
-                                    if currentScale == 1.0 {
-                                        currentOffset = .zero
-                                    }
-                                }
-                        )
-                    Spacer()
+                    
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button(action: { 
+                                isShowingFullAttachment = false 
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .scaledFont(28)
+                                    .foregroundStyle(Color.white)
+                                    .padding()
+                            }
+                        }
+                        Spacer()
+                    }
                 }
             }
             
@@ -741,10 +729,11 @@ public struct PrescriptionDetailView: View {
         .task {
             await reloadDetail()
         }
-        .sheet(isPresented: $isShowingCamera) {
+        .fullScreenCover(isPresented: $isShowingCamera) {
             ImagePickerView(sourceType: .camera) { image in
                 uploadAttachment(image: image)
             }
+            .ignoresSafeArea()
         }
         
         .sheet(item: $planToCreateFor) { rx in
@@ -767,7 +756,11 @@ public struct PrescriptionDetailView: View {
         }
         .alert("删除原件", isPresented: $showDeleteAttachmentConfirm) {
             Button("取消", role: .cancel) {}
-            Button("确认删除", role: .destructive) { deleteAttachment() }
+            Button("确认删除", role: .destructive) {
+                if let attId = attachmentToDelete {
+                    deleteAttachment(attId)
+                }
+            }
         } message: {
             Text("确认要删除该处方原件照片吗？不可恢复。")
         }
@@ -793,34 +786,43 @@ public struct PrescriptionDetailView: View {
         if currentTaskID == taskID { isLoading = false }
     }
     
-    private func loadAndShowAttachment() {
-        guard !isBusy else { return }
-        isBusy = true
+    private func loadAndShowAttachment(attachmentId: Int) {
+        self.isShowingFullAttachment = true
+        self.attachmentData = nil
         Task {
             do {
-                let data = try await ApiClient.shared.fetchPrescriptionAttachment(id: id)
+                let data = try await ApiClient.shared.fetchPrescriptionAttachment(id: id, attachmentId: attachmentId)
                 await MainActor.run {
                     self.attachmentData = data
-                    self.isShowingFullAttachment = true
-                    self.isBusy = false
                 }
             } catch {
                 await MainActor.run {
-                    self.errorMessage = "加载处方原件失败: \(error.localizedDescription)"
-                    self.isBusy = false
+                    self.isShowingFullAttachment = false
+                    self.errorMessage = "加载原件失败: \(error.localizedDescription)"
                 }
             }
         }
     }
     
     private func uploadAttachment(image: UIImage) {
+        uploadTask?.cancel()
         isUploading = true
         uploadProgress = 0.0
-        Task {
+        uploadTask = Task { @MainActor in
+            defer {
+                isUploading = false
+                uploadTask = nil
+            }
             do {
-                guard let data = await Task.detached(priority: .userInitiated, operation: {
-                    image.jpegData(compressionQuality: 0.8)
-                }).value else { return }
+                guard let cgImage = image.cgImage else {
+                    errorMessage = "无法读取照片内容"
+                    return
+                }
+                let orientation = cgImagePropertyOrientation(from: image.imageOrientation)
+                let data = await Task.detached(priority: .userInitiated) {
+                    jpegDataForUpload(from: cgImage, orientation: orientation)
+                }.value
+                guard !Task.isCancelled, let data else { return }
                 let fileName = "prescription_\(id)_\(Int(Date().timeIntervalSince1970)).jpg"
                 try await ApiClient.shared.uploadPrescriptionAttachment(id: id, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
                     DispatchQueue.main.async {
@@ -828,10 +830,11 @@ public struct PrescriptionDetailView: View {
                     }
                 }
                 await reloadDetail()
+            } catch is CancellationError {
+                return
             } catch {
                 errorMessage = "上传处方原件失败: \(error.localizedDescription)"
             }
-            isUploading = false
         }
     }
     
@@ -857,13 +860,15 @@ public struct PrescriptionDetailView: View {
         guard !isBusy else { return }
         isBusy = true
         Task {
+            defer { 
+                Task { @MainActor in self.isBusy = false } 
+            }
             do {
                 try await ApiClient.shared.deleteProcessingPlan(id: planId)
                 await reloadDetail()
             } catch {
                 await MainActor.run {
                     self.errorMessage = "删除计划失败: \(error.localizedDescription)"
-                    self.isBusy = false
                 }
             }
         }
@@ -1022,17 +1027,19 @@ public struct PrescriptionDetailView: View {
         .clipShape(.rect(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 0.5))
     }
-    private func deleteAttachment() {
+    private func deleteAttachment(_ attachmentId: Int) {
         guard !isBusy else { return }
         isBusy = true
         Task {
+            defer { 
+                Task { @MainActor in self.isBusy = false } 
+            }
             do {
-                try await ApiClient.shared.deletePrescriptionAttachment(id: id)
+                try await ApiClient.shared.deletePrescriptionAttachment(id: id, attachmentId: attachmentId)
                 await reloadDetail()
             } catch {
                 await MainActor.run {
                     self.errorMessage = "删除原件失败: \(error.localizedDescription)"
-                    self.isBusy = false
                 }
             }
         }

@@ -24,7 +24,7 @@ public enum ApiError: LocalizedError {
     }
 }
 
-public class ApiClient {
+public class ApiClient: NSObject, URLSessionTaskDelegate {
     public static let shared = ApiClient()
     
     private let serverUrlKey = "tcm_server_api_base_url"
@@ -124,7 +124,7 @@ public class ApiClient {
         return (false, nil, "无法识别为有效的服务器配置格式")
     }
 
-    private init() {}
+    private override init() { super.init() }
     
     // MARK: - Generic Response Cache
     private struct CacheEntry {
@@ -133,7 +133,28 @@ public class ApiClient {
     }
     
     private var memoryCache: [String: CacheEntry] = [:]
+    private var cacheGeneration = 0
     private let cacheQueue = DispatchQueue(label: "com.tcm.apiCache", attributes: .concurrent)
+    
+
+    private lazy var defaultSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }()
+    
+    public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        var modifiedRequest = request
+        modifiedRequest.setValue(nil, forHTTPHeaderField: "Authorization")
+        completionHandler(modifiedRequest)
+    }
+    
+    private lazy var uploadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300 // 5 分钟超时，应对几十兆的图片
+        config.timeoutIntervalForResource = 600
+        config.httpMaximumConnectionsPerHost = 4 // 独立连接池，不影响普通接口请求
+        return URLSession(configuration: config)
+    }()
     
     private func getCacheTTL(for path: String) -> TimeInterval? {
         let route = path.components(separatedBy: "?").first ?? path
@@ -177,7 +198,8 @@ public class ApiClient {
             prefixes = ["/admin/prescriptions", "/admin/processing-plans", "/admin/packages", "/admin/stats"]
         }
         
-        cacheQueue.sync(flags: .barrier) {
+        cacheQueue.async(flags: .barrier) {
+            self.cacheGeneration &+= 1
             self.memoryCache = self.memoryCache.filter { entry in
                 !prefixes.contains { entry.key.starts(with: $0) }
             }
@@ -186,7 +208,8 @@ public class ApiClient {
     
 
     public func clearResponseCache() {
-        cacheQueue.sync(flags: .barrier) {
+        cacheQueue.async(flags: .barrier) {
+            self.cacheGeneration &+= 1
             self.memoryCache.removeAll()
         }
     }
@@ -196,7 +219,8 @@ public class ApiClient {
         path: String,
         method: String = "GET",
         body: [String: Any]? = nil,
-        queryParams: [String: String]? = nil
+        queryParams: [String: String]? = nil,
+        baseURLOverride: String? = nil
     ) async throws -> T {
         let queryString = queryParams?.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: "&") ?? ""
         let cacheKey = path + (queryString.isEmpty ? "" : "?\(queryString)")
@@ -215,12 +239,16 @@ public class ApiClient {
                             try JSONDecoder().decode(T.self, from: data)
                         }.value
                     } catch {
-                        // Ignore decode error and fallback to network
+                        cacheQueue.async(flags: .barrier) {
+                            self.memoryCache.removeValue(forKey: cacheKey)
+                        }
                     }
                 }
             }
         }
-        var urlString = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
+        let requestBaseURL = baseURLOverride ?? baseURL
+        var urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         if let queryParams = queryParams, !queryParams.isEmpty {
             var components = URLComponents(string: urlString)
             components?.queryItems = queryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
@@ -238,12 +266,13 @@ public class ApiClient {
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         
         // 自动注入 Bearer Token
-        if let token = SessionManager.shared.token, !token.isEmpty {
+        if let token = await SessionManager.shared.token, !token.isEmpty {
             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
         #if os(iOS)
-        request.addValue(UIDevice.current.name, forHTTPHeaderField: "X-Device-Name")
+        let deviceName = await UIDevice.current.name
+        request.addValue(deviceName, forHTTPHeaderField: "X-Device-Name")
         #endif
         
         if let body = body {
@@ -254,7 +283,7 @@ public class ApiClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await defaultSession.data(for: request)
         } catch {
             if Task.isCancelled || (error as? URLError)?.code == .cancelled || error is CancellationError {
                 throw CancellationError()
@@ -300,6 +329,7 @@ public class ApiClient {
             if method == "GET" {
                 if self.getCacheTTL(for: path) != nil {
                     self.cacheQueue.async(flags: .barrier) {
+                        guard self.cacheGeneration == requestCacheGeneration else { return }
                         self.memoryCache[cacheKey] = CacheEntry(data: targetData, savedAt: Date())
                     }
                 }
@@ -363,6 +393,7 @@ public class ApiClient {
         keyword: String = "",
         storeId: Int? = nil,
         doctorId: Int? = nil,
+        createdDate: String? = nil,
         page: Int = 1,
         pageSize: Int = 20
     ) async throws -> [PrescriptionItem] {
@@ -371,6 +402,7 @@ public class ApiClient {
         if let st = storeId { params["storeId"] = "\(st)" }
         if let doc = doctorId { params["doctorId"] = "\(doc)" }
         if !keyword.isEmpty { params["keyword"] = keyword }
+        if let cd = createdDate, !cd.isEmpty { params["createdDate"] = cd }
         
         struct PagedList: Decodable {
             let list: [PrescriptionItem]?
@@ -646,6 +678,8 @@ public class ApiClient {
         category: String = "default",
         onProgress: ((Double) -> Void)? = nil
     ) async throws -> [String: Any] {
+        let requestBaseURL = baseURL
+        try Task.checkCancellation()
         final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
             let onProgress: ((Double) -> Void)?
             init(onProgress: ((Double) -> Void)?) { self.onProgress = onProgress }
@@ -676,8 +710,12 @@ public class ApiClient {
             )
             strategyData = strategyRes.data
         } catch {
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
             print("OSS upload strategy unavailable: \(error)")
         }
+        try Task.checkCancellation()
         
         let uploadUrlString = strategyData?.uploadUrl
         var directUploadAllowed = false
@@ -693,7 +731,7 @@ public class ApiClient {
             putReq.httpMethod = "PUT"
             putReq.setValue(mimeType, forHTTPHeaderField: "Content-Type")
             
-            let (data, response) = try await URLSession.shared.upload(for: putReq, from: fileData, delegate: delegate)
+            let (data, response) = try await uploadSession.upload(for: putReq, from: fileData, delegate: delegate)
             
             guard let httpRes = response as? HTTPURLResponse else {
                 throw ApiError.invalidResponse(statusCode: -1, message: "直传服务器未响应")
@@ -714,21 +752,21 @@ public class ApiClient {
             ]
             let backendPath = path.components(separatedBy: "?").first ?? path
             struct NotifyRes: Decodable {}
-            let _: NotifyRes = try await self.request(path: backendPath, method: "POST", body: notifyPayload)
+            let _: NotifyRes = try await self.request(path: backendPath, method: "POST", body: notifyPayload, baseURLOverride: requestBaseURL)
             return ["success": true, "storagePath": strategyData?.storagePath ?? ""]
         }
         
         // 2. 降级回传统 Multipart 上传
         let boundary = "Boundary-\(UUID().uuidString)"
-        let urlString = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         guard let url = URL(string: urlString) else {
             throw ApiError.invalidURL
         }
         
-        var request = URLRequest(url: url, timeoutInterval: 15.0)
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = SessionManager.shared.token, !token.isEmpty {
+        if let token = await SessionManager.shared.token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
@@ -740,7 +778,7 @@ public class ApiClient {
         body.append("\r\n".data(using: .utf8) ?? Data())
         body.append("--\(boundary)--\r\n".data(using: .utf8) ?? Data())
         
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body, delegate: delegate)
+        let (data, response) = try await uploadSession.upload(for: request, from: body, delegate: delegate)
         guard let httpRes = response as? HTTPURLResponse else {
             throw ApiError.invalidResponse(statusCode: -1, message: "服务器未响应")
         }
@@ -757,6 +795,8 @@ public class ApiClient {
     
     public func requestBytes(path: String) async throws -> Data {
         let cacheKey = "bytes_" + path
+        let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
+        let requestBaseURL = baseURL
         var cachedData: Data? = nil
         
         cacheQueue.sync {
@@ -770,21 +810,23 @@ public class ApiClient {
             return data
         }
         
-        let urlString = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         guard let url = URL(string: urlString) else { throw ApiError.invalidURL }
-        var request = URLRequest(url: url, timeoutInterval: 15.0)
-        if let token = SessionManager.shared.token, !token.isEmpty {
+        var request = URLRequest(url: url, timeoutInterval: 60.0)
+        if let token = await SessionManager.shared.token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         #if os(iOS)
-        request.setValue(UIDevice.current.name, forHTTPHeaderField: "X-Device-Name")
+        let deviceName = await UIDevice.current.name
+        request.setValue(deviceName, forHTTPHeaderField: "X-Device-Name")
         #endif
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await defaultSession.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
             throw ApiError.invalidResponse(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1, message: "获取文件失败")
         }
         
         cacheQueue.async(flags: .barrier) {
+            guard self.cacheGeneration == requestCacheGeneration else { return }
             self.memoryCache[cacheKey] = CacheEntry(data: data, savedAt: Date())
         }
         
@@ -859,7 +901,7 @@ public class ApiClient {
             fileName: fileName,
             mimeType: mimeType,
             fileData: data,
-            category: "dispensing_photo",
+            category: "dispensing-photo",
             onProgress: onProgress
         )
     }
@@ -912,23 +954,23 @@ public class ApiClient {
     
     public func uploadPrescriptionAttachment(id: Int, fileName: String, mimeType: String, data: Data, onProgress: ((Double) -> Void)? = nil) async throws {
         _ = try await uploadMultipart(
-            path: "/admin/prescriptions/\(id)/attachment",
+            path: "/admin/prescriptions/\(id)/attachments",
             fieldName: "file",
             fileName: fileName,
             mimeType: mimeType,
             fileData: data,
-            category: "prescription_attachment",
+            category: "prescription-attachment",
             onProgress: onProgress
         )
     }
     
-    public func fetchPrescriptionAttachment(id: Int) async throws -> Data {
-        return try await requestBytes(path: "/admin/prescriptions/\(id)/attachment")
+    public func fetchPrescriptionAttachment(id: Int, attachmentId: Int) async throws -> Data {
+        return try await requestBytes(path: "/admin/prescriptions/\(id)/attachments/\(attachmentId)")
     }
     
-    public func deletePrescriptionAttachment(id: Int) async throws {
+    public func deletePrescriptionAttachment(id: Int, attachmentId: Int) async throws {
         struct EmptyResponse: Decodable {}
-        let _: EmptyResponse = try await request(path: "/admin/prescriptions/\(id)/attachment", method: "DELETE")
+        let _: EmptyResponse = try await request(path: "/admin/prescriptions/\(id)/attachments/\(attachmentId)", method: "DELETE")
     }
     
     // MARK: - 包裹管理接口
@@ -1125,49 +1167,9 @@ public class ApiClient {
         )
     }
     
-    public func createProcessingPlan(
-        prescriptionId: Int,
-        processType: String,
-        totalDose: Int,
-        bagCount: Int,
-        volumeMl: Int,
-        usageMethod: String,
-        pickupMethod: Int,
-        expressAddress: String,
-        scheduleType: Int,
-        processDate: Date? = nil,
-        isUrgent: Bool,
-        paymentStatus: Int,
-        processRemark: String,
-        remark: String
-    ) async throws {
-        var body: [String: Any] = [
-            "prescriptionId": prescriptionId,
-            "method": processType,
-            "totalDose": totalDose,
-            "bagCount": bagCount,
-            "volumeMl": volumeMl,
-            "usageMethod": usageMethod,
-            "pickupMethod": pickupMethod,
-            "expressAddress": expressAddress,
-            "scheduleType": scheduleType,
-            "priority": isUrgent ? 1 : 0,
-            "paymentStatus": paymentStatus,
-            "processRemark": processRemark,
-            "remark": remark
-        ]
-        if scheduleType == 1, let pDate = processDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            body["processDate"] = formatter.string(from: pDate)
-        }
-        
+    public func createProcessingPlan(payload: [String: Any]) async throws {
         struct EmptyResponse: Decodable {}
-        let _: EmptyResponse = try await request(
-            path: "/admin/processing-plans",
-            method: "POST",
-            body: body
-        )
+        let _: EmptyResponse = try await request(path: "/admin/processing-plans", method: "POST", body: payload)
     }
     
     // MARK: - 基础字典与医生接口
@@ -1175,15 +1177,8 @@ public class ApiClient {
         return try await request(path: "/admin/doctors", queryParams: ["page": "1", "pageSize": "100"])
     }
     
-    public func fetchProcessTypes() async throws -> [ProcessTypeItem] {
-        do {
-            return try await request(path: "/admin/process-types")
-        } catch {
-            return [
-                ProcessTypeItem(id: 1, name: "代煎", code: "DECOCTION"),
-                ProcessTypeItem(id: 2, name: "原药", code: "RAW")
-            ]
-        }
+    public func fetchProcessTypes() async throws -> [DictionaryItem] {
+        return try await fetchDictionaries(type: "ProcessType")
     }
     
     public func fetchDictionaries(type: String) async throws -> [DictionaryItem] {
@@ -1198,4 +1193,3 @@ public class ApiClient {
         return try await fetchDictionaries(type: "PrescriptionSource")
     }
 }
-

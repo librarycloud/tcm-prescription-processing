@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import ImageIO
+import UniformTypeIdentifiers
 
 func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
@@ -11,6 +12,73 @@ func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
     ]
     guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
     return UIImage(cgImage: image)
+}
+
+nonisolated func jpegDataForUpload(
+    from cgImage: CGImage,
+    orientation: CGImagePropertyOrientation,
+    maxPixelSize: CGFloat = 5712,
+    quality: CGFloat = 0.85
+) -> Data? {
+    let sourceWidth = CGFloat(cgImage.width)
+    let sourceHeight = CGFloat(cgImage.height)
+    let sourceMaxDimension = max(sourceWidth, sourceHeight)
+    let scale = sourceMaxDimension > maxPixelSize ? maxPixelSize / sourceMaxDimension : 1
+    let outputImage: CGImage
+
+    if scale < 1 {
+        let width = max(1, Int((sourceWidth * scale).rounded()))
+        let height = max(1, Int((sourceHeight * scale).rounded()))
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let resizedImage = context.makeImage() else { return nil }
+        outputImage = resizedImage
+    } else {
+        outputImage = cgImage
+    }
+
+    let outputData = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(
+        outputData,
+        UTType.jpeg.identifier as CFString,
+        1,
+        nil
+    ) else {
+        return nil
+    }
+
+    let properties: [CFString: Any] = [
+        kCGImagePropertyOrientation: orientation.rawValue,
+        kCGImageDestinationLossyCompressionQuality: quality
+    ]
+    CGImageDestinationAddImage(destination, outputImage, properties as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else { return nil }
+    return outputData as Data
+}
+
+func cgImagePropertyOrientation(from orientation: UIImage.Orientation) -> CGImagePropertyOrientation {
+    switch orientation {
+    case .up: return .up
+    case .upMirrored: return .upMirrored
+    case .down: return .down
+    case .downMirrored: return .downMirrored
+    case .leftMirrored: return .leftMirrored
+    case .right: return .right
+    case .rightMirrored: return .rightMirrored
+    case .left: return .left
+    @unknown default: return .up
+    }
 }
 
 // MARK: - 1. 通用标准卡片 (AppCard)
@@ -195,6 +263,8 @@ struct SegmentedButton: View {
                         .stroke(isSelected ? Color.clear : Color.cardBorder, lineWidth: 1)
                 )
                 .shadow(color: isSelected ? Color.black.opacity(0.15) : Color.black.opacity(0.02), radius: 1, x: 0, y: 1)
+                .padding(.vertical, 2)
+                .padding(.horizontal, 1)
         }
     }
 }
@@ -693,12 +763,11 @@ struct KeyboardDismissalView: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // 允许与所有其他手势同时识别，绝不阻断侧滑返回的 pan 手势
-            return true
+            // 键盘收起点击不与导航侧滑、滚动和系统手势并行识别。
+            return false
         }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            // UIPanGestureRecognizer (侧滑返回) 不应被 tap 识别器接收
             let view = touch.view
             if view is UIControl {
                 return false
@@ -708,14 +777,16 @@ struct KeyboardDismissalView: UIViewRepresentable {
                 if c is UITextField || c is UITextView {
                     return false
                 }
+                if c is UIScrollView {
+                    return false
+                }
                 current = c.superview
             }
             return true
         }
         
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // 如果另一个手势是 pan（侧滑返回），让 tap 手势等其失败后才触发
-            return false
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            otherGestureRecognizer is UIPanGestureRecognizer
         }
     }
 }
@@ -1083,26 +1154,96 @@ public class HapticManager {
         generator.notificationOccurred(type)
     }
 }
+import SwiftUI
+import SwiftUI
 import UIKit
 
-public extension UIImage {
-    func resized(toMaxDimension maxDimension: CGFloat = 1280) -> UIImage {
-        let size = self.size
-        let maxOriginal = max(size.width, size.height)
+public struct ZoomableImageView: UIViewRepresentable {
+    public let image: UIImage
+    
+    public init(image: UIImage) {
+        self.image = image
+    }
+    
+    public func makeUIView(context: Context) -> ZoomingScrollView {
+        let scrollView = ZoomingScrollView()
+        scrollView.maximumZoomScale = 5.0
+        scrollView.minimumZoomScale = 1.0
+        scrollView.bouncesZoom = true
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.backgroundColor = .clear
         
-        if maxOriginal <= maxDimension {
-            return self
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+        
+        scrollView.imageView.image = image
+        context.coordinator.scrollView = scrollView
+        
+        return scrollView
+    }
+    
+    public func updateUIView(_ uiView: ZoomingScrollView, context: Context) {
+        uiView.imageView.image = image
+    }
+    
+    public func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    public class Coordinator: NSObject {
+        weak var scrollView: ZoomingScrollView?
+        
+        @objc func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let scrollView = scrollView else { return }
+            if scrollView.zoomScale > scrollView.minimumZoomScale {
+                scrollView.setZoomScale(scrollView.minimumZoomScale, animated: true)
+            } else {
+                let pointInView = recognizer.location(in: scrollView.imageView)
+                let zoomScale = min(scrollView.maximumZoomScale, 3.0)
+                let scrollViewSize = scrollView.bounds.size
+                let w = scrollViewSize.width / zoomScale
+                let h = scrollViewSize.height / zoomScale
+                let x = pointInView.x - (w / 2.0)
+                let y = pointInView.y - (h / 2.0)
+                scrollView.zoom(to: CGRect(x: x, y: y, width: w, height: h), animated: true)
+            }
         }
-        
-        let ratio = maxDimension / maxOriginal
-        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
-        
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0 // Use 1.0 so we don't multiply by screen scale
-        
-        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
-        return renderer.image { _ in
-            self.draw(in: CGRect(origin: .zero, size: newSize))
+    }
+}
+
+public class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
+    let imageView = UIImageView()
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.delegate = self
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+        addSubview(imageView)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        // If zoom scale is 1, keep frame matching bounds to allow aspect fit to work
+        if zoomScale == minimumZoomScale {
+            imageView.frame = bounds
         }
+    }
+    
+    public func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return imageView
+    }
+    
+    public func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        let offsetX = max((bounds.width - contentSize.width) * 0.5, 0)
+        let offsetY = max((bounds.height - contentSize.height) * 0.5, 0)
+        imageView.center = CGPoint(x: contentSize.width * 0.5 + offsetX,
+                                 y: contentSize.height * 0.5 + offsetY)
     }
 }

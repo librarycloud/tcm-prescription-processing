@@ -171,20 +171,12 @@ public struct LoginView: View {
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {
-                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("提示：在 Mac 电脑模拟器中运行，连接本机服务直接填 http://127.0.0.1:3000 或 http://localhost:3000；若是真机调试，请填 Mac 的局域网 IP 地址。")) {
+                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("请输入药房系统的后端服务器地址。如不清楚，请联系系统管理员。")) {
                         TextField("http://127.0.0.1:3000", text: $configuredBaseURL)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                     }
-                    
-                    Section(header: Text("快捷预设")) {
-                        Button("本机开发机 (http://127.0.0.1:3000)") {
-                            configuredBaseURL = "http://127.0.0.1:3000"
-                        }
-                        Button("本地主机名 (http://localhost:3000)") {
-                            configuredBaseURL = "http://localhost:3000"
-                        }
-                    }
+
                 }
                 .navigationTitle("服务器设置")
                 .navigationBarTitleDisplayMode(.inline)

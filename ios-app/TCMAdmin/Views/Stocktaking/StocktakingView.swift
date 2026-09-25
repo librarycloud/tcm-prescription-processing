@@ -449,19 +449,7 @@ public struct StocktakingDetailView: View {
                                     onScan: { Router.shared.presentScanner(enableOCR: true) }
                                 )
                                 .onChange(of: candidateKeyword) {
-                                    searchTask?.cancel()
-                                    let term = candidateKeyword.trimmingCharacters(in: .whitespaces)
-                                    if term.isEmpty {
-                                        candidates = []
-                                        return
-                                    }
-                                    searchTask = Task {
-                                        do {
-                                            try await Task.sleep(nanoseconds: 500_000_000)
-                                            guard !Task.isCancelled else { return }
-                                            searchCandidates()
-                                        } catch {}
-                                    }
+                                    searchCandidates()
                                 }
                                 
                                 // 候选药品下拉/选择
@@ -791,15 +779,21 @@ public struct StocktakingDetailView: View {
     }
     
     private func searchCandidates() {
-        guard !candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        Task {
-            let res = (try? await ApiClient.shared.fetchGoodsCheckCandidates(checkId: checkId, keyword: candidateKeyword)) ?? []
-            await MainActor.run {
-                self.candidates = res
-                if res.count == 1 {
-                    self.selectedCandidate = res.first
-                    self.countInputQty = ""
-                }
+        let keyword = candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchTask?.cancel()
+        if keyword.isEmpty {
+            candidates = []
+            return
+        }
+        searchTask = Task { @MainActor in
+            do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
+            guard !Task.isCancelled else { return }
+            let res = (try? await ApiClient.shared.fetchGoodsCheckCandidates(checkId: checkId, keyword: keyword)) ?? []
+            guard !Task.isCancelled, candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines) == keyword else { return }
+            self.candidates = res
+            if res.count == 1 {
+                self.selectedCandidate = res.first
+                self.countInputQty = ""
             }
         }
     }
@@ -933,4 +927,3 @@ private struct CandidateRowView: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
-

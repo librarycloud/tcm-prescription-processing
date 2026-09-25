@@ -338,6 +338,7 @@ public struct TransfersView: View {
                 storeId: selectedStoreId
             )
             guard !Task.isCancelled else { return }
+            guard currentTaskID == taskID else { return }
             self.transfers = result
         } catch {
             guard !Task.isCancelled else { return }

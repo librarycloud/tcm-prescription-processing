@@ -15,6 +15,7 @@ public struct WorkflowOperationView: View {
     
     // 照片相关状态
     @State private var selectedPhotoData: Data? = nil
+    @State private var isShowingPhoto = false
     @State private var isShowingCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isUploadingPhoto = false
@@ -235,61 +236,43 @@ public struct WorkflowOperationView: View {
                 await loadWorkflow()
             }
             
-            // 全屏放大照片查看
-            if let photoData = selectedPhotoData, let uiImage = UIImage(data: photoData) {
-                Color.black.ignoresSafeArea()
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            selectedPhotoData = nil
-                            photoViewerScale = 1.0
-                            photoViewerOffset = .zero
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .scaledFont(28)
-                                .foregroundStyle(Color.white)
-                                .padding()
-                        }
+            if isShowingPhoto {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    
+                    if let photoData = selectedPhotoData, let uiImage = downsampledImage(from: photoData, maxPixelSize: 5712) {
+                        ZoomableImageView(image: uiImage)
+                            .ignoresSafeArea()
+                    } else {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
                     }
-                    Spacer()
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(photoViewerScale)
-                        .offset(photoViewerOffset)
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    photoViewerScale = max(1.0, value)
-                                }
-                                .onEnded { _ in
-                                    if photoViewerScale < 1.0 { photoViewerScale = 1.0 }
-                                }
-                        )
-                        .simultaneousGesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if photoViewerScale > 1.0 {
-                                        photoViewerOffset = value.translation
-                                    }
-                                }
-                                .onEnded { _ in
-                                    if photoViewerScale == 1.0 {
-                                        photoViewerOffset = .zero
-                                    }
-                                }
-                        )
-                        .padding()
-                    Spacer()
+                    
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                isShowingPhoto = false
+                                selectedPhotoData = nil
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .scaledFont(28)
+                                    .foregroundStyle(Color.white)
+                                    .padding()
+                            }
+                        }
+                        Spacer()
+                    }
                 }
             }
         }
         // 相机与相册 Sheet
-        .sheet(isPresented: $isShowingCamera) {
+        .fullScreenCover(isPresented: $isShowingCamera) {
             ImagePickerView(sourceType: .camera) { image in
                 handlePickedImage(image)
             }
+            .ignoresSafeArea()
         }
         
         // 扫码/手动输入设备编号弹窗
@@ -516,7 +499,7 @@ public struct WorkflowOperationView: View {
                         }}
                         .onChange(of: selectedPhotoItem) { _, newItem in
                             Task { @MainActor in
-                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = UIImage(data: data) {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
                                     handlePickedImage(uiImage)
                                 }
                             }
@@ -975,10 +958,20 @@ public struct WorkflowOperationView: View {
         isUploadingPhoto = true
         uploadProgress = 0.0
         uploadTask = Task { @MainActor in
+            defer {
+                isUploadingPhoto = false
+                uploadTask = nil
+            }
             do {
-                guard let data = await Task.detached(priority: .userInitiated, operation: {
-                    image.jpegData(compressionQuality: 0.8)
-                }).value else { return }
+                guard let cgImage = image.cgImage else {
+                    errorMessage = "无法读取照片内容"
+                    return
+                }
+                let orientation = cgImagePropertyOrientation(from: image.imageOrientation)
+                let data = await Task.detached(priority: .userInitiated) {
+                    jpegDataForUpload(from: cgImage, orientation: orientation)
+                }.value
+                guard !Task.isCancelled, let data else { return }
                 let fileName = "dispensing_\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
                 try await ApiClient.shared.completeDispensing(planId: planId, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
                     DispatchQueue.main.async {
@@ -992,25 +985,22 @@ public struct WorkflowOperationView: View {
                     errorMessage = "上传凭证照片失败: \(error.localizedDescription)"
                 }
             }
-            isUploadingPhoto = false
-            uploadTask = nil
         }
     }
     
     private func viewPhoto(photoId: Int) {
-        guard !isBusy else { return }
-        isBusy = true
+        self.isShowingPhoto = true
+        self.selectedPhotoData = nil
         Task {
             do {
                 let data = try await ApiClient.shared.fetchProcessingPhoto(planId: planId, photoId: photoId)
                 await MainActor.run {
                     self.selectedPhotoData = data
-                    self.isBusy = false
                 }
             } catch {
                 await MainActor.run {
+                    self.isShowingPhoto = false
                     self.errorMessage = "加载照片失败: \(error.localizedDescription)"
-                    self.isBusy = false
                 }
             }
         }

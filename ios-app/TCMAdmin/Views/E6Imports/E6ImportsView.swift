@@ -283,7 +283,7 @@ public struct E6ImportsView: View {
                                                 }) {
                                                     HStack(spacing: 4) {
                                                         Image(systemName: "checkmark.circle.fill")
-                                                        Text("确认导入并排产")
+                                                        Text("确认导入")
                                                     }
                                                     .scaledFont(12.5, weight: .bold)
                                                     .foregroundStyle(Color.white)
@@ -326,7 +326,7 @@ public struct E6ImportsView: View {
                             let items = e6Imports.filter { selectedIds.contains($0.id) }
                             confirmTargetItems = items
                         }) {
-                            Text("合并为单处方并排产")
+                            Text("合并为单处方")
                                 .scaledFont(13, weight: .bold)
                                 .foregroundStyle(Color.appPrimary)
                                 .padding(.horizontal, 14)
@@ -534,7 +534,7 @@ struct E6ConfirmFormSheet: View {
     @State private var batchDrafts: [BatchDraft] = []
     
     @State private var doctors: [DoctorItem] = []
-    @State private var processTypes: [ProcessTypeItem] = []
+    @State private var processTypes: [DictionaryItem] = []
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
@@ -544,7 +544,7 @@ struct E6ConfirmFormSheet: View {
         items.first?.prescriptionId != nil && (items.first?.prescriptionId ?? 0) > 0
     }
     
-    private var selectedProcessType: ProcessTypeItem? {
+    private var selectedProcessType: DictionaryItem? {
         processTypes.first { $0.id == selectedProcessTypeId }
     }
     
@@ -665,6 +665,7 @@ struct E6ConfirmFormSheet: View {
                                             }
                                         }
                                     }
+                                    .padding(2) // 防止阴影和描边被裁切
                                 }
                             }
                             .padding(.top, 4)
@@ -720,6 +721,7 @@ struct E6ConfirmFormSheet: View {
                             Divider().foregroundStyle(Color.cardBorder)
                             
                             ForEach(Array(batchDrafts.enumerated()), id: \.element.id) { index, draft in
+                                if index < batchDrafts.count {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(spacing: 8) {
                                         Text("第\(index + 1)批")
@@ -806,6 +808,7 @@ struct E6ConfirmFormSheet: View {
                                 .padding(10)
                                 .background(Color.pageBackground.opacity(0.6))
                                 .clipShape(.rect(cornerRadius: 8))
+                                }
                             }
                             
                             HStack {
@@ -905,7 +908,7 @@ struct E6ConfirmFormSheet: View {
                 .frame(maxWidth: .infinity)
             }
             .background(Color.pageBackground)
-            .navigationTitle(isMerge ? "合并订单并排产" : "确认导入并排产")
+            .navigationTitle(isMerge ? "合并订单" : "确认导入")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
