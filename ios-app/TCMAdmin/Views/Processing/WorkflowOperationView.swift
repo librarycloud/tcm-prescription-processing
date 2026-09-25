@@ -237,25 +237,26 @@ public struct WorkflowOperationView: View {
             
             // 全屏放大照片查看
             if let photoData = selectedPhotoData, let uiImage = downsampledImage(from: photoData, maxPixelSize: 5712) {
-                Color.black.ignoresSafeArea()
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            selectedPhotoData = nil
-                            photoViewerScale = 1.0
-                            photoViewerOffset = .zero
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .scaledFont(28)
-                                .foregroundStyle(Color.white)
-                                .padding()
-                        }
-                    }
-                    Spacer()
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    
                     ZoomableImageView(image: uiImage)
-                        .ignoresSafeArea(edges: .bottom)
-                    Spacer()
+                        .ignoresSafeArea()
+                    
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                selectedPhotoData = nil
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .scaledFont(28)
+                                    .foregroundStyle(Color.white)
+                                    .padding()
+                            }
+                        }
+                        Spacer()
+                    }
                 }
             }
         }

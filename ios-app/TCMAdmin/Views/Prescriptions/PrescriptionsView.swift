@@ -689,25 +689,26 @@ public struct PrescriptionDetailView: View {
             // 处方全屏预览
             if isShowingFullAttachment, let data = attachmentData,
                let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
-                Color.black.ignoresSafeArea()
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: { 
-                            isShowingFullAttachment = false 
-                            currentScale = 1.0
-                            currentOffset = .zero
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .scaledFont(28)
-                                .foregroundStyle(Color.white)
-                                .padding()
-                        }
-                    }
-                    Spacer()
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    
                     ZoomableImageView(image: uiImage)
-                        .ignoresSafeArea(edges: .bottom)
-                    Spacer()
+                        .ignoresSafeArea()
+                    
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button(action: { 
+                                isShowingFullAttachment = false 
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .scaledFont(28)
+                                    .foregroundStyle(Color.white)
+                                    .padding()
+                            }
+                        }
+                        Spacer()
+                    }
                 }
             }
             
