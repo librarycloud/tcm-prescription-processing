@@ -268,7 +268,7 @@ public struct WorkflowOperationView: View {
             }
         }
         // 相机与相册 Sheet
-        .sheet(isPresented: $isShowingCamera) {
+        .fullScreenCover(isPresented: $isShowingCamera) {
             ImagePickerView(sourceType: .camera) { image in
                 handlePickedImage(image)
             }

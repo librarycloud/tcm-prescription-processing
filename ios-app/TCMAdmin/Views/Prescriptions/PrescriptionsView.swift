@@ -722,7 +722,7 @@ public struct PrescriptionDetailView: View {
         .task {
             await reloadDetail()
         }
-        .sheet(isPresented: $isShowingCamera) {
+        .fullScreenCover(isPresented: $isShowingCamera) {
             ImagePickerView(sourceType: .camera) { image in
                 uploadAttachment(image: image)
             }
