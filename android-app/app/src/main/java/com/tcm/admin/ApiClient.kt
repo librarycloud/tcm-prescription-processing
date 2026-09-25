@@ -552,9 +552,9 @@ object ApiClient {
     suspend fun updatePrescription(id: Int, payload: JSONObject): JSONObject = request("/admin/prescriptions/$id", "PUT", payload).getJSONObject("data")
     suspend fun deletePrescription(id: Int): JSONObject = request("/admin/prescriptions/$id", "DELETE").getJSONObject("data")
     suspend fun uploadPrescriptionAttachment(id: Int, filename: String, mimeType: String, bytes: ByteArray, onProgress: ((Int) -> Unit)? = null): JSONObject =
-        requestMultipart("/admin/prescriptions/$id/attachment", "file", filename, mimeType, bytes, "prescriptions", onProgress).getJSONObject("data")
-    suspend fun prescriptionAttachment(id: Int): ByteArray = requestBytes("/admin/prescriptions/$id/attachment")
-    suspend fun deletePrescriptionAttachment(id: Int): JSONObject = request("/admin/prescriptions/$id/attachment", "DELETE").getJSONObject("data")
+        requestMultipart("/admin/prescriptions/$id/attachments", "file", filename, mimeType, bytes, "prescriptions", onProgress).getJSONObject("data")
+    suspend fun prescriptionAttachment(id: Int, attachmentId: Int): ByteArray = requestBytes("/admin/prescriptions/$id/attachments/$attachmentId")
+    suspend fun deletePrescriptionAttachment(id: Int, attachmentId: Int): JSONObject = request("/admin/prescriptions/$id/attachments/$attachmentId", "DELETE").getJSONObject("data")
     suspend fun doctors(): JSONArray = arrayData(request("/admin/doctors?page=1&pageSize=100").opt("data"))
     suspend fun dictionaries(type: String): JSONArray = arrayData(request("/admin/dictionaries?type=${java.net.URLEncoder.encode(type, "UTF-8")}").opt("data"))
     suspend fun plans(view: String = "today-all", keyword: String = "", storeId: Int? = null): JSONArray {
