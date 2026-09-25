@@ -389,7 +389,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     var busy by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf(0) }
     var deletePlan by remember { mutableStateOf<JSONObject?>(null) }
-    var deleteAttachment by remember { mutableStateOf(false) }
+    var deleteAttachmentId by remember { mutableStateOf<Int?>(null) }
     var viewingAttachmentId by remember { mutableStateOf<Int?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var previewScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
@@ -651,13 +651,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                                 if (!readOnly) {
                                     OutlinedButton(
                                         enabled = !busy,
-                                        onClick = { scope.launch {
-                                            busy = true
-                                            runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescriptionAttachment(id, attachment.optInt("id")) } }
-                                                .onSuccess { error = "附件已删除"; reload++ }
-                                                .onFailure { error = it.message ?: "删除失败" }
-                                            busy = false
-                                        } },
+                                        onClick = { deleteAttachmentId = attachment.optInt("id") },
                                         shape = FieldShape,
                                         modifier = Modifier.heightIn(min = 32.dp),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
@@ -957,13 +951,13 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
         }
         Spacer(Modifier.height(16.dp))
     }
-    if (deleteAttachment) AlertDialog(
-        onDismissRequest = { deleteAttachment = false },
+    deleteAttachmentId?.let { attachmentId -> AlertDialog(
+        onDismissRequest = { deleteAttachmentId = null },
         title = { Text("删除处方原件") },
         text = { Text("确认删除该处方原件？") },
-        confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescriptionAttachment(id) } }.onSuccess { deleteAttachment = false; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
-        dismissButton = { TextButton(onClick = { deleteAttachment = false }) { Text("取消") } },
-    )
+        confirmButton = { Button(onClick = { scope.launch { busy = true; runCatching { withContext(Dispatchers.IO) { ApiClient.deletePrescriptionAttachment(id, attachmentId) } }.onSuccess { deleteAttachmentId = null; reload++ }.onFailure { error = it.message ?: "删除失败" }; busy = false } }) { Text("确认删除") } },
+        dismissButton = { TextButton(onClick = { deleteAttachmentId = null }) { Text("取消") } },
+    ) }
     deletePlan?.let { plan -> AlertDialog(
         onDismissRequest = { deletePlan = null },
         title = { Text("删除加工批次") },
