@@ -253,34 +253,8 @@ public struct WorkflowOperationView: View {
                         }
                     }
                     Spacer()
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(photoViewerScale)
-                        .offset(photoViewerOffset)
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    photoViewerScale = max(1.0, value)
-                                }
-                                .onEnded { _ in
-                                    if photoViewerScale < 1.0 { photoViewerScale = 1.0 }
-                                }
-                        )
-                        .simultaneousGesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if photoViewerScale > 1.0 {
-                                        photoViewerOffset = value.translation
-                                    }
-                                }
-                                .onEnded { _ in
-                                    if photoViewerScale == 1.0 {
-                                        photoViewerOffset = .zero
-                                    }
-                                }
-                        )
-                        .padding()
+                    ZoomableImageView(image: uiImage)
+                        .ignoresSafeArea(edges: .bottom)
                     Spacer()
                 }
             }

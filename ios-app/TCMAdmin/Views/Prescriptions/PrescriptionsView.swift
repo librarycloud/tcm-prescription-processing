@@ -705,33 +705,8 @@ public struct PrescriptionDetailView: View {
                         }
                     }
                     Spacer()
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(currentScale)
-                        .offset(currentOffset)
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    currentScale = max(1.0, value)
-                                }
-                                .onEnded { _ in
-                                    if currentScale < 1.0 { currentScale = 1.0 }
-                                }
-                        )
-                        .simultaneousGesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if currentScale > 1.0 {
-                                        currentOffset = value.translation
-                                    }
-                                }
-                                .onEnded { _ in
-                                    if currentScale == 1.0 {
-                                        currentOffset = .zero
-                                    }
-                                }
-                        )
+                    ZoomableImageView(image: uiImage)
+                        .ignoresSafeArea(edges: .bottom)
                     Spacer()
                 }
             }
