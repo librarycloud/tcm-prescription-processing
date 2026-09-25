@@ -508,7 +508,7 @@ public struct PrescriptionDetailView: View {
                                         }}
                                         .onChange(of: selectedPhotoItem) { _, newItem in
                                             Task {
-                                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 8000) {
+                                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
                                                     uploadAttachment(image: uiImage)
                                                 }
                                             }
@@ -688,7 +688,7 @@ public struct PrescriptionDetailView: View {
             
             // 处方全屏预览
             if isShowingFullAttachment, let data = attachmentData,
-               let uiImage = downsampledImage(from: data, maxPixelSize: 8000) {
+               let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
                 Color.black.ignoresSafeArea()
                 VStack {
                     HStack {
