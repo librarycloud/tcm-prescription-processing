@@ -195,6 +195,8 @@ struct SegmentedButton: View {
                         .stroke(isSelected ? Color.clear : Color.cardBorder, lineWidth: 1)
                 )
                 .shadow(color: isSelected ? Color.black.opacity(0.15) : Color.black.opacity(0.02), radius: 1, x: 0, y: 1)
+                .padding(.vertical, 2)
+                .padding(.horizontal, 1)
         }
     }
 }

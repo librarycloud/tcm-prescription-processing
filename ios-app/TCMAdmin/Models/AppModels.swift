@@ -270,6 +270,11 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
     public let updatedAt: String?
     public let remark: String?
     public let processRemark: String?
+    public let usageMethod: String?
+    public let scheduleType: Int?
+    public let paymentStatus: Int?
+    public let notifyStatus: Int?
+    public let notifyType: DictionaryItem?
     
     public var isUrgent: Bool {
         if let u = rawIsUrgent { return u }
@@ -283,9 +288,7 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
     public let store: StoreNested?
     
     enum CodingKeys: String, CodingKey {
-        case id, planCode, status, createdAt, updatedAt, delayDays, priority, isUrgent, batchNo, totalDose
-        case prescriptionId, plans, bagCount, volumeMl, pickupMethod, processDate, startDate, finishDate, remark, processRemark
-        case prescription, processType, package, store
+        case id, planCode, status, createdAt, delayDays, priority, isUrgent, batchNo, totalDose, prescriptionId, plans, bagCount, volumeMl, pickupMethod, processDate, startDate, finishDate, updatedAt, remark, processRemark, prescription, processType, package, store, usageMethod, scheduleType, paymentStatus, notifyStatus, notifyType
     }
     
     public init(from decoder: Decoder) throws {
@@ -316,6 +319,11 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
         self.finishDate = try? c.decodeIfPresent(String.self, forKey: .finishDate)
         self.remark = try? c.decodeIfPresent(String.self, forKey: .remark)
         self.processRemark = try? c.decodeIfPresent(String.self, forKey: .processRemark)
+        self.usageMethod = try? c.decodeIfPresent(String.self, forKey: .usageMethod)
+        self.scheduleType = try? c.decodeIfPresent(Int.self, forKey: .scheduleType)
+        self.paymentStatus = try? c.decodeIfPresent(Int.self, forKey: .paymentStatus)
+        self.notifyStatus = try? c.decodeIfPresent(Int.self, forKey: .notifyStatus)
+        self.notifyType = try? c.decodeIfPresent(DictionaryItem.self, forKey: .notifyType)
         self.prescription = try? c.decodeIfPresent(PrescriptionNested.self, forKey: .prescription)
         self.processType = try? c.decodeIfPresent(ProcessTypeNested.self, forKey: .processType)
         self.package = try? c.decodeIfPresent(PackageNested.self, forKey: .package)
@@ -344,6 +352,11 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
         try c.encodeIfPresent(finishDate, forKey: .finishDate)
         try c.encodeIfPresent(remark, forKey: .remark)
         try c.encodeIfPresent(processRemark, forKey: .processRemark)
+        try c.encodeIfPresent(usageMethod, forKey: .usageMethod)
+        try c.encodeIfPresent(scheduleType, forKey: .scheduleType)
+        try c.encodeIfPresent(paymentStatus, forKey: .paymentStatus)
+        try c.encodeIfPresent(notifyStatus, forKey: .notifyStatus)
+        try c.encodeIfPresent(notifyType, forKey: .notifyType)
         try c.encodeIfPresent(prescription, forKey: .prescription)
         try c.encodeIfPresent(processType, forKey: .processType)
         try c.encodeIfPresent(package, forKey: .package)
@@ -363,6 +376,7 @@ public struct ProcessingPlanItem: Codable, Identifiable , Equatable {
     }
     
     public struct ProcessTypeNested: Codable , Equatable {
+        public let id: Int?
         public let name: String?
     }
     
@@ -2004,4 +2018,12 @@ extension String {
         let idx = self.index(self.startIndex, offsetBy: 3)
         return "\(self[..<idx])-\(self[idx...])"
     }
+}
+
+extension DateFormatter {
+    static let yyyyMMdd: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }

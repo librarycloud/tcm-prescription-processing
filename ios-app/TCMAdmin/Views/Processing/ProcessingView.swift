@@ -155,7 +155,7 @@ public struct ProcessingView: View {
                                 }
                             }
                         }
-                        .padding(.horizontal, 2)
+                        .padding(2) // 统一加2点内边距，防止上下左右的描边被裁切
                     }
                 } else {
                     // 领取列表模式下的统计卡片 (对齐 Android)

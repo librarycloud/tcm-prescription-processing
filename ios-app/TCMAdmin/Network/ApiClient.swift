@@ -363,6 +363,7 @@ public class ApiClient {
         keyword: String = "",
         storeId: Int? = nil,
         doctorId: Int? = nil,
+        createdDate: String? = nil,
         page: Int = 1,
         pageSize: Int = 20
     ) async throws -> [PrescriptionItem] {
@@ -371,6 +372,7 @@ public class ApiClient {
         if let st = storeId { params["storeId"] = "\(st)" }
         if let doc = doctorId { params["doctorId"] = "\(doc)" }
         if !keyword.isEmpty { params["keyword"] = keyword }
+        if let cd = createdDate, !cd.isEmpty { params["createdDate"] = cd }
         
         struct PagedList: Decodable {
             let list: [PrescriptionItem]?
@@ -1125,49 +1127,9 @@ public class ApiClient {
         )
     }
     
-    public func createProcessingPlan(
-        prescriptionId: Int,
-        processType: String,
-        totalDose: Int,
-        bagCount: Int,
-        volumeMl: Int,
-        usageMethod: String,
-        pickupMethod: Int,
-        expressAddress: String,
-        scheduleType: Int,
-        processDate: Date? = nil,
-        isUrgent: Bool,
-        paymentStatus: Int,
-        processRemark: String,
-        remark: String
-    ) async throws {
-        var body: [String: Any] = [
-            "prescriptionId": prescriptionId,
-            "method": processType,
-            "totalDose": totalDose,
-            "bagCount": bagCount,
-            "volumeMl": volumeMl,
-            "usageMethod": usageMethod,
-            "pickupMethod": pickupMethod,
-            "expressAddress": expressAddress,
-            "scheduleType": scheduleType,
-            "priority": isUrgent ? 1 : 0,
-            "paymentStatus": paymentStatus,
-            "processRemark": processRemark,
-            "remark": remark
-        ]
-        if scheduleType == 1, let pDate = processDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            body["processDate"] = formatter.string(from: pDate)
-        }
-        
+    public func createProcessingPlan(payload: [String: Any]) async throws {
         struct EmptyResponse: Decodable {}
-        let _: EmptyResponse = try await request(
-            path: "/admin/processing-plans",
-            method: "POST",
-            body: body
-        )
+        let _: EmptyResponse = try await request(path: "/admin/processing-plans", method: "POST", body: payload)
     }
     
     // MARK: - 基础字典与医生接口
@@ -1175,15 +1137,8 @@ public class ApiClient {
         return try await request(path: "/admin/doctors", queryParams: ["page": "1", "pageSize": "100"])
     }
     
-    public func fetchProcessTypes() async throws -> [ProcessTypeItem] {
-        do {
-            return try await request(path: "/admin/process-types")
-        } catch {
-            return [
-                ProcessTypeItem(id: 1, name: "代煎", code: "DECOCTION"),
-                ProcessTypeItem(id: 2, name: "原药", code: "RAW")
-            ]
-        }
+    public func fetchProcessTypes() async throws -> [DictionaryItem] {
+        return try await fetchDictionaries(type: "ProcessType")
     }
     
     public func fetchDictionaries(type: String) async throws -> [DictionaryItem] {
