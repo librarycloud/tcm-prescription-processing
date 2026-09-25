@@ -136,6 +136,14 @@ public class ApiClient {
     private var cacheGeneration = 0
     private let cacheQueue = DispatchQueue(label: "com.tcm.apiCache", attributes: .concurrent)
     
+    private lazy var uploadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300 // 5 分钟超时，应对几十兆的图片
+        config.timeoutIntervalForResource = 600
+        config.httpMaximumConnectionsPerHost = 4 // 独立连接池，不影响普通接口请求
+        return URLSession(configuration: config)
+    }()
+    
     private func getCacheTTL(for path: String) -> TimeInterval? {
         let route = path.components(separatedBy: "?").first ?? path
         switch route {
@@ -710,7 +718,7 @@ public class ApiClient {
             putReq.httpMethod = "PUT"
             putReq.setValue(mimeType, forHTTPHeaderField: "Content-Type")
             
-            let (data, response) = try await URLSession.shared.upload(for: putReq, from: fileData, delegate: delegate)
+            let (data, response) = try await uploadSession.upload(for: putReq, from: fileData, delegate: delegate)
             
             guard let httpRes = response as? HTTPURLResponse else {
                 throw ApiError.invalidResponse(statusCode: -1, message: "直传服务器未响应")
@@ -742,7 +750,7 @@ public class ApiClient {
             throw ApiError.invalidURL
         }
         
-        var request = URLRequest(url: url, timeoutInterval: 15.0)
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if let token = SessionManager.shared.token, !token.isEmpty {
@@ -757,7 +765,7 @@ public class ApiClient {
         body.append("\r\n".data(using: .utf8) ?? Data())
         body.append("--\(boundary)--\r\n".data(using: .utf8) ?? Data())
         
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body, delegate: delegate)
+        let (data, response) = try await uploadSession.upload(for: request, from: body, delegate: delegate)
         guard let httpRes = response as? HTTPURLResponse else {
             throw ApiError.invalidResponse(statusCode: -1, message: "服务器未响应")
         }
@@ -791,7 +799,7 @@ public class ApiClient {
         
         let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         guard let url = URL(string: urlString) else { throw ApiError.invalidURL }
-        var request = URLRequest(url: url, timeoutInterval: 15.0)
+        var request = URLRequest(url: url, timeoutInterval: 60.0)
         if let token = SessionManager.shared.token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
