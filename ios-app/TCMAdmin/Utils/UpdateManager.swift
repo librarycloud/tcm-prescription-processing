@@ -74,32 +74,15 @@ public class UpdateManager {
         self.isChecking = true
         defer { self.isChecking = false }
         
-        let currentVersionCode = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "unknown_ios_device"
-        let deviceModel = Self.currentDeviceModel
-        let osVersion = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.tcm.admin"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         
-        let apiBase = ApiClient.shared.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let requestUrlString = "\(apiBase)/app/version/\(platform)"
-        
-        var urlComponents = URLComponents(string: requestUrlString)
-        urlComponents?.queryItems = [
-            URLQueryItem(name: "versionCode", value: currentVersionCode),
-            URLQueryItem(name: "deviceId", value: deviceId),
-            URLQueryItem(name: "deviceModel", value: deviceModel),
-            URLQueryItem(name: "osVersion", value: osVersion)
-        ]
-        
-        guard let url = urlComponents?.url else {
+        guard let url = URL(string: "https://itunes.apple.com/cn/lookup?bundleId=\(bundleId)") else {
             throw URLError(.badURL)
         }
         
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(deviceId, forHTTPHeaderField: "x-device-id")
-        request.setValue(deviceModel, forHTTPHeaderField: "x-device-model")
-        request.setValue(osVersion, forHTTPHeaderField: "x-os-version")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -107,9 +90,44 @@ public class UpdateManager {
             throw URLError(.badServerResponse)
         }
         
-        let resData = try JSONDecoder().decode(AppUpdateInfo.self, from: data)
-        self.lastCheckTime = Date()
-        self.updateInfo = resData
-        return resData
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let results = json?["results"] as? [[String: Any]] ?? []
+        
+        if let appInfo = results.first,
+           let storeVersion = appInfo["version"] as? String,
+           storeVersion.compare(currentVersion, options: .numeric) == .orderedDescending {
+            
+            let releaseNotes = appInfo["releaseNotes"] as? String ?? appInfo["description"] as? String ?? "有新版本发布，快去看看吧！"
+            let trackId = appInfo["trackId"] as? Int ?? 0
+            
+            // 使用 itms-apps:// 协议可直接在 iOS 端唤起 App Store 并跳转至对应应用页面
+            let downloadUrl = "itms-apps://itunes.apple.com/app/id\(trackId)"
+            
+            let resData = AppUpdateInfo(
+                hasUpdate: true,
+                updateType: "appstore",
+                versionCode: nil,
+                versionName: storeVersion,
+                forceUpdate: false, // 官方 App Store API 无法标识强更，默认非强更
+                releaseNotes: releaseNotes.components(separatedBy: "\n").filter { !$0.isEmpty },
+                downloadUrl: downloadUrl
+            )
+            self.lastCheckTime = Date()
+            self.updateInfo = resData
+            return resData
+        } else {
+            let resData = AppUpdateInfo(
+                hasUpdate: false,
+                updateType: nil,
+                versionCode: nil,
+                versionName: currentVersion,
+                forceUpdate: false,
+                releaseNotes: nil,
+                downloadUrl: nil
+            )
+            self.lastCheckTime = Date()
+            self.updateInfo = resData
+            return resData
+        }
     }
 }

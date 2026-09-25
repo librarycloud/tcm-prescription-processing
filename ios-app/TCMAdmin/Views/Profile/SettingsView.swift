@@ -63,8 +63,10 @@ public struct SettingsView: View {
                         }
                         Divider().padding(.leading, 48)
                         ProfileRow(icon: "trash.fill", title: "清除缓存", value: isClearingCache ? "清理中..." : cacheSize) {
+                            if isClearingCache { return }
                             isClearingCache = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            Task {
+                                await clearAppCache()
                                 cacheSize = "0 KB"
                                 isClearingCache = false
                             }
@@ -79,6 +81,9 @@ public struct SettingsView: View {
             }
             .padding(16)
         }
+        .task {
+            cacheSize = await calculateCacheSize()
+        }
         .background(Color.pageBackground)
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
@@ -86,20 +91,12 @@ public struct SettingsView: View {
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {
-                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("提示：在 Mac 电脑模拟器中运行，连接本机服务直接填 http://127.0.0.1:3000 或 http://localhost:3000；若是真机调试，请填 Mac 的局域网 IP 地址。")) {
+                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("请输入药房系统的后端服务器地址。如不清楚，请联系系统管理员。")) {
                         TextField("http://127.0.0.1:3000", text: $configuredBaseURL)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                     }
-                    
-                    Section(header: Text("快捷预设")) {
-                        Button("本机开发机 (http://127.0.0.1:3000)") {
-                            configuredBaseURL = "http://127.0.0.1:3000"
-                        }
-                        Button("本地主机名 (http://localhost:3000)") {
-                            configuredBaseURL = "http://localhost:3000"
-                        }
-                    }
+
                 }
                 .navigationTitle("服务器设置")
                 .navigationBarTitleDisplayMode(.inline)
@@ -142,6 +139,51 @@ public struct SettingsView: View {
             }
         } message: {
             Text("切换到新的服务器地址后，当前账号登录状态将被清除，需要重新登录。\n\n新地址：\(pendingBaseURL)")
+        }
+    }
+    
+    nonisolated private func calculateCacheSize() async -> String {
+        return await Task.detached {
+            var totalSize: Int = 0
+            
+            // 1. URLCache 大小
+            totalSize += URLCache.shared.currentDiskUsage
+            totalSize += URLCache.shared.currentMemoryUsage
+            
+            // 2. Caches 文件夹大小 (这里存放着各种图片和临时文件)
+            if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+               let enumerator = FileManager.default.enumerator(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey]) {
+                for case let url as URL in enumerator {
+                    if let attr = try? url.resourceValues(forKeys: [.fileSizeKey]), let size = attr.fileSize {
+                        totalSize += size
+                    }
+                }
+            }
+            
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useKB]
+            formatter.countStyle = .file
+            return formatter.string(fromByteCount: Int64(totalSize))
+        }.value
+    }
+    
+    nonisolated private func clearAppCache() async {
+        await Task.detached {
+            // 清理系统 URLCache
+            URLCache.shared.removeAllCachedResponses()
+            
+            // 清理 Caches 目录
+            if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+               let contents = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
+                for url in contents {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+        }.value
+        
+        // 回到 MainActor 清理 ApiClient 内存缓存
+        await MainActor.run {
+            ApiClient.shared.clearResponseCache()
         }
     }
 }
