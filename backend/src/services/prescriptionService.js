@@ -294,10 +294,6 @@ export async function uploadPrescriptionAttachment(
     });
   }
 
-  const previous = await prisma.prescriptionAttachment.findUnique({
-    where: { prescriptionId: current.id },
-    select: { storagePath: true },
-  });
   let attachment;
   try {
     attachment = await prisma.$transaction(async (tx) => {
@@ -331,14 +327,6 @@ export async function uploadPrescriptionAttachment(
       // Preserve the database error; an orphaned file can be removed separately.
     }
     throw error;
-  }
-  if (previous?.storagePath) {
-    try {
-      await deleteOssFile(prisma, previous.storagePath);
-      await removeUploadFile(previous.storagePath);
-    } catch {
-      // Keep the new attachment available even if removing its replaced file fails.
-    }
   }
   return attachment;
 }
