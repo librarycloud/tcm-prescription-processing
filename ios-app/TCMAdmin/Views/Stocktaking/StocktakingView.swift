@@ -780,11 +780,11 @@ public struct StocktakingDetailView: View {
     
     private func searchCandidates() {
         let keyword = candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchTask?.cancel()
         if keyword.isEmpty {
             candidates = []
             return
         }
-        searchTask?.cancel()
         searchTask = Task { @MainActor in
             do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
             guard !Task.isCancelled else { return }

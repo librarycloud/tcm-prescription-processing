@@ -980,9 +980,15 @@ public struct WorkflowOperationView: View {
                 uploadTask = nil
             }
             do {
-                guard let data = await Task.detached(priority: .userInitiated, operation: {
-                    image.resized(toMaxDimension: 2560).jpegData(compressionQuality: 0.85)
-                }).value else { return }
+                guard let cgImage = image.cgImage else {
+                    errorMessage = "无法读取照片内容"
+                    return
+                }
+                let orientation = cgImagePropertyOrientation(from: image.imageOrientation)
+                let data = await Task.detached(priority: .userInitiated) {
+                    jpegDataForUpload(from: cgImage, orientation: orientation)
+                }.value
+                guard !Task.isCancelled, let data else { return }
                 let fileName = "dispensing_\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
                 try await ApiClient.shared.completeDispensing(planId: planId, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
                     DispatchQueue.main.async {

@@ -128,12 +128,17 @@ public struct SettingsView: View {
         .alert("切换服务器需要重新登录", isPresented: $isShowingServerChangeAlert) {
             Button("取消", role: .cancel) {}
             Button("确认切换", role: .destructive) {
+                let previousBaseURL = ApiClient.shared.baseURL
                 ApiClient.shared.baseURL = pendingBaseURL
                 isShowingServerConfig = false
                 Task { @MainActor in
                     // 通知旧服务器退出当前 session（best-effort，失败不阻断）
                     struct EmptyResponse: Decodable {}
-                    _ = try? await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                    _ = try? await ApiClient.shared.request(
+                        path: "/auth/logout",
+                        method: "POST",
+                        baseURLOverride: previousBaseURL
+                    ) as EmptyResponse
                     SessionManager.shared.clearSession()
                 }
             }
@@ -153,11 +158,10 @@ public struct SettingsView: View {
             // 2. Caches 文件夹大小 (这里存放着各种图片和临时文件)
             if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
                let enumerator = FileManager.default.enumerator(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey]) {
-                if let allURLs = enumerator.allObjects as? [URL] {
-                    for url in allURLs {
-                        if let attr = try? url.resourceValues(forKeys: [.fileSizeKey]), let size = attr.fileSize {
-                            totalSize += size
-                        }
+                while let item = enumerator.nextObject() {
+                    guard let url = item as? URL else { continue }
+                    if let attr = try? url.resourceValues(forKeys: [.fileSizeKey]), let size = attr.fileSize {
+                        totalSize += size
                     }
                 }
             }

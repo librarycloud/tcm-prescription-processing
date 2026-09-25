@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import ImageIO
+import UniformTypeIdentifiers
 
 func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
@@ -11,6 +12,73 @@ func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
     ]
     guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
     return UIImage(cgImage: image)
+}
+
+nonisolated func jpegDataForUpload(
+    from cgImage: CGImage,
+    orientation: CGImagePropertyOrientation,
+    maxPixelSize: CGFloat = 2560,
+    quality: CGFloat = 0.85
+) -> Data? {
+    let sourceWidth = CGFloat(cgImage.width)
+    let sourceHeight = CGFloat(cgImage.height)
+    let sourceMaxDimension = max(sourceWidth, sourceHeight)
+    let scale = sourceMaxDimension > maxPixelSize ? maxPixelSize / sourceMaxDimension : 1
+    let outputImage: CGImage
+
+    if scale < 1 {
+        let width = max(1, Int((sourceWidth * scale).rounded()))
+        let height = max(1, Int((sourceHeight * scale).rounded()))
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let resizedImage = context.makeImage() else { return nil }
+        outputImage = resizedImage
+    } else {
+        outputImage = cgImage
+    }
+
+    let outputData = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(
+        outputData,
+        UTType.jpeg.identifier as CFString,
+        1,
+        nil
+    ) else {
+        return nil
+    }
+
+    let properties: [CFString: Any] = [
+        kCGImagePropertyOrientation: orientation.rawValue,
+        kCGImageDestinationLossyCompressionQuality: quality
+    ]
+    CGImageDestinationAddImage(destination, outputImage, properties as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else { return nil }
+    return outputData as Data
+}
+
+func cgImagePropertyOrientation(from orientation: UIImage.Orientation) -> CGImagePropertyOrientation {
+    switch orientation {
+    case .up: return .up
+    case .upMirrored: return .upMirrored
+    case .down: return .down
+    case .downMirrored: return .downMirrored
+    case .leftMirrored: return .leftMirrored
+    case .right: return .right
+    case .rightMirrored: return .rightMirrored
+    case .left: return .left
+    @unknown default: return .up
+    }
 }
 
 // MARK: - 1. 通用标准卡片 (AppCard)
@@ -1084,28 +1152,5 @@ public class HapticManager {
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(type)
-    }
-}
-import UIKit
-
-public extension UIImage {
-    nonisolated func resized(toMaxDimension maxDimension: CGFloat = 1280) -> UIImage {
-        let size = self.size
-        let maxOriginal = max(size.width, size.height)
-        
-        if maxOriginal <= maxDimension {
-            return self
-        }
-        
-        let ratio = maxDimension / maxOriginal
-        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
-        
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0 // Use 1.0 so we don't multiply by screen scale
-        
-        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
-        return renderer.image { _ in
-            self.draw(in: CGRect(origin: .zero, size: newSize))
-        }
     }
 }
