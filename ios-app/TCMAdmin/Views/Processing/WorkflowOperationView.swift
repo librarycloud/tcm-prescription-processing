@@ -15,6 +15,7 @@ public struct WorkflowOperationView: View {
     
     // 照片相关状态
     @State private var selectedPhotoData: Data? = nil
+    @State private var isShowingPhoto = false
     @State private var isShowingCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isUploadingPhoto = false
@@ -235,18 +236,24 @@ public struct WorkflowOperationView: View {
                 await loadWorkflow()
             }
             
-            // 全屏放大照片查看
-            if let photoData = selectedPhotoData, let uiImage = downsampledImage(from: photoData, maxPixelSize: 5712) {
+            if isShowingPhoto {
                 ZStack {
                     Color.black.ignoresSafeArea()
                     
-                    ZoomableImageView(image: uiImage)
-                        .ignoresSafeArea()
+                    if let photoData = selectedPhotoData, let uiImage = downsampledImage(from: photoData, maxPixelSize: 5712) {
+                        ZoomableImageView(image: uiImage)
+                            .ignoresSafeArea()
+                    } else {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
+                    }
                     
                     VStack {
                         HStack {
                             Spacer()
                             Button(action: {
+                                isShowingPhoto = false
                                 selectedPhotoData = nil
                             }) {
                                 Image(systemName: "xmark.circle.fill")
@@ -981,19 +988,18 @@ public struct WorkflowOperationView: View {
     }
     
     private func viewPhoto(photoId: Int) {
-        guard !isBusy else { return }
-        isBusy = true
+        self.isShowingPhoto = true
+        self.selectedPhotoData = nil
         Task {
             do {
                 let data = try await ApiClient.shared.fetchProcessingPhoto(planId: planId, photoId: photoId)
                 await MainActor.run {
                     self.selectedPhotoData = data
-                    self.isBusy = false
                 }
             } catch {
                 await MainActor.run {
+                    self.isShowingPhoto = false
                     self.errorMessage = "加载照片失败: \(error.localizedDescription)"
-                    self.isBusy = false
                 }
             }
         }

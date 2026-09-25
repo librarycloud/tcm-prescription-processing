@@ -686,14 +686,18 @@ public struct PrescriptionDetailView: View {
                 }
             }
             
-            // 处方全屏预览
-            if isShowingFullAttachment, let data = attachmentData,
-               let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
+            if isShowingFullAttachment {
                 ZStack {
                     Color.black.ignoresSafeArea()
                     
-                    ZoomableImageView(image: uiImage)
-                        .ignoresSafeArea()
+                    if let data = attachmentData, let uiImage = downsampledImage(from: data, maxPixelSize: 5712) {
+                        ZoomableImageView(image: uiImage)
+                            .ignoresSafeArea()
+                    } else {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
+                    }
                     
                     VStack {
                         HStack {
@@ -771,20 +775,18 @@ public struct PrescriptionDetailView: View {
     }
     
     private func loadAndShowAttachment() {
-        guard !isBusy else { return }
-        isBusy = true
+        self.isShowingFullAttachment = true
+        self.attachmentData = nil
         Task {
             do {
                 let data = try await ApiClient.shared.fetchPrescriptionAttachment(id: id)
                 await MainActor.run {
                     self.attachmentData = data
-                    self.isShowingFullAttachment = true
-                    self.isBusy = false
                 }
             } catch {
                 await MainActor.run {
-                    self.errorMessage = "加载处方原件失败: \(error.localizedDescription)"
-                    self.isBusy = false
+                    self.isShowingFullAttachment = false
+                    self.errorMessage = "加载原件失败: \(error.localizedDescription)"
                 }
             }
         }
