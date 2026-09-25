@@ -879,7 +879,7 @@ public class ApiClient {
             fileName: fileName,
             mimeType: mimeType,
             fileData: data,
-            category: "dispensing_photo",
+            category: "dispensing-photo",
             onProgress: onProgress
         )
     }
@@ -937,7 +937,7 @@ public class ApiClient {
             fileName: fileName,
             mimeType: mimeType,
             fileData: data,
-            category: "prescription_attachment",
+            category: "prescription-attachment",
             onProgress: onProgress
         )
     }
