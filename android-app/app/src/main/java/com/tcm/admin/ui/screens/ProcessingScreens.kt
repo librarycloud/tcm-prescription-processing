@@ -1917,9 +1917,8 @@ internal fun WorkflowOperationScreen(
         DisposableEffect(bitmap) {
             onDispose { if (!bitmap.isRecycled) bitmap.recycle() }
         }
-        var previewScale by remember(previewPhotoId) { mutableStateOf(1f) }
-        var previewOffsetX by remember(previewPhotoId) { mutableStateOf(0f) }
-        var previewOffsetY by remember(previewPhotoId) { mutableStateOf(0f) }
+        var previewScale by remember(previewPhotoId) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        var previewOffset by remember(previewPhotoId) { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
         Dialog(
             onDismissRequest = { previewBitmap = null },
             properties = DialogProperties(
@@ -1942,14 +1941,16 @@ internal fun WorkflowOperationScreen(
                             .graphicsLayer {
                                 scaleX = previewScale
                                 scaleY = previewScale
-                                translationX = previewOffsetX
-                                translationY = previewOffsetY
+                                translationX = previewOffset.x
+                                translationY = previewOffset.y
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
                             }
                             .pointerInput(previewPhotoId) {
-                                detectTransformGestures { _, pan, zoom, _ ->
+                                detectTransformGestures { centroid, pan, zoom, _ ->
+                                    val oldScale = previewScale
                                     previewScale = (previewScale * zoom).coerceIn(1f, 5f)
-                                    previewOffsetX += pan.x
-                                    previewOffsetY += pan.y
+                                    val fractional = previewScale / oldScale
+                                    previewOffset = (previewOffset - centroid) * fractional + centroid + pan
                                 }
                             },
                     )
@@ -1962,8 +1963,7 @@ internal fun WorkflowOperationScreen(
                         TextButton(
                             onClick = {
                                 previewScale = 1f
-                                previewOffsetX = 0f
-                                previewOffsetY = 0f
+                                previewOffset = androidx.compose.ui.geometry.Offset.Zero
                             },
                         ) { Text("复位", color = Color.White) }
                         TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }

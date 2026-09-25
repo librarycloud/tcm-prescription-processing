@@ -391,9 +391,8 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
     var deleteAttachment by remember { mutableStateOf(false) }
     var viewingAttachment by remember { mutableStateOf(false) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var previewScale by remember { mutableStateOf(1f) }
-    var previewOffsetX by remember { mutableStateOf(0f) }
-    var previewOffsetY by remember { mutableStateOf(0f) }
+    var previewScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var previewOffset by remember { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
     fun viewAttachmentFile(attachment: JSONObject) {
         viewingAttachment = true
@@ -428,8 +427,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
             }.onSuccess { bmp ->
                 if (bmp != null) {
                     previewScale = 1f
-                    previewOffsetX = 0f
-                    previewOffsetY = 0f
+                    previewOffset = androidx.compose.ui.geometry.Offset.Zero
                     previewBitmap = bmp
                 }
             }.onFailure {
@@ -934,14 +932,16 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                             .graphicsLayer {
                                 scaleX = previewScale
                                 scaleY = previewScale
-                                translationX = previewOffsetX
-                                translationY = previewOffsetY
+                                translationX = previewOffset.x
+                                translationY = previewOffset.y
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
                             }
                             .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
+                                detectTransformGestures { centroid, pan, zoom, _ ->
+                                    val oldScale = previewScale
                                     previewScale = (previewScale * zoom).coerceIn(1f, 5f)
-                                    previewOffsetX += pan.x
-                                    previewOffsetY += pan.y
+                                    val fractional = previewScale / oldScale
+                                    previewOffset = (previewOffset - centroid) * fractional + centroid + pan
                                 }
                             },
                     )
@@ -954,8 +954,7 @@ internal fun PrescriptionDetailScreen(id: Int, user: JSONObject?, onNavigate: (R
                         TextButton(
                             onClick = {
                                 previewScale = 1f
-                                previewOffsetX = 0f
-                                previewOffsetY = 0f
+                                previewOffset = androidx.compose.ui.geometry.Offset.Zero
                             },
                         ) { Text("复位", color = Color.White) }
                         TextButton(onClick = { previewBitmap = null }) { Text("关闭", color = Color.White) }
