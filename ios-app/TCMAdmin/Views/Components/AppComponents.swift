@@ -17,8 +17,8 @@ func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
 nonisolated func jpegDataForUpload(
     from cgImage: CGImage,
     orientation: CGImagePropertyOrientation,
-    maxPixelSize: CGFloat = 10000,
-    quality: CGFloat = 0.95
+    maxPixelSize: CGFloat = 4000,
+    quality: CGFloat = 0.85
 ) -> Data? {
     let sourceWidth = CGFloat(cgImage.width)
     let sourceHeight = CGFloat(cgImage.height)
