@@ -181,7 +181,7 @@ struct HerbsView: View {
                             .padding(.bottom, 4)
                         }
                         
-                        LazyVGrid(columns: gridColumns, spacing: 12) {
+                        MasonryLayout(minColumnWidth: sizeClass == .regular ? 340 : 9999, spacing: 12) {
                             ForEach(groupedUnits) { unit in
                             AppCard(padding: 16) {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -312,6 +312,55 @@ struct HerbsView: View {
             return "斗\(unit) · \(layerStr) · \(column)列"
         } else {
             return "\(loc.typeLabel)\(unit) · \(layer) 层"
+        }
+    }
+}
+
+
+public struct MasonryLayout: Layout {
+    public var minColumnWidth: CGFloat
+    public var spacing: CGFloat
+    
+    public init(minColumnWidth: CGFloat = 340, spacing: CGFloat = 12) {
+        self.minColumnWidth = minColumnWidth
+        self.spacing = spacing
+    }
+    
+    private func computeColumns(in boundsWidth: CGFloat) -> Int {
+        let maxColumns = Int((boundsWidth + spacing) / (minColumnWidth + spacing))
+        return max(1, maxColumns)
+    }
+    
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.replacingUnspecifiedDimensions().width
+        let columns = computeColumns(in: width)
+        let columnWidth = (width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+        var columnHeights = Array(repeating: CGFloat(0), count: columns)
+        
+        for subview in subviews {
+            let shortestColumn = columnHeights.enumerated().min(by: { $0.element < $1.element })?.offset ?? 0
+            let size = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil))
+            columnHeights[shortestColumn] += size.height + spacing
+        }
+        
+        let maxHeight = (columnHeights.max() ?? 0)
+        return CGSize(width: width, height: max(0, maxHeight - (subviews.isEmpty ? 0 : spacing)))
+    }
+    
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let columns = computeColumns(in: bounds.width)
+        let columnWidth = (bounds.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+        var columnHeights = Array(repeating: bounds.minY, count: columns)
+        
+        for subview in subviews {
+            let shortestColumn = columnHeights.enumerated().min(by: { $0.element < $1.element })?.offset ?? 0
+            let x = bounds.minX + CGFloat(shortestColumn) * (columnWidth + spacing)
+            let y = columnHeights[shortestColumn]
+            
+            let size = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil))
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: columnWidth, height: size.height))
+            
+            columnHeights[shortestColumn] += size.height + spacing
         }
     }
 }
