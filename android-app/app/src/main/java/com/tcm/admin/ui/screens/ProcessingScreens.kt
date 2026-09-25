@@ -113,6 +113,26 @@ private const val MAX_PROCESSING_PHOTO_BYTES = 5 * 1024 * 1024
 private const val MAX_SOURCE_PHOTO_BYTES = 25 * 1024 * 1024
 private const val PROCESSING_PHOTO_CACHE_TTL_MILLIS = 3 * 60 * 60 * 1000L
 
+private fun readBytesLimited(context: android.content.Context, uri: Uri, maxBytes: Int): ByteArray {
+    val input = context.contentResolver.openInputStream(uri)
+        ?: throw IllegalStateException("无法读取照片")
+    input.use { stream ->
+        val output = java.io.ByteArrayOutputStream(minOf(maxBytes, 1024 * 1024))
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val count = stream.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > maxBytes) {
+                throw IllegalStateException("照片过大，请选择 25MB 以内的照片")
+            }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+}
+
 private suspend fun loadProcessingPhoto(context: android.content.Context, planId: Int, photoId: Int): Bitmap = withContext(Dispatchers.IO) {
     val cacheFile = java.io.File(context.cacheDir, "processing-photos/$planId-$photoId")
     val legacyFile = java.io.File(context.filesDir, "processing-photos/$planId-$photoId")
@@ -149,8 +169,7 @@ private fun readProcessingPhoto(context: android.content.Context, uri: Uri): Byt
     if (reportedSize != null && reportedSize > MAX_SOURCE_PHOTO_BYTES) {
         throw IllegalStateException("照片过大，请选择 25MB 以内的照片")
     }
-    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        ?: throw IllegalStateException("无法读取照片")
+    val original = readBytesLimited(context, uri, MAX_SOURCE_PHOTO_BYTES)
     if (original.size <= MAX_PROCESSING_PHOTO_BYTES) return original
 
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -879,7 +898,7 @@ internal fun WorkflowOperationScreen(
         busy = true
         uploadingPhoto = true
         uploadProgress = 0
-        uploadJob = kotlinx.coroutines.GlobalScope.launch {
+        uploadJob = scope.launch {
             try {
                 runCatching {
                     withContext(Dispatchers.IO) {

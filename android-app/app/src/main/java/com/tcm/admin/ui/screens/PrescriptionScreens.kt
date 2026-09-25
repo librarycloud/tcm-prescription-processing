@@ -1161,15 +1161,36 @@ internal fun PrescriptionFormScreen(initial: JSONObject, user: JSONObject?, onSa
     }
 }
 
+private const val MAX_PRESCRIPTION_FILE_BYTES = 25 * 1024 * 1024
+
+private fun readBytesLimited(context: Context, uri: Uri, maxBytes: Int): ByteArray {
+    val input = context.contentResolver.openInputStream(uri)
+        ?: throw IllegalStateException("无法读取处方文件")
+    input.use { stream ->
+        val output = java.io.ByteArrayOutputStream(minOf(maxBytes, 1024 * 1024))
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val count = stream.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > maxBytes) {
+                throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
+            }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+}
+
 private fun compressPrescriptionImageIfNeeded(context: Context, uri: Uri): ByteArray {
     val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
         if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
     }
-    if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
+    if (reportedSize != null && reportedSize > MAX_PRESCRIPTION_FILE_BYTES) {
         throw IllegalStateException("处方文件过大，请选择 25MB 以内的图片")
     }
-    val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        ?: throw IllegalStateException("无法读取处方文件")
+    val original = readBytesLimited(context, uri, MAX_PRESCRIPTION_FILE_BYTES)
     if (original.size <= 2 * 1024 * 1024) return original
 
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -1247,10 +1268,10 @@ private suspend fun uploadAttachment(context: Context, prescriptionId: Int, uri:
         val reportedSize = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
             if (it.moveToFirst()) it.getLong(0).takeIf { size -> size > 0L } else null
         }
-        if (reportedSize != null && reportedSize > 25L * 1024L * 1024L) {
+        if (reportedSize != null && reportedSize > MAX_PRESCRIPTION_FILE_BYTES) {
             throw IllegalStateException("处方文件过大，请选择 25MB 以内的文件")
         }
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+        readBytesLimited(context, uri, MAX_PRESCRIPTION_FILE_BYTES)
     }
     val uploadMime = if (isImage && !mimeType.startsWith("image/")) "image/jpeg" else mimeType
     ApiClient.uploadPrescriptionAttachment(prescriptionId, name, uploadMime, bytes, onProgress)

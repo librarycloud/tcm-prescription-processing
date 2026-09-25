@@ -54,8 +54,9 @@ object CacheManager {
     }
 
     /**
-     * Automatically cleans up obsolete installation packages (.apk) and temporary patch files (.tmp)
-     * from previous updates. Safe to call on app startup and before starting updates.
+     * Cleans temporary update artifacts from previous attempts. APKs are kept until
+     * the user installs them or explicitly clears cache, so a pending update survives
+     * an app process restart.
      */
     fun cleanObsoleteApksAndPatches(context: Context): Long {
         var freedBytes = 0L
@@ -79,10 +80,11 @@ object CacheManager {
                 }
             }
 
-            // 3. Clean external downloads directory for update APKs from past versions
+            // 3. Keep downloaded APKs so an update can be installed after a process
+            // restart. A new update explicitly removes stale APKs before downloading.
             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.listFiles()?.forEach { file ->
                 val name = file.name.lowercase(Locale.US)
-                if (name.endsWith(".apk") || name.endsWith(".tmp") || name.endsWith(".patch")) {
+                if (name.endsWith(".tmp") || name.endsWith(".patch")) {
                     val len = file.length()
                     if (file.delete()) freedBytes += len
                 }

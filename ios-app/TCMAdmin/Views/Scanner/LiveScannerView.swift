@@ -237,6 +237,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var hasScanned = false
+    private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     private var lastOcrScanTime: Date = Date.distantPast
     
     override func viewDidLoad() {
@@ -318,16 +319,16 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
     
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        guard !hasScanned, let metadataObj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+        guard let metadataObj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let stringValue = metadataObj.stringValue else {
             return
         }
-        hasScanned = true
+        guard claimScan() else { return }
         onScanned?(stringValue)
         
         // 延迟 1.5 秒后允许下一次扫描，避免重复触发
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.hasScanned = false
+            self?.releaseScan()
         }
     }
     
@@ -335,7 +336,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
     // MARK: - OCR Video Frame Extraction
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard !hasScanned else { return }
+        guard !isScanClaimed() else { return }
         
         let now = Date()
         // 限制 OCR 频率为 500ms 一次，避免发热
@@ -345,17 +346,16 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         
         let request = VNRecognizeTextRequest { [weak self] request, error in
-            guard let self = self, !self.hasScanned else { return }
+            guard let self = self, !self.isScanClaimed() else { return }
             guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
             
             if let sku = self.extractSku(observations: observations) {
+                guard self.claimScan() else { return }
                 DispatchQueue.main.async {
-                    guard !self.hasScanned else { return }
-                    self.hasScanned = true
                     self.onScanned?(sku)
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        self.hasScanned = false
+                        self.releaseScan()
                     }
                 }
             }
@@ -464,6 +464,24 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         
         // Return the candidate closest to the center Y
         return candidates.sorted(by: { $0.distanceToCenter < $1.distanceToCenter }).first?.sku
+    }
+
+    private func isScanClaimed() -> Bool {
+        scanStateQueue.sync { hasScanned }
+    }
+
+    private func claimScan() -> Bool {
+        scanStateQueue.sync {
+            guard !hasScanned else { return false }
+            hasScanned = true
+            return true
+        }
+    }
+
+    private func releaseScan() {
+        scanStateQueue.async { [weak self] in
+            self?.hasScanned = false
+        }
     }
 
     func stopScanner() {

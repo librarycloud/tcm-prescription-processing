@@ -297,6 +297,7 @@ public struct PrescriptionDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var isUploading = false
     @State private var uploadProgress: Double = 0.0
+    @State private var uploadTask: Task<Void, Never>? = nil
     @State private var showDeleteAttachmentConfirm = false
     
     // 加工批次操作状态
@@ -507,7 +508,7 @@ public struct PrescriptionDetailView: View {
                                         }}
                                         .onChange(of: selectedPhotoItem) { _, newItem in
                                             Task {
-                                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = UIImage(data: data) {
+                                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 2560) {
                                                     uploadAttachment(image: uiImage)
                                                 }
                                             }
@@ -814,12 +815,17 @@ public struct PrescriptionDetailView: View {
     }
     
     private func uploadAttachment(image: UIImage) {
+        uploadTask?.cancel()
         isUploading = true
         uploadProgress = 0.0
-        Task {
+        uploadTask = Task { @MainActor in
+            defer {
+                isUploading = false
+                uploadTask = nil
+            }
             do {
                 guard let data = await Task.detached(priority: .userInitiated, operation: {
-                    image.jpegData(compressionQuality: 0.8)
+                    image.resized(toMaxDimension: 2560).jpegData(compressionQuality: 0.85)
                 }).value else { return }
                 let fileName = "prescription_\(id)_\(Int(Date().timeIntervalSince1970)).jpg"
                 try await ApiClient.shared.uploadPrescriptionAttachment(id: id, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
@@ -828,10 +834,11 @@ public struct PrescriptionDetailView: View {
                     }
                 }
                 await reloadDetail()
+            } catch is CancellationError {
+                return
             } catch {
                 errorMessage = "上传处方原件失败: \(error.localizedDescription)"
             }
-            isUploading = false
         }
     }
     

@@ -695,12 +695,11 @@ struct KeyboardDismissalView: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // 允许与所有其他手势同时识别，绝不阻断侧滑返回的 pan 手势
-            return true
+            // 键盘收起点击不与导航侧滑、滚动和系统手势并行识别。
+            return false
         }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            // UIPanGestureRecognizer (侧滑返回) 不应被 tap 识别器接收
             let view = touch.view
             if view is UIControl {
                 return false
@@ -710,14 +709,16 @@ struct KeyboardDismissalView: UIViewRepresentable {
                 if c is UITextField || c is UITextView {
                     return false
                 }
+                if c is UIScrollView {
+                    return false
+                }
                 current = c.superview
             }
             return true
         }
         
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // 如果另一个手势是 pan（侧滑返回），让 tap 手势等其失败后才触发
-            return false
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            otherGestureRecognizer is UIPanGestureRecognizer
         }
     }
 }

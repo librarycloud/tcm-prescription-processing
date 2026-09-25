@@ -459,7 +459,7 @@ public struct StocktakingDetailView: View {
                                         do {
                                             try await Task.sleep(nanoseconds: 500_000_000)
                                             guard !Task.isCancelled else { return }
-                                            searchCandidates()
+                                            await loadCandidateResults(for: term)
                                         } catch {}
                                     }
                                 }
@@ -791,15 +791,16 @@ public struct StocktakingDetailView: View {
     }
     
     private func searchCandidates() {
-        guard !candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        Task {
-            let res = (try? await ApiClient.shared.fetchGoodsCheckCandidates(checkId: checkId, keyword: candidateKeyword)) ?? []
-            await MainActor.run {
-                self.candidates = res
-                if res.count == 1 {
-                    self.selectedCandidate = res.first
-                    self.countInputQty = ""
-                }
+        let keyword = candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return }
+        searchTask?.cancel()
+        searchTask = Task { @MainActor in
+            let res = (try? await ApiClient.shared.fetchGoodsCheckCandidates(checkId: checkId, keyword: keyword)) ?? []
+            guard !Task.isCancelled, candidateKeyword.trimmingCharacters(in: .whitespacesAndNewlines) == keyword else { return }
+            self.candidates = res
+            if res.count == 1 {
+                self.selectedCandidate = res.first
+                self.countInputQty = ""
             }
         }
     }
@@ -933,4 +934,3 @@ private struct CandidateRowView: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
-

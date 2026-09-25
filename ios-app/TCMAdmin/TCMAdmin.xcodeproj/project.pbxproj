@@ -8,11 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		7C6DC4503059647800D4F198 /* DifferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4313059647800D4F198 /* DifferencesView.swift */; };
-		7C6DC4513059647800D4F198 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4453059647800D4F198 /* DocumentScannerView.swift */; };
 		7C6DC4523059647800D4F198 /* StocktakingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4493059647800D4F198 /* StocktakingView.swift */; };
 		7C6DC4533059647800D4F198 /* PackagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC43A3059647800D4F198 /* PackagesView.swift */; };
 		7C6DC4543059647800D4F198 /* MainShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC44D3059647800D4F198 /* MainShellView.swift */; };
-		7C6DC4553059647800D4F198 /* OCRDemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4473059647800D4F198 /* OCRDemoView.swift */; };
 		7C6DC4563059647800D4F198 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4253059647800D4F198 /* AppRoute.swift */; };
 		7C6DC4573059647800D4F198 /* ProcessingPlanFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC43E3059647800D4F198 /* ProcessingPlanFormView.swift */; };
 		7C6DC4583059647800D4F198 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4433059647800D4F198 /* SettingsView.swift */; };
@@ -65,9 +63,7 @@
 		7C6DC4403059647800D4F198 /* WorkflowOperationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowOperationView.swift; sourceTree = "<group>"; };
 		7C6DC4423059647800D4F198 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		7C6DC4433059647800D4F198 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		7C6DC4453059647800D4F198 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
 		7C6DC4463059647800D4F198 /* LiveScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScannerView.swift; sourceTree = "<group>"; };
-		7C6DC4473059647800D4F198 /* OCRDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRDemoView.swift; sourceTree = "<group>"; };
 		7C6DC4493059647800D4F198 /* StocktakingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StocktakingView.swift; sourceTree = "<group>"; };
 		7C6DC44B3059647800D4F198 /* TransfersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransfersView.swift; sourceTree = "<group>"; };
 		7C6DC44D3059647800D4F198 /* MainShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainShellView.swift; sourceTree = "<group>"; };
@@ -247,9 +243,7 @@
 		7C6DC4483059647800D4F198 /* Scanner */ = {
 			isa = PBXGroup;
 			children = (
-				7C6DC4453059647800D4F198 /* DocumentScannerView.swift */,
 				7C6DC4463059647800D4F198 /* LiveScannerView.swift */,
-				7C6DC4473059647800D4F198 /* OCRDemoView.swift */,
 			);
 			path = Scanner;
 			sourceTree = "<group>";
@@ -362,11 +356,9 @@
 			isa = PBXSourcesBuildPhase;
 			files = (
 				7C6DC4503059647800D4F198 /* DifferencesView.swift in Sources */,
-				7C6DC4513059647800D4F198 /* DocumentScannerView.swift in Sources */,
 				7C6DC4523059647800D4F198 /* StocktakingView.swift in Sources */,
 				7C6DC4533059647800D4F198 /* PackagesView.swift in Sources */,
 				7C6DC4543059647800D4F198 /* MainShellView.swift in Sources */,
-				7C6DC4553059647800D4F198 /* OCRDemoView.swift in Sources */,
 				7C6DC4563059647800D4F198 /* AppRoute.swift in Sources */,
 				7C6DC4573059647800D4F198 /* ProcessingPlanFormView.swift in Sources */,
 				7C6DC4583059647800D4F198 /* SettingsView.swift in Sources */,

@@ -516,7 +516,7 @@ public struct WorkflowOperationView: View {
                         }}
                         .onChange(of: selectedPhotoItem) { _, newItem in
                             Task { @MainActor in
-                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = UIImage(data: data) {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self), let uiImage = downsampledImage(from: data, maxPixelSize: 2560) {
                                     handlePickedImage(uiImage)
                                 }
                             }
@@ -975,9 +975,13 @@ public struct WorkflowOperationView: View {
         isUploadingPhoto = true
         uploadProgress = 0.0
         uploadTask = Task { @MainActor in
+            defer {
+                isUploadingPhoto = false
+                uploadTask = nil
+            }
             do {
                 guard let data = await Task.detached(priority: .userInitiated, operation: {
-                    image.jpegData(compressionQuality: 0.8)
+                    image.resized(toMaxDimension: 2560).jpegData(compressionQuality: 0.85)
                 }).value else { return }
                 let fileName = "dispensing_\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
                 try await ApiClient.shared.completeDispensing(planId: planId, fileName: fileName, mimeType: "image/jpeg", data: data) { progress in
@@ -992,8 +996,6 @@ public struct WorkflowOperationView: View {
                     errorMessage = "上传凭证照片失败: \(error.localizedDescription)"
                 }
             }
-            isUploadingPhoto = false
-            uploadTask = nil
         }
     }
     

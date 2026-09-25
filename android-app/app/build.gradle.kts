@@ -101,7 +101,7 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
             buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
             buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
-            manifestPlaceholders["cleartextTraffic"] = true
+            manifestPlaceholders["cleartextTraffic"] = false
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

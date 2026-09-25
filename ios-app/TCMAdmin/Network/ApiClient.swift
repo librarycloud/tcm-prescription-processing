@@ -133,6 +133,7 @@ public class ApiClient {
     }
     
     private var memoryCache: [String: CacheEntry] = [:]
+    private var cacheGeneration = 0
     private let cacheQueue = DispatchQueue(label: "com.tcm.apiCache", attributes: .concurrent)
     
     private func getCacheTTL(for path: String) -> TimeInterval? {
@@ -178,6 +179,7 @@ public class ApiClient {
         }
         
         cacheQueue.sync(flags: .barrier) {
+            self.cacheGeneration &+= 1
             self.memoryCache = self.memoryCache.filter { entry in
                 !prefixes.contains { entry.key.starts(with: $0) }
             }
@@ -187,6 +189,7 @@ public class ApiClient {
 
     public func clearResponseCache() {
         cacheQueue.sync(flags: .barrier) {
+            self.cacheGeneration &+= 1
             self.memoryCache.removeAll()
         }
     }
@@ -196,7 +199,8 @@ public class ApiClient {
         path: String,
         method: String = "GET",
         body: [String: Any]? = nil,
-        queryParams: [String: String]? = nil
+        queryParams: [String: String]? = nil,
+        baseURLOverride: String? = nil
     ) async throws -> T {
         let queryString = queryParams?.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: "&") ?? ""
         let cacheKey = path + (queryString.isEmpty ? "" : "?\(queryString)")
@@ -220,7 +224,9 @@ public class ApiClient {
                 }
             }
         }
-        var urlString = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
+        let requestBaseURL = baseURLOverride ?? baseURL
+        var urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         if let queryParams = queryParams, !queryParams.isEmpty {
             var components = URLComponents(string: urlString)
             components?.queryItems = queryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
@@ -300,6 +306,7 @@ public class ApiClient {
             if method == "GET" {
                 if self.getCacheTTL(for: path) != nil {
                     self.cacheQueue.async(flags: .barrier) {
+                        guard self.cacheGeneration == requestCacheGeneration else { return }
                         self.memoryCache[cacheKey] = CacheEntry(data: targetData, savedAt: Date())
                     }
                 }
@@ -648,6 +655,8 @@ public class ApiClient {
         category: String = "default",
         onProgress: ((Double) -> Void)? = nil
     ) async throws -> [String: Any] {
+        let requestBaseURL = baseURL
+        try Task.checkCancellation()
         final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
             let onProgress: ((Double) -> Void)?
             init(onProgress: ((Double) -> Void)?) { self.onProgress = onProgress }
@@ -678,8 +687,12 @@ public class ApiClient {
             )
             strategyData = strategyRes.data
         } catch {
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
             print("OSS upload strategy unavailable: \(error)")
         }
+        try Task.checkCancellation()
         
         let uploadUrlString = strategyData?.uploadUrl
         var directUploadAllowed = false
@@ -716,13 +729,13 @@ public class ApiClient {
             ]
             let backendPath = path.components(separatedBy: "?").first ?? path
             struct NotifyRes: Decodable {}
-            let _: NotifyRes = try await self.request(path: backendPath, method: "POST", body: notifyPayload)
+            let _: NotifyRes = try await self.request(path: backendPath, method: "POST", body: notifyPayload, baseURLOverride: requestBaseURL)
             return ["success": true, "storagePath": strategyData?.storagePath ?? ""]
         }
         
         // 2. 降级回传统 Multipart 上传
         let boundary = "Boundary-\(UUID().uuidString)"
-        let urlString = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         guard let url = URL(string: urlString) else {
             throw ApiError.invalidURL
         }
@@ -759,6 +772,8 @@ public class ApiClient {
     
     public func requestBytes(path: String) async throws -> Data {
         let cacheKey = "bytes_" + path
+        let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
+        let requestBaseURL = baseURL
         var cachedData: Data? = nil
         
         cacheQueue.sync {
@@ -772,7 +787,7 @@ public class ApiClient {
             return data
         }
         
-        let urlString = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         guard let url = URL(string: urlString) else { throw ApiError.invalidURL }
         var request = URLRequest(url: url, timeoutInterval: 15.0)
         if let token = SessionManager.shared.token, !token.isEmpty {
@@ -787,6 +802,7 @@ public class ApiClient {
         }
         
         cacheQueue.async(flags: .barrier) {
+            guard self.cacheGeneration == requestCacheGeneration else { return }
             self.memoryCache[cacheKey] = CacheEntry(data: data, savedAt: Date())
         }
         
@@ -1153,4 +1169,3 @@ public class ApiClient {
         return try await fetchDictionaries(type: "PrescriptionSource")
     }
 }
-

@@ -245,6 +245,7 @@ public struct PackagesView: View {
                 sortBy: selectedSortBy
             )
             guard !Task.isCancelled else { return }
+            guard currentTaskID == taskID else { return }
             self.packages = res
         } catch is CancellationError {
             return

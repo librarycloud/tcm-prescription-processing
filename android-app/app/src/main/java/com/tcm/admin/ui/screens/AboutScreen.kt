@@ -81,15 +81,11 @@ private const val CACHED_UPDATE = "cached_update"
 private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
 
 private fun isAllowedDownloadUrl(url: String): Boolean {
-    if (BuildConfig.DEBUG) return true
-    if (url.startsWith("https://", ignoreCase = true)) return true
+    if (BuildConfig.DEBUG) {
+        return url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+    }
     val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
-    val host = uri.host?.lowercase() ?: return false
-    return host == "localhost" || host == "127.0.0.1" ||
-        host.startsWith("192.168.") || host.startsWith("10.") ||
-        host.startsWith("172.16.") || host.startsWith("172.17.") ||
-        host.startsWith("172.18.") || host.startsWith("172.19.") ||
-        host.startsWith("172.2") || host.startsWith("172.30.") || host.startsWith("172.31.")
+    return uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()
 }
 
 @Composable
@@ -135,10 +131,24 @@ internal fun AboutScreen(
                         do {
                             val id = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
                             val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                            if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING) {
+                            if (status == DownloadManager.STATUS_RUNNING ||
+                                status == DownloadManager.STATUS_PENDING ||
+                                status == DownloadManager.STATUS_SUCCESSFUL
+                            ) {
                                 val uriString = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_URI))
                                 if (uriString != null && uriString.contains("versionCode=")) {
-                                    downloadId = id
+                                    val parsedUri = runCatching { Uri.parse(uriString) }.getOrNull()
+                                    val versionCode = parsedUri?.getQueryParameter("versionCode")?.toIntOrNull()
+                                    if (versionCode != null) {
+                                        downloadFileName = "update_${versionCode}.apk"
+                                        downloadVersionName = latest?.optString("versionName", "").orEmpty()
+                                        downloadSha256 = latest?.displayField("sha256", "")?.trim()?.lowercase().orEmpty()
+                                    }
+                                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                                        downloadedUri = downloadManager.getUriForDownloadedFile(id)
+                                    } else {
+                                        downloadId = id
+                                    }
                                     break
                                 }
                             }
@@ -195,7 +205,7 @@ internal fun AboutScreen(
             downloadError = "暂未配置下载地址"
             return
         }
-        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/').ifBlank { BuildConfig.API_BASE_URL.trimEnd('/') }
+        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/').ifBlank { ApiClient.currentBaseUrl.trimEnd('/') }
         val url = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
             rawUrl
         } else {
@@ -245,7 +255,7 @@ internal fun AboutScreen(
             startFullDownload(version)
             return
         }
-        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/').ifBlank { BuildConfig.API_BASE_URL.trimEnd('/') }
+        val updateBase = BuildConfig.UPDATE_BASE_URL.trimEnd('/').ifBlank { ApiClient.currentBaseUrl.trimEnd('/') }
         val patchUrl = if (rawPatchUrl.startsWith("http://") || rawPatchUrl.startsWith("https://")) {
             rawPatchUrl
         } else {

@@ -588,6 +588,7 @@ struct InventoryView: View {
         do {
             let res = try await ApiClient.shared.fetchInventory(keyword: term, storeId: selectedStoreId)
             guard !Task.isCancelled else { return }
+            guard currentTaskID == taskID else { return }
             if allowAutoNavigate && res.count == 1 && !term.isEmpty && !hasAutoNavigated && selectedProduct == nil {
                 hasAutoNavigated = true
                 self.items = res
