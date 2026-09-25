@@ -51,6 +51,8 @@ test('client display service loads default config and saves updates', async () =
   const info = await getClientDisplayInfo();
   assert.equal(info.wechat.appName, '测试药房小程序');
   assert.ok(info.wechat.qrcodeUrl?.startsWith('data:image/png;base64,'));
+  assert.equal(info.ios.displayName, '测试药房助手 iOS');
+  assert.equal(info.ios.testflightUrl, 'https://testflight.apple.com/join/xxxx');
   assert.equal(info.serverUrl, 'https://api.tcm.example.com');
   assert.equal(info.announcement, '欢迎使用移动客户端');
 });

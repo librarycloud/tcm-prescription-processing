@@ -378,6 +378,10 @@ export async function getClientDisplayInfo() {
       hubConnected: hubVersion.connected,
       hubMessage: hubVersion.message || ''
     },
+    ios: {
+      displayName: conf.ios.displayName,
+      testflightUrl: conf.ios.testflightUrl
+    },
     serverUrl: conf.serverUrl || '',
     announcement: conf.announcement
   };
