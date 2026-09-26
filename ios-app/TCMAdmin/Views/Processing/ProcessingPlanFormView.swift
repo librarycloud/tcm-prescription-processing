@@ -131,6 +131,7 @@ public struct ProcessingPlanFormView: View {
                 }
                 .padding(16)
             }
+            .scrollDismissesKeyboard(.immediately)
             .background(Color.pageBackground.ignoresSafeArea())
             .navigationTitle(planToEdit != nil ? "编辑加工计划" : "新建加工计划")
             .navigationBarTitleDisplayMode(.inline)
@@ -237,12 +238,26 @@ public struct ProcessingPlanFormView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.immediately)
             .searchable(text: $rxSearchText, prompt: "搜索处方号或患者姓名")
             .onChange(of: rxSearchText) { _, newVal in
+                let trimmed = newVal.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    Task { try? await fetchAvailablePrescriptions(keyword: "") }
+                    return
+                }
+                
+                let isPureNumber = trimmed.allSatisfy { $0.isNumber }
+                if isPureNumber && trimmed.count < 3 { return }
+                if !isPureNumber && trimmed.count < 2 { return }
+                
                 Task {
-                    do {
-                        try await fetchAvailablePrescriptions(keyword: newVal)
-                    } catch { }
+                    try? await fetchAvailablePrescriptions(keyword: trimmed)
+                }
+            }
+            .onSubmit(of: .search) {
+                Task {
+                    try? await fetchAvailablePrescriptions(keyword: rxSearchText.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             }
             .navigationTitle("选择关联处方")

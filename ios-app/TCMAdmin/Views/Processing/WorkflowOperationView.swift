@@ -310,12 +310,15 @@ public struct WorkflowOperationView: View {
         }
         // 完成加工确认弹窗
         .alert("完成加工确认", isPresented: $showFinishDialog) {
-            Button("确认完成") {
-                finishWorkflow(createPackage: createPackageImmediately)
+            Button("完成并生成包裹") {
+                finishWorkflow(createPackage: true)
+            }
+            Button("仅完成加工", role: .destructive) {
+                finishWorkflow(createPackage: false)
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("确认加工已全部完成？将自动更新处方状态并生成待核销包裹。")
+            Text("确认加工已全部完成？\n可选择是否立即生成待核销包裹。")
         }
         // 设备被占用警告弹窗
         .alert("设备使用中", isPresented: $showOccupiedDialog) {

@@ -34,6 +34,9 @@ public struct ProcessingView: View {
     @State private var isCreatingPlan = false
     @State private var planToEdit: ProcessingPlanItem? = nil
     @State private var planForPackage: ProcessingPlanItem? = nil
+    @State private var showQuickScanAlert = false
+    @State private var quickScanErrorMessage: String? = nil
+    @State private var quickScanNeedPhotoPlanId: Int? = nil
     
     private var isSuperAdmin: Bool {
         session.currentUser?.role == 0
@@ -258,6 +261,20 @@ public struct ProcessingView: View {
                 await loadData()
             }
         }
+        .alert("扫码提示", isPresented: $showQuickScanAlert) {
+            if let planId = quickScanNeedPhotoPlanId {
+                Button("去传照片") {
+                    quickScanErrorMessage = nil
+                    quickScanNeedPhotoPlanId = nil
+                    router.navigate(to: .workflowOperation(planId: planId, planCode: ""))
+                }
+                Button("取消", role: .cancel) { quickScanNeedPhotoPlanId = nil }
+            } else {
+                Button("确定", role: .cancel) { }
+            }
+        } message: {
+            Text(quickScanErrorMessage ?? "")
+        }
     }
     
     // MARK: - 计划模式列表视图
@@ -307,7 +324,10 @@ public struct ProcessingView: View {
                                 }
                             },
                             onScanClick: {
-                                router.isScannerPresented = true
+                                router.presentScanner { code in
+                                    let equipmentCode = code.replacingOccurrences(of: "TCM:EQUIPMENT:1:", with: "")
+                                    executeAutoQuickScan(plan: plan, scanned: equipmentCode)
+                                }
                             },
                             onWorkflowClick: {
                                 router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
@@ -339,6 +359,9 @@ public struct ProcessingView: View {
             
             .background(Color.pageBackground)
         }
+
+
+
     }
     
     // MARK: - 领取模式列表视图 (对标 Android pickupFlow)
@@ -392,6 +415,11 @@ public struct ProcessingView: View {
             .background(Color.pageBackground)
         }
     }
+
+
+    
+    
+
     
     // MARK: - 辅助卡片
     private func statPickupCard(label: String, value: String, isSelected: Bool, color: Color, softColor: Color, action: @escaping () -> Void) -> some View {
@@ -466,6 +494,93 @@ public struct ProcessingView: View {
             }
         }
     }
+
+    private var quickScanAlert: Alert {
+        if let planId = quickScanNeedPhotoPlanId {
+            return Alert(
+                title: Text("扫码提示"),
+                message: Text(quickScanErrorMessage ?? ""),
+                primaryButton: .default(Text("去传照片")) {
+                    quickScanErrorMessage = nil
+                    quickScanNeedPhotoPlanId = nil
+                    router.navigate(to: .workflowOperation(planId: planId, planCode: ""))
+                },
+                secondaryButton: .cancel(Text("取消")) { quickScanNeedPhotoPlanId = nil }
+            )
+        } else {
+            return Alert(
+                title: Text("扫码提示"),
+                message: Text(quickScanErrorMessage ?? ""),
+                dismissButton: .default(Text("确定"))
+            )
+        }
+    }
+
+    private func executeAutoQuickScan(plan: ProcessingPlanItem, scanned: String) {
+        let processTypeName = plan.method ?? "代煎"
+        let isDecoction = processTypeName.contains("煎")
+        
+        if !isDecoction {
+            self.quickScanErrorMessage = "该加工计划为非代煎工艺，无需扫码关联煎煮设备。"
+            self.showQuickScanAlert = true
+            return
+        }
+        
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let workflow = try await ApiClient.shared.fetchProcessingWorkflow(id: plan.id)
+                let photoCount = workflow.photos?.count ?? 0
+                let currentStage = workflow.currentStage ?? 1
+                
+                if photoCount == 0 && currentStage == 1 {
+                    self.quickScanErrorMessage = "需先上传调配完成照片。按规范要求，浸泡前需先完成调配审核拍照。"
+                    self.quickScanNeedPhotoPlanId = plan.id
+                    self.showQuickScanAlert = true
+                    return
+                }
+                
+                let usages = workflow.equipmentUsages ?? []
+                let activeSoakings = usages.filter { $0.stage == 3 && $0.status == 1 }
+                let activeDecoctions = usages.filter { $0.stage == 4 && $0.status == 1 }
+                
+                let allSoakings = usages.filter { $0.stage == 3 }
+                let nextSoakPortion = allSoakings.isEmpty ? 1 : ((allSoakings.map { $0.portionNo ?? 1 }.max() ?? 0) + 1)
+                
+                var successMsg: String? = nil
+                var lastError: String = ""
+                
+                for decoction in activeDecoctions {
+                    do {
+                        try await ApiClient.shared.startPackaging(planId: plan.id, usageId: decoction.id, equipmentCode: scanned)
+                        successMsg = "已成功扫码记录：第 \(decoction.portionNo ?? 1) 组包装机开始打包"
+                        break
+                    } catch { lastError = error.localizedDescription }
+                }
+                
+                if successMsg == nil {
+                    for soaking in activeSoakings {
+                        do {
+                            try await ApiClient.shared.startEquipmentUsage(planId: plan.id, stage: 4, portionNo: soaking.portionNo ?? 1, equipmentCode: scanned)
+                            successMsg = "已成功扫码记录：第 \(soaking.portionNo ?? 1) 组煎煮设备"
+                            break
+                        } catch { lastError = error.localizedDescription }
+                    }
+                }
+                
+                if successMsg == nil {
+                    do {
+                        try await ApiClient.shared.startEquipmentUsage(planId: plan.id, stage: 3, portionNo: nextSoakPortion, equipmentCode: scanned)
+                        successMsg = "已成功扫码记录：第 \(nextSoakPortion) 组浸泡桶"
+                    } catch { lastError = error.localizedDescription }
+                }
+                
+                if successMsg != nil { startLoadData() } else { self.quickScanErrorMessage = lastError.isEmpty ? "扫码设备分配失败" : lastError; self.showQuickScanAlert = true }
+            } catch { self.quickScanErrorMessage = "获取工序状态失败: \(error.localizedDescription)"; self.showQuickScanAlert = true }
+        }
+    }
+
 }
 
 // MARK: - 生成包裹弹窗 (对标 Android ProcessingListScreen.kt AlertDialog)
@@ -542,8 +657,8 @@ struct GeneratePackageDialog: View {
                     .disabled(isSubmitting)
                 }
             }
-        }
-    }
+        }}
+
 }
 
 // MARK: - 加工计划卡片组件 (对标 Android ProcessingPlanCard)

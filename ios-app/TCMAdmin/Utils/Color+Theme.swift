@@ -87,3 +87,50 @@ extension ShapeStyle where Self == Color {
         Color(UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor.systemRed.withAlphaComponent(0.25) : UIColor.systemRed.withAlphaComponent(0.15) })
     }
 }
+import Foundation
+
+extension String {
+    nonisolated private static let pinyinCacheQueue = DispatchQueue(label: "com.tcm.pinyincache", attributes: .concurrent)
+    nonisolated(unsafe) private static var _pinyinCache: [String: String] = [:]
+
+    nonisolated private static let tcmPolyphonicMap: [Character: Character] = [
+        "参": "身", // shen -> s
+        "术": "竹", // zhu -> z
+        "重": "虫", // chong -> c
+        "阿": "婀", // e -> e
+        "壳": "桥", // qiao -> q
+        "查": "扎", // zha -> z
+        "蛤": "哥", // ge -> g
+        "长": "常", // chang -> c
+        "曾": "增", // zeng -> z
+    ]
+
+    nonisolated var pinyinInitials: String {
+        // Fast path: check cache
+        var cached: String?
+        String.pinyinCacheQueue.sync {
+            cached = String._pinyinCache[self]
+        }
+        if let cached = cached { return cached }
+        
+        // Handle TCM polyphonic characters to preserve 1:1 length while getting correct initials
+        let replacedStr = String(self.map { String.tcmPolyphonicMap[$0] ?? $0 })
+        
+        // Compute
+        let mutableString = NSMutableString(string: replacedStr)
+        CFStringTransform(mutableString, nil, kCFStringTransformToLatin, false)
+        CFStringTransform(mutableString, nil, kCFStringTransformStripDiacritics, false)
+        let pinyin = mutableString as String
+        let result = pinyin.components(separatedBy: CharacterSet.whitespacesAndNewlines)
+            .compactMap { $0.first }
+            .map { String($0) }
+            .joined()
+            
+        // Save to cache
+        String.pinyinCacheQueue.async(flags: .barrier) {
+            String._pinyinCache[self] = result
+        }
+        
+        return result
+    }
+}
