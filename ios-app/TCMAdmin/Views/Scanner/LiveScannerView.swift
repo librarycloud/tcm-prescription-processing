@@ -239,6 +239,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private var hasScanned = false
     private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     private var lastOcrScanTime: Date = Date.distantPast
+    private var lastOcrResult: String? = nil
+    private var ocrMatchCount: Int = 0
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -253,7 +255,15 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             session.sessionPreset = .hd1920x1080
         }
         
-        guard let videoDevice = AVCaptureDevice.default(for: .video),
+        let deviceTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInDualWideCamera,
+            .builtInTripleCamera,
+            .builtInDualCamera,
+            .builtInWideAngleCamera
+        ]
+        let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes, mediaType: .video, position: .back)
+        
+        guard let videoDevice = discovery.devices.first ?? AVCaptureDevice.default(for: .video),
               let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
               session.canAddInput(videoInput) else {
             return
@@ -261,7 +271,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         
         do {
             try videoDevice.lockForConfiguration()
-            // 加回近距离对焦限制，这是防拉风箱和秒扫的核心
+            // 对于支持微距的虚拟多镜头系统，.near 会自动切换到超广角微距镜头，实现 10cm 内的极速对焦
             if videoDevice.isAutoFocusRangeRestrictionSupported {
                 videoDevice.autoFocusRangeRestriction = .near
             }
@@ -339,8 +349,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard !isScanClaimed() else { return }
         
         let now = Date()
-        // 限制 OCR 频率为 500ms 一次，避免发热
-        guard now.timeIntervalSince(lastOcrScanTime) > 0.5 else { return }
+        // 限制 OCR 频率为 150ms 一次
+        guard now.timeIntervalSince(lastOcrScanTime) > 0.15 else { return }
         lastOcrScanTime = now
         
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
@@ -350,14 +360,28 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
             
             if let sku = self.extractSku(observations: observations) {
-                guard self.claimScan() else { return }
-                DispatchQueue.main.async {
-                    self.onScanned?(sku)
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        self.releaseScan()
+                if sku == self.lastOcrResult {
+                    self.ocrMatchCount += 1
+                } else {
+                    self.lastOcrResult = sku
+                    self.ocrMatchCount = 1
+                }
+                
+                if self.ocrMatchCount >= 2 {
+                    guard self.claimScan() else { return }
+                    DispatchQueue.main.async {
+                        self.onScanned?(sku)
+                        self.lastOcrResult = nil
+                        self.ocrMatchCount = 0
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            self.releaseScan()
+                        }
                     }
                 }
+            } else {
+                self.ocrMatchCount = 0
+                self.lastOcrResult = nil
             }
         }
         // Keep the 1080p camera stream, but limit OCR work to the aiming area.
@@ -503,7 +527,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
     
     func setTorch(on: Bool) {
-        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        let activeDevice = (captureSession?.inputs.first as? AVCaptureDeviceInput)?.device ?? AVCaptureDevice.default(for: .video)
+        guard let device = activeDevice, device.hasTorch else { return }
         try? device.lockForConfiguration()
         device.torchMode = on ? .on : .off
         device.unlockForConfiguration()

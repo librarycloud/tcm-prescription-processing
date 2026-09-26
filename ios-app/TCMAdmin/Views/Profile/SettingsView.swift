@@ -656,7 +656,13 @@ public struct SecurityPrivacyView: View {
     private func fetchSessions() async {
         do {
             isLoading = true
-            sessions = try await ApiClient.shared.fetchSessions()
+            let fetched = try await ApiClient.shared.fetchSessions()
+            sessions = fetched.sorted {
+                if $0.isCurrent != $1.isCurrent {
+                    return $0.isCurrent
+                }
+                return $0.lastActiveAt > $1.lastActiveAt
+            }
         } catch {
             print("Failed to fetch sessions: \(error)")
         }

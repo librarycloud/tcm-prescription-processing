@@ -252,7 +252,7 @@ function scopedWhere(actor, query = {}) {
     conditions.push({
       OR: [
         { outboundStatus: OUTBOUND_STATUS.PENDING },
-        { returnRecords: { some: { status: RETURN_STATUS.PENDING } } }
+        { items: { some: { returns: { some: { status: RETURN_STATUS.PENDING } } } } }
       ]
     });
   }
@@ -349,7 +349,7 @@ export async function getStoreTransferStats(prisma, actor, query = {}) {
         AND: [scope],
         OR: [
           { outboundStatus: OUTBOUND_STATUS.PENDING },
-          { returnRecords: { some: { status: RETURN_STATUS.PENDING } } }
+          { items: { some: { returns: { some: { status: RETURN_STATUS.PENDING } } } } }
         ]
       },
     }),
