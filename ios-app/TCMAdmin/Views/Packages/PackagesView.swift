@@ -79,6 +79,14 @@ public struct PackagesView: View {
                 )
                 .onChange(of: searchText) {
                     searchTask?.cancel()
+                    let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !trimmed.isEmpty {
+                        let isPureNumber = trimmed.allSatisfy { $0.isNumber }
+                        if isPureNumber && trimmed.count < 3 { return }
+                        if !isPureNumber && trimmed.count < 2 { return }
+                    }
+                    
                     searchTask = Task {
                         do {
                             try await Task.sleep(nanoseconds: 350_000_000)

@@ -444,10 +444,13 @@ public struct DifferencesView: View {
 
 // MARK: - 登记差异表单弹窗 (1:1 对齐 Android 登记差异 Dialog)
 public struct RegisterDifferenceSheet: View {
+
     public let onSaved: () -> Void
     
     @Environment(\.dismiss) private var dismiss
     @State private var registerType: String = "PRE_RECEIPT" // PRE_RECEIPT: 先到货, PRE_SHIPMENT: 先出货
+    @FocusState private var isKeywordFocused: Bool
+
     @State private var keyword: String = ""
     @State private var catalog: [DifferenceProductModel] = []
     @State private var selectedProduct: DifferenceProductModel? = nil
@@ -498,11 +501,16 @@ public struct RegisterDifferenceSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("选择商品 *").scaledFont(13, weight: .medium).foregroundStyle(Color.ink)
                                 TextField("搜索商品名称、编码或条码", text: $keyword)
+                                    .focused($isKeywordFocused)
                                     .padding(.horizontal, 12)
                                     .frame(height: 44)
                                     .background(Color.surface)
                                     .clipShape(.rect(cornerRadius: 8))
                                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        isKeywordFocused = true
+                                    }
                                 
                                 if isLoadingCatalog {
                                     ProgressView().padding(.vertical, 8)
@@ -587,6 +595,7 @@ public struct RegisterDifferenceSheet: View {
                 }
                 .padding(16)
             }
+            .scrollDismissesKeyboard(.immediately)
             .background(Color.pageBackground)
             .navigationTitle("登记差异")
             .navigationBarTitleDisplayMode(.inline)

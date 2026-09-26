@@ -785,6 +785,7 @@ public struct StocktakingDetailView: View {
             candidates = []
             return
         }
+        if keyword.shouldSkipAutoSearch { return }
         searchTask = Task { @MainActor in
             do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
             guard !Task.isCancelled else { return }

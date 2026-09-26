@@ -907,6 +907,7 @@ struct E6ConfirmFormSheet: View {
                 .padding(16)
                 .frame(maxWidth: .infinity)
             }
+            .scrollDismissesKeyboard(.immediately)
             .background(Color.pageBackground)
             .navigationTitle(isMerge ? "合并订单" : "确认导入")
             .navigationBarTitleDisplayMode(.inline)
@@ -1304,6 +1305,7 @@ public struct E6ImportDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .scrollDismissesKeyboard(.immediately)
         .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("订单详情")
         .navigationBarTitleDisplayMode(.inline)

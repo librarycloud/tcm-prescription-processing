@@ -135,6 +135,49 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     private var memoryCache: [String: CacheEntry] = [:]
     private var cacheGeneration = 0
     private let cacheQueue = DispatchQueue(label: "com.tcm.apiCache", attributes: .concurrent)
+
+    // MARK: - Disk Cache Utils
+    private func cacheFileURL(for key: String) -> URL {
+        let fileName = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("api_cache")
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        return cacheDir.appendingPathComponent(fileName)
+    }
+    
+    private func saveToDiskCache(key: String, data: Data) {
+        let fileURL = cacheFileURL(for: key)
+        try? data.write(to: fileURL)
+    }
+    
+    private func loadFromDiskCache(key: String, ttl: TimeInterval) -> Data? {
+        let fileURL = cacheFileURL(for: key)
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let modDate = attrs[.modificationDate] as? Date,
+              Date().timeIntervalSince(modDate) < ttl else {
+            return nil
+        }
+        return try? Data(contentsOf: fileURL)
+    }
+    
+    private func removeDiskCache(prefixes: [String]) {
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("api_cache")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) else { return }
+        for file in files {
+            // decode key
+            let fileName = file.lastPathComponent.replacingOccurrences(of: "_", with: "/").replacingOccurrences(of: "-", with: "+")
+            if let decodedData = Data(base64Encoded: fileName), let key = String(data: decodedData, encoding: .utf8) {
+                if prefixes.contains(where: { key.starts(with: $0) }) {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        }
+    }
+    
+    private func clearAllDiskCache() {
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("api_cache")
+        try? FileManager.default.removeItem(at: cacheDir)
+    }
+
     
 
     private lazy var defaultSession: URLSession = {
@@ -203,6 +246,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             self.memoryCache = self.memoryCache.filter { entry in
                 !prefixes.contains { entry.key.starts(with: $0) }
             }
+            self.removeDiskCache(prefixes: prefixes)
         }
     }
     
@@ -211,6 +255,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         cacheQueue.async(flags: .barrier) {
             self.cacheGeneration &+= 1
             self.memoryCache.removeAll()
+            self.clearAllDiskCache()
         }
     }
     
@@ -233,6 +278,17 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
                         cachedData = entry.data
                     }
                 }
+                
+                if cachedData == nil {
+                    // Try disk cache
+                    if let diskData = loadFromDiskCache(key: cacheKey, ttl: ttl) {
+                        cachedData = diskData
+                        cacheQueue.async(flags: .barrier) {
+                            self.memoryCache[cacheKey] = CacheEntry(data: diskData, savedAt: Date())
+                        }
+                    }
+                }
+                
                 if let data = cachedData {
                     do {
                         return try await Task.detached(priority: .userInitiated) {
@@ -241,6 +297,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
                     } catch {
                         cacheQueue.async(flags: .barrier) {
                             self.memoryCache.removeValue(forKey: cacheKey)
+                            self.removeDiskCache(prefixes: [cacheKey])
                         }
                     }
                 }
@@ -331,6 +388,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
                     self.cacheQueue.async(flags: .barrier) {
                         guard self.cacheGeneration == requestCacheGeneration else { return }
                         self.memoryCache[cacheKey] = CacheEntry(data: targetData, savedAt: Date())
+                        self.saveToDiskCache(key: cacheKey, data: targetData)
                     }
                 }
             } else {
@@ -605,7 +663,11 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         if overdueOnly {
             params["overdue"] = "1"
         } else if let s = status {
-            params["status"] = "\(s)"
+            if s == 99 {
+                params["pendingConfirm"] = "1"
+            } else {
+                params["status"] = "\(s)"
+            }
         }
         if let st = storeId { params["storeId"] = "\(st)" }
         if !keyword.isEmpty { params["keyword"] = keyword }
@@ -828,6 +890,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         cacheQueue.async(flags: .barrier) {
             guard self.cacheGeneration == requestCacheGeneration else { return }
             self.memoryCache[cacheKey] = CacheEntry(data: data, savedAt: Date())
+            self.saveToDiskCache(key: cacheKey, data: data)
         }
         
         return data
