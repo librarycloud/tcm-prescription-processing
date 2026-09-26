@@ -53,12 +53,15 @@ struct HerbsView: View {
             if currentSearchText.isEmpty {
                 filtered = locsByType
             } else {
+                let isSearchPinyin = currentSearchText.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil
                 filtered = locsByType.filter { loc in
                     (loc.code?.localizedCaseInsensitiveContains(currentSearchText) == true) ||
-                    (loc.herbs?.contains(where: {
-                        $0.name.localizedCaseInsensitiveContains(currentSearchText) ||
-                        ($0.pinyin?.localizedCaseInsensitiveContains(currentSearchText) == true) ||
-                        ($0.code?.localizedCaseInsensitiveContains(currentSearchText) == true)
+                    (loc.herbs?.contains(where: { herb in
+                        if herb.name.localizedCaseInsensitiveContains(currentSearchText) { return true }
+                        if herb.pinyin?.localizedCaseInsensitiveContains(currentSearchText) == true { return true }
+                        if herb.code?.localizedCaseInsensitiveContains(currentSearchText) == true { return true }
+                        if isSearchPinyin && herb.name.pinyinInitials.localizedCaseInsensitiveContains(currentSearchText) { return true }
+                        return false
                     }) == true)
                 }
             }
@@ -186,68 +189,22 @@ struct HerbsView: View {
                             .padding(.bottom, 4)
                         }
                         
-                        MasonryLayout(minColumnWidth: sizeClass == .regular ? 340 : 9999, spacing: 12) {
-                            ForEach(groupedUnits) { unit in
-                            AppCard(padding: 16) {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    HStack {
-                                        Image(systemName: "shippingbox.fill")
-                                            .foregroundStyle(Color.appPrimary)
-                                        Text("\(unit.typeLabel) \(unit.unitNo ?? 0) 组")
-                                            .scaledFont(15, weight: .bold)
-                                            .foregroundStyle(Color.ink)
-                                        Spacer()
-                                        Text("共 \(unit.locations.count) 个位置")
-                                            .scaledFont(12)
-                                            .foregroundStyle(Color.muted)
+                        Group {
+                            if sizeClass == .regular {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 12, alignment: .top)], spacing: 12) {
+                                    ForEach(groupedUnits) { unit in
+                                        unitCard(unit)
                                     }
-                                    
-                                    ForEach(unit.locations) { loc in
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                HighlightedText(
-                                                    text: loc.code ?? "",
-                                                    keyword: searchText,
-                                                    font: .system(size: 13),
-                                                    weight: .semibold
-                                                )
-                                                Spacer()
-                                                Text(positionLabel(for: loc))
-                                                    .scaledFont(10)
-                                                    .foregroundStyle(Color.appPrimaryDark)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.appPrimary.opacity(0.35), lineWidth: 1))
-                                            }
-                                            
-                                            Text(loc.typeLabel).scaledFont(11).foregroundStyle(Color.muted)
-                                            
-                                            if let herbs = loc.herbs, !herbs.isEmpty {
-                                                HighlightedText(
-                                                    text: herbs.map { $0.name }.joined(separator: "、"),
-                                                    keyword: searchText,
-                                                    font: .system(size: 12),
-                                                    weight: .medium
-                                                )
-                                                .padding(.top, 2)
-                                            } else {
-                                                Text("未配置药材（空置）").scaledFont(12).foregroundStyle(Color.muted)
-                                                    .padding(.top, 2)
-                                            }
-                                        }
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 8)
-                                        .background(Color.surface)
-                                        .clipShape(.rect(cornerRadius: 8))
-                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
-                                        .onTapGesture {
-                                            Router.shared.navigate(to: .herbLocationAssign(location: loc))
-                                        }
+                                }
+                            } else {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(groupedUnits) { unit in
+                                        unitCard(unit)
                                     }
                                 }
                             }
                         }
-                    }
+                        .padding(16)
                     .padding(16)
                     } // End VStack
                 }
@@ -299,12 +256,84 @@ struct HerbsView: View {
             let result = try await ApiClient.shared.fetchHerbLocations(storeId: selectedStoreId)
             guard !Task.isCancelled else { return }
             self.data = result
+            
+            Task.detached(priority: .background) {
+                for loc in result.locations ?? [] {
+                    for herb in loc.herbs ?? [] {
+                        _ = herb.name.pinyinInitials
+                    }
+                }
+            }
+            
             updateGroupedUnits()
         } catch {
             guard !Task.isCancelled else { return }
             self.errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }
+    }
+
+
+    @ViewBuilder
+    private func unitCard(_ unit: HerbUnit) -> some View {
+        AppCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "shippingbox.fill")
+                        .foregroundStyle(Color.appPrimary)
+                    Text("\(unit.typeLabel) \(unit.unitNo ?? 0) 组")
+                        .scaledFont(15, weight: .bold)
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    Text("共 \(unit.locations.count) 个位置")
+                        .scaledFont(12)
+                        .foregroundStyle(Color.muted)
+                }
+                
+                ForEach(unit.locations) { loc in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            HighlightedText(
+                                text: loc.code ?? "",
+                                keyword: searchText,
+                                font: .system(size: 13),
+                                weight: .semibold
+                            )
+                            Spacer()
+                            Text(positionLabel(for: loc))
+                                .scaledFont(10)
+                                .foregroundStyle(Color.appPrimaryDark)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.appPrimary.opacity(0.35), lineWidth: 1))
+                        }
+                        
+                        Text(loc.typeLabel).scaledFont(11).foregroundStyle(Color.muted)
+                        
+                        if let herbs = loc.herbs, !herbs.isEmpty {
+                            HighlightedText(
+                                text: herbs.map { $0.name }.joined(separator: "、"),
+                                keyword: searchText,
+                                font: .system(size: 12),
+                                weight: .medium
+                            )
+                            .padding(.top, 2)
+                        } else {
+                            Text("未配置药材（空置）").scaledFont(12).foregroundStyle(Color.muted)
+                                .padding(.top, 2)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color.surface)
+                    .clipShape(.rect(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                    .onTapGesture {
+                        Router.shared.navigate(to: .herbLocationAssign(location: loc))
+                    }
+                }
+            }
+        }
     }
 
     private func positionLabel(for loc: HerbLocationItem) -> String {

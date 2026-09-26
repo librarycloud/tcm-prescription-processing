@@ -11,10 +11,23 @@ private val stringPinyinCache = object : java.util.LinkedHashMap<String, String>
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 256
 }
 
+private val tcmPolyphonicMap = mapOf(
+    '参' to 's', // shen
+    '术' to 'z', // zhu
+    '重' to 'c', // chong
+    '阿' to 'e', // e
+    '壳' to 'q', // qiao
+    '查' to 'z', // zha
+    '蛤' to 'g', // ge
+    '长' to 'c', // chang
+    '曾' to 'z', // zeng
+)
+
 private fun isHanCharacter(value: Char): Boolean =
     value.code in 0x3400..0x4DBF || value.code in 0x4E00..0x9FFF
 
 private fun pinyinInitial(value: Char): Char? {
+    tcmPolyphonicMap[value]?.let { return it }
     if (value.isLetterOrDigit() && !isHanCharacter(value)) return value.lowercaseChar()
     charPinyinCache[value]?.let { return it }
     val latin = synchronized(hanToLatin) { hanToLatin.transliterate(value.toString()) }

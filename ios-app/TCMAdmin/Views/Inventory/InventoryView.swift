@@ -46,11 +46,7 @@ struct InventoryView: View {
     }
     
     private func shouldAutoSearchQuery(_ value: String) -> Bool {
-        let text = value.trimmingCharacters(in: .whitespaces)
-        if text.isEmpty { return false }
-        let chineseCount = text.filter { $0 >= "\u{4E00}" && $0 <= "\u{9FA5}" }.count
-        let digitCount = text.filter { $0.isNumber }.count
-        return chineseCount >= 2 || digitCount >= 4
+        return !value.shouldSkipAutoSearch
     }
 
     private func clearSearchHistory() {
