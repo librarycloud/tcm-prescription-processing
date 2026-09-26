@@ -154,7 +154,7 @@ struct StatusPill: View {
             return (.blue, .blue.opacity(0.15))
         case "盘点中", "实货少", "已取消", "逾期", "已逾期", "紧急", "特急", "加急":
             return (.danger, .dangerSoft)
-        case "待出库", "借出中", "未付款":
+        case "待确认调出", "借出中", "未付款", "待确认归还":
             return (.orange, .orange.opacity(0.15))
         case "全局管理员", "门店管理员", "门店员工", "管理员":
             return (.appPrimaryDark, .appPrimarySoft)
@@ -173,6 +173,8 @@ struct SearchBarField: View {
     var placeholder: String
     var onSearch: (() -> Void)?
     var onScan: (() -> Void)?
+    
+    @FocusState private var isFocused: Bool
     
     init(
         text: Binding<String>,
@@ -202,6 +204,7 @@ struct SearchBarField: View {
             }
             
             TextField(placeholder, text: $text, onCommit: { onSearch?() })
+                .focused($isFocused)
                 .scaledFont(15)
                 .foregroundStyle(Color.ink)
                 .submitLabel(.search)
@@ -239,6 +242,10 @@ struct SearchBarField: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.cardBorder, lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isFocused = true
+        }
     }
 }
 
@@ -388,6 +395,8 @@ public struct ProfileRow: View {
                 
                 if let value = value {
                     Text(value)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .scaledFont(14)
                         .foregroundStyle(Color.muted)
                 }
@@ -546,12 +555,47 @@ struct HighlightedText: View, Equatable {
     
     private func buildAttributedString(trimmed: String) -> AttributedString {
         var attributed = AttributedString(text)
-        var searchRange = attributed.startIndex..<attributed.endIndex
-        while let range = attributed[searchRange].range(of: trimmed, options: .caseInsensitive) {
-            attributed[range].foregroundColor = highlightColor
-            attributed[range].inlinePresentationIntent = .stronglyEmphasized
-            searchRange = range.upperBound..<attributed.endIndex
+        
+        // 1. Direct match (for Chinese characters or exact matches)
+        var searchRange = text.startIndex..<text.endIndex
+        var foundDirectMatch = false
+        while let range = text[searchRange].range(of: trimmed, options: .caseInsensitive) {
+            foundDirectMatch = true
+            if let attrRange = Range<AttributedString.Index>(range, in: attributed) {
+                attributed[attrRange].foregroundColor = highlightColor
+                attributed[attrRange].inlinePresentationIntent = .stronglyEmphasized
+            }
+            searchRange = range.upperBound..<text.endIndex
         }
+        
+        if foundDirectMatch { return attributed }
+        
+        // 2. Pinyin initials match (if no direct match and keyword is English)
+        let isSearchPinyin = trimmed.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil
+        if isSearchPinyin {
+            let mappedText = text.map { char -> String in
+                let s = String(char)
+                let p = s.pinyinInitials
+                return p.isEmpty ? s : p
+            }.joined()
+            
+            var pinyinSearchRange = mappedText.startIndex..<mappedText.endIndex
+            while let matchRange = mappedText[pinyinSearchRange].range(of: trimmed, options: .caseInsensitive) {
+                let startOffset = mappedText.distance(from: mappedText.startIndex, to: matchRange.lowerBound)
+                let length = mappedText.distance(from: matchRange.lowerBound, to: matchRange.upperBound)
+                
+                let textStart = text.index(text.startIndex, offsetBy: startOffset)
+                let textEnd = text.index(textStart, offsetBy: length)
+                
+                if let attrRange = Range<AttributedString.Index>(textStart..<textEnd, in: attributed) {
+                    attributed[attrRange].foregroundColor = highlightColor
+                    attributed[attrRange].inlinePresentationIntent = .stronglyEmphasized
+                }
+                
+                pinyinSearchRange = matchRange.upperBound..<mappedText.endIndex
+            }
+        }
+        
         return attributed
     }
 }
@@ -772,17 +816,34 @@ struct KeyboardDismissalView: UIViewRepresentable {
             if view is UIControl {
                 return false
             }
-            var current = view
-            while let c = current {
-                if c is UITextField || c is UITextView {
+            
+            // Check if tap is physically near any text input on screen
+            if let window = touch.window {
+                let point = touch.location(in: window)
+                if isPointNearTextInput(window, point: point, window: window) {
                     return false
                 }
-                if c is UIScrollView {
-                    return false
-                }
-                current = c.superview
             }
+            
             return true
+        }
+        
+        private func isPointNearTextInput(_ view: UIView, point: CGPoint, window: UIWindow) -> Bool {
+            if !view.isHidden && view.alpha > 0.01 {
+                if view is UITextField || view is UITextView {
+                    let convertedFrame = view.convert(view.bounds, to: window)
+                    let expandedFrame = convertedFrame.insetBy(dx: -20, dy: -20) // 容错 20pt padding
+                    if expandedFrame.contains(point) {
+                        return true
+                    }
+                }
+                for subview in view.subviews {
+                    if isPointNearTextInput(subview, point: point, window: window) {
+                        return true
+                    }
+                }
+            }
+            return false
         }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -980,6 +1041,7 @@ public struct AppScrollView<Content: View>: View {
 
                 content()
             }
+            .scrollDismissesKeyboard(.immediately)
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScrollToTop"))) { _ in
                 withAnimation(.easeOut(duration: 0.3)) {
                     proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
@@ -1245,5 +1307,19 @@ public class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         let offsetY = max((bounds.height - contentSize.height) * 0.5, 0)
         imageView.center = CGPoint(x: contentSize.width * 0.5 + offsetX,
                                  y: contentSize.height * 0.5 + offsetY)
+    }
+}
+
+// MARK: - String Extension for Search
+public extension String {
+    var shouldSkipAutoSearch: Bool {
+        let trimmed = self.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return false } // 允许清空时自动刷新
+        
+        let isPureNumber = trimmed.allSatisfy { $0.isNumber }
+        if isPureNumber && trimmed.count < 3 { return true }
+        if !isPureNumber && trimmed.count < 2 { return true }
+        
+        return false
     }
 }

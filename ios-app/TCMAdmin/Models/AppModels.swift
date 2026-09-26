@@ -19,7 +19,7 @@ public struct UserItem: Codable, Identifiable , Equatable {
     public let name: String?
     public let nickname: String?
     public let phone: String?
-    public let role: Int? // 0: 全局管理员, 1: 门店管理员, 2: 门店员工
+    public let role: Int? // 0: 全局管理员, 2: 门店管理员, 3: 门店员工
     public let storeId: Int?
     public let store: StoreItem?
     
@@ -30,9 +30,9 @@ public struct UserItem: Codable, Identifiable , Equatable {
     public var roleName: String {
         switch role {
         case 0: return "全局管理员"
-        case 1: return "门店管理员"
-        case 2: return "门店员工"
-        default: return "员工"
+        case 2: return "门店管理员"
+        case 3: return "门店员工"
+        default: return "管理员"
         }
     }
 }
@@ -1703,12 +1703,26 @@ public struct TransferModel: Codable, Identifiable , Equatable {
     }
     
     public var statusText: String {
-        if overdue == true { return "已逾期" }
-        if status == 3 { return "已取消" }
-        if status == 2 { return "已调平" }
-        if status == 1 { return "部分归还" }
-        if outboundStatus == 0 { return "待出库" }
-        return "借出中"
+        return statusTags.first ?? "未知"
+    }
+    
+    public var statusTags: [String] {
+        var tags = [String]()
+        
+        if status == 3 { tags.append("已取消") }
+        else if status == 2 { tags.append("已调平") }
+        else if status == 1 { tags.append("部分归还") }
+        else if outboundStatus == 0 { tags.append("待确认调出") }
+        else { tags.append("借出中") }
+        
+        if let items = items, items.contains(where: { ($0.pendingReturnQuantity ?? 0) > 0 }) {
+            tags.append("待确认归还")
+        }
+        if overdue == true { 
+            tags.append("已逾期") 
+        }
+        
+        return tags
     }
 
     enum CodingKeys: String, CodingKey {
