@@ -924,7 +924,7 @@ object ApiClient {
         val query = buildList {
             add("page=$page"); add("pageSize=$pageSize")
             keyword.takeIf { it.isNotBlank() }?.let { add("keyword=${java.net.URLEncoder.encode(it.trim(), "UTF-8")}") }
-            status?.let { add("status=$it") }; storeId?.let { add("storeId=$it") }
+            status?.let { if (it == 99) add("pendingConfirm=1") else add("status=$it") }; storeId?.let { add("storeId=$it") }
             if (overdue) add("overdue=1")
         }.joinToString("&")
         return request("/admin/store-transfers?$query").getJSONObject("data")

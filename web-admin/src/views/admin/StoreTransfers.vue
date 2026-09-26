@@ -12,8 +12,8 @@
       <div class="stat-action" @click="applyStatus(TRANSFER_STATUS.BORROWING)">
         <StatisticCard label="借出中" :value="stats.borrowing" icon="Sort" type="primary" />
       </div>
-      <div class="stat-action" @click="applyStatus(TRANSFER_STATUS.PART_RETURNED)">
-        <StatisticCard label="部分归还" :value="stats.partReturned" icon="Refresh" type="warning" />
+      <div class="stat-action" @click="applyPendingConfirm">
+        <StatisticCard label="待确认" :value="stats.pendingConfirm" icon="Refresh" type="warning" />
       </div>
       <div class="stat-action" @click="applyPending">
         <StatisticCard label="待调平" :value="stats.pending" icon="Clock" type="info" />
@@ -86,9 +86,10 @@
         </el-table-column>
         <el-table-column label="预计归还" align="center">
           <template #default="{ row }">
-            <span :class="{ 'overdue-text': row.overdue }">{{
+            <span v-if="row.status !== 2 && row.status !== 3" :class="{ 'overdue-text': row.overdue }">{{
               formatDateOnly(row.expectedReturnDate)
             }}</span>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="调拨项目">
@@ -106,6 +107,12 @@
                 type="warning"
                 effect="dark"
                 >待确认调出</el-tag
+              >
+              <el-tag
+                v-if="row.items && row.items.some(i => i.pendingReturnQuantity > 0)"
+                type="warning"
+                effect="dark"
+                >待确认归还</el-tag
               >
               <el-tag v-if="row.overdue" type="danger" effect="dark">已逾期</el-tag>
             </div>
@@ -272,6 +279,12 @@
               effect="dark"
               >待确认调出</el-tag
             >
+            <el-tag
+              v-if="detail.items && detail.items.some(i => i.pendingReturnQuantity > 0)"
+              type="warning"
+              effect="dark"
+              >待确认归还</el-tag
+            >
             <el-tag v-if="detail.overdue" type="danger" effect="dark">已逾期</el-tag>
           </div>
         </div>
@@ -302,7 +315,7 @@
           <el-descriptions-item label="调拨日期">{{
             formatDateOnly(detail.transferDate)
           }}</el-descriptions-item>
-          <el-descriptions-item label="预计归还日期">
+          <el-descriptions-item v-if="detail.status !== 2 && detail.status !== 3" label="预计归还日期">
             <span :class="{ 'overdue-text': detail.overdue }">{{
               formatDateOnly(detail.expectedReturnDate)
             }}</span>
@@ -710,9 +723,10 @@ async function reload() {
 }
 
 function search() {
-  if (query.value.status) {
+  if (query.value.status !== undefined && query.value.status !== '') {
     query.value.pending = '';
     query.value.overdue = '';
+    query.value.pendingConfirm = '';
   }
   handleSearch();
   loadStats();
@@ -729,6 +743,16 @@ function applyStatus(status) {
   query.value.status = status;
   query.value.pending = '';
   query.value.overdue = '';
+  query.value.pendingConfirm = '';
+  handleSearch();
+  loadStats();
+}
+
+function applyPendingConfirm() {
+  query.value.status = '';
+  query.value.pending = '';
+  query.value.overdue = '';
+  query.value.pendingConfirm = '1';
   handleSearch();
   loadStats();
 }
@@ -737,6 +761,7 @@ function applyPending() {
   query.value.status = '';
   query.value.pending = '1';
   query.value.overdue = '';
+  query.value.pendingConfirm = '';
   handleSearch();
   loadStats();
 }
@@ -745,6 +770,7 @@ function applyOverdue() {
   query.value.status = '';
   query.value.pending = '';
   query.value.overdue = '1';
+  query.value.pendingConfirm = '';
   handleSearch();
   loadStats();
 }

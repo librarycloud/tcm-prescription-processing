@@ -61,12 +61,12 @@ public struct TransfersView: View {
                     }
                     
                     statCardItem(
-                        title: "部分归还",
-                        value: "\(stats["partReturned"] ?? 0)",
-                        isSelected: selectedStatus == 1 && !overdueOnly,
+                        title: "待确认",
+                        value: "\(stats["pendingConfirm"] ?? 0)",
+                        isSelected: selectedStatus == 99 && !overdueOnly,
                         color: .warning
                     ) {
-                        selectedStatus = 1
+                        selectedStatus = 99
                         overdueOnly = false
                         startLoadTransfers()
                     }
@@ -93,6 +93,7 @@ public struct TransfersView: View {
                 )
                 .onChange(of: searchText) {
                     searchTask?.cancel()
+                    if searchText.shouldSkipAutoSearch { return }
                     searchTask = Task {
                         do {
                             try await Task.sleep(nanoseconds: 300_000_000)
@@ -116,8 +117,8 @@ public struct TransfersView: View {
                             overdueOnly = false
                             startLoadTransfers()
                         }
-                        SegmentedButton(label: "部分归还", isSelected: selectedStatus == 1 && !overdueOnly) {
-                            selectedStatus = 1
+                        SegmentedButton(label: "待确认", isSelected: selectedStatus == 99 && !overdueOnly) {
+                            selectedStatus = 99
                             overdueOnly = false
                             startLoadTransfers()
                         }
@@ -198,7 +199,11 @@ public struct TransfersView: View {
                                             Text(item.transferNo)
                                                 .scaledFont(15, weight: .bold)
                                             Spacer()
-                                            StatusPill(text: item.overdue == true ? "已逾期" : item.statusText)
+                                            HStack(spacing: 4) {
+                                                ForEach(item.statusTags, id: \.self) { tag in
+                                                    StatusPill(text: tag)
+                                                }
+                                            }
                                         }
                                         
                                         HStack {
@@ -225,12 +230,14 @@ public struct TransfersView: View {
                                             InfoRowItem(label: "调拨日期", value: formatDateOnly(item.transferDate) != "-" ? formatDateOnly(item.transferDate) : formatDateOnly(item.createdAt))
                                             
                                             let isItemOverdue = item.overdue == true || (item.expectedReturnDate != nil && item.expectedReturnDate! < String(Date().ISO8601Format().prefix(10)))
-                                            InfoRowItem(
-                                                label: "预计归还",
-                                                value: formatDateOnly(item.expectedReturnDate),
-                                                valueColor: isItemOverdue ? .danger : .ink,
-                                                isBold: isItemOverdue
-                                            )
+                                            if item.status != 2 && item.status != 3 {
+                                                InfoRowItem(
+                                                    label: "预计归还",
+                                                    value: formatDateOnly(item.expectedReturnDate),
+                                                    valueColor: isItemOverdue ? .danger : .ink,
+                                                    isBold: isItemOverdue
+                                                )
+                                            }
                                         }
                                         .padding(.top, 4)
                                         
@@ -652,7 +659,11 @@ public struct TransferDetailView: View {
                                     .scaledFont(17, weight: .bold)
                                     .foregroundStyle(Color.ink)
                                 Spacer()
-                                StatusPill(text: item.overdue == true ? "已逾期" : item.statusText)
+                                HStack(spacing: 4) {
+                                    ForEach(item.statusTags, id: \.self) { tag in
+                                        StatusPill(text: tag)
+                                    }
+                                }
                             }
                             
                             HStack {
@@ -682,12 +693,14 @@ public struct TransferDetailView: View {
                             InfoRowItem(label: "调拨日期", value: formatDateOnly(item.transferDate) != "-" ? formatDateOnly(item.transferDate) : formatDateOnly(item.createdAt))
                             
                             let isItemOverdue = item.overdue == true
-                            InfoRowItem(
-                                label: "预计归还",
-                                value: formatDateOnly(item.expectedReturnDate),
-                                valueColor: isItemOverdue ? .danger : .ink,
-                                isBold: isItemOverdue
-                            )
+                            if item.status != 2 && item.status != 3 {
+                                InfoRowItem(
+                                    label: "预计归还",
+                                    value: formatDateOnly(item.expectedReturnDate),
+                                    valueColor: isItemOverdue ? .danger : .ink,
+                                    isBold: isItemOverdue
+                                )
+                            }
                             InfoRowItem(label: "创建人", value: item.creator?.displayName ?? "-")
                             if let created = item.createdAt, !created.isEmpty {
                                 InfoRowItem(label: "创建时间", value: formatDateTimeToMinute(created))

@@ -248,6 +248,14 @@ function scopedWhere(actor, query = {}) {
       status: { in: ACTIVE_TRANSFER_STATUSES },
       outboundStatus: OUTBOUND_STATUS.CONFIRMED,
     });
+  if (String(query.pendingConfirm || "") === "1") {
+    conditions.push({
+      OR: [
+        { outboundStatus: OUTBOUND_STATUS.PENDING },
+        { returnRecords: { some: { status: RETURN_STATUS.PENDING } } }
+      ]
+    });
+  }
   if (query.keyword) {
     const keyword = String(query.keyword).trim();
     conditions.push({
@@ -321,7 +329,7 @@ export async function listTransferStores(prisma) {
 export async function getStoreTransferStats(prisma, actor, query = {}) {
   const scope = transferScope(actor, query.storeId);
   const today = dateOnly(prescriptionBusinessDate(), "当前日期");
-  const [borrowing, partReturned, overdue] = await Promise.all([
+  const [borrowing, partReturned, pendingConfirm, overdue] = await Promise.all([
     storeTransferRepository.count(prisma, {
       where: {
         AND: [scope],
@@ -339,6 +347,15 @@ export async function getStoreTransferStats(prisma, actor, query = {}) {
     storeTransferRepository.count(prisma, {
       where: {
         AND: [scope],
+        OR: [
+          { outboundStatus: OUTBOUND_STATUS.PENDING },
+          { returnRecords: { some: { status: RETURN_STATUS.PENDING } } }
+        ]
+      },
+    }),
+    storeTransferRepository.count(prisma, {
+      where: {
+        AND: [scope],
         status: { in: ACTIVE_TRANSFER_STATUSES },
         outboundStatus: OUTBOUND_STATUS.CONFIRMED,
         expectedReturnDate: { lt: today },
@@ -348,6 +365,7 @@ export async function getStoreTransferStats(prisma, actor, query = {}) {
   return {
     borrowing,
     partReturned,
+    pendingConfirm,
     pending: borrowing + partReturned,
     overdue,
   };

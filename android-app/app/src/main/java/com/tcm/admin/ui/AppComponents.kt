@@ -300,11 +300,12 @@ internal fun pickupMethodLabel(method: Int): String = when (method) {
     else -> "其他"
 }
 
-internal fun transferStatusLabel(status: Int, outboundStatus: Int): String = when {
+internal fun transferStatusLabel(status: Int, outboundStatus: Int, hasPendingReturn: Boolean = false): String = when {
     status == 3 -> "已取消"
     status == 2 -> "已调平"
+    hasPendingReturn -> "待确认归还"
     status == 1 -> "部分归还"
-    outboundStatus == 0 -> "待出库"
+    outboundStatus == 0 -> "待确认调出"
     else -> "借出中"
 }
 
@@ -340,7 +341,7 @@ internal fun StatusPill(
             Pair(Indigo, IndigoSoft)
         text == "盘点中" ->
             Pair(Pink, PinkSoft)
-        text in listOf("待出库", "借出中") ->
+        text in listOf("待确认调出", "借出中", "待确认归还") ->
             Pair(Brown, BrownSoft)
         text == "未付款" ->
             Pair(Brown, BrownSoft)

@@ -190,13 +190,13 @@ internal fun TransfersScreen(
                     StatsGrid(
                         listOf(
                             "借出中" to it.optInt("borrowing").toString(),
-                            "部分归还" to it.optInt("partReturned").toString(),
+                            "待确认" to it.optInt("pendingConfirm").toString(),
                             "已逾期" to it.optInt("overdue").toString(),
                         ),
                         selectedIndex = when {
                             overdueOnly -> 2
                             statusFilter == 0 -> 0
-                            statusFilter == 1 -> 1
+                            statusFilter == 99 -> 1
                             else -> null
                         },
                         onItemClick = { index ->
@@ -206,7 +206,7 @@ internal fun TransfersScreen(
                                     viewModel.overdueOnly.value = false
                                 }
                                 1 -> {
-                                    viewModel.statusFilter.value = 1
+                                    viewModel.statusFilter.value = 99
                                     viewModel.overdueOnly.value = false
                                 }
                                 2 -> {
@@ -249,8 +249,8 @@ internal fun TransfersScreen(
                         viewModel.statusFilter.value = 0
                         viewModel.overdueOnly.value = false
                     })
-                    SegmentedButton("部分归还", statusFilter == 1 && !overdueOnly, onClick = {
-                        viewModel.statusFilter.value = 1
+                    SegmentedButton("待确认", statusFilter == 99 && !overdueOnly, onClick = {
+                        viewModel.statusFilter.value = 99
                         viewModel.overdueOnly.value = false
                     })
                     SegmentedButton("已逾期", overdueOnly, onClick = {
@@ -297,6 +297,7 @@ internal fun TransfersScreen(
                     val status = transfer.optInt("status")
                     val outboundStatus = transfer.optInt("outboundStatus")
                     val isOverdue = transfer.optBoolean("overdue")
+                    val hasPendingReturn = (0 until items.length()).any { items.getJSONObject(it).optDouble("pendingReturnQuantity", 0.0) > 0.0 }
 
                     AppCard(
                         modifier = Modifier.padding(bottom = 12.dp),
@@ -308,9 +309,11 @@ internal fun TransfersScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Transform, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = transfer.displayField("transferNo"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) }
-                            StatusPill(
-                                text = if (isOverdue) "已逾期" else transferStatusLabel(status, outboundStatus),
-                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                StatusPill(text = transferStatusLabel(status, outboundStatus, false))
+                                if (hasPendingReturn) StatusPill(text = "待确认归还")
+                                if (isOverdue) StatusPill(text = "已逾期")
+                            }
                         }
 
                         Spacer(Modifier.height(10.dp))
@@ -368,12 +371,14 @@ internal fun TransfersScreen(
                             label = "调拨日期",
                             value = serverDateOnly(transfer.opt("transferDate"), "-"),
                         )
-                        InfoRowItem(
-                            label = "预计归还",
-                            value = serverDateOnly(transfer.opt("expectedReturnDate"), "-"),
-                            valueColor = if (isOverdue) Danger else Ink,
-                            isBold = isOverdue,
-                        )
+                        if (status != 2 && status != 3) {
+                            InfoRowItem(
+                                label = "预计归还",
+                                value = serverDateOnly(transfer.opt("expectedReturnDate"), "-"),
+                                valueColor = if (isOverdue) Danger else Ink,
+                                isBold = isOverdue,
+                            )
+                        }
 
                         if (outboundStatus == 0) {
                             Spacer(Modifier.height(4.dp))
@@ -560,6 +565,7 @@ internal fun TransferDetailScreen(
     val records = current.optJSONArray("returnRecords") ?: JSONArray()
     val permissions = current.optJSONObject("permissions")
     val isOverdue = current.optBoolean("overdue")
+    val hasPendingReturn = (0 until items.length()).any { items.getJSONObject(it).optDouble("pendingReturnQuantity", 0.0) > 0.0 }
 
     Column(
         modifier = Modifier
@@ -582,7 +588,11 @@ internal fun TransferDetailScreen(
                         fontSize = 13.sp,
                     )
                 }
-                StatusPill(if (isOverdue) "已逾期" else transferStatusLabel(current.optInt("status"), current.optInt("outboundStatus")))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    StatusPill(text = transferStatusLabel(current.optInt("status"), current.optInt("outboundStatus"), false))
+                    if (hasPendingReturn) StatusPill(text = "待确认归还")
+                    if (isOverdue) StatusPill(text = "已逾期")
+                }
             }
         }
 
@@ -591,12 +601,15 @@ internal fun TransferDetailScreen(
         Spacer(Modifier.height(8.dp))
         AppCard {
             InfoRowItem("调拨日期", serverDateOnly(current.opt("transferDate"), "-"))
-            InfoRowItem(
-                "预计归还",
-                serverDateOnly(current.opt("expectedReturnDate"), "-"),
-                valueColor = if (isOverdue) Danger else Ink,
-                isBold = isOverdue,
-            )
+            val status = current.optInt("status")
+            if (status != 2 && status != 3) {
+                InfoRowItem(
+                    "预计归还",
+                    serverDateOnly(current.opt("expectedReturnDate"), "-"),
+                    valueColor = if (isOverdue) Danger else Ink,
+                    isBold = isOverdue,
+                )
+            }
             InfoRowItem("创建人", transferOperatorLabel(current.optJSONObject("creator")))
             InfoRowItem("创建时间", transferDateTime(current.opt("createdAt")))
             val remark = displayText(current.opt("remark"))
