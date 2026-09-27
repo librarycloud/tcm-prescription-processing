@@ -370,6 +370,19 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
 
 
+    private func cleanDigits(_ str: String) -> String {
+        var res = ""
+        for char in str {
+            if char.isNumber { res.append(char) }
+            else if char == "O" || char == "o" { res.append("0") }
+            else if char == "I" || char == "l" || char == "i" || char == "L" { res.append("1") }
+            else if char == "Z" || char == "z" { res.append("2") }
+            else if char == "S" || char == "s" { res.append("5") }
+            else if char == "B" || char == "b" { res.append("8") }
+        }
+        return res
+    }
+
     // MARK: - OCR Video Frame Extraction
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard !isScanClaimed() else { return }
@@ -396,35 +409,78 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 let params = engine.baselineRuntimeDefaults()
                 let result = try engine.run(image: uiImage, params: params)
                 
-                // 拼接识别结果并用正则过滤
+                // --- 1. 同步 Android 端的过滤逻辑 ---
                 let texts = result.results.map { $0.text }
                 if texts.isEmpty { return }
                 
-                var skuFound: String? = nil
-                let labelRegex = try? NSRegularExpression(pattern: "(编码|编号|SKU|商品码|批号)", options: .caseInsensitive)
-                let standalone9Regex = try? NSRegularExpression(pattern: "\b\d{9}\b")
-                let candidate9Regex = try? NSRegularExpression(pattern: "(?i)\b[0-9A-Za-z]{9}\b")
+                let tokenCharPattern = try NSRegularExpression(pattern: "[\s:：#\-_/|]+")
+                let skuLabelRegex = try NSRegularExpression(pattern: "(?i)(?:^|[^a-zA-Z0-9\u4e00-\u9fa5])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)")
+                let candidate9Pattern = try NSRegularExpression(pattern: "(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b")
+                let standalone9Pattern = try NSRegularExpression(pattern: "\b\d{9}\b")
+                let excludeLinePattern = try NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
                 
-                let combinedText = texts.joined(separator: " ")
+                var skuCandidates: [String] = []
                 
-                // 1. 如果有标签，找后面的9位候选
-                if let regex = labelRegex, regex.firstMatch(in: combinedText, range: NSRange(location: 0, length: (combinedText as NSString).length)) != nil {
-                    for text in texts {
-                        if let match = candidate9Regex?.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) {
-                            skuFound = (text as NSString).substring(with: match.range)
-                            break
+                for (i, rawLine) in texts.enumerated() {
+                    let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: "")
+                    
+                    // 1. 带标签匹配
+                    if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(location: 0, length: rawLine.count)) != nil {
+                        let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: " ")
+                        let cleaned = self.cleanDigits(afterLabel)
+                        if cleaned.count == 9 { skuCandidates.append(cleaned) }
+                        
+                        let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(location: 0, length: afterLabel.count))
+                        for match in matches {
+                            let matchText = (afterLabel as NSString).substring(with: match.range)
+                            let c = self.cleanDigits(matchText)
+                            if c.count == 9 { skuCandidates.append(c) }
+                        }
+                        
+                        // 向下看 1-2 行
+                        for offset in 1...2 {
+                            guard i + offset < texts.count else { break }
+                            let nextLine = texts[i + offset]
+                            if excludeLinePattern.firstMatch(in: nextLine, range: NSRange(location: 0, length: nextLine.count)) != nil { continue }
+                            
+                            let nextCleaned = self.cleanDigits(nextLine)
+                            if nextCleaned.count == 9 { skuCandidates.append(nextCleaned) }
+                            
+                            let nextMatches = candidate9Pattern.matches(in: nextLine, range: NSRange(location: 0, length: nextLine.count))
+                            for match in nextMatches {
+                                let matchText = (nextLine as NSString).substring(with: match.range)
+                                let c = self.cleanDigits(matchText)
+                                if c.count == 9 { skuCandidates.append(c) }
+                            }
                         }
                     }
                 }
                 
-                // 2. 否则找独立的9位数字
-                if skuFound == nil {
-                    if let match = standalone9Regex?.firstMatch(in: combinedText, range: NSRange(location: 0, length: (combinedText as NSString).length)) {
-                        skuFound = (combinedText as NSString).substring(with: match.range)
+                // 2. 独立纯 9 位数字
+                if skuCandidates.isEmpty {
+                    for rawLine in texts {
+                        if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(location: 0, length: rawLine.count)) != nil { continue }
+                        let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: "")
+                        
+                        if let _ = try? NSRegularExpression(pattern: "\d{10,}").firstMatch(in: collapsed, range: NSRange(location: 0, length: collapsed.count)) { continue }
+                        
+                        let matches = standalone9Pattern.matches(in: collapsed, range: NSRange(location: 0, length: collapsed.count))
+                        for match in matches {
+                            skuCandidates.append((collapsed as NSString).substring(with: match.range))
+                        }
+                        
+                        let cMatches = candidate9Pattern.matches(in: collapsed, range: NSRange(location: 0, length: collapsed.count))
+                        for match in cMatches {
+                            let matchText = (collapsed as NSString).substring(with: match.range)
+                            let c = self.cleanDigits(matchText)
+                            if c.count == 9 { skuCandidates.append(c) }
+                        }
                     }
                 }
                 
-                guard let sku = skuFound else {
+                let finalSku = skuCandidates.first
+                
+                guard let sku = finalSku else {
                     DispatchQueue.main.async {
                         self.ocrMatchCount = 0
                         self.lastOcrResult = nil
@@ -456,132 +512,3 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             }
         }
     }
-    
-    // MARK: - Old Extract SKU method (Removed)
-        func extractSkuDummy() {
-        
-        func has10PlusConsecutiveDigits(_ text: String) -> Bool {
-            let regex = try? NSRegularExpression(pattern: "\\d{10,}")
-            let nsText = text as NSString
-            return regex?.firstMatch(in: text, range: NSRange(location: 0, length: nsText.length)) != nil
-        }
-        
-        let labelRegex = try? NSRegularExpression(pattern: "(编码|编号|SKU|商品码|批号)", options: .caseInsensitive)
-        let candidate9Regex = try? NSRegularExpression(pattern: "(?i)\\b[0-9A-Za-z]{9}\\b")
-        let standalone9Regex = try? NSRegularExpression(pattern: "\\b\\d{9}\\b")
-        let allSpaces = CharacterSet.whitespacesAndNewlines
-        
-        struct Candidate {
-            let sku: String
-            let distanceToCenter: CGFloat
-        }
-        var candidates: [Candidate] = []
-        
-        // VNRecognizedTextObservation boundingBox is in normalized coordinates (0.0 to 1.0)
-        // Center of the screen is (0.5, 0.5). We calculate distance to center Y (0.5).
-        let centerY: CGFloat = 0.5
-        
-        for (i, obs) in observations.enumerated() {
-            guard let topCandidate = obs.topCandidates(1).first else { continue }
-            let line = topCandidate.string
-            let normalizedLine = line.components(separatedBy: allSpaces).joined()
-            if normalizedLine.isEmpty { continue }
-            
-            // Vision's boundingBox origin is bottom-left
-            let boxMidY = obs.boundingBox.origin.y + (obs.boundingBox.size.height / 2.0)
-            let distance = abs(boxMidY - centerY)
-            
-            let nsLine = normalizedLine as NSString
-            
-            // 1. 标签匹配
-            if let regex = labelRegex, regex.firstMatch(in: normalizedLine, range: NSRange(location: 0, length: nsLine.length)) != nil {
-                for offset in 0...2 {
-                    guard i + offset < observations.count else { break }
-                    let nextObs = observations[i + offset]
-                    guard let nextTop = nextObs.topCandidates(1).first else { continue }
-                    
-                    let checkLine = nextTop.string.components(separatedBy: allSpaces).joined()
-                    if has10PlusConsecutiveDigits(checkLine) { continue }
-                    
-                    let nextBoxMidY = nextObs.boundingBox.origin.y + (nextObs.boundingBox.size.height / 2.0)
-                    let nextDist = abs(nextBoxMidY - centerY)
-                    
-                    let c = cleanDigits(checkLine)
-                    if c.count == 9 { candidates.append(Candidate(sku: c, distanceToCenter: nextDist)); continue }
-                    
-                    if let cRegex = candidate9Regex {
-                        let nsCheck = checkLine as NSString
-                        let matches = cRegex.matches(in: checkLine, range: NSRange(location: 0, length: nsCheck.length))
-                        for match in matches {
-                            let candidate = cleanDigits(nsCheck.substring(with: match.range))
-                            if candidate.count == 9 { candidates.append(Candidate(sku: candidate, distanceToCenter: nextDist)) }
-                        }
-                    }
-                }
-            }
-            
-            // 2. 无标签的纯数字/容错匹配
-            if has10PlusConsecutiveDigits(normalizedLine) { continue }
-            
-            if let sRegex = standalone9Regex, let match = sRegex.firstMatch(in: normalizedLine, range: NSRange(location: 0, length: nsLine.length)) {
-                candidates.append(Candidate(sku: nsLine.substring(with: match.range), distanceToCenter: distance))
-                continue
-            }
-            
-            if let cRegex = candidate9Regex {
-                let matches = cRegex.matches(in: normalizedLine, range: NSRange(location: 0, length: nsLine.length))
-                for match in matches {
-                    let candidate = cleanDigits(nsLine.substring(with: match.range))
-                    if candidate.count == 9 { candidates.append(Candidate(sku: candidate, distanceToCenter: distance)) }
-                }
-            }
-        }
-        
-        // Return the candidate closest to the center Y
-        return candidates.sorted(by: { $0.distanceToCenter < $1.distanceToCenter }).first?.sku
-    }
-
-    private func isScanClaimed() -> Bool {
-        scanStateQueue.sync { hasScanned }
-    }
-
-    private func claimScan() -> Bool {
-        scanStateQueue.sync {
-            guard !hasScanned else { return false }
-            hasScanned = true
-            return true
-        }
-    }
-
-    private func releaseScan() {
-        scanStateQueue.async { [weak self] in
-            self?.hasScanned = false
-        }
-    }
-
-    func stopScanner() {
-        guard let session = captureSession else { return }
-        // AVCaptureSession 激活时系统会强制阻止熄屏，结束后需手动恢复用户设置的值
-        sessionQueue.async {
-            if session.isRunning {
-                session.stopRunning()
-            }
-            DispatchQueue.main.async {
-                let keepAwake = UserDefaults.standard.bool(forKey: "keep_screen_awake")
-                UIApplication.shared.isIdleTimerDisabled = keepAwake
-            }
-        }
-    }
-    
-    deinit {
-        stopScanner()
-    }
-    
-    func setTorch(on: Bool) {
-        let activeDevice = (captureSession?.inputs.first as? AVCaptureDeviceInput)?.device ?? AVCaptureDevice.default(for: .video)
-        guard let device = activeDevice, device.hasTorch else { return }
-        try? device.lockForConfiguration()
-        device.torchMode = on ? .on : .off
-        device.unlockForConfiguration()
-    }
-}
