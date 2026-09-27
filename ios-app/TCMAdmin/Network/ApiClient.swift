@@ -53,15 +53,13 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     
 
     // MARK: - 自动导入服务器配置 (支持 Deep Link 与二维码)
-    @discardableResult
-    public func importServerConfig(from url: URL) -> (success: Bool, newURL: String?, message: String) {
+    public func parseServerConfig(from url: URL) -> String? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
-            return (false, nil, "无效的配置链接格式")
+            return nil
         }
         
         var targetServer: String? = nil
         
-        // 1. 优先解析 Query 参数: ?server=... 或 ?url=... 或 ?baseURL=...
         if let queryItems = components.queryItems {
             for item in queryItems {
                 let name = item.name.lowercased()
@@ -73,7 +71,6 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             }
         }
         
-        // 2. 若无 Query，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
         if targetServer == nil {
             if let host = components.host, !host.isEmpty, host != "config" && host != "server" {
                 let port = components.port.map { ":\($0)" } ?? ""
@@ -82,7 +79,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         }
         
         guard let serverStr = targetServer?.trimmingCharacters(in: .whitespacesAndNewlines), !serverStr.isEmpty else {
-            return (false, nil, "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=http://...)")
+            return nil
         }
         
         var finalURL = serverStr
@@ -92,7 +89,16 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         finalURL = finalURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
         guard URL(string: finalURL) != nil else {
-            return (false, nil, "服务器地址格式不正确: \(serverStr)")
+            return nil
+        }
+        
+        return finalURL
+    }
+    
+    @discardableResult
+    public func importServerConfig(from url: URL) -> (success: Bool, newURL: String?, message: String) {
+        guard let finalURL = parseServerConfig(from: url) else {
+            return (false, nil, "无法识别为有效的服务器配置格式")
         }
         
         self.baseURL = finalURL
