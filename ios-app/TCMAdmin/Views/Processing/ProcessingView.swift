@@ -58,8 +58,9 @@ public struct ProcessingView: View {
     public init() {}
     
     public var body: some View {
-        VStack(spacing: 0) {
-            // 1. 顶部操作栏与模式切换
+        AppScrollView {
+            VStack(spacing: 0) {
+                // 1. 顶部操作栏与模式切换
             VStack(spacing: 12) {
                 // 扫码与新建按钮
                 HStack(spacing: 10) {
@@ -226,6 +227,11 @@ public struct ProcessingView: View {
                 pickupContentView
             }
         }
+        }
+        .refreshable {
+            ApiClient.shared.clearResponseCache()
+            await loadData()
+        }
         .onChange(of: activeView) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .onChange(of: mode) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .background(Color.pageBackground)
@@ -298,9 +304,9 @@ public struct ProcessingView: View {
                     .scaledFont(15)
                     .foregroundStyle(Color.muted)
             }
+            .padding(.top, 60)
             Spacer()
         } else {
-            AppScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(plans) { plan in
                         ProcessingPlanCard(
@@ -351,11 +357,6 @@ public struct ProcessingView: View {
                     }
                 }
                 .padding(16)
-            }
-            .refreshable {
-                ApiClient.shared.clearResponseCache()
-                await loadData()
-            }
             
             .background(Color.pageBackground)
         }
@@ -385,9 +386,9 @@ public struct ProcessingView: View {
                     .scaledFont(15)
                     .foregroundStyle(Color.muted)
             }
+            .padding(.top, 60)
             Spacer()
         } else {
-            AppScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(pickupPackages) { pkg in
                         ProcessingPickupPackageCard(
@@ -406,11 +407,6 @@ public struct ProcessingView: View {
                     }
                 }
                 .padding(16)
-            }
-            .refreshable {
-                ApiClient.shared.clearResponseCache()
-                await loadData()
-            }
             
             .background(Color.pageBackground)
         }
@@ -576,7 +572,14 @@ public struct ProcessingView: View {
                     } catch { lastError = error.localizedDescription }
                 }
                 
-                if successMsg != nil { startLoadData() } else { self.quickScanErrorMessage = lastError.isEmpty ? "扫码设备分配失败" : lastError; self.showQuickScanAlert = true }
+                if let msg = successMsg {
+                    self.quickScanErrorMessage = msg
+                    self.showQuickScanAlert = true
+                    startLoadData()
+                } else {
+                    self.quickScanErrorMessage = lastError.isEmpty ? "扫码设备分配失败" : lastError
+                    self.showQuickScanAlert = true
+                }
             } catch { self.quickScanErrorMessage = "获取工序状态失败: \(error.localizedDescription)"; self.showQuickScanAlert = true }
         }
     }

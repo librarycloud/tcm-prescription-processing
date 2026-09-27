@@ -98,6 +98,7 @@
             <div class="secondary-text">共 {{ row.items?.length || 0 }} 项</div>
           </template>
         </el-table-column>
+
         <el-table-column label="状态" align="center">
           <template #default="{ row }">
             <div class="status-tags">
@@ -586,6 +587,7 @@ import { useTable } from '@/utils/useTable';
 const statusOptions = Object.freeze([
   { label: '借出中', value: TRANSFER_STATUS.BORROWING },
   { label: '部分归还', value: TRANSFER_STATUS.PART_RETURNED },
+  { label: '待确认', value: 'pendingConfirm' },
   { label: '已调平', value: TRANSFER_STATUS.RETURNED },
   { label: '已取消', value: TRANSFER_STATUS.CANCELLED }
 ]);
@@ -723,7 +725,12 @@ async function reload() {
 }
 
 function search() {
-  if (query.value.status !== undefined && query.value.status !== '') {
+  if (query.value.status === 'pendingConfirm') {
+    query.value.status = '';
+    query.value.pending = '';
+    query.value.overdue = '';
+    query.value.pendingConfirm = '1';
+  } else if (query.value.status !== undefined && query.value.status !== '') {
     query.value.pending = '';
     query.value.overdue = '';
     query.value.pendingConfirm = '';

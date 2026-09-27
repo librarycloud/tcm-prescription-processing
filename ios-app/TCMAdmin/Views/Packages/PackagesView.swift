@@ -34,8 +34,9 @@ public struct PackagesView: View {
     }
     
     public var body: some View {
-        VStack(spacing: 0) {
-            // 头部与搜索过滤区
+        AppScrollView {
+            VStack(spacing: 0) {
+                // 头部与搜索过滤区
             VStack(spacing: 10) {
                 HStack(alignment: .center) {
                     SectionHeader(title: "包裹管理", subtitle: "取件记录与物流登记")
@@ -182,9 +183,9 @@ public struct PackagesView: View {
                         .scaledFont(15)
                         .foregroundStyle(Color.muted)
                 }
+                .padding(.top, 60)
                 Spacer()
             } else {
-                AppScrollView {
                     LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(packages) { pkg in
                             PackageRowCard(pkg: pkg, showStore: showStore) {
@@ -195,13 +196,13 @@ public struct PackagesView: View {
                         }
                     }
                     .padding(16)
-                }
-                .refreshable {
-                    ApiClient.shared.clearResponseCache()
-                    await loadPackages()
-                }
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 8) }
                 .background(Color.pageBackground)
+            }
+            } // Close VStack
+            .refreshable {
+                ApiClient.shared.clearResponseCache()
+                await loadPackages()
             }
         }
         .sheet(isPresented: $isCreateSheetShowing) {

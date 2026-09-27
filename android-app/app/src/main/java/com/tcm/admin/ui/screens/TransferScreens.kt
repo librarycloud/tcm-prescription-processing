@@ -37,7 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.automirrored.filled.CompareArrows
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -305,11 +305,16 @@ internal fun TransfersScreen(
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Transform, null, Modifier.size(16.dp), tint = Primary); Spacer(Modifier.width(6.dp)); Text(text = transfer.displayField("transferNo"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) }
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) { 
+                                Icon(Icons.Rounded.Transform, null, Modifier.size(16.dp), tint = Primary)
+                                Spacer(Modifier.width(6.dp))
+                                Text(text = transfer.displayField("transferNo"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink) 
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Spacer(Modifier.width(8.dp))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 StatusPill(text = transferStatusLabel(status, outboundStatus, false))
                                 if (hasPendingReturn) StatusPill(text = "待确认归还")
                                 if (isOverdue) StatusPill(text = "已逾期")
@@ -336,7 +341,7 @@ internal fun TransfersScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Icon(
-                                    Icons.AutoMirrored.Filled.CompareArrows,
+                                    Icons.AutoMirrored.Rounded.ArrowForward,
                                     contentDescription = null,
                                     tint = Primary,
                                     modifier = Modifier.size(18.dp),
@@ -378,6 +383,11 @@ internal fun TransfersScreen(
                                 valueColor = if (isOverdue) Danger else Ink,
                                 isBold = isOverdue,
                             )
+                        }
+                        
+                        val listRemark = transfer.optString("remark", "").trim()
+                        if (listRemark.isNotBlank() && listRemark != "null" && listRemark != "-") {
+                            InfoRowItem("备注", listRemark)
                         }
 
                         if (outboundStatus == 0) {
@@ -539,6 +549,8 @@ internal fun TransferDetailScreen(
     var returnItem by remember { mutableStateOf<JSONObject?>(null) }
     var returnQuantity by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
+    var confirmAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var confirmMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(id, reload) {
@@ -588,7 +600,7 @@ internal fun TransferDetailScreen(
                         fontSize = 13.sp,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     StatusPill(text = transferStatusLabel(current.optInt("status"), current.optInt("outboundStatus"), false))
                     if (hasPendingReturn) StatusPill(text = "待确认归还")
                     if (isOverdue) StatusPill(text = "已逾期")
@@ -645,15 +657,27 @@ internal fun TransferDetailScreen(
                     }
                     Text(
                         "${quantityText(item.opt("quantity"), "0")} ${item.displayField("unit")}",
-                        color = Ink,
-                        fontWeight = FontWeight.SemiBold,
+                        color = Primary,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(color = CardBorderColor)
+                Spacer(Modifier.height(8.dp))
+                
+                val itemRemark = item.optString("remark", "").trim()
+                if (itemRemark.isNotBlank() && itemRemark != "null" && itemRemark != "-") {
+                    InfoRowItem("备注", itemRemark)
+                }
+                
                 InfoRowItem("已确认归还", "${quantityText(item.opt("returnedQuantity"), "0")} ${item.displayField("unit")}")
-                InfoRowItem("待确认归还", "${quantityText(item.opt("pendingReturnQuantity"), "0")} ${item.displayField("unit")}", valueColor = Warning)
+                val pending = item.optDouble("pendingReturnQuantity", 0.0)
+                if (pending > 0) {
+                    InfoRowItem("待确认归还", "${quantityText(item.opt("pendingReturnQuantity"), "0")} ${item.displayField("unit")}", valueColor = Warning)
+                }
                 InfoRowItem("剩余待归还", "${quantityText(item.opt("remainingQuantity"), "0")} ${item.displayField("unit")}", isBold = true)
+                
                 if (permissions?.optBoolean("canSubmitReturn") == true && item.optDouble("availableReturnQuantity") > 0) {
                     Spacer(Modifier.height(6.dp))
                     OutlinedButton(
@@ -700,11 +724,14 @@ internal fun TransferDetailScreen(
                         Spacer(Modifier.height(6.dp))
                         Button(
                             onClick = {
-                                saving = true
-                                scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(id, record.optInt("id")) } }
-                                        .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
-                                        .onFailure { saving = false; error = it.message ?: "确认归还失败" }
+                                confirmMessage = "确定要确认归还这笔物资吗？"
+                                confirmAction = {
+                                    saving = true
+                                    scope.launch {
+                                        runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(id, record.optInt("id")) } }
+                                            .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
+                                            .onFailure { saving = false; error = it.message ?: "确认归还失败" }
+                                    }
                                 }
                             },
                             modifier = Modifier.heightIn(min = 34.dp),
@@ -728,11 +755,14 @@ internal fun TransferDetailScreen(
                 if (permissions?.optBoolean("canConfirmOutbound") == true) {
                     Button(
                         onClick = {
-                            saving = true
-                            scope.launch {
-                                runCatching { withContext(Dispatchers.IO) { ApiClient.confirmOutbound(id) } }
-                                    .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
-                                    .onFailure { saving = false; error = it.message ?: "确认调出失败" }
+                            confirmMessage = "确定要确认调出该订单吗？确认后物品将正式发出。"
+                            confirmAction = {
+                                saving = true
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { ApiClient.confirmOutbound(id) } }
+                                        .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
+                                        .onFailure { saving = false; error = it.message ?: "确认调出失败" }
+                                }
                             }
                         },
                         modifier = Modifier.heightIn(min = 34.dp).defaultMinSize(minHeight = 34.dp),
@@ -809,6 +839,20 @@ internal fun TransferDetailScreen(
                 ) { Text("提交") }
             },
             dismissButton = { TextButton(onClick = { returnItem = null }) { Text("取消") } },
+        )
+    }
+
+    if (confirmAction != null) {
+        AlertDialog(
+            onDismissRequest = { confirmAction = null },
+            title = { Text("二次确认", fontWeight = FontWeight.Bold) },
+            text = { Text(confirmMessage) },
+            confirmButton = {
+                Button(onClick = { confirmAction?.invoke(); confirmAction = null }, enabled = !saving) { Text("确定") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { confirmAction = null }) { Text("取消") }
+            }
         )
     }
 }

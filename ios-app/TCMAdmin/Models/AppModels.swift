@@ -743,12 +743,13 @@ public struct InventoryBatch: Codable, Identifiable, Hashable {
     public let productionDate: String?
     public let expiryDate: String?
     public let inboundDate: String?
+    public let updatedAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, batchNo, locationCode, locationName, quantity, productionDate, expiryDate, inboundDate
+        case id, batchNo, locationCode, locationName, quantity, productionDate, expiryDate, inboundDate, updatedAt
     }
 
-    public init(id: Int, batchNo: String? = nil, locationCode: String? = nil, locationName: String? = nil, quantity: Double? = nil, productionDate: String? = nil, expiryDate: String? = nil, inboundDate: String? = nil) {
+    public init(id: Int, batchNo: String? = nil, locationCode: String? = nil, locationName: String? = nil, quantity: Double? = nil, productionDate: String? = nil, expiryDate: String? = nil, inboundDate: String? = nil, updatedAt: String? = nil) {
         self.id = id
         self.batchNo = batchNo
         self.locationCode = locationCode
@@ -757,6 +758,7 @@ public struct InventoryBatch: Codable, Identifiable, Hashable {
         self.productionDate = productionDate
         self.expiryDate = expiryDate
         self.inboundDate = inboundDate
+        self.updatedAt = updatedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -774,6 +776,7 @@ public struct InventoryBatch: Codable, Identifiable, Hashable {
         self.productionDate = try? c.decodeIfPresent(String.self, forKey: .productionDate)
         self.expiryDate = try? c.decodeIfPresent(String.self, forKey: .expiryDate)
         self.inboundDate = try? c.decodeIfPresent(String.self, forKey: .inboundDate)
+        self.updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
 
         if let q = try? c.decodeIfPresent(Double.self, forKey: .quantity) {
             self.quantity = q

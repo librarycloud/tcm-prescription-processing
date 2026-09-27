@@ -758,9 +758,9 @@ internal fun OccupyingPlanCard(
     }
 
     Surface(
-        color = Color(0xFFEFF6FF),
+        color = PrimarySoft.copy(alpha = 0.5f),
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, Color(0xFF93C5FD)),
+        border = BorderStroke(1.dp, Primary.copy(alpha = 0.2f)),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
@@ -775,17 +775,17 @@ internal fun OccupyingPlanCard(
                         text = "设备占用计划",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1D4ED8),
+                        color = Primary,
                     )
                     if (stageText.isNotBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Surface(
-                            color = Color(0xFFDBEAFE),
+                            color = PrimarySoft,
                             shape = RoundedCornerShape(4.dp),
                         ) {
                             Text(
                                 text = stageText,
-                                color = Color(0xFF1E40AF),
+                                color = Primary,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
@@ -1245,6 +1245,27 @@ internal fun WorkflowOperationScreen(
                 }
             }
 
+        }
+
+        val procRem = plan.displayField("processRemark", "")
+        val rem = plan.displayField("remark", "")
+        if (procRem.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(color = WarningSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("加工备注", color = Warning, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(procRem, color = Warning, fontSize = 14.sp)
+                }
+            }
+        }
+        if (rem.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("其他备注", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(rem, color = Ink, fontSize = 14.sp)
+                }
+            }
         }
 
         if (error != null) {

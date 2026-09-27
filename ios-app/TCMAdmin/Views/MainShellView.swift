@@ -15,11 +15,24 @@ public struct MainShellView: View {
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
     
+
+    private var tabSelectionBinding: Binding<Int> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if newValue == selectedTab {
+                    NotificationCenter.default.post(name: NSNotification.Name("TabDoubleTapped"), object: nil)
+                }
+                selectedTab = newValue
+            }
+        )
+    }
+    
     public var body: some View {
         ZStack(alignment: .leading) {
             NavigationStack(path: $router.navPath) {
                 // 主 Tab 导航区
-                TabView(selection: $selectedTab) {
+                TabView(selection: tabSelectionBinding) {
                     // Tab 1: 库存
                     InventoryView()
                         .tabItem {
@@ -158,10 +171,6 @@ public struct MainShellView: View {
             self.selectedTab = 0
             self.router.popToRoot()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"))) { _ in
-            self.selectedTab = 0
-            self.router.popToRoot()
-        }
         .fullScreenCover(isPresented: $router.isScannerPresented) {
                 LiveScannerView(enableOCR: router.scannerEnableOCR)
             }
@@ -213,7 +222,7 @@ class TabBarDoubleTapHandler: NSObject, UIGestureRecognizerDelegate {
     }
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        false
+        true
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
