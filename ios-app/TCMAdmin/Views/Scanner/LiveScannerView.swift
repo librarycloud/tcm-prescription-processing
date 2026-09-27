@@ -526,7 +526,9 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
             guard let engine = self.ocrEngine else {
+                #if DEBUG
                 print("PaddleOCR frame skipped: engine is not ready")
+                #endif
                 return
             }
 
@@ -551,7 +553,9 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
 
             ocrInFlight = true
+            #if DEBUG
             print("PaddleOCR inference started: \(cgImage.width)x\(cgImage.height)")
+            #endif
             Task.detached(priority: .utility) { [weak self] in
                 guard let self = self else { return }
                 defer { 
@@ -567,7 +571,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     return self.extractSku(from: results.map { $0.text }) != nil
                 }
                 let texts = result.results.map(\.text)
+                
+                #if DEBUG
                 print("PaddleOCR inference finished: total=\(Int(result.totalTime * 1000))ms det=\(Int(result.detectionTime * 1000))ms rec=\(Int(result.recognitionTime * 1000))ms text=\(texts)")
+                #endif
                 
                 if texts.isEmpty {
                     self.consecutiveEmptyFrames += 1
