@@ -255,28 +255,6 @@ internal fun InventoryScreen(
     ) {
         // Heading & Search
         item(key = "header") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "E6药店商品库存",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Ink,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "搜索或扫码查看商品库存与批次详情",
-                        color = Muted,
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
             SearchBarField(
                 value = query,
                 onValueChange = {
