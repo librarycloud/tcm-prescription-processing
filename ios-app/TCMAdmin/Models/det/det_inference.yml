@@ -6,8 +6,8 @@ PreProcess:
       channel_first: false
       img_mode: BGR
   - DetResizeForTest:
-      limit_side_len: 64
-      limit_type: min
+      limit_side_len: 480
+      limit_type: max
   - NormalizeImage:
       mean:
       - 0.485
