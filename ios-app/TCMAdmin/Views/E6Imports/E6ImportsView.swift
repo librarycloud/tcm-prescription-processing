@@ -307,11 +307,21 @@ public struct E6ImportsView: View {
                             }
                         }
                         .padding(16)
+                        if hasMore && !e6Imports.isEmpty {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .task {
+                                    await loadMoreE6Imports()
+                                }
+                        }
                         .padding(.bottom, selectedIds.isEmpty ? 0 : 64)
                     }
                     .refreshable {
-            ApiClient.shared.clearResponseCache()
-                        await loadE6Imports()
+                        ApiClient.shared.clearResponseCache()
+                        page = 1
+                        hasMore = true
+                        await loadE6Imports(isLoadMore: false)
                     }
                 
                     .background(Color.pageBackground)
