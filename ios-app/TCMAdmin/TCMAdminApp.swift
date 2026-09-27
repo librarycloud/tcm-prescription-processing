@@ -11,6 +11,13 @@ struct TCMAdminApp: App {
     @State private var pendingConfigURL: URL? = nil
     @State private var showConfirmConfigAlert = false
 
+    init() {
+        // App 启动时立即在后台预加载 OCR 引擎，消除扫码界面的冷启动卡顿
+        Task { @MainActor in
+            SharedOCRManager.shared.preload()
+        }
+    }
+
 
     var body: some Scene {
         WindowGroup {

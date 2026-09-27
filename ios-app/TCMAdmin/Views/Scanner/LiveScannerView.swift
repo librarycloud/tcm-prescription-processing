@@ -4,6 +4,46 @@ import CoreImage
 import UIKit
 
 @MainActor
+final class SharedOCRManager {
+    static let shared = SharedOCRManager()
+    
+    var engine: OCREngine?
+    var isLoading: Bool = false
+    private var isLoaded: Bool = false
+    
+    private init() {}
+    
+    func preload() {
+        guard !isLoaded && !isLoading else { return }
+        isLoading = true
+        
+        Task {
+            do {
+                let sessionManager = ORTSessionManager()
+                var tuning = ORTSessionTuningOptions.default
+                tuning.intraOpThreads = 4
+                try await sessionManager.loadModels(executionProvider: .cpu, tuning: tuning)
+                let engine = try OCREngine(sessionManager: sessionManager)
+                
+                await MainActor.run {
+                    self.engine = engine
+                    self.isLoaded = true
+                    self.isLoading = false
+                    #if DEBUG
+                    print("PaddleOCR engine loaded globally (CPU EP with 4 threads)")
+                    #endif
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                    print("Failed to preload PaddleOCR engine globally: \(error)")
+                }
+            }
+        }
+    }
+}
+
+@MainActor
 public struct LiveScannerView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable private var router = Router.shared
@@ -318,19 +358,16 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         if enableOCR {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                self.isOcrEngineLoading = true
-                do {
-                    // ORTSessionManager 是 actor，需要 await loadModels()
-                    // ModelConfig 会自动从 Bundle 的 Models/det 和 Models/rec 目录读取
-                    let sessionManager = ORTSessionManager()
-                    var tuning = ORTSessionTuningOptions.default
-                    tuning.intraOpThreads = 4 // 使用苹果原生 CPU EP，稳跑 4 线程，杜绝 XNNPACK 动态 shape 退回引发的性能卡顿
-                    try await sessionManager.loadModels(executionProvider: .cpu, tuning: tuning)
-                    self.ocrEngine = try OCREngine(sessionManager: sessionManager)
-                    print("PaddleOCR engine loaded successfully (CPU EP with 4 threads)")
-                } catch {
-                    print("Failed to load PaddleOCR engine: \(error)")
+                if SharedOCRManager.shared.engine == nil {
+                    self.isOcrEngineLoading = true
+                    // Wait for preload if it hasn't finished, or trigger it
+                    SharedOCRManager.shared.preload()
+                    // Simple poll until loaded (should be rare)
+                    while SharedOCRManager.shared.engine == nil && SharedOCRManager.shared.isLoading {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
                 }
+                self.ocrEngine = SharedOCRManager.shared.engine
                 self.isOcrEngineLoading = false
             }
         }
