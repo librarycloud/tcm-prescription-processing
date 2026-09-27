@@ -700,7 +700,7 @@ internal fun InventoryScreen(
                             }
                         }
                         
-                        val updDate = inventoryDateTime(item, "updatedAt")
+                        val updDate = serverDateTime(item.opt("updatedAt"), "")
                         if (updDate.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
                             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -856,15 +856,7 @@ private fun inventoryDate(item: JSONObject, vararg keys: String): String {
         .orEmpty()
 }
 
-private fun inventoryDateTime(item: JSONObject, vararg keys: String): String {
-    return keys.asSequence()
-        .mapNotNull { key -> item.opt(key)?.takeIf { it != JSONObject.NULL }?.toString() }
-        .firstOrNull { value -> value.isNotBlank() && value != "null" }
-        ?.replace("T", " ")
-        ?.substringBefore(".")
-        ?.take(16)
-        .orEmpty()
-}
+
 
 private fun inventoryExpiryWarning(value: String): Boolean = runCatching {
     LocalDate.parse(value.take(10)).isBefore(serverToday().plusMonths(6))

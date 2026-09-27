@@ -58,7 +58,7 @@ struct ModelConfig {
         throw ModelConfigError.modelNotFound(notFoundMessage)
     }
 
-    static func detection() throws -> ModelConfig {
+    nonisolated static func detection() throws -> ModelConfig {
         let modelPath = try Self.bundledWeightsPath(
             prefix: "det_inference",
             notFoundMessage: "det_inference.ort or det_inference.onnx"
@@ -70,7 +70,7 @@ struct ModelConfig {
         return ModelConfig(modelPath: modelPath, configPath: configPath, name: name)
     }
 
-    static func recognition() throws -> ModelConfig {
+    nonisolated static func recognition() throws -> ModelConfig {
         let modelPath = try Self.bundledWeightsPath(
             prefix: "rec_inference",
             notFoundMessage: "rec_inference.ort or rec_inference.onnx"

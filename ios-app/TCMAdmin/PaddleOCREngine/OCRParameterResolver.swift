@@ -29,7 +29,7 @@ struct OCRRuntimeParams: Equatable, Sendable {
     var textRecBatchSize: Int?
     var textRecScoreThresh: Float?
 
-    static let noOverrides = OCRRuntimeParams(
+    nonisolated static let noOverrides = OCRRuntimeParams(
         textDetLimitSideLen: nil,
         textDetLimitType: nil,
         textDetMaxSideLimit: nil,

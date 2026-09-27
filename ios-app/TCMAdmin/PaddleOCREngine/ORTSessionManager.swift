@@ -106,7 +106,7 @@ struct ORTSessionTuningOptions: Sendable {
     /// CoreML EP flags: enableOnSubgraphs, createMLProgram, staticInputShapes, cpuOnly, cpuAndGPU, aneOnly.
     var coreMLFlags: Set<String> = []
 
-    static let `default` = ORTSessionTuningOptions()
+    nonisolated static let `default` = ORTSessionTuningOptions()
 }
 
 extension ORTSessionTuningOptions: Equatable {}
