@@ -641,7 +641,12 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             let roiRect = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
             
             let cropped = translated.cropped(to: roiRect)
-            guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
+            
+            // --- 终极核弹级优化：在交由 CPU/GPU 渲染和推理前，直接把图像长宽缩小一半 (面积缩小 4 倍) ---
+            // 这保证了即使底层 YAML 配置没生效，送入 OCR 引擎的图像也只有 432x576，彻底告别 1.3秒的漫长推理！
+            let scaled = cropped.transformed(by: CGAffineTransform(scaleX: 0.5, y: 0.5))
+            
+            guard let cgImage = ciContext.createCGImage(scaled, from: scaled.extent) else { return }
 
             ocrInFlight = true
             #if DEBUG

@@ -151,7 +151,8 @@ class OCREngine {
             let w = sqrt(dx1 * dx1 + dy1 * dy1)
             let h = sqrt(dx2 * dx2 + dy2 * dy2)
             
-            if w < 32 || h < 8 { return false }
+            // 图像已经经过 0.5 倍缩小，这里的阈值也需减半 (w<16, h<4)
+            if w < 16 || h < 4 { return false }
             if h == 0 { return false }
             let aspectRatio = w / h
             if aspectRatio < 1.25 { return false }
