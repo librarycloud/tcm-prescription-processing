@@ -493,18 +493,18 @@ struct InventoryView: View {
                                     Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("生产日期").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(pDate).scaledFont(10).foregroundStyle(Color.ink).lineLimit(1)
+                                            Text("生产日期").scaledFont(11).foregroundStyle(Color.muted)
+                                            Text(pDate).scaledFont(12).foregroundStyle(Color.ink).lineLimit(1)
                                         }.frame(maxWidth: .infinity, alignment: .leading)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("有效期至").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(eDate).scaledFont(10).foregroundStyle(Color.ink).lineLimit(1)
+                                            Text("有效期至").scaledFont(11).foregroundStyle(Color.muted)
+                                            Text(eDate).scaledFont(12).foregroundStyle(Color.ink).lineLimit(1)
                                         }.frame(maxWidth: .infinity, alignment: .leading)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("入库日期").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(iDate).scaledFont(10).foregroundStyle(Color.muted).lineLimit(1)
+                                            Text("入库日期").scaledFont(11).foregroundStyle(Color.muted)
+                                            Text(iDate).scaledFont(12).foregroundStyle(Color.muted).lineLimit(1)
                                         }.frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .padding(.top, 2)
@@ -513,7 +513,7 @@ struct InventoryView: View {
                                     let updFormatted = formatDateTimeToMinute(upd)
                                     Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
                                     Text("更新时间: \(updFormatted)")
-                                        .scaledFont(10)
+                                        .scaledFont(11)
                                         .foregroundStyle(Color.muted)
                                         .padding(.top, 2)
                                 }
