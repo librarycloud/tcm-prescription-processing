@@ -592,5 +592,6 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 print("PaddleOCR engine run failed: \(error.localizedDescription)")
             }
         }
+        }
     }
 }
