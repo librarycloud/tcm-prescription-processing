@@ -714,7 +714,6 @@
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "药房助手";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问您的相机以扫描药品条形码与处方单据";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问您的相册以选择处方图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -787,7 +786,6 @@
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "药房助手";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问您的相机以扫描药品条形码与处方单据";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问您的相册以选择处方图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

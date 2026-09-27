@@ -246,7 +246,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
     nonisolated(unsafe) private var hasScanned = false
-    nonisolated(unsafe) private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
+    private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
     nonisolated(unsafe) private var consecutiveEmptyFrames: Int = 0
     nonisolated(unsafe) private var lastOcrResult: String? = nil
@@ -259,7 +259,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated(unsafe) private var ocrEngine: OCREngine?
     private var isOcrEngineLoading = false
     // 复用 CIContext，创建代价极高，绝对不能每帧 new 一个
-    nonisolated(unsafe) private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Scan state (被误删的原始实现)
 
@@ -429,11 +429,11 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
 
 
-    nonisolated(unsafe) private static let tokenCharPattern = try! NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
-    nonisolated(unsafe) private static let skuLabelRegex = try! NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
-    nonisolated(unsafe) private static let candidate9Pattern = try! NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
-    nonisolated(unsafe) private static let standalone9Pattern = try! NSRegularExpression(pattern: #"\b\d{9}\b"#)
-    nonisolated(unsafe) private static let excludeLinePattern = try! NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
+    nonisolated private static let tokenCharPattern = try! NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
+    nonisolated private static let skuLabelRegex = try! NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
+    nonisolated private static let candidate9Pattern = try! NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
+    nonisolated private static let standalone9Pattern = try! NSRegularExpression(pattern: #"\b\d{9}\b"#)
+    nonisolated private static let excludeLinePattern = try! NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
 
     nonisolated private func extractSku(from texts: [String]) -> String? {
         let tokenCharPattern = Self.tokenCharPattern
