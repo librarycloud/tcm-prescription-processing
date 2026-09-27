@@ -758,9 +758,9 @@ internal fun OccupyingPlanCard(
     }
 
     Surface(
-        color = Color(0xFFEFF6FF),
+        color = PrimarySoft.copy(alpha = 0.5f),
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, Color(0xFF93C5FD)),
+        border = BorderStroke(1.dp, Primary.copy(alpha = 0.2f)),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
@@ -775,17 +775,17 @@ internal fun OccupyingPlanCard(
                         text = "设备占用计划",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1D4ED8),
+                        color = Primary,
                     )
                     if (stageText.isNotBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Surface(
-                            color = Color(0xFFDBEAFE),
+                            color = PrimarySoft,
                             shape = RoundedCornerShape(4.dp),
                         ) {
                             Text(
                                 text = stageText,
-                                color = Color(0xFF1E40AF),
+                                color = Primary,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),

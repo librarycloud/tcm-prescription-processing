@@ -1174,9 +1174,9 @@ private fun ReleaseEntryRow(entry: ReleaseEntry) {
     ) {
         if (entry.tag != null) {
             val (tagBg, tagText) = when (entry.tagType) {
-                ReleaseTagType.NEW -> Pair(Color(0xFF10B981).copy(alpha = 0.15f), Color(0xFF059669))
-                ReleaseTagType.OPTIMIZE -> Pair(Color(0xFFF59E0B).copy(alpha = 0.15f), Color(0xFFD97706))
-                ReleaseTagType.FIX -> Pair(Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
+                ReleaseTagType.NEW -> Pair(SuccessSoft, Success)
+                ReleaseTagType.OPTIMIZE -> Pair(WarningSoft, Warning)
+                ReleaseTagType.FIX -> Pair(DangerSoft, Danger)
                 ReleaseTagType.GENERAL -> Pair(PrimarySoft, Primary)
             }
             Surface(
