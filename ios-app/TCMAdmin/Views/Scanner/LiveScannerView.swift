@@ -29,7 +29,12 @@ public struct LiveScannerView: View {
             // 扫描瞄准取景框
             VStack {
                 HStack {
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        // Update the cover binding explicitly; this still works when the
+                        // presentation is owned by Router rather than the local dismiss action.
+                        router.isScannerPresented = false
+                        dismiss()
+                    }) {
                         Image(systemName: "xmark.circle.fill")
                             .scaledFont(32)
                             .foregroundStyle(Color.white.opacity(0.8))
@@ -107,6 +112,9 @@ public struct LiveScannerView: View {
             Button("我知道了", role: .cancel) {}
         } message: {
             Text(scanError ?? "")
+        }
+        .onDisappear {
+            router.isScannerPresented = false
         }
     }
     
@@ -244,6 +252,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated(unsafe) private var ocrMatchCount: Int = 0
     /// 对标 Android ocrInFlight：防止单次推理 > 500ms 时任务叠加
     nonisolated(unsafe) private var ocrInFlight: Bool = false
+    nonisolated(unsafe) private var isStopped = false
 
     // PaddleOCR Engine
     nonisolated(unsafe) private var ocrEngine: OCREngine?
@@ -280,7 +289,21 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
 
     func stopScanner() {
-        sessionQueue.async { [weak self] in self?.captureSession?.stopRunning() }
+        isStopped = true
+        ocrInFlight = false
+        scanStateQueue.sync { hasScanned = false }
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.captureSession?.stopRunning()
+            self.captureSession?.outputs.forEach { output in
+                if let videoOutput = output as? AVCaptureVideoDataOutput {
+                    videoOutput.setSampleBufferDelegate(nil, queue: nil)
+                }
+                if let metadataOutput = output as? AVCaptureMetadataOutput {
+                    metadataOutput.setMetadataObjectsDelegate(nil, queue: nil)
+                }
+            }
+        }
     }
     
     override func viewDidLoad() {
@@ -290,6 +313,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
     
     private func setupCamera() {
+        isStopped = false
         if enableOCR {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
@@ -299,11 +323,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     // ModelConfig 会自动从 Bundle 的 Models/det 和 Models/rec 目录读取
                     let sessionManager = ORTSessionManager()
                     var tuning = ORTSessionTuningOptions.default
-                    tuning.xnnpackThreads = 4
-                    tuning.intraOpThreads = 1 // 修复与 XNNPACK 内部线程池的资源竞争导致死锁/闪退
-                    try await sessionManager.loadModels(executionProvider: .xnnpack, tuning: tuning)
+                    tuning.intraOpThreads = 4 // 使用苹果原生 CPU EP，稳跑 4 线程，杜绝 XNNPACK 动态 shape 退回引发的性能卡顿
+                    try await sessionManager.loadModels(executionProvider: .cpu, tuning: tuning)
                     self.ocrEngine = try OCREngine(sessionManager: sessionManager)
-                    print("PaddleOCR engine loaded successfully (XNNPACK EP with 4 threads)")
+                    print("PaddleOCR engine loaded successfully (CPU EP with 4 threads)")
                 } catch {
                     print("Failed to load PaddleOCR engine: \(error)")
                 }
@@ -405,12 +428,18 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
 
 
+    nonisolated(unsafe) private static let tokenCharPattern = try! NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
+    nonisolated(unsafe) private static let skuLabelRegex = try! NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
+    nonisolated(unsafe) private static let candidate9Pattern = try! NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
+    nonisolated(unsafe) private static let standalone9Pattern = try! NSRegularExpression(pattern: #"\b\d{9}\b"#)
+    nonisolated(unsafe) private static let excludeLinePattern = try! NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
+
     nonisolated private func extractSku(from texts: [String]) -> String? {
-        guard let tokenCharPattern = try? NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#),
-              let skuLabelRegex = try? NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#),
-              let candidate9Pattern = try? NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#),
-              let standalone9Pattern = try? NSRegularExpression(pattern: #"\b\d{9}\b"#),
-              let excludeLinePattern = try? NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)") else { return nil }
+        let tokenCharPattern = Self.tokenCharPattern
+        let skuLabelRegex = Self.skuLabelRegex
+        let candidate9Pattern = Self.candidate9Pattern
+        let standalone9Pattern = Self.standalone9Pattern
+        let excludeLinePattern = Self.excludeLinePattern
 
         var skuCandidates: [String] = []
 
@@ -474,46 +503,52 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
     // MARK: - OCR Video Frame Extraction
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard !isScanClaimed() else { return }
+        autoreleasepool {
+            guard !isScanClaimed() else { return }
+            guard !isStopped else { return }
 
-        let now = Date()
-        // 限制 OCR 频率为 500ms 一次
-        guard now.timeIntervalSince(lastOcrScanTime) > 0.5 else { return }
-        // 对标 Android ocrInFlight：推理未结束时跳过本帧，防止任务叠加
-        guard !ocrInFlight else { return }
-        lastOcrScanTime = now
+            let now = Date()
+            // 限制 OCR 频率为 500ms 一次
+            guard now.timeIntervalSince(lastOcrScanTime) > 0.5 else { return }
+            // 对标 Android ocrInFlight：推理未结束时跳过本帧，防止任务叠加
+            guard !ocrInFlight else { return }
+            lastOcrScanTime = now
 
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        guard let engine = self.ocrEngine else { return }
-
-        // --- ROI 裁剪：只送取景框区域入模型（对标 Android restrictScanningToRect）---
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        // 手机竖屏时相机帧是横向的，先右转 90 度变成竖屏 (比如 1080x1920)
-        let rotated = ciImage.oriented(.right)
-        // oriented 后 origin 可能为负，必须平移回 (0,0) 才能正常计算 crop
-        let translated = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.origin.x, y: -rotated.extent.origin.y))
-        
-        let frameW = translated.extent.width   // 竖屏宽，约 1080
-        let frameH = translated.extent.height  // 竖屏高，约 1920
-        
-        // 取景框 ROI：横向居中占 80%，纵向偏上占 60%
-        let roiX = frameW * 0.1
-        let roiY = frameH * 0.2
-        let roiW = frameW * 0.8
-        let roiH = frameH * 0.6
-        let roiRect = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
-        
-        let cropped = translated.cropped(to: roiRect)
-        guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
-
-        ocrInFlight = true
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self = self else { return }
-            defer { 
-                Task { @MainActor in
-                    self.ocrInFlight = false 
-                }
+            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+            guard let engine = self.ocrEngine else {
+                print("PaddleOCR frame skipped: engine is not ready")
+                return
             }
+
+            // --- ROI 裁剪：只送取景框区域入模型（对标 Android restrictScanningToRect）---
+            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+            // 手机竖屏时相机帧是横向的，先右转 90 度变成竖屏 (比如 1080x1920)
+            let rotated = ciImage.oriented(.right)
+            // oriented 后 origin 可能为负，必须平移回 (0,0) 才能正常计算 crop
+            let translated = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.origin.x, y: -rotated.extent.origin.y))
+            
+            let frameW = translated.extent.width   // 竖屏宽，约 1080
+            let frameH = translated.extent.height  // 竖屏高，约 1920
+            
+            // 取景框 ROI：横向居中占 80%，纵向偏上占 60%
+            let roiX = frameW * 0.1
+            let roiY = frameH * 0.2
+            let roiW = frameW * 0.8
+            let roiH = frameH * 0.6
+            let roiRect = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
+            
+            let cropped = translated.cropped(to: roiRect)
+            guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
+
+            ocrInFlight = true
+            print("PaddleOCR inference started: \(cgImage.width)x\(cgImage.height)")
+            Task.detached(priority: .utility) { [weak self] in
+                guard let self = self else { return }
+                defer { 
+                    Task { @MainActor in
+                        self.ocrInFlight = false 
+                    }
+                }
             guard !self.isScanClaimed() else { return }
 
             do {
@@ -521,7 +556,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     guard let self = self else { return false }
                     return self.extractSku(from: results.map { $0.text }) != nil
                 }
-                let texts = result.results.map { $0.text }
+                let texts = result.results.map(\.text)
+                print("PaddleOCR inference finished: total=\(Int(result.totalTime * 1000))ms det=\(Int(result.detectionTime * 1000))ms rec=\(Int(result.recognitionTime * 1000))ms text=\(texts)")
                 if texts.isEmpty { return }
                 
                 guard let sku = self.extractSku(from: texts) else {
@@ -553,7 +589,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     }
                 }
             } catch {
-                print("PaddleOCR engine run failed: \(error)")
+                print("PaddleOCR engine run failed: \(error.localizedDescription)")
             }
         }
     }
