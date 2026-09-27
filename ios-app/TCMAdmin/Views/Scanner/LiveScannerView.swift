@@ -435,6 +435,66 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated private static let standalone9Pattern = try! NSRegularExpression(pattern: #"\b\d{9}\b"#)
     nonisolated private static let excludeLinePattern = try! NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
 
+
+    private struct LogicalRow {
+        let text: String
+        let top: Float
+        let centerY: Float
+    }
+
+    nonisolated private func buildLogicalRows(_ elements: [OCRResult]) -> [String] {
+        if elements.isEmpty { return [] }
+        
+        struct RawElement {
+            let text: String
+            let left: Float
+            let top: Float
+            let height: Float
+            let centerY: Float
+        }
+        
+        let rawElements = elements.map { res -> RawElement in
+            let p = res.polygon
+            let ys = p.map { Float($0[1]) }
+            let xs = p.map { Float($0[0]) }
+            let top = ys.min() ?? 0
+            let bottom = ys.max() ?? 0
+            let left = xs.min() ?? 0
+            let height = bottom - top
+            let centerY = top + height / 2.0
+            return RawElement(text: normalizeOcrText(res.text), left: left, top: top, height: height, centerY: centerY)
+        }.sorted { $0.centerY < $1.centerY }
+        
+        var clusters: [[RawElement]] = []
+        for elem in rawElements {
+            var matched = false
+            for i in 0..<clusters.count {
+                let cluster = clusters[i]
+                let avgCenterY = cluster.map { $0.centerY }.reduce(0, +) / Float(cluster.count)
+                let avgHeight = cluster.map { $0.height }.reduce(0, +) / Float(cluster.count)
+                let threshold = max(avgHeight, elem.height) * 0.75
+                if abs(elem.centerY - avgCenterY) <= threshold {
+                    clusters[i].append(elem)
+                    matched = true
+                    break
+                }
+            }
+            if !matched {
+                clusters.append([elem])
+            }
+        }
+        
+        let rows = clusters.map { cluster -> LogicalRow in
+            let sortedCluster = cluster.sorted { $0.left < $1.left }
+            let joinedText = sortedCluster.map { $0.text }.joined(separator: " ")
+            let avgTop = cluster.map { $0.top }.min() ?? 0
+            let avgCenterY = cluster.map { $0.centerY }.reduce(0, +) / Float(cluster.count)
+            return LogicalRow(text: joinedText, top: avgTop, centerY: avgCenterY)
+        }.sorted { $0.top < $1.top }
+        
+        return rows.map { $0.text }
+    }
+
     nonisolated private func extractSku(from texts: [String]) -> String? {
         let tokenCharPattern = Self.tokenCharPattern
         let skuLabelRegex = Self.skuLabelRegex
@@ -489,15 +549,46 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         return skuCandidates.first(where: { $0.count == 9 })
     }
 
+
+    nonisolated private func normalizeOcrText(_ text: String) -> String {
+        var res = ""
+        for char in text {
+            if char == "\u{3000}" || char == "\u{00A0}" {
+                res.append(" ")
+            } else if char == "〇" {
+                res.append("0")
+            } else if let scalar = char.unicodeScalars.first, scalar.value >= 0xFF10 && scalar.value <= 0xFF19 {
+                // Fullwidth numbers ０..９
+                res.append(Character(UnicodeScalar(scalar.value - 0xFF10 + 0x0030)!))
+            } else if let scalar = char.unicodeScalars.first, scalar.value >= 0xFF21 && scalar.value <= 0xFF3A {
+                // Fullwidth letters Ａ..Ｚ
+                res.append(Character(UnicodeScalar(scalar.value - 0xFF21 + 0x0041)!))
+            } else if let scalar = char.unicodeScalars.first, scalar.value >= 0xFF41 && scalar.value <= 0xFF5A {
+                // Fullwidth letters ａ..ｚ
+                res.append(Character(UnicodeScalar(scalar.value - 0xFF41 + 0x0061)!))
+            } else {
+                res.append(char)
+            }
+        }
+        return res
+    }
+
     nonisolated private func cleanDigits(_ str: String) -> String {
         var res = ""
         for char in str {
-            if char.isNumber { res.append(char) }
-            else if char == "O" || char == "o" { res.append("0") }
-            else if char == "I" || char == "l" || char == "i" || char == "L" { res.append("1") }
-            else if char == "Z" || char == "z" { res.append("2") }
-            else if char == "S" || char == "s" { res.append("5") }
-            else if char == "B" || char == "b" { res.append("8") }
+            switch char {
+            case "O", "o", "C", "c", "D", "d", "Q", "q", "〇": res.append("0")
+            case "I", "l", "|", "i", "!", "J", "j", "L": res.append("1")
+            case "Z", "z": res.append("2")
+            case "E": res.append("3")
+            case "S", "s", "$": res.append("5")
+            case "b", "G": res.append("6")
+            case "T", "t": res.append("7")
+            case "B", "R", "r": res.append("8")
+            case "g": res.append("9")
+            default:
+                if char.isNumber { res.append(char) }
+            }
         }
         return res
     }
