@@ -436,9 +436,7 @@ struct InventoryView: View {
             }
             
             // 批次信息
-            Text("库存批次明细")
-                .scaledFont(14, weight: .bold)
-                .foregroundStyle(Color.ink)
+            SectionHeader(title: "库存批次明细")
                 .padding(.top, 8)
             
             if let batches = item.inventories, !batches.isEmpty {

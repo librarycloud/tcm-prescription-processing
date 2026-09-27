@@ -298,9 +298,9 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     // ORTSessionManager 是 actor，需要 await loadModels()
                     // ModelConfig 会自动从 Bundle 的 Models/det 和 Models/rec 目录读取
                     let sessionManager = ORTSessionManager()
-                    try await sessionManager.loadModels(executionProvider: .coreML)
+                    try await sessionManager.loadModels(executionProvider: .cpu)
                     self.ocrEngine = try OCREngine(sessionManager: sessionManager)
-                    print("PaddleOCR engine loaded successfully (CoreML EP)")
+                    print("PaddleOCR engine loaded successfully (CPU EP)")
                 } catch {
                     print("Failed to load PaddleOCR engine: \(error)")
                 }
@@ -525,7 +525,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                         self.lastOcrResult = sku
                         self.ocrMatchCount = 1
                     }
-                    if self.ocrMatchCount >= 2 {
+                    if self.ocrMatchCount >= 1 {
                         guard self.claimScan() else { return }
                         self.onScanned?(sku)
                         self.lastOcrResult = nil
