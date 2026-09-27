@@ -448,14 +448,14 @@ internal fun InventoryScreen(
                         Text(
                             text = "商品编码",
                             color = Muted,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = product.displayField("productCode").ifBlank { "-" },
                             color = Ink,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             maxLines = 1,
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                         )
@@ -468,13 +468,13 @@ internal fun InventoryScreen(
                         Text(
                             text = "商品条码",
                             color = Muted,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = product.displayField("barcode").ifBlank { "无条码" },
                             color = Ink,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             maxLines = 1,
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                         )
@@ -487,7 +487,7 @@ internal fun InventoryScreen(
                         Text(
                             text = "规格：${product.displayField("specification").ifBlank { "-" }}",
                             color = Muted,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             maxLines = 1,
                         )
                         Spacer(Modifier.width(8.dp))
@@ -614,7 +614,7 @@ internal fun InventoryScreen(
                                         text = "批号：$batchNo",
                                         fontWeight = FontWeight.SemiBold,
                                         color = Ink,
-                                        fontSize = 14.sp,
+                                        fontSize = 15.sp,
                                     )
                                     if (showStore && storeName.isNotBlank()) {
                                         Spacer(Modifier.width(8.dp))
@@ -680,22 +680,22 @@ internal fun InventoryScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("生产日期", color = Muted, fontSize = 11.sp)
-                                    Text(prodDate.ifBlank { "-" }, color = RegularText, fontSize = 12.sp, maxLines = 1)
+                                    Text("生产日期", color = Muted, fontSize = 12.sp)
+                                    Text(prodDate.ifBlank { "-" }, color = RegularText, fontSize = 13.sp, maxLines = 1)
                                 }
                                 Column(Modifier.weight(1f)) {
-                                    Text("有效期至", color = Muted, fontSize = 11.sp)
+                                    Text("有效期至", color = Muted, fontSize = 12.sp)
                                     Text(
                                         expDate.ifBlank { "-" },
                                         color = if (expiringSoon) Danger else RegularText,
                                         fontWeight = if (expiringSoon) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         maxLines = 1,
                                     )
                                 }
                                 Column(Modifier.weight(1f)) {
-                                    Text("入库日期", color = Muted, fontSize = 11.sp)
-                                    Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 12.sp, maxLines = 1)
+                                    Text("入库日期", color = Muted, fontSize = 12.sp)
+                                    Text(inDate.ifBlank { "-" }, color = Muted, fontSize = 13.sp, maxLines = 1)
                                 }
                             }
                         }
@@ -705,7 +705,7 @@ internal fun InventoryScreen(
                             Spacer(Modifier.height(6.dp))
                             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                             Spacer(Modifier.height(4.dp))
-                            Text("更新时间: $updDate", color = Muted, fontSize = 11.sp)
+                            Text("更新时间: $updDate", color = Muted, fontSize = 12.sp)
                         }
                     }
                 }
