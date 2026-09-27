@@ -176,6 +176,27 @@ public struct WorkflowOperationView: View {
                     // 2. 顶部计划信息卡片
                     topSummaryCard
                     
+                    if let wf = workflow {
+                        if let pr = wf.processRemark, !pr.isEmpty {
+                            AppCard(padding: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("加工备注").scaledFont(11, weight: .semibold).foregroundStyle(Color.warning)
+                                    Text(pr).scaledFont(14).foregroundStyle(Color.warning)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        if let r = wf.remark, !r.isEmpty {
+                            AppCard(padding: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("其他备注").scaledFont(11, weight: .semibold).foregroundStyle(Color.muted)
+                                    Text(r).scaledFont(14).foregroundStyle(Color.ink)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    
                     // 3. 待加工时顶部启动按钮
                     if status == 0 {
                         Button(action: startDispensingPlan) {

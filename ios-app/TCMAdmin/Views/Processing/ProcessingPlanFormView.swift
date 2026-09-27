@@ -590,9 +590,9 @@ public struct ProcessingPlanFormView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("其他内部备注")
+                    Text("其他备注")
                         .scaledFont(13, weight: .medium)
-                    TextField("输入内部备注", text: $remark)
+                    TextField("输入其他备注", text: $remark)
                         .padding(10)
                         .background(Color.pageBackground)
                         .clipShape(.rect(cornerRadius: 8))

@@ -1247,6 +1247,27 @@ internal fun WorkflowOperationScreen(
 
         }
 
+        val procRem = plan.displayField("processRemark", "")
+        val rem = plan.displayField("remark", "")
+        if (procRem.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(color = WarningSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("加工备注", color = Warning, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(procRem, color = WarningDark, fontSize = 14.sp)
+                }
+            }
+        }
+        if (rem.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("其他备注", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(rem, color = Ink, fontSize = 14.sp)
+                }
+            }
+        }
+
         if (error != null) {
             Spacer(Modifier.height(10.dp))
             Surface(color = DangerSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {

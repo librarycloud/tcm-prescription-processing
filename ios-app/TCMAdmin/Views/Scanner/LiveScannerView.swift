@@ -247,6 +247,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     // PaddleOCR Engine
     private var ocrEngine: OCREngine?
     private var isOcrEngineLoading = false
+    // 复用 CIContext，创建代价极高，绝对不能每帧 new 一个
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -256,19 +258,16 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
     private func setupCamera() {
         if enableOCR {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            Task.detached(priority: .userInitiated) { [weak self] in
                 guard let self = self else { return }
                 self.isOcrEngineLoading = true
                 do {
-                    let inferenceConfig = InferenceConfig(
-                        detModelAsset: Bundle.main.path(forResource: "inference", ofType: "onnx", inDirectory: "Models/det") ?? "",
-                        recModelAsset: Bundle.main.path(forResource: "inference", ofType: "onnx", inDirectory: "Models/rec") ?? "",
-                        recConfigAsset: Bundle.main.path(forResource: "inference", ofType: "yml", inDirectory: "Models/rec") ?? "",
-                        engineConfig: EngineConfig()
-                    )
-                    let sessionManager = try ORTSessionManager(config: inferenceConfig)
+                    // ORTSessionManager 是 actor，需要 await loadModels()
+                    // ModelConfig 会自动从 Bundle 的 Models/det 和 Models/rec 目录读取
+                    let sessionManager = ORTSessionManager()
+                    try await sessionManager.loadModels(executionProvider: .coreML)
                     self.ocrEngine = try OCREngine(sessionManager: sessionManager)
-                    print("PaddleOCR engine loaded successfully")
+                    print("PaddleOCR engine loaded successfully (CoreML EP)")
                 } catch {
                     print("Failed to load PaddleOCR engine: \(error)")
                 }
@@ -396,18 +395,18 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         
         guard let engine = self.ocrEngine else { return }
         
-        // 提取图像并运行PaddleOCR
+        // 提取图像并运行PaddleOCR（复用 ciContext，避免每帧重建）
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return }
-        let uiImage = UIImage(cgImage: cgImage, scale: 1.0, orientation: .right)
+        // 手机竖屏时图像是横着的，需要旋转 90°
+        let rotated = ciImage.oriented(.right)
+        guard let cgImage = ciContext.createCGImage(rotated, from: rotated.extent) else { return }
         
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self, !self.isScanClaimed() else { return }
             
             do {
-                let params = engine.baselineRuntimeDefaults()
-                let result = try engine.run(image: uiImage, params: params)
+                // OCREngine.run 是 async throws，接受 CGImage
+                let result = try await engine.run(cgImage)
                 
                 // --- 1. 同步 Android 端的过滤逻辑 ---
                 let texts = result.results.map { $0.text }
