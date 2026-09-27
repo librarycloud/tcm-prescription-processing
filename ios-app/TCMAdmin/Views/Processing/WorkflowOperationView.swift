@@ -160,46 +160,12 @@ public struct WorkflowOperationView: View {
                     }
                     
                     // 设备占用卡片 (对齐 Android OccupyingPlanCard)
-                    if let occEquip = occupiedEquipmentInfo, let usage = occEquip.currentUsage, let occPlanId = usage.processingPlanId, occPlanId > 0 {
-                        let eName = occEquip.name
-                        let eNo = occEquip.equipmentNo ?? ""
-                        let pCode = usage.planCode ?? "计划 #\(occPlanId)"
-                        let ptName = usage.patientName ?? "患者"
-                        let clickCode = usage.planCode ?? ""
-                        OccupyingPlanCard(
-                            equipmentName: eName,
-                            equipmentNo: eNo,
-                            planCode: pCode,
-                            patientName: ptName,
-                            onClick: {
-                                router.navigate(to: .workflowOperation(planId: occPlanId, planCode: clickCode))
-                            }
-                        )
-                    }
+                    occupiedEquipmentView
                     
                     // 2. 顶部计划信息卡片
                     topSummaryCard
                     
-                    if let wf = workflow {
-                        if let pr = wf.processRemark, !pr.isEmpty {
-                            AppCard(padding: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("加工备注").scaledFont(11, weight: .semibold).foregroundStyle(Color.warning)
-                                    Text(pr).scaledFont(14).foregroundStyle(Color.warning)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                        if let r = wf.remark, !r.isEmpty {
-                            AppCard(padding: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("其他备注").scaledFont(11, weight: .semibold).foregroundStyle(Color.muted)
-                                    Text(r).scaledFont(14).foregroundStyle(Color.ink)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
+                    remarksView
                     
                     // 3. 待加工时顶部启动按钮
                     if status == 0 {
@@ -954,6 +920,48 @@ public struct WorkflowOperationView: View {
         }
     }
     
+
+    @ViewBuilder
+    private var occupiedEquipmentView: some View {
+        if let occEquip = occupiedEquipmentInfo, let usage = occEquip.currentUsage, let occPlanId = usage.processingPlanId, occPlanId > 0 {
+            OccupyingPlanCard(
+                equipmentName: occEquip.name,
+                equipmentNo: occEquip.equipmentNo ?? "",
+                planCode: usage.planCode ?? String(occPlanId),
+                patientName: usage.patientName ?? "患者",
+                onClick: {
+                    let cd = usage.planCode ?? ""
+                    router.navigate(to: .workflowOperation(planId: occPlanId, planCode: cd))
+                }
+            )
+        }
+    }
+
+
+    @ViewBuilder
+    private var remarksView: some View {
+        if let wf = workflow {
+            if let pr = wf.plans?.first?.processRemark, !pr.isEmpty {
+                AppCard(padding: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("加工备注").scaledFont(11, weight: .semibold).foregroundStyle(Color.warning)
+                        Text(pr).scaledFont(14).foregroundStyle(Color.warning)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            if let r = wf.plans?.first?.remark, !r.isEmpty {
+                AppCard(padding: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("其他备注").scaledFont(11, weight: .semibold).foregroundStyle(Color.muted)
+                        Text(r).scaledFont(14).foregroundStyle(Color.ink)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
     private func loadWorkflow() async {
         let taskID = UUID()
         currentTaskID = taskID
