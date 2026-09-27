@@ -405,6 +405,60 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
 
 
+    nonisolated private func extractSku(from texts: [String]) -> String? {
+        guard let tokenCharPattern = try? NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#),
+              let skuLabelRegex = try? NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#),
+              let candidate9Pattern = try? NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#),
+              let standalone9Pattern = try? NSRegularExpression(pattern: #"\b\d{9}\b"#),
+              let excludeLinePattern = try? NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)") else { return nil }
+
+        var skuCandidates: [String] = []
+
+        for (i, rawLine) in texts.enumerated() {
+            // 1. 带标签匹配
+            if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil {
+                let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: " ")
+                let cleaned = cleanDigits(afterLabel)
+                if cleaned.count == 9 { skuCandidates.append(cleaned) }
+                let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(afterLabel.startIndex..., in: afterLabel))
+                for match in matches {
+                    let c = cleanDigits((afterLabel as NSString).substring(with: match.range))
+                    if c.count == 9 { skuCandidates.append(c) }
+                }
+                // 向下看 1-2 行
+                for offset in 1...2 {
+                    guard i + offset < texts.count else { break }
+                    let next = texts[i + offset]
+                    if excludeLinePattern.firstMatch(in: next, range: NSRange(next.startIndex..., in: next)) != nil { continue }
+                    let nc = cleanDigits(next)
+                    if nc.count == 9 { skuCandidates.append(nc) }
+                    for m in candidate9Pattern.matches(in: next, range: NSRange(next.startIndex..., in: next)) {
+                        let c = cleanDigits((next as NSString).substring(with: m.range))
+                        if c.count == 9 { skuCandidates.append(c) }
+                    }
+                }
+            }
+        }
+
+        // 2. 独立纯 9 位数字（兜底）
+        if skuCandidates.isEmpty {
+            for rawLine in texts {
+                if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil { continue }
+                let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: "")
+                if (try? NSRegularExpression(pattern: #"\d{10,}"#))?.firstMatch(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) != nil { continue }
+                for m in standalone9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
+                    skuCandidates.append((collapsed as NSString).substring(with: m.range))
+                }
+                for m in candidate9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
+                    let c = cleanDigits((collapsed as NSString).substring(with: m.range))
+                    if c.count == 9 { skuCandidates.append(c) }
+                }
+            }
+        }
+
+        return skuCandidates.first(where: { $0.count == 9 })
+    }
+
     nonisolated private func cleanDigits(_ str: String) -> String {
         var res = ""
         for char in str {
@@ -459,61 +513,14 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             guard !self.isScanClaimed() else { return }
 
             do {
-                let result = try await engine.run(cgImage)
+                let result = try await engine.run(cgImage) { [weak self] results in
+                    guard let self = self else { return false }
+                    return self.extractSku(from: results.map { $0.text }) != nil
+                }
                 let texts = result.results.map { $0.text }
                 if texts.isEmpty { return }
-
-                let tokenCharPattern = try NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
-                let skuLabelRegex = try NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
-                let candidate9Pattern = try NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
-                let standalone9Pattern = try NSRegularExpression(pattern: #"\b\d{9}\b"#)
-                let excludeLinePattern = try NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
-
-                var skuCandidates: [String] = []
-
-                for (i, rawLine) in texts.enumerated() {
-                    // 1. 带标签匹配
-                    if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil {
-                        let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: " ")
-                        let cleaned = self.cleanDigits(afterLabel)
-                        if cleaned.count == 9 { skuCandidates.append(cleaned) }
-                        let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(afterLabel.startIndex..., in: afterLabel))
-                        for match in matches {
-                            let c = self.cleanDigits((afterLabel as NSString).substring(with: match.range))
-                            if c.count == 9 { skuCandidates.append(c) }
-                        }
-                        // 向下看 1-2 行
-                        for offset in 1...2 {
-                            guard i + offset < texts.count else { break }
-                            let next = texts[i + offset]
-                            if excludeLinePattern.firstMatch(in: next, range: NSRange(next.startIndex..., in: next)) != nil { continue }
-                            let nc = self.cleanDigits(next)
-                            if nc.count == 9 { skuCandidates.append(nc) }
-                            for m in candidate9Pattern.matches(in: next, range: NSRange(next.startIndex..., in: next)) {
-                                let c = self.cleanDigits((next as NSString).substring(with: m.range))
-                                if c.count == 9 { skuCandidates.append(c) }
-                            }
-                        }
-                    }
-                }
-
-                // 2. 独立纯 9 位数字（兜底）
-                if skuCandidates.isEmpty {
-                    for rawLine in texts {
-                        if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil { continue }
-                        let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: "")
-                        if (try? NSRegularExpression(pattern: #"\d{10,}"#))?.firstMatch(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) != nil { continue }
-                        for m in standalone9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
-                            skuCandidates.append((collapsed as NSString).substring(with: m.range))
-                        }
-                        for m in candidate9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
-                            let c = self.cleanDigits((collapsed as NSString).substring(with: m.range))
-                            if c.count == 9 { skuCandidates.append(c) }
-                        }
-                    }
-                }
-
-                guard let sku = skuCandidates.first else {
+                
+                guard let sku = self.extractSku(from: texts) else {
                     DispatchQueue.main.async {
                         self.ocrMatchCount = 0
                         self.lastOcrResult = nil

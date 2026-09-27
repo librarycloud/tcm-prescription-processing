@@ -134,7 +134,7 @@ class OCREngine {
     ///   - image: The input `CGImage` to process.
     ///   - params: Optional runtime parameter overrides (see ``OCRRuntimeParams``).
     /// - Returns: `OCRRunResult` with all line results and timing.
-    func run(_ image: CGImage, params: OCRRuntimeParams = .noOverrides) async throws -> OCRRunResult {
+    func run(_ image: CGImage, params: OCRRuntimeParams = .noOverrides, earlyStopPredicate: (([OCRResult]) -> Bool)? = nil) async throws -> OCRRunResult {
         let runStart = CFAbsoluteTimeGetCurrent()
 
         let resolved = params.resolved(detectionEngine.modelConfig)
@@ -180,7 +180,8 @@ class OCREngine {
         let (ocrResults, recTiming, perLine) = try await recognizeSortedBoxes(
             topBoxes,
             sourceImage: image,
-            resolved: resolved
+            resolved: resolved,
+            earlyStopPredicate: earlyStopPredicate
         )
 
         let totalTime = CFAbsoluteTimeGetCurrent() - runStart
@@ -227,11 +228,11 @@ class OCREngine {
     private func recognizeSortedBoxes(
         _ sortedBoxes: [DetectionBox],
         sourceImage: CGImage,
-        resolved: ResolvedOCRRuntimeParams
+        resolved: ResolvedOCRRuntimeParams,
+        earlyStopPredicate: (([OCRResult]) -> Bool)? = nil
     ) async throws -> ([OCRResult], RecognitionTimingAggregate, PerLineRecognitionTimes) {
         struct LineCrop {
             let lineIndex: Int
-            let aspectRatio: Float
             let crop: CGImage
             let polygon: [[Int32]]
         }
@@ -246,40 +247,10 @@ class OCREngine {
             } catch {
                 throw OCREngineError.quadTextCropFailed(boxIndex: index, underlying: error)
             }
-            let h = max(croppedImage.height, 1)
-            let aspect = Float(croppedImage.width) / Float(h)
-            lines.append(LineCrop(lineIndex: index, aspectRatio: aspect, crop: croppedImage, polygon: box.points))
-        }
-
-        let sortedForInference = lines.sorted { a, b in
-            if a.aspectRatio != b.aspectRatio {
-                return a.aspectRatio < b.aspectRatio
-            }
-            return a.lineIndex < b.lineIndex
+            lines.append(LineCrop(lineIndex: index, crop: croppedImage, polygon: box.points))
         }
 
         let batchSize = max(1, resolved.textRecBatchSize)
-        var perLine: [RecognitionEngineResult?] = Array(repeating: nil, count: lines.count)
-        var batchInputShapes: [[Int]] = []
-
-        var chunkStart = 0
-        while chunkStart < sortedForInference.count {
-            let chunkEnd = min(chunkStart + batchSize, sortedForInference.count)
-            let chunk = Array(sortedForInference[chunkStart..<chunkEnd])
-            let crops = chunk.map(\.crop)
-            let recBatch = try await recognitionEngine.recognizeBatch(crops)
-            guard recBatch.count == chunk.count else {
-                throw OCREngineError.recognitionBatchSizeMismatch(expected: chunk.count, actual: recBatch.count)
-            }
-            if let first = recBatch.first {
-                batchInputShapes.append(first.inputTensorShape)
-            }
-            for (i, item) in chunk.enumerated() {
-                perLine[item.lineIndex] = recBatch[i]
-            }
-            chunkStart = chunkEnd
-        }
-
         var ocrResults: [OCRResult] = []
         var totalRecTime: TimeInterval = 0
         var totalRecPre: TimeInterval = 0
@@ -288,27 +259,46 @@ class OCREngine {
         var lineInf: [TimeInterval] = []
         var linePre: [TimeInterval] = []
         var linePost: [TimeInterval] = []
-        lineInf.reserveCapacity(lines.count)
-        linePre.reserveCapacity(lines.count)
-        linePost.reserveCapacity(lines.count)
+        var batchInputShapes: [[Int]] = []
 
-        for line in lines {
-            guard let recResult = perLine[line.lineIndex] else { continue }
-            linePre.append(recResult.preprocessTime)
-            lineInf.append(recResult.inferenceTime)
-            linePost.append(recResult.postprocessTime)
-            totalRecTime += recResult.totalTime
-            totalRecPre += recResult.preprocessTime
-            totalRecInf += recResult.inferenceTime
-            totalRecPost += recResult.postprocessTime
-            if recResult.confidence < resolved.textRecScoreThresh {
-                continue
+        var chunkStart = 0
+        while chunkStart < lines.count {
+            let chunkEnd = min(chunkStart + batchSize, lines.count)
+            let chunk = Array(lines[chunkStart..<chunkEnd])
+            let crops = chunk.map(\.crop)
+            let recBatch = try await recognitionEngine.recognizeBatch(crops)
+            guard recBatch.count == chunk.count else {
+                throw OCREngineError.recognitionBatchSizeMismatch(expected: chunk.count, actual: recBatch.count)
             }
-            ocrResults.append(OCRResult(
-                polygon: line.polygon,
-                text: recResult.text,
-                confidence: recResult.confidence
-            ))
+            if let first = recBatch.first {
+                batchInputShapes.append(first.inputTensorShape)
+            }
+            
+            var batchProducedResult = false
+            for (i, item) in chunk.enumerated() {
+                let recResult = recBatch[i]
+                linePre.append(recResult.preprocessTime)
+                lineInf.append(recResult.inferenceTime)
+                linePost.append(recResult.postprocessTime)
+                totalRecTime += recResult.totalTime
+                totalRecPre += recResult.preprocessTime
+                totalRecInf += recResult.inferenceTime
+                totalRecPost += recResult.postprocessTime
+                
+                if recResult.confidence >= resolved.textRecScoreThresh {
+                    ocrResults.append(OCRResult(
+                        polygon: item.polygon,
+                        text: recResult.text,
+                        confidence: recResult.confidence
+                    ))
+                    batchProducedResult = true
+                }
+            }
+            
+            if batchProducedResult, let predicate = earlyStopPredicate, predicate(ocrResults) {
+                break
+            }
+            chunkStart = chunkEnd
         }
 
         let aggregate = RecognitionTimingAggregate(
