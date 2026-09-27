@@ -160,9 +160,11 @@ object ServerConfigNotifier {
     fun request(uri: android.net.Uri) {
         serverConfigRequest.tryEmit(uri)
     }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun consumeRequest() {
         serverConfigRequest.resetReplayCache()
     }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun consume() {
         importResult.resetReplayCache()
     }

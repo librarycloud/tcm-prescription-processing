@@ -93,7 +93,9 @@ object CacheManager {
                     } else {
                         // For non-standard APK names, parse archive or just assume obsolete
                         val info = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
-                        info == null || info.versionCode <= com.tcm.admin.BuildConfig.VERSION_CODE
+                        @Suppress("DEPRECATION")
+                        val code = info?.versionCode ?: 0
+                        info == null || code <= com.tcm.admin.BuildConfig.VERSION_CODE
                     }
                     
                     if (isObsolete) {
