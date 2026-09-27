@@ -248,6 +248,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated(unsafe) private var hasScanned = false
     nonisolated(unsafe) private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
+    nonisolated(unsafe) private var consecutiveEmptyFrames: Int = 0
     nonisolated(unsafe) private var lastOcrResult: String? = nil
     nonisolated(unsafe) private var ocrMatchCount: Int = 0
     /// 对标 Android ocrInFlight：防止单次推理 > 500ms 时任务叠加
@@ -508,8 +509,17 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             guard !isStopped else { return }
 
             let now = Date()
-            // 限制 OCR 频率为 500ms 一次
-            guard now.timeIntervalSince(lastOcrScanTime) > 0.5 else { return }
+            
+            // --- 动态自适应限流 (对标 Android) ---
+            let throttleMs: TimeInterval
+            if consecutiveEmptyFrames >= 6 {
+                throttleMs = 0.250 // 空白视野：主动拉长至 250ms
+            } else if consecutiveEmptyFrames >= 3 {
+                throttleMs = 0.120 // 过渡阶段
+            } else {
+                throttleMs = 0.0   // 发现目标文字：满速识别，零延迟响应
+            }
+            guard now.timeIntervalSince(lastOcrScanTime) >= throttleMs else { return }
             // 对标 Android ocrInFlight：推理未结束时跳过本帧，防止任务叠加
             guard !ocrInFlight else { return }
             lastOcrScanTime = now
@@ -558,7 +568,13 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 }
                 let texts = result.results.map(\.text)
                 print("PaddleOCR inference finished: total=\(Int(result.totalTime * 1000))ms det=\(Int(result.detectionTime * 1000))ms rec=\(Int(result.recognitionTime * 1000))ms text=\(texts)")
-                if texts.isEmpty { return }
+                
+                if texts.isEmpty {
+                    self.consecutiveEmptyFrames += 1
+                    return
+                } else {
+                    self.consecutiveEmptyFrames = 0
+                }
                 
                 guard let sku = self.extractSku(from: texts) else {
                     DispatchQueue.main.async {
