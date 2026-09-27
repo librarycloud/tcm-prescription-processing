@@ -238,7 +238,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
     nonisolated(unsafe) private var hasScanned = false
-    private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
+    nonisolated(unsafe) private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
     nonisolated(unsafe) private var lastOcrResult: String? = nil
     nonisolated(unsafe) private var ocrMatchCount: Int = 0
@@ -246,10 +246,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated(unsafe) private var ocrInFlight: Bool = false
 
     // PaddleOCR Engine
-    private var ocrEngine: OCREngine?
+    nonisolated(unsafe) private var ocrEngine: OCREngine?
     private var isOcrEngineLoading = false
     // 复用 CIContext，创建代价极高，绝对不能每帧 new 一个
-    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated(unsafe) private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Scan state (被误删的原始实现)
 
@@ -473,7 +473,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
 
     // MARK: - OCR Video Frame Extraction
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard !isScanClaimed() else { return }
 
         let now = Date()
@@ -507,9 +507,13 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
 
         ocrInFlight = true
-        Task { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
-            defer { self.ocrInFlight = false }
+            defer { 
+                Task { @MainActor in
+                    self.ocrInFlight = false 
+                }
+            }
             guard !self.isScanClaimed() else { return }
 
             do {
