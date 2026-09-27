@@ -955,8 +955,8 @@ struct E6ConfirmFormSheet: View {
     
     private func initDefaults() {
         if let first = items.first {
-            customerName = first.displayCustomer
-            phone = first.displayPhone
+            customerName = first.customerName ?? first.patientName ?? ""
+            phone = first.phone ?? ""
             if let dId = first.doctorMapping?.doctorId ?? first.doctorMapping?.doctor?.id, dId > 0 {
                 selectedDoctorId = dId
             }
