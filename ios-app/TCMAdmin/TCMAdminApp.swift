@@ -8,6 +8,16 @@ struct TCMAdminApp: App {
     @State private var showImportAlert = false
     @State private var hasAgreedPrivacy: Bool = UserDefaults.standard.bool(forKey: "agreed_privacy")
     @AppStorage("keep_screen_awake") private var keepScreenAwake: Bool = false
+    @State private var pendingConfigURL: URL? = nil
+    @State private var showConfirmConfigAlert = false
+
+    init() {
+        // App 启动时立即在后台预加载 OCR 引擎，消除扫码界面的冷启动卡顿
+        Task { @MainActor in
+            SharedOCRManager.shared.preload()
+        }
+    }
+
 
     var body: some Scene {
         WindowGroup {
@@ -38,14 +48,50 @@ struct TCMAdminApp: App {
             .tint(theme.primaryColor)
             .enableGlobalKeyboardDismiss()
             .onOpenURL { url in
-                let res = ApiClient.shared.importServerConfig(from: url)
-                importedAlertMessage = res.success ? "已成功自动导入并切换服务器地址：\n\n\(res.newURL ?? "")" : res.message
-                showImportAlert = true
+                if ApiClient.shared.parseServerConfig(from: url) != nil {
+                    pendingConfigURL = url
+                    showConfirmConfigAlert = true
+                } else {
+                    importedAlertMessage = "无效的配置链接"
+                    showImportAlert = true
+                }
             }
             .alert("服务器配置", isPresented: $showImportAlert) {
                 Button("好的", role: .cancel) { }
             } message: {
                 Text(importedAlertMessage ?? "")
+            }
+            .alert("确认切换服务器", isPresented: $showConfirmConfigAlert) {
+                Button("取消", role: .cancel) { }
+                Button("确认", role: .destructive) {
+                    guard let pendingUrl = pendingConfigURL else { return }
+                    
+                    Task { @MainActor in
+                        let wasLoggedIn = SessionManager.shared.isAuthenticated
+                        if wasLoggedIn {
+                            struct EmptyResponse: Decodable {}
+                            _ = try? await ApiClient.shared.request(
+                                path: "/auth/logout",
+                                method: "POST"
+                            ) as EmptyResponse
+                            SessionManager.shared.clearSession()
+                        }
+                        
+                        let res = ApiClient.shared.importServerConfig(from: pendingUrl)
+                        importedAlertMessage = res.success ? "已成功自动导入并切换服务器地址：\n\n\(res.newURL ?? "")" : res.message
+                        showImportAlert = true
+                    }
+                }
+            } message: {
+                if let u = pendingConfigURL, let target = ApiClient.shared.parseServerConfig(from: u) {
+                    if SessionManager.shared.isAuthenticated {
+                        Text("外部链接请求切换服务器。确认后会清除当前登录状态并要求重新登录。\n\n\(target)")
+                    } else {
+                        Text("外部链接请求导入服务器地址，请确认地址可信。\n\n\(target)")
+                    }
+                } else {
+                    Text("")
+                }
             }
             .onAppear {
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
