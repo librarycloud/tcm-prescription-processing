@@ -43,7 +43,7 @@ enum InferenceImageChannelOrder: Equatable, Sendable {
     case rgb
 
     /// Parses `DecodeImage.img_mode`; empty/missing defaults to **BGR**.
-    static func fromDecodeImage(imgMode: String?) -> InferenceImageChannelOrder {
+    nonisolated static func fromDecodeImage(imgMode: String?) -> InferenceImageChannelOrder {
         guard let raw = imgMode?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return .bgr
         }
@@ -150,13 +150,13 @@ extension InferenceConfig {
     // MARK: - Private Parsing Helpers
 
     private enum ParseDefaults {
-        static let postThresh: Float = 0.3
-        static let postBoxThresh: Float = 0.6
-        static let postMaxCandidates: Int = 1000
-        static let postUnclipRatio: Float = 2.0
-        static let detResizeLimitSideLen: Int = 960
-        static let detResizeLimitType: String = "max"
-        static let detResizeMaxSideLimit: Int = 4000
+        nonisolated static let postThresh: Float = 0.3
+        nonisolated static let postBoxThresh: Float = 0.6
+        nonisolated static let postMaxCandidates: Int = 1000
+        nonisolated static let postUnclipRatio: Float = 2.0
+        nonisolated static let detResizeLimitSideLen: Int = 960
+        nonisolated static let detResizeLimitType: String = "max"
+        nonisolated static let detResizeMaxSideLimit: Int = 4000
     }
 
     private static let defaultDetResizeParams = DetResizeParams(
@@ -218,7 +218,7 @@ extension InferenceConfig {
 
     /// Parses the `scale` field which may be a numeric value or a fraction string like `"1./255."`.
     /// Handles string division expressions by splitting on "/" and computing the result.
-    private static func parseScale(_ value: Any?) -> Float {
+    nonisolated private static func parseScale(_ value: Any?) -> Float {
         if let floatVal = value as? Double {
             return Float(floatVal)
         }
@@ -230,7 +230,7 @@ extension InferenceConfig {
     }
 
     /// Evaluates a fraction string by splitting on `"/"` and dividing numerator by denominator.
-    private static func parseScaleString(_ s: String) -> Float {
+    nonisolated private static func parseScaleString(_ s: String) -> Float {
         if s.contains("/") {
             let parts = s.split(separator: "/")
             if parts.count == 2,
@@ -251,7 +251,7 @@ extension InferenceConfig {
         return 1.0 / 255.0
     }
 
-    private static func parseFloatArray(_ value: Any?) -> [Float]? {
+    nonisolated private static func parseFloatArray(_ value: Any?) -> [Float]? {
         guard let array = value as? [Any] else { return nil }
         return array.compactMap { element -> Float? in
             if let d = element as? Double { return Float(d) }
@@ -278,13 +278,13 @@ extension InferenceConfig {
         )
     }
 
-    private static func toInt(_ value: Any) -> Int? {
+    nonisolated private static func toInt(_ value: Any) -> Int? {
         if let i = value as? Int { return i }
         if let d = value as? Double { return Int(d) }
         return nil
     }
 
-    private static func optionalIntValue(_ value: Any?) -> Int? {
+    nonisolated private static func optionalIntValue(_ value: Any?) -> Int? {
         guard let value else { return nil }
         return toInt(value)
     }
@@ -295,7 +295,7 @@ extension InferenceConfig {
         return params[key] as? String
     }
 
-    private static func intValueForKeyIfPresent(_ params: [String: Any], key: String) -> Int? {
+    nonisolated private static func intValueForKeyIfPresent(_ params: [String: Any], key: String) -> Int? {
         guard params.keys.contains(key) else { return nil }
         return optionalIntValue(params[key])
     }
