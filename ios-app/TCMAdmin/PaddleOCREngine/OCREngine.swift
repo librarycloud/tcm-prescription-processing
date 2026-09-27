@@ -140,9 +140,45 @@ class OCREngine {
         let resolved = params.resolved(detectionEngine.modelConfig)
 
         let detResult = try await detectionEngine.detect(image, runtimeParams: params)
-        let sortedBoxes = BoxSorter.sortInReadingOrder(detResult.boxes)
+        
+        // --- 几何预过滤 (对齐 Android 端逻辑) ---
+        // 排除单字方块中文（如“盒”、“片”、“OTC”等）、排除极小噪点文字、排除无法容纳 9 位数字的极短碎框
+        let filteredBoxes = detResult.boxes.filter { box in
+            guard box.points.count == 4 else { return false }
+            let pt0 = box.points[0], pt1 = box.points[1], pt2 = box.points[2]
+            let dx1 = Double(pt1[0] - pt0[0]), dy1 = Double(pt1[1] - pt0[1])
+            let dx2 = Double(pt2[0] - pt1[0]), dy2 = Double(pt2[1] - pt1[1])
+            let w = sqrt(dx1 * dx1 + dy1 * dy1)
+            let h = sqrt(dx2 * dx2 + dy2 * dy2)
+            
+            if w < 32 || h < 8 { return false }
+            if h == 0 { return false }
+            let aspectRatio = w / h
+            if aspectRatio < 1.25 { return false }
+            return true
+        }
+
+        // 准心中心优先排序识别！
+        let cx = Double(image.width) / 2.0
+        let cy = Double(image.height) / 2.0
+        let sortedByCenter = filteredBoxes.sorted { b1, b2 in
+            let pts1 = b1.points, pts2 = b2.points
+            guard pts1.count == 4, pts2.count == 4 else { return false }
+            let midX1 = Double(pts1[0][0] + pts1[1][0] + pts1[2][0] + pts1[3][0]) / 4.0
+            let midY1 = Double(pts1[0][1] + pts1[1][1] + pts1[2][1] + pts1[3][1]) / 4.0
+            let midX2 = Double(pts2[0][0] + pts2[1][0] + pts2[2][0] + pts2[3][0]) / 4.0
+            let midY2 = Double(pts2[0][1] + pts2[1][1] + pts2[2][1] + pts2[3][1]) / 4.0
+            
+            let dist1 = (midX1 - cx) * (midX1 - cx) + (midY1 - cy) * (midY1 - cy)
+            let dist2 = (midX2 - cx) * (midX2 - cx) + (midY2 - cy) * (midY2 - cy)
+            return dist1 < dist2
+        }
+        
+        // 每帧上限识别 6 个中心候选框，彻底杜绝无目标空转卡顿
+        let topBoxes = Array(sortedByCenter.prefix(6))
+        
         let (ocrResults, recTiming, perLine) = try await recognizeSortedBoxes(
-            sortedBoxes,
+            topBoxes,
             sourceImage: image,
             resolved: resolved
         )

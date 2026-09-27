@@ -298,9 +298,12 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     // ORTSessionManager 是 actor，需要 await loadModels()
                     // ModelConfig 会自动从 Bundle 的 Models/det 和 Models/rec 目录读取
                     let sessionManager = ORTSessionManager()
-                    try await sessionManager.loadModels(executionProvider: .cpu)
+                    var tuning = ORTSessionTuningOptions.default
+                    tuning.xnnpackThreads = 4
+                    tuning.intraOpThreads = 4
+                    try await sessionManager.loadModels(executionProvider: .xnnpack, tuning: tuning)
                     self.ocrEngine = try OCREngine(sessionManager: sessionManager)
-                    print("PaddleOCR engine loaded successfully (CPU EP)")
+                    print("PaddleOCR engine loaded successfully (XNNPACK EP with 4 threads)")
                 } catch {
                     print("Failed to load PaddleOCR engine: \(error)")
                 }
@@ -450,7 +453,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
 
         ocrInFlight = true
-        Task { @MainActor [weak self] in
+        Task { [weak self] in
             guard let self = self else { return }
             defer { self.ocrInFlight = false }
             guard !self.isScanClaimed() else { return }
@@ -525,9 +528,12 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                         self.lastOcrResult = sku
                         self.ocrMatchCount = 1
                     }
-                    if self.ocrMatchCount >= 1 {
+                    if self.ocrMatchCount >= 2 {
                         guard self.claimScan() else { return }
-                        self.onScanned?(sku)
+                        let finalSku = sku
+                        DispatchQueue.main.async {
+                            self.onScanned?(finalSku)
+                        }
                         self.lastOcrResult = nil
                         self.ocrMatchCount = 0
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
