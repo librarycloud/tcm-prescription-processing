@@ -1,7 +1,6 @@
 import SwiftUI
 import AVFoundation
-import Vision
-import CoreVideo
+import CoreImage
 import UIKit
 
 @MainActor
@@ -243,12 +242,46 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private var lastOcrScanTime: Date = Date.distantPast
     private var lastOcrResult: String? = nil
     private var ocrMatchCount: Int = 0
-    
+    /// 对标 Android ocrInFlight：防止单次推理 > 500ms 时任务叠加
+    private var ocrInFlight: Bool = false
+
     // PaddleOCR Engine
     private var ocrEngine: OCREngine?
     private var isOcrEngineLoading = false
     // 复用 CIContext，创建代价极高，绝对不能每帧 new 一个
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    // MARK: - Scan state (被误删的原始实现)
+
+    @discardableResult
+    func claimScan() -> Bool {
+        var claimed = false
+        scanStateQueue.sync {
+            if !hasScanned { hasScanned = true; claimed = true }
+        }
+        return claimed
+    }
+
+    func releaseScan() {
+        scanStateQueue.sync { hasScanned = false }
+    }
+
+    func isScanClaimed() -> Bool {
+        scanStateQueue.sync { hasScanned }
+    }
+
+    // MARK: - Camera control
+
+    func setTorch(on: Bool) {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        try? device.lockForConfiguration()
+        device.torchMode = on ? .on : .off
+        device.unlockForConfiguration()
+    }
+
+    func stopScanner() {
+        sessionQueue.async { [weak self] in self?.captureSession?.stopRunning() }
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -385,108 +418,105 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     // MARK: - OCR Video Frame Extraction
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard !isScanClaimed() else { return }
-        
+
         let now = Date()
-        // 限制 OCR 频率为 500ms 一次，避免过多占用CPU
+        // 限制 OCR 频率为 500ms 一次
         guard now.timeIntervalSince(lastOcrScanTime) > 0.5 else { return }
+        // 对标 Android ocrInFlight：推理未结束时跳过本帧，防止任务叠加
+        guard !ocrInFlight else { return }
         lastOcrScanTime = now
-        
+
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        
         guard let engine = self.ocrEngine else { return }
-        
-        // 提取图像并运行PaddleOCR（复用 ciContext，避免每帧重建）
+
+        // --- ROI 裁剪：只送取景框区域入模型（对标 Android restrictScanningToRect）---
+        // 相机帧是横向的（手机竖屏），原始尺寸为 1920×1080（宽×高）
+        // 竖屏显示时实际是 1080×1920，旋转后 ROI 取中心 60%×40% 区域
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        // 手机竖屏时图像是横着的，需要旋转 90°
-        let rotated = ciImage.oriented(.right)
+        let frameW = ciImage.extent.width   // 旋转前：1920
+        let frameH = ciImage.extent.height  // 旋转前：1080
+
+        // 在原始（横向）坐标系中取中心区域，对应竖屏取景框
+        // 竖屏的"横向中间 60%"对应横向帧的"纵向中间 60%"
+        let roiX = frameW * 0.1
+        let roiY = frameH * 0.2
+        let roiW = frameW * 0.8
+        let roiH = frameH * 0.6
+        let roiRect = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
+        let cropped = ciImage.cropped(to: roiRect)
+        let rotated = cropped.oriented(.right)
+
         guard let cgImage = ciContext.createCGImage(rotated, from: rotated.extent) else { return }
-        
+
+        ocrInFlight = true
         Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self = self, !self.isScanClaimed() else { return }
-            
+            guard let self = self else { return }
+            defer { self.ocrInFlight = false }
+            guard !self.isScanClaimed() else { return }
+
             do {
-                // OCREngine.run 是 async throws，接受 CGImage
                 let result = try await engine.run(cgImage)
-                
-                // --- 1. 同步 Android 端的过滤逻辑 ---
                 let texts = result.results.map { $0.text }
                 if texts.isEmpty { return }
-                
-                let tokenCharPattern = try NSRegularExpression(pattern: "[\\s:：#\\-_/|]+")
-                let skuLabelRegex = try NSRegularExpression(pattern: "(?i)(?:^|[^a-zA-Z0-9\\u{4e00}-\\u{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\\s|$)")
-                let candidate9Pattern = try NSRegularExpression(pattern: "(?i)\\b[0-9A-Za-z|!〇\\s.\\-_]{8,24}\\b")
-                let standalone9Pattern = try NSRegularExpression(pattern: "\\b\\d{9}\\b")
+
+                let tokenCharPattern = try NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
+                let skuLabelRegex = try NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
+                let candidate9Pattern = try NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
+                let standalone9Pattern = try NSRegularExpression(pattern: #"\b\d{9}\b"#)
                 let excludeLinePattern = try NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
-                
+
                 var skuCandidates: [String] = []
-                
+
                 for (i, rawLine) in texts.enumerated() {
-                    let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: "")
-                    
                     // 1. 带标签匹配
-                    if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(location: 0, length: rawLine.count)) != nil {
-                        let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: " ")
+                    if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil {
+                        let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: " ")
                         let cleaned = self.cleanDigits(afterLabel)
                         if cleaned.count == 9 { skuCandidates.append(cleaned) }
-                        
-                        let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(location: 0, length: afterLabel.count))
+                        let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(afterLabel.startIndex..., in: afterLabel))
                         for match in matches {
-                            let matchText = (afterLabel as NSString).substring(with: match.range)
-                            let c = self.cleanDigits(matchText)
+                            let c = self.cleanDigits((afterLabel as NSString).substring(with: match.range))
                             if c.count == 9 { skuCandidates.append(c) }
                         }
-                        
                         // 向下看 1-2 行
                         for offset in 1...2 {
                             guard i + offset < texts.count else { break }
-                            let nextLine = texts[i + offset]
-                            if excludeLinePattern.firstMatch(in: nextLine, range: NSRange(location: 0, length: nextLine.count)) != nil { continue }
-                            
-                            let nextCleaned = self.cleanDigits(nextLine)
-                            if nextCleaned.count == 9 { skuCandidates.append(nextCleaned) }
-                            
-                            let nextMatches = candidate9Pattern.matches(in: nextLine, range: NSRange(location: 0, length: nextLine.count))
-                            for match in nextMatches {
-                                let matchText = (nextLine as NSString).substring(with: match.range)
-                                let c = self.cleanDigits(matchText)
+                            let next = texts[i + offset]
+                            if excludeLinePattern.firstMatch(in: next, range: NSRange(next.startIndex..., in: next)) != nil { continue }
+                            let nc = self.cleanDigits(next)
+                            if nc.count == 9 { skuCandidates.append(nc) }
+                            for m in candidate9Pattern.matches(in: next, range: NSRange(next.startIndex..., in: next)) {
+                                let c = self.cleanDigits((next as NSString).substring(with: m.range))
                                 if c.count == 9 { skuCandidates.append(c) }
                             }
                         }
                     }
                 }
-                
-                // 2. 独立纯 9 位数字
+
+                // 2. 独立纯 9 位数字（兜底）
                 if skuCandidates.isEmpty {
                     for rawLine in texts {
-                        if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(location: 0, length: rawLine.count)) != nil { continue }
-                        let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: "")
-                        
-                        if let _ = try? NSRegularExpression(pattern: "\\d{10,}").firstMatch(in: collapsed, range: NSRange(location: 0, length: collapsed.count)) { continue }
-                        
-                        let matches = standalone9Pattern.matches(in: collapsed, range: NSRange(location: 0, length: collapsed.count))
-                        for match in matches {
-                            skuCandidates.append((collapsed as NSString).substring(with: match.range))
+                        if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil { continue }
+                        let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: "")
+                        if (try? NSRegularExpression(pattern: #"\d{10,}"#))?.firstMatch(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) != nil { continue }
+                        for m in standalone9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
+                            skuCandidates.append((collapsed as NSString).substring(with: m.range))
                         }
-                        
-                        let cMatches = candidate9Pattern.matches(in: collapsed, range: NSRange(location: 0, length: collapsed.count))
-                        for match in cMatches {
-                            let matchText = (collapsed as NSString).substring(with: match.range)
-                            let c = self.cleanDigits(matchText)
+                        for m in candidate9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
+                            let c = self.cleanDigits((collapsed as NSString).substring(with: m.range))
                             if c.count == 9 { skuCandidates.append(c) }
                         }
                     }
                 }
-                
-                let finalSku = skuCandidates.first
-                
-                guard let sku = finalSku else {
+
+                guard let sku = skuCandidates.first else {
                     DispatchQueue.main.async {
                         self.ocrMatchCount = 0
                         self.lastOcrResult = nil
                     }
                     return
                 }
-                
+
                 DispatchQueue.main.async {
                     if sku == self.lastOcrResult {
                         self.ocrMatchCount += 1
@@ -494,13 +524,11 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                         self.lastOcrResult = sku
                         self.ocrMatchCount = 1
                     }
-                    
                     if self.ocrMatchCount >= 2 {
                         guard self.claimScan() else { return }
                         self.onScanned?(sku)
                         self.lastOcrResult = nil
                         self.ocrMatchCount = 0
-                        
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             self.releaseScan()
                         }
