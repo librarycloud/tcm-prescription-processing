@@ -1254,7 +1254,7 @@ internal fun WorkflowOperationScreen(
             Surface(color = WarningSoft, shape = FieldShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
                     Text("加工备注", color = Warning, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text(procRem, color = WarningDark, fontSize = 14.sp)
+                    Text(procRem, color = Warning, fontSize = 14.sp)
                 }
             }
         }
