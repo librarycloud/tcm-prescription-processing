@@ -213,20 +213,25 @@ struct DetPreprocessor {
 
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        var out = [UInt8](repeating: 0, count: height * width * 3)
-        for i in 0..<(height * width) {
-            let r = rgbaData[i * 4]
-            let g = rgbaData[i * 4 + 1]
-            let b = rgbaData[i * 4 + 2]
-            switch order {
-            case .bgr:
-                out[i * 3] = b
-                out[i * 3 + 1] = g
-                out[i * 3 + 2] = r
-            case .rgb:
-                out[i * 3] = r
-                out[i * 3 + 1] = g
-                out[i * 3 + 2] = b
+        let pixelCount = height * width
+        var out = [UInt8](repeating: 0, count: pixelCount * 3)
+        if order == .bgr {
+            // Fast BGR path: bulk copy 4 bytes, drop alpha byte inline
+            for i in 0..<pixelCount {
+                let src = i * 4
+                let dst = i * 3
+                out[dst]     = rgbaData[src + 2] // B
+                out[dst + 1] = rgbaData[src + 1] // G
+                out[dst + 2] = rgbaData[src]     // R
+            }
+        } else {
+            // RGB path
+            for i in 0..<pixelCount {
+                let src = i * 4
+                let dst = i * 3
+                out[dst]     = rgbaData[src]     // R
+                out[dst + 1] = rgbaData[src + 1] // G
+                out[dst + 2] = rgbaData[src + 2] // B
             }
         }
         return out
