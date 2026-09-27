@@ -776,6 +776,7 @@ private fun E6PrescriptionItemRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun E6ImportConfirmScreen(
     initial: JSONObject,

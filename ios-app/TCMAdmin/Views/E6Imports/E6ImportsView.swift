@@ -435,32 +435,42 @@ public struct E6ImportsView: View {
         await loadE6Imports(isLoadMore: true)
     }
 
-    private func loadE6Imports() async {
+    private func loadE6Imports(isLoadMore: Bool = false) async {
         let taskID = UUID()
         currentTaskID = taskID
-        isLoading = true
+        if !isLoadMore {
+            isLoading = true
+        } else {
+            isLoadingMore = true
+        }
         errorMessage = nil
         defer {
             if currentTaskID == taskID {
                 isLoading = false
+                isLoadingMore = false
             }
         }
         do {
             let res = try await ApiClient.shared.fetchE6Imports(
                 keyword: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
                 status: selectedStatus,
-                orderDate: orderDate
+                orderDate: orderDate,
+                page: page,
+                pageSize: 20
             )
             guard !Task.isCancelled else { return }
-            self.e6Imports = res
+            
+            if isLoadMore {
+                self.e6Imports.append(contentsOf: res)
+            } else {
+                self.e6Imports = res
+            }
+            self.hasMore = res.count == 20
         } catch is CancellationError {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            let desc = error.localizedDescription
-            if !desc.lowercased().contains("cancel") && !desc.isEmpty {
-                self.errorMessage = desc
-            }
+            self.errorMessage = error.localizedDescription
         }
     }
     
