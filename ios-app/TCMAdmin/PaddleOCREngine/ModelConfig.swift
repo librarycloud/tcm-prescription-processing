@@ -24,7 +24,7 @@ struct ModelConfig {
     let name: String
 
     /// Human-readable label from `Global.model_name` in the model config file; `fallback` if the file cannot be read.
-    private static func displayName(fromModelConfigPath configPath: String, fallback: String) -> String {
+    private nonisolated static func displayName(fromModelConfigPath configPath: String, fallback: String) -> String {
         guard let cfg = try? InferenceConfig.load(from: configPath) else {
             return fallback
         }
@@ -40,7 +40,7 @@ struct ModelConfig {
         "inference.with_runtime_opt",
     ]
 
-    private static func bundledOrtPath(prefix: String) -> String? {
+    private nonisolated static func bundledOrtPath(prefix: String) -> String? {
         // Just directly try the prefix (e.g. det_inference.ort)
         if let p = Bundle.main.path(forResource: prefix, ofType: "ort") {
             return p
@@ -48,7 +48,7 @@ struct ModelConfig {
         return nil
     }
 
-    private static func bundledWeightsPath(prefix: String, notFoundMessage: String) throws -> String {
+    private nonisolated static func bundledWeightsPath(prefix: String, notFoundMessage: String) throws -> String {
         if let ort = bundledOrtPath(prefix: prefix) {
             return ort
         }

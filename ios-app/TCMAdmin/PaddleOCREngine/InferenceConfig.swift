@@ -101,7 +101,7 @@ struct InferenceConfig {
     ///
     /// - Parameter path: Absolute filesystem path to the model config file.
     /// - Returns: A fully parsed `InferenceConfig` with typed transform operations.
-    static func load(from path: String) throws -> InferenceConfig {
+    nonisolated static func load(from path: String) throws -> InferenceConfig {
         guard FileManager.default.fileExists(atPath: path) else {
             throw InferenceConfigError.fileNotFound(path)
         }
@@ -166,7 +166,7 @@ extension InferenceConfig {
     )
 
     /// Parses a single transform operation dictionary (one key = op name, value = params or null).
-    private static func parseTransformOp(_ dict: [String: Any?]) -> TransformOp {
+    nonisolated private static func parseTransformOp(_ dict: [String: Any?]) -> TransformOp {
         guard let opName = dict.keys.first else {
             return .unknown(name: "empty")
         }
@@ -260,7 +260,7 @@ extension InferenceConfig {
         }
     }
 
-    private static func parsePostProcess(_ dict: [String: Any]) -> PostProcessConfig {
+    nonisolated private static func parsePostProcess(_ dict: [String: Any]) -> PostProcessConfig {
         let name = dict["name"] as? String ?? "Unknown"
         let thresh = (dict["thresh"] as? Double).map { Float($0) } ?? ParseDefaults.postThresh
         let boxThresh = (dict["box_thresh"] as? Double).map { Float($0) } ?? ParseDefaults.postBoxThresh

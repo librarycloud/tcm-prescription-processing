@@ -721,6 +721,12 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 58E615198A528B3374DAB9F0 /* Pods-TCMAdmin.debug.xcconfig */;
 			buildSettings = {
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-Wno-error=quoted-include-in-framework-header",
+				);
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PODS_ROOT)/onnxruntime-objc/objectivec",
@@ -788,6 +794,12 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = DEC7EA7248024733644B3878 /* Pods-TCMAdmin.release.xcconfig */;
 			buildSettings = {
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-Wno-error=quoted-include-in-framework-header",
+				);
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PODS_ROOT)/onnxruntime-objc/objectivec",

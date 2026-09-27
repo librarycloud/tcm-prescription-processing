@@ -161,14 +161,18 @@ public struct WorkflowOperationView: View {
                     
                     // 设备占用卡片 (对齐 Android OccupyingPlanCard)
                     if let occEquip = occupiedEquipmentInfo, let usage = occEquip.currentUsage, let occPlanId = usage.processingPlanId, occPlanId > 0 {
+                        let eName = occEquip.name
+                        let eNo = occEquip.equipmentNo ?? ""
+                        let pCode = usage.planCode ?? "计划 #\(occPlanId)"
+                        let ptName = usage.patientName ?? "患者"
+                        let clickCode = usage.planCode ?? ""
                         OccupyingPlanCard(
-                            equipmentName: occEquip.name,
-                            equipmentNo: occEquip.equipmentNo ?? "",
-                            planCode: usage.planCode ?? "计划 #\(occPlanId)",
-                            patientName: usage.patientName ?? "患者",
+                            equipmentName: eName,
+                            equipmentNo: eNo,
+                            planCode: pCode,
+                            patientName: ptName,
                             onClick: {
-                                let code = usage.planCode ?? ""
-                                router.navigate(to: .workflowOperation(planId: occPlanId, planCode: code))
+                                router.navigate(to: .workflowOperation(planId: occPlanId, planCode: clickCode))
                             }
                         )
                     }

@@ -237,13 +237,13 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private var captureSession: AVCaptureSession?
     private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
-    private var hasScanned = false
+    nonisolated(unsafe) private var hasScanned = false
     private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
-    private var lastOcrScanTime: Date = Date.distantPast
-    private var lastOcrResult: String? = nil
-    private var ocrMatchCount: Int = 0
+    nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
+    nonisolated(unsafe) private var lastOcrResult: String? = nil
+    nonisolated(unsafe) private var ocrMatchCount: Int = 0
     /// 对标 Android ocrInFlight：防止单次推理 > 500ms 时任务叠加
-    private var ocrInFlight: Bool = false
+    nonisolated(unsafe) private var ocrInFlight: Bool = false
 
     // PaddleOCR Engine
     private var ocrEngine: OCREngine?
@@ -266,7 +266,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         scanStateQueue.sync { hasScanned = false }
     }
 
-    func isScanClaimed() -> Bool {
+    nonisolated func isScanClaimed() -> Bool {
         scanStateQueue.sync { hasScanned }
     }
 
@@ -291,7 +291,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
     private func setupCamera() {
         if enableOCR {
-            Task.detached(priority: .userInitiated) { [weak self] in
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.isOcrEngineLoading = true
                 do {
@@ -402,7 +402,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
 
 
-    private func cleanDigits(_ str: String) -> String {
+    nonisolated private func cleanDigits(_ str: String) -> String {
         var res = ""
         for char in str {
             if char.isNumber { res.append(char) }
@@ -449,7 +449,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard let cgImage = ciContext.createCGImage(rotated, from: rotated.extent) else { return }
 
         ocrInFlight = true
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self = self else { return }
             defer { self.ocrInFlight = false }
             guard !self.isScanClaimed() else { return }

@@ -111,19 +111,17 @@ struct ORTSessionTuningOptions: Sendable {
 
 extension ORTSessionTuningOptions: Equatable {}
 
-/// At most one placement-related Core ML EP option is applied. Priority matches
-/// ``OnnxRuntimeSettingsPanel`` when several keys appear (e.g. benchmark env / JSON).
-private func applyCoreMLPlacementFlags(from flags: Set<String>, to coreml: ORTCoreMLExecutionProviderOptions) {
-    if flags.contains(ORTCoreMLProviderOption.cpuOnly.rawValue) {
-        coreml.useCPUOnly = true
-    } else if flags.contains(ORTCoreMLProviderOption.cpuAndGPU.rawValue) {
-        coreml.useCPUAndGPU = true
-    } else if flags.contains(ORTCoreMLProviderOption.aneOnly.rawValue) {
-        coreml.onlyEnableForDevicesWithANE = true
-    }
-}
 
 actor ORTSessionManager {
+    private func applyCoreMLPlacementFlags(from flags: Set<String>, to coreml: ORTCoreMLExecutionProviderOptions) {
+        if flags.contains(ORTCoreMLProviderOption.cpuOnly.rawValue) {
+            coreml.useCPUOnly = true
+        } else if flags.contains(ORTCoreMLProviderOption.cpuAndGPU.rawValue) {
+            coreml.useCPUAndGPU = true
+        } else if flags.contains(ORTCoreMLProviderOption.aneOnly.rawValue) {
+            coreml.onlyEnableForDevicesWithANE = true
+        }
+    }
     private struct SessionIONames {
         let inputName: String
         let outputNames: Set<String>

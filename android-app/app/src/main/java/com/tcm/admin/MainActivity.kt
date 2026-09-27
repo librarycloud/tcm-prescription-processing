@@ -434,15 +434,16 @@ private fun TcmAdminApp() {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
 
         pendingServerConfig?.let { uri ->
+            val displayUrl = uri.getQueryParameter("url") ?: uri.toString()
             AlertDialog(
                 onDismissRequest = { pendingServerConfig = null },
                 title = { Text("确认切换服务器") },
                 text = {
                     Text(
                         if (session != null) {
-                            "外部链接请求切换服务器。确认后会清除当前登录状态并要求重新登录。\n\n${uri}"
+                            "外部链接请求切换服务器。确认后会清除当前登录状态并要求重新登录。\n\n${displayUrl}"
                         } else {
-                            "外部链接请求导入服务器地址，请确认地址可信。\n\n${uri}"
+                            "外部链接请求导入服务器地址，请确认地址可信。\n\n${displayUrl}"
                         }
                     )
                 },
@@ -451,18 +452,23 @@ private fun TcmAdminApp() {
                         val target = pendingServerConfig ?: return@TextButton
                         pendingServerConfig = null
                         scope.launch {
+                            var wasLoggedIn = false
                             if (session != null) {
+                                wasLoggedIn = true
+                                runCatching { withContext(Dispatchers.IO) { ApiClient.logout() } }
                                 ApiClient.clearSession(appContext)
                                 clearRetainedListValues()
                                 session = null
-                                navController.navigate(Route.Login) {
-                                    popUpTo(navController.graph.id) { inclusive = true }
-                                }
                             }
                             val result = withContext(Dispatchers.IO) {
                                 ApiClient.importServerConfig(appContext, target)
                             }
                             ServerConfigNotifier.notify(result.first, result.second)
+                            if (wasLoggedIn) {
+                                navController.navigate(Route.Login) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                }
+                            }
                         }
                     }) { Text("确认") }
                 },

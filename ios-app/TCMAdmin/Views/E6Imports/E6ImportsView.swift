@@ -307,13 +307,15 @@ public struct E6ImportsView: View {
                             }
                         }
                         .padding(16)
-                        if hasMore && !e6Imports.isEmpty {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .task {
-                                    await loadMoreE6Imports()
-                                }
+                        Group {
+                            if hasMore && !e6Imports.isEmpty {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .task {
+                                        await loadMoreE6Imports()
+                                    }
+                            }
                         }
                         .padding(.bottom, selectedIds.isEmpty ? 0 : 64)
                     }
