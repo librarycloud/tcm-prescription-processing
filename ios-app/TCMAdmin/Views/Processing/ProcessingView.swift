@@ -572,7 +572,14 @@ public struct ProcessingView: View {
                     } catch { lastError = error.localizedDescription }
                 }
                 
-                if successMsg != nil { startLoadData() } else { self.quickScanErrorMessage = lastError.isEmpty ? "扫码设备分配失败" : lastError; self.showQuickScanAlert = true }
+                if let msg = successMsg {
+                    self.quickScanErrorMessage = msg
+                    self.showQuickScanAlert = true
+                    startLoadData()
+                } else {
+                    self.quickScanErrorMessage = lastError.isEmpty ? "扫码设备分配失败" : lastError
+                    self.showQuickScanAlert = true
+                }
             } catch { self.quickScanErrorMessage = "获取工序状态失败: \(error.localizedDescription)"; self.showQuickScanAlert = true }
         }
     }
