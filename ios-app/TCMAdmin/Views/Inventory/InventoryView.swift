@@ -512,10 +512,12 @@ struct InventoryView: View {
                                 if let upd = batch.updatedAt, !upd.isEmpty {
                                     let updFormatted = formatDateTimeToMinute(upd)
                                     Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
-                                    Text("更新时间: \(updFormatted)")
-                                        .scaledFont(11)
-                                        .foregroundStyle(Color.muted)
-                                        .padding(.top, 2)
+                                    HStack {
+                                        Text("更新时间").scaledFont(11).foregroundStyle(Color.muted)
+                                        Spacer()
+                                        Text(updFormatted).scaledFont(11).foregroundStyle(Color.muted)
+                                    }
+                                    .padding(.top, 2)
                                 }
                             }
                         }

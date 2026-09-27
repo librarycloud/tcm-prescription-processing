@@ -705,7 +705,14 @@ internal fun InventoryScreen(
                             Spacer(Modifier.height(6.dp))
                             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                             Spacer(Modifier.height(4.dp))
-                            Text("更新时间: $updDate", color = Muted, fontSize = 11.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("更新时间", color = Muted, fontSize = 11.sp)
+                                Text(updDate, color = Muted, fontSize = 11.sp)
+                            }
                         }
                     }
                 }
