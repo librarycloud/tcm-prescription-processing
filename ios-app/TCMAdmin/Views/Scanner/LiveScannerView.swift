@@ -556,7 +556,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             #if DEBUG
             print("PaddleOCR inference started: \(cgImage.width)x\(cgImage.height)")
             #endif
-            Task.detached(priority: .utility) { [weak self] in
+            Task.detached(priority: .userInitiated) { [weak self] in
                 guard let self = self else { return }
                 defer { 
                     Task { @MainActor in
