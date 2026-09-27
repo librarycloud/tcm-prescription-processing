@@ -300,7 +300,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     let sessionManager = ORTSessionManager()
                     var tuning = ORTSessionTuningOptions.default
                     tuning.xnnpackThreads = 4
-                    tuning.intraOpThreads = 4
+                    tuning.intraOpThreads = 1 // 修复与 XNNPACK 内部线程池的资源竞争导致死锁/闪退
                     try await sessionManager.loadModels(executionProvider: .xnnpack, tuning: tuning)
                     self.ocrEngine = try OCREngine(sessionManager: sessionManager)
                     print("PaddleOCR engine loaded successfully (XNNPACK EP with 4 threads)")
