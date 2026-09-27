@@ -509,6 +509,15 @@ struct InventoryView: View {
                                     }
                                     .padding(.top, 2)
                                 }
+                                
+                                if let upd = batch.updatedAt, !upd.isEmpty {
+                                    let updFormatted = String(upd.replacingOccurrences(of: "T", with: " ").prefix(16))
+                                    Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
+                                    Text("更新时间: \(updFormatted)")
+                                        .scaledFont(10)
+                                        .foregroundStyle(Color.muted)
+                                        .padding(.top, 2)
+                                }
                             }
                         }
                     }

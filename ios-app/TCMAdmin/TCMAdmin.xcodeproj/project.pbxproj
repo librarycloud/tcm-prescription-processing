@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 90;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -54,6 +54,7 @@
 		7C6DC6053059647800D4F198 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC5053059647800D4F198 /* UpdateManager.swift */; };
 		7C6DC6063059647800D4F198 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC5063059647800D4F198 /* ThemeManager.swift */; };
 		7CE54047A62F985D4B2D016A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B968473F98B1C92433064B1B /* Assets.xcassets */; };
+		7D4A377FC516E7864F317887 /* Pods_TCMAdmin.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A153C52175F39A6799FC2585 /* Pods_TCMAdmin.framework */; };
 		902B4B378302A14EC34C2E87 /* DetectionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 410B4C4FB3B905BBA451AC13 /* DetectionEngine.swift */; };
 		99F74D0598385439DCA9C315 /* TCMAdmin-Bridging-Header.h in Headers */ = {isa = PBXBuildFile; fileRef = 78DC430EBD831227A8F2D8C6 /* TCMAdmin-Bridging-Header.h */; };
 		A4B44E388AD11EB3A5DFB850 /* RecognitionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0C4084943B3A7D60A65DC7 /* RecognitionEngine.swift */; };
@@ -85,6 +86,7 @@
 		48AD4079BC93A587EFA480B0 /* ORTSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ORTSessionManager.swift; path = PaddleOCREngine/ORTSessionManager.swift; sourceTree = "<group>"; };
 		52494A85AF53D385345904AE /* DBPostProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DBPostProcess.swift; path = PaddleOCREngine/DBPostProcess.swift; sourceTree = "<group>"; };
 		53754429BB3FB62726CF3541 /* QuadTextCrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QuadTextCrop.swift; path = PaddleOCREngine/QuadTextCrop.swift; sourceTree = "<group>"; };
+		5C6FE81B7BF109B08C1DA1CE /* Pods-TCMAdmin.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TCMAdmin.release.xcconfig"; path = "Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin.release.xcconfig"; sourceTree = "<group>"; };
 		6AA54C0CBF025802E93DD3B3 /* PDBPolygonOffsetBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PDBPolygonOffsetBridge.h; path = PaddleOCREngine/PDBPolygonOffsetBridge.h; sourceTree = "<group>"; };
 		6E544390A1074F97E967D261 /* OpenCVDBBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = OpenCVDBBridge.h; path = PaddleOCREngine/OpenCVDBBridge.h; sourceTree = "<group>"; };
 		71164D88B378BCF82F3E0E27 /* clipper.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = clipper.cpp; path = ThirdParty/Clipper1/clipper.cpp; sourceTree = "<group>"; };
@@ -123,7 +125,9 @@
 		7C6DC5063059647800D4F198 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		92D34B8CB343FD7F2298BFE6 /* OpenCVDBBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = OpenCVDBBridge.mm; path = PaddleOCREngine/OpenCVDBBridge.mm; sourceTree = "<group>"; };
 		99E1477D8893BDA5199E9D65 /* EncodedImageCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EncodedImageCodec.swift; path = PaddleOCREngine/EncodedImageCodec.swift; sourceTree = "<group>"; };
+		A153C52175F39A6799FC2585 /* Pods_TCMAdmin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TCMAdmin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A82E4BC69DF2F4E762F18D42 /* inference.yml */ = {isa = PBXFileReference; lastKnownFileType = None; name = inference.yml; path = Models/rec/inference.yml; sourceTree = "<group>"; };
+		B785A427EC7A09B58CE5C1ED /* Pods-TCMAdmin.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TCMAdmin.debug.xcconfig"; path = "Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin.debug.xcconfig"; sourceTree = "<group>"; };
 		B968473F98B1C92433064B1B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		BD0C4084943B3A7D60A65DC7 /* RecognitionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecognitionEngine.swift; path = PaddleOCREngine/RecognitionEngine.swift; sourceTree = "<group>"; };
 		BDB14AC2A6C984FE4EA41B69 /* BoxSorter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BoxSorter.swift; path = PaddleOCREngine/BoxSorter.swift; sourceTree = "<group>"; };
@@ -134,13 +138,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		000000000000000000000010 /* 药房助手 */ = {isa = PBXFileSystemSynchronizedRootGroup; path = "药房助手"; sourceTree = "<group>"; };
+		000000000000000000000010 /* 药房助手 */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = "药房助手";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				7D4A377FC516E7864F317887 /* Pods_TCMAdmin.framework in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -186,6 +197,8 @@
 				D172439AAF16BF491C084260 /* clipper.hpp */,
 				2A224E8DB66E90D0C9243001 /* inference.onnx */,
 				A82E4BC69DF2F4E762F18D42 /* inference.yml */,
+				B9669485BF195E9A63B55EFB /* Pods */,
+				BF45B53786F8A35AFEBE650A /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -366,6 +379,24 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		B9669485BF195E9A63B55EFB /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				B785A427EC7A09B58CE5C1ED /* Pods-TCMAdmin.debug.xcconfig */,
+				5C6FE81B7BF109B08C1DA1CE /* Pods-TCMAdmin.release.xcconfig */,
+			);
+			name = Pods;
+			path = ../Pods;
+			sourceTree = "<group>";
+		};
+		BF45B53786F8A35AFEBE650A /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A153C52175F39A6799FC2585 /* Pods_TCMAdmin.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -389,12 +420,16 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "TCMAdmin" */;
 			buildPhases = (
+				6850B19602CDB2913AB0BE14 /* [CP] Check Pods Manifest.lock */,
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
 				9B1E4811B74915B97118FBBD /* Headers */,
+				353E725B383A5D1B234F70F0 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
+			);
+			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* 药房助手 */,
@@ -450,6 +485,48 @@
 			);
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		353E725B383A5D1B234F70F0 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		6850B19602CDB2913AB0BE14 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TCMAdmin-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000120000000 /* Sources */ = {
@@ -644,6 +721,7 @@
 		};
 		000000000000000111000000 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B785A427EC7A09B58CE5C1ED /* Pods-TCMAdmin.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -670,9 +748,9 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				LIBRARY_SEARCH_PATHS = (
+				LD_RUNPATH_SEARCH_PATHS = ( "$(inherited)", "@executable_path/Frameworks", );
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = ( "$(inherited)", "@executable_path/../Frameworks", );
+				LIBRARY_SEARCH_PATHS = ( "$(inherited)", 
 					"$(SRCROOT)/",
 					"$(SRCROOT)/PaddleOCREngine",
 					"$(SRCROOT)/ThirdParty/Clipper1",
@@ -699,6 +777,7 @@
 		};
 		000000000000000112000000 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5C6FE81B7BF109B08C1DA1CE /* Pods-TCMAdmin.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -725,9 +804,9 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				LIBRARY_SEARCH_PATHS = (
+				LD_RUNPATH_SEARCH_PATHS = ( "$(inherited)", "@executable_path/Frameworks", );
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = ( "$(inherited)", "@executable_path/../Frameworks", );
+				LIBRARY_SEARCH_PATHS = ( "$(inherited)", 
 					"$(SRCROOT)/",
 					"$(SRCROOT)/PaddleOCREngine",
 					"$(SRCROOT)/ThirdParty/Clipper1",

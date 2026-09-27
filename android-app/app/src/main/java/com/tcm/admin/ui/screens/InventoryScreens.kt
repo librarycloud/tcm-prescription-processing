@@ -699,6 +699,14 @@ internal fun InventoryScreen(
                                 }
                             }
                         }
+                        
+                        val updDate = inventoryDateTime(item, "updatedAt")
+                        if (updDate.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            Spacer(Modifier.height(4.dp))
+                            Text("更新时间: $updDate", color = Muted, fontSize = 10.sp)
+                        }
                     }
                 }
             }
@@ -845,6 +853,16 @@ private fun inventoryDate(item: JSONObject, vararg keys: String): String {
         .mapNotNull { key -> item.opt(key)?.takeIf { it != JSONObject.NULL }?.toString() }
         .firstOrNull { value -> value.isNotBlank() && value != "null" }
         ?.take(10)
+        .orEmpty()
+}
+
+private fun inventoryDateTime(item: JSONObject, vararg keys: String): String {
+    return keys.asSequence()
+        .mapNotNull { key -> item.opt(key)?.takeIf { it != JSONObject.NULL }?.toString() }
+        .firstOrNull { value -> value.isNotBlank() && value != "null" }
+        ?.replace("T", " ")
+        ?.substringBefore(".")
+        ?.take(16)
         .orEmpty()
 }
 

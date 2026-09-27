@@ -413,10 +413,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 let texts = result.results.map { $0.text }
                 if texts.isEmpty { return }
                 
-                let tokenCharPattern = try NSRegularExpression(pattern: "[\s:：#\-_/|]+")
-                let skuLabelRegex = try NSRegularExpression(pattern: "(?i)(?:^|[^a-zA-Z0-9\u4e00-\u9fa5])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)")
-                let candidate9Pattern = try NSRegularExpression(pattern: "(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b")
-                let standalone9Pattern = try NSRegularExpression(pattern: "\b\d{9}\b")
+                let tokenCharPattern = try NSRegularExpression(pattern: "[\\s:：#\\-_/|]+")
+                let skuLabelRegex = try NSRegularExpression(pattern: "(?i)(?:^|[^a-zA-Z0-9\\u{4e00}-\\u{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\\s|$)")
+                let candidate9Pattern = try NSRegularExpression(pattern: "(?i)\\b[0-9A-Za-z|!〇\\s.\\-_]{8,24}\\b")
+                let standalone9Pattern = try NSRegularExpression(pattern: "\\b\\d{9}\\b")
                 let excludeLinePattern = try NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
                 
                 var skuCandidates: [String] = []
@@ -462,7 +462,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                         if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(location: 0, length: rawLine.count)) != nil { continue }
                         let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(location: 0, length: rawLine.count), withTemplate: "")
                         
-                        if let _ = try? NSRegularExpression(pattern: "\d{10,}").firstMatch(in: collapsed, range: NSRange(location: 0, length: collapsed.count)) { continue }
+                        if let _ = try? NSRegularExpression(pattern: "\\d{10,}").firstMatch(in: collapsed, range: NSRange(location: 0, length: collapsed.count)) { continue }
                         
                         let matches = standalone9Pattern.matches(in: collapsed, range: NSRange(location: 0, length: collapsed.count))
                         for match in matches {
@@ -512,3 +512,4 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             }
         }
     }
+}
