@@ -16,6 +16,8 @@
 		34614799AB6BAA5BF2EB67D8 /* OCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C024D529C72D1F6B1358892 /* OCREngine.swift */; };
 		3EB34A3E99B4A1C0D2732CA4 /* OpenCVImageBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = 487B49CA8E4CCA50E0D8A01F /* OpenCVImageBridge.mm */; };
 		463344CAA47D1F4AA235CC1D /* det_inference.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 2A224E8DB66E90D0C9243001 /* det_inference.onnx */; };
+		AA000001AA000001AA000001 /* det_inference.yml in Resources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* det_inference.yml */; };
+		AA000003AA000003AA000003 /* rec_inference.onnx in Resources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* rec_inference.onnx */; };
 		4B3E452F9C7E742B8395FFA4 /* EncodedImageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E1477D8893BDA5199E9D65 /* EncodedImageCodec.swift */; };
 		571E48088A7193796D75FB0C /* Preprocessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFF4D97BCCC0DABFA471BFD /* Preprocessing.swift */; };
 		5BC94974969FE026A392B124 /* ORTProfilingBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = 13E542008B22E631F95258C6 /* ORTProfilingBridge.mm */; };
@@ -76,6 +78,8 @@
 		1CFF4D97BCCC0DABFA471BFD /* Preprocessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Preprocessing.swift; path = PaddleOCREngine/Preprocessing.swift; sourceTree = "<group>"; };
 		22D945D19D90619C7364D8C8 /* PDBPolygonOffsetBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = PDBPolygonOffsetBridge.mm; path = PaddleOCREngine/PDBPolygonOffsetBridge.mm; sourceTree = "<group>"; };
 		2A224E8DB66E90D0C9243001 /* det_inference.onnx */ = {isa = PBXFileReference; lastKnownFileType = None; name = det_inference.onnx; path = Models/det/det_inference.onnx; sourceTree = "<group>"; };
+		AA000002AA000002AA000002 /* det_inference.yml */ = {isa = PBXFileReference; lastKnownFileType = None; name = det_inference.yml; path = Models/det/det_inference.yml; sourceTree = "<group>"; };
+		AA000004AA000004AA000004 /* rec_inference.onnx */ = {isa = PBXFileReference; lastKnownFileType = None; name = rec_inference.onnx; path = Models/rec/rec_inference.onnx; sourceTree = "<group>"; };
 		37034B8195701B78FC6EFE86 /* ModelConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelConfig.swift; path = PaddleOCREngine/ModelConfig.swift; sourceTree = "<group>"; };
 		3A3C411CB896462FD748EB02 /* InferenceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InferenceConfig.swift; path = PaddleOCREngine/InferenceConfig.swift; sourceTree = "<group>"; };
 		3C024D529C72D1F6B1358892 /* OCREngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OCREngine.swift; path = PaddleOCREngine/OCREngine.swift; sourceTree = "<group>"; };
@@ -196,6 +200,8 @@
 				71164D88B378BCF82F3E0E27 /* clipper.cpp */,
 				D172439AAF16BF491C084260 /* clipper.hpp */,
 				2A224E8DB66E90D0C9243001 /* det_inference.onnx */,
+				AA000002AA000002AA000002 /* det_inference.yml */,
+				AA000004AA000004AA000004 /* rec_inference.onnx */,
 				A82E4BC69DF2F4E762F18D42 /* rec_inference.yml */,
 				B35DAA2A0331EA6162B7BFA2 /* Pods */,
 				0D10DF8909BA121358368E0C /* Frameworks */,
@@ -478,6 +484,8 @@
 				7CE54047A62F985D4B2D016A /* Assets.xcassets in Resources */,
 				F73642518C869752E5C280C4 /* LICENSE in Resources */,
 				463344CAA47D1F4AA235CC1D /* det_inference.onnx in Resources */,
+				AA000001AA000001AA000001 /* det_inference.yml in Resources */,
+				AA000003AA000003AA000003 /* rec_inference.onnx in Resources */,
 				D18E458C9D82FE2FFBEDBB31 /* rec_inference.yml in Resources */,
 			);
 		};

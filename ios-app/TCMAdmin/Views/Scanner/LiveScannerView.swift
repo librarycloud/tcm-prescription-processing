@@ -430,23 +430,24 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard let engine = self.ocrEngine else { return }
 
         // --- ROI 裁剪：只送取景框区域入模型（对标 Android restrictScanningToRect）---
-        // 相机帧是横向的（手机竖屏），原始尺寸为 1920×1080（宽×高）
-        // 竖屏显示时实际是 1080×1920，旋转后 ROI 取中心 60%×40% 区域
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let frameW = ciImage.extent.width   // 旋转前：1920
-        let frameH = ciImage.extent.height  // 旋转前：1080
-
-        // 在原始（横向）坐标系中取中心区域，对应竖屏取景框
-        // 竖屏的"横向中间 60%"对应横向帧的"纵向中间 60%"
+        // 手机竖屏时相机帧是横向的，先右转 90 度变成竖屏 (比如 1080x1920)
+        let rotated = ciImage.oriented(.right)
+        // oriented 后 origin 可能为负，必须平移回 (0,0) 才能正常计算 crop
+        let translated = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.origin.x, y: -rotated.extent.origin.y))
+        
+        let frameW = translated.extent.width   // 竖屏宽，约 1080
+        let frameH = translated.extent.height  // 竖屏高，约 1920
+        
+        // 取景框 ROI：横向居中占 80%，纵向偏上占 60%
         let roiX = frameW * 0.1
         let roiY = frameH * 0.2
         let roiW = frameW * 0.8
         let roiH = frameH * 0.6
         let roiRect = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
-        let cropped = ciImage.cropped(to: roiRect)
-        let rotated = cropped.oriented(.right)
-
-        guard let cgImage = ciContext.createCGImage(rotated, from: rotated.extent) else { return }
+        
+        let cropped = translated.cropped(to: roiRect)
+        guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else { return }
 
         ocrInFlight = true
         Task { @MainActor [weak self] in
