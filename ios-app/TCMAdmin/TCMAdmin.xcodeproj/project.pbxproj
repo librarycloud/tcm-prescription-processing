@@ -7,6 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C70445A892069A9FC038875 /* PDBPolygonOffsetBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = 22D945D19D90619C7364D8C8 /* PDBPolygonOffsetBridge.mm */; };
+		1A654A6CA6BE46E1F04599B2 /* QuadTextCrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53754429BB3FB62726CF3541 /* QuadTextCrop.swift */; };
+		2626825090E10FB8031E2016 /* Pods_TCMAdmin.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C82AAAE8FAD74374868F3ECC /* Pods_TCMAdmin.framework */; };
+		297C4AEC85EEF911335991F8 /* OpenCVDBBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = 92D34B8CB343FD7F2298BFE6 /* OpenCVDBBridge.mm */; };
+		34614799AB6BAA5BF2EB67D8 /* OCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C024D529C72D1F6B1358892 /* OCREngine.swift */; };
+		3EB34A3E99B4A1C0D2732CA4 /* OpenCVImageBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = 487B49CA8E4CCA50E0D8A01F /* OpenCVImageBridge.mm */; };
+		463344CAA47D1F4AA235CC1D /* det_inference.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 2A224E8DB66E90D0C9243001 /* det_inference.onnx */; };
+		4B3E452F9C7E742B8395FFA4 /* EncodedImageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E1477D8893BDA5199E9D65 /* EncodedImageCodec.swift */; };
+		571E48088A7193796D75FB0C /* Preprocessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFF4D97BCCC0DABFA471BFD /* Preprocessing.swift */; };
+		5BC94974969FE026A392B124 /* ORTProfilingBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = 13E542008B22E631F95258C6 /* ORTProfilingBridge.mm */; };
+		670042F9806CD6E949556F5C /* BoxSorter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB14AC2A6C984FE4EA41B69 /* BoxSorter.swift */; };
+		6AC94F04A8711C0FCA5DCCEB /* RecPreprocessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F09B4E2E908E936173D0F3C2 /* RecPreprocessor.swift */; };
+		7A28445FA748E5D45D662F27 /* ORTSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48AD4079BC93A587EFA480B0 /* ORTSessionManager.swift */; };
 		7C6DC4503059647800D4F198 /* DifferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4313059647800D4F198 /* DifferencesView.swift */; };
 		7C6DC4523059647800D4F198 /* StocktakingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC4493059647800D4F198 /* StocktakingView.swift */; };
 		7C6DC4533059647800D4F198 /* PackagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC43A3059647800D4F198 /* PackagesView.swift */; };
@@ -39,10 +52,42 @@
 		7C6DC6053059647800D4F198 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC5053059647800D4F198 /* UpdateManager.swift */; };
 		7C6DC6063059647800D4F198 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6DC5063059647800D4F198 /* ThemeManager.swift */; };
 		7CE54047A62F985D4B2D016A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B968473F98B1C92433064B1B /* Assets.xcassets */; };
+		902B4B378302A14EC34C2E87 /* DetectionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 410B4C4FB3B905BBA451AC13 /* DetectionEngine.swift */; };
+		A4B44E388AD11EB3A5DFB850 /* RecognitionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0C4084943B3A7D60A65DC7 /* RecognitionEngine.swift */; };
+		AA000001AA000001AA000001 /* det_inference.yml in Resources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* det_inference.yml */; };
+		AA000003AA000003AA000003 /* rec_inference.onnx in Resources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* rec_inference.onnx */; };
+		C1F54496A23220959A6A403B /* InferenceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3C411CB896462FD748EB02 /* InferenceConfig.swift */; };
+		D0924B81BE591482193AABDF /* DBPostProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52494A85AF53D385345904AE /* DBPostProcess.swift */; };
+		D18E458C9D82FE2FFBEDBB31 /* rec_inference.yml in Resources */ = {isa = PBXBuildFile; fileRef = A82E4BC69DF2F4E762F18D42 /* rec_inference.yml */; };
+		E643416EB9BA0692CB1592B8 /* OCRParameterResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A64C7188F8A5DAD9AD9FD8 /* OCRParameterResolver.swift */; };
+		F1B24369AE98301C6A06218C /* clipper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 71164D88B378BCF82F3E0E27 /* clipper.cpp */; };
+		F73642518C869752E5C280C4 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = D61E42EE952927230FE0B0C8 /* LICENSE */; };
+		FB0B424DA34DCDFB0A7B4E31 /* ModelConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37034B8195701B78FC6EFE86 /* ModelConfig.swift */; };
+		FBF84109A8EF0A14BF2BF183 /* CTCDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0D46F1A96138D3B208DC2C /* CTCDecoder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* TCMAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TCMAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13E542008B22E631F95258C6 /* ORTProfilingBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = ORTProfilingBridge.mm; path = PaddleOCREngine/ORTProfilingBridge.mm; sourceTree = "<group>"; };
+		1CFF4D97BCCC0DABFA471BFD /* Preprocessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Preprocessing.swift; path = PaddleOCREngine/Preprocessing.swift; sourceTree = "<group>"; };
+		22D945D19D90619C7364D8C8 /* PDBPolygonOffsetBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = PDBPolygonOffsetBridge.mm; path = PaddleOCREngine/PDBPolygonOffsetBridge.mm; sourceTree = "<group>"; };
+		2A224E8DB66E90D0C9243001 /* det_inference.onnx */ = {isa = PBXFileReference; lastKnownFileType = None; name = det_inference.onnx; path = Models/det/det_inference.onnx; sourceTree = "<group>"; };
+		37034B8195701B78FC6EFE86 /* ModelConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelConfig.swift; path = PaddleOCREngine/ModelConfig.swift; sourceTree = "<group>"; };
+		3A3C411CB896462FD748EB02 /* InferenceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InferenceConfig.swift; path = PaddleOCREngine/InferenceConfig.swift; sourceTree = "<group>"; };
+		3C024D529C72D1F6B1358892 /* OCREngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OCREngine.swift; path = PaddleOCREngine/OCREngine.swift; sourceTree = "<group>"; };
+		3C0D46F1A96138D3B208DC2C /* CTCDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CTCDecoder.swift; path = PaddleOCREngine/CTCDecoder.swift; sourceTree = "<group>"; };
+		3D174C33BFFC8FAD513C140C /* ORTProfilingBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ORTProfilingBridge.h; path = PaddleOCREngine/ORTProfilingBridge.h; sourceTree = "<group>"; };
+		410B4C4FB3B905BBA451AC13 /* DetectionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DetectionEngine.swift; path = PaddleOCREngine/DetectionEngine.swift; sourceTree = "<group>"; };
+		487B49CA8E4CCA50E0D8A01F /* OpenCVImageBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = OpenCVImageBridge.mm; path = PaddleOCREngine/OpenCVImageBridge.mm; sourceTree = "<group>"; };
+		48AD4079BC93A587EFA480B0 /* ORTSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ORTSessionManager.swift; path = PaddleOCREngine/ORTSessionManager.swift; sourceTree = "<group>"; };
+		52494A85AF53D385345904AE /* DBPostProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DBPostProcess.swift; path = PaddleOCREngine/DBPostProcess.swift; sourceTree = "<group>"; };
+		53754429BB3FB62726CF3541 /* QuadTextCrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QuadTextCrop.swift; path = PaddleOCREngine/QuadTextCrop.swift; sourceTree = "<group>"; };
+		58E615198A528B3374DAB9F0 /* Pods-TCMAdmin.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TCMAdmin.debug.xcconfig"; path = "Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin.debug.xcconfig"; sourceTree = "<group>"; };
+		6AA54C0CBF025802E93DD3B3 /* PDBPolygonOffsetBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PDBPolygonOffsetBridge.h; path = PaddleOCREngine/PDBPolygonOffsetBridge.h; sourceTree = "<group>"; };
+		6E544390A1074F97E967D261 /* OpenCVDBBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = OpenCVDBBridge.h; path = PaddleOCREngine/OpenCVDBBridge.h; sourceTree = "<group>"; };
+		71164D88B378BCF82F3E0E27 /* clipper.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = clipper.cpp; path = ThirdParty/Clipper1/clipper.cpp; sourceTree = "<group>"; };
+		71A64C7188F8A5DAD9AD9FD8 /* OCRParameterResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OCRParameterResolver.swift; path = PaddleOCREngine/OCRParameterResolver.swift; sourceTree = "<group>"; };
+		78DC430EBD831227A8F2D8C6 /* TCMAdmin-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TCMAdmin-Bridging-Header.h"; sourceTree = "<group>"; };
 		7C6DC4233059647800D4F198 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		7C6DC4253059647800D4F198 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		7C6DC4273059647800D4F198 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
@@ -74,7 +119,20 @@
 		7C6DC5043059647800D4F198 /* ProfileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileDetailView.swift; sourceTree = "<group>"; };
 		7C6DC5053059647800D4F198 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
 		7C6DC5063059647800D4F198 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
+		92D34B8CB343FD7F2298BFE6 /* OpenCVDBBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = OpenCVDBBridge.mm; path = PaddleOCREngine/OpenCVDBBridge.mm; sourceTree = "<group>"; };
+		99E1477D8893BDA5199E9D65 /* EncodedImageCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EncodedImageCodec.swift; path = PaddleOCREngine/EncodedImageCodec.swift; sourceTree = "<group>"; };
+		A82E4BC69DF2F4E762F18D42 /* rec_inference.yml */ = {isa = PBXFileReference; lastKnownFileType = None; name = rec_inference.yml; path = Models/rec/rec_inference.yml; sourceTree = "<group>"; };
+		AA000002AA000002AA000002 /* det_inference.yml */ = {isa = PBXFileReference; lastKnownFileType = None; name = det_inference.yml; path = Models/det/det_inference.yml; sourceTree = "<group>"; };
+		AA000004AA000004AA000004 /* rec_inference.onnx */ = {isa = PBXFileReference; lastKnownFileType = None; name = rec_inference.onnx; path = Models/rec/rec_inference.onnx; sourceTree = "<group>"; };
 		B968473F98B1C92433064B1B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		BD0C4084943B3A7D60A65DC7 /* RecognitionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecognitionEngine.swift; path = PaddleOCREngine/RecognitionEngine.swift; sourceTree = "<group>"; };
+		BDB14AC2A6C984FE4EA41B69 /* BoxSorter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BoxSorter.swift; path = PaddleOCREngine/BoxSorter.swift; sourceTree = "<group>"; };
+		C82AAAE8FAD74374868F3ECC /* Pods_TCMAdmin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TCMAdmin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D172439AAF16BF491C084260 /* clipper.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = clipper.hpp; path = ThirdParty/Clipper1/clipper.hpp; sourceTree = "<group>"; };
+		D61E42EE952927230FE0B0C8 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = ThirdParty/Clipper1/LICENSE; sourceTree = "<group>"; };
+		DEC7EA7248024733644B3878 /* Pods-TCMAdmin.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TCMAdmin.release.xcconfig"; path = "Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin.release.xcconfig"; sourceTree = "<group>"; };
+		E0D748749D3ED0227208AD5D /* OpenCVImageBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = OpenCVImageBridge.h; path = PaddleOCREngine/OpenCVImageBridge.h; sourceTree = "<group>"; };
+		F09B4E2E908E936173D0F3C2 /* RecPreprocessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecPreprocessor.swift; path = PaddleOCREngine/RecPreprocessor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -89,6 +147,7 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				2626825090E10FB8031E2016 /* Pods_TCMAdmin.framework in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -106,6 +165,38 @@
 				7C6DC44F3059647800D4F198 /* Views */,
 				000000000000000000000020 /* Products */,
 				B968473F98B1C92433064B1B /* Assets.xcassets */,
+				78DC430EBD831227A8F2D8C6 /* TCMAdmin-Bridging-Header.h */,
+				BD0C4084943B3A7D60A65DC7 /* RecognitionEngine.swift */,
+				48AD4079BC93A587EFA480B0 /* ORTSessionManager.swift */,
+				92D34B8CB343FD7F2298BFE6 /* OpenCVDBBridge.mm */,
+				3A3C411CB896462FD748EB02 /* InferenceConfig.swift */,
+				6AA54C0CBF025802E93DD3B3 /* PDBPolygonOffsetBridge.h */,
+				410B4C4FB3B905BBA451AC13 /* DetectionEngine.swift */,
+				53754429BB3FB62726CF3541 /* QuadTextCrop.swift */,
+				13E542008B22E631F95258C6 /* ORTProfilingBridge.mm */,
+				487B49CA8E4CCA50E0D8A01F /* OpenCVImageBridge.mm */,
+				3C024D529C72D1F6B1358892 /* OCREngine.swift */,
+				3C0D46F1A96138D3B208DC2C /* CTCDecoder.swift */,
+				22D945D19D90619C7364D8C8 /* PDBPolygonOffsetBridge.mm */,
+				99E1477D8893BDA5199E9D65 /* EncodedImageCodec.swift */,
+				F09B4E2E908E936173D0F3C2 /* RecPreprocessor.swift */,
+				BDB14AC2A6C984FE4EA41B69 /* BoxSorter.swift */,
+				71A64C7188F8A5DAD9AD9FD8 /* OCRParameterResolver.swift */,
+				6E544390A1074F97E967D261 /* OpenCVDBBridge.h */,
+				E0D748749D3ED0227208AD5D /* OpenCVImageBridge.h */,
+				52494A85AF53D385345904AE /* DBPostProcess.swift */,
+				3D174C33BFFC8FAD513C140C /* ORTProfilingBridge.h */,
+				1CFF4D97BCCC0DABFA471BFD /* Preprocessing.swift */,
+				37034B8195701B78FC6EFE86 /* ModelConfig.swift */,
+				D61E42EE952927230FE0B0C8 /* LICENSE */,
+				71164D88B378BCF82F3E0E27 /* clipper.cpp */,
+				D172439AAF16BF491C084260 /* clipper.hpp */,
+				2A224E8DB66E90D0C9243001 /* det_inference.onnx */,
+				AA000002AA000002AA000002 /* det_inference.yml */,
+				AA000004AA000004AA000004 /* rec_inference.onnx */,
+				A82E4BC69DF2F4E762F18D42 /* rec_inference.yml */,
+				B35DAA2A0331EA6162B7BFA2 /* Pods */,
+				0D10DF8909BA121358368E0C /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -115,6 +206,14 @@
 				000000000000000000000120 /* TCMAdmin.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0D10DF8909BA121358368E0C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C82AAAE8FAD74374868F3ECC /* Pods_TCMAdmin.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		7C6DC4243059647800D4F198 /* Models */ = {
@@ -286,6 +385,16 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		B35DAA2A0331EA6162B7BFA2 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				58E615198A528B3374DAB9F0 /* Pods-TCMAdmin.debug.xcconfig */,
+				DEC7EA7248024733644B3878 /* Pods-TCMAdmin.release.xcconfig */,
+			);
+			name = Pods;
+			path = ../Pods;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -293,9 +402,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "TCMAdmin" */;
 			buildPhases = (
+				0B956691C0FB2EE5D1FEF738 /* [CP] Check Pods Manifest.lock */,
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
+				672E592CFD07F8FA222220A8 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -347,9 +458,57 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				7CE54047A62F985D4B2D016A /* Assets.xcassets in Resources */,
+				F73642518C869752E5C280C4 /* LICENSE in Resources */,
+				463344CAA47D1F4AA235CC1D /* det_inference.onnx in Resources */,
+				AA000001AA000001AA000001 /* det_inference.yml in Resources */,
+				AA000003AA000003AA000003 /* rec_inference.onnx in Resources */,
+				D18E458C9D82FE2FFBEDBB31 /* rec_inference.yml in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0B956691C0FB2EE5D1FEF738 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TCMAdmin-checkManifestLockResult.txt",
+			);
+			shellPath = /bin/sh;
+			shellScript = (
+				"diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null",
+				"if [ $? != 0 ] ; then",
+				"    # print error to STDERR",
+				"    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2",
+				"    exit 1",
+				"fi",
+				"# This output is used by Xcode 'outputs' to avoid re-running this script phase.",
+				"echo \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"",
+				"",
+			);
+			showEnvVarsInLog = 0;
+		};
+		672E592CFD07F8FA222220A8 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			shellPath = /bin/sh;
+			shellScript = (
+				"\"${PODS_ROOT}/Target Support Files/Pods-TCMAdmin/Pods-TCMAdmin-frameworks.sh\"",
+				"",
+			);
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000120000000 /* Sources */ = {
@@ -386,6 +545,25 @@
 				7C6DC6043059647800D4F198 /* ProfileDetailView.swift in Sources */,
 				7C6DC6053059647800D4F198 /* UpdateManager.swift in Sources */,
 				7C6DC6063059647800D4F198 /* ThemeManager.swift in Sources */,
+				A4B44E388AD11EB3A5DFB850 /* RecognitionEngine.swift in Sources */,
+				7A28445FA748E5D45D662F27 /* ORTSessionManager.swift in Sources */,
+				297C4AEC85EEF911335991F8 /* OpenCVDBBridge.mm in Sources */,
+				C1F54496A23220959A6A403B /* InferenceConfig.swift in Sources */,
+				902B4B378302A14EC34C2E87 /* DetectionEngine.swift in Sources */,
+				1A654A6CA6BE46E1F04599B2 /* QuadTextCrop.swift in Sources */,
+				5BC94974969FE026A392B124 /* ORTProfilingBridge.mm in Sources */,
+				3EB34A3E99B4A1C0D2732CA4 /* OpenCVImageBridge.mm in Sources */,
+				34614799AB6BAA5BF2EB67D8 /* OCREngine.swift in Sources */,
+				FBF84109A8EF0A14BF2BF183 /* CTCDecoder.swift in Sources */,
+				0C70445A892069A9FC038875 /* PDBPolygonOffsetBridge.mm in Sources */,
+				4B3E452F9C7E742B8395FFA4 /* EncodedImageCodec.swift in Sources */,
+				6AC94F04A8711C0FCA5DCCEB /* RecPreprocessor.swift in Sources */,
+				670042F9806CD6E949556F5C /* BoxSorter.swift in Sources */,
+				E643416EB9BA0692CB1592B8 /* OCRParameterResolver.swift in Sources */,
+				D0924B81BE591482193AABDF /* DBPostProcess.swift in Sources */,
+				571E48088A7193796D75FB0C /* Preprocessing.swift in Sources */,
+				FB0B424DA34DCDFB0A7B4E31 /* ModelConfig.swift in Sources */,
+				F1B24369AE98301C6A06218C /* clipper.cpp in Sources */,
 			);
 		};
 /* End PBXSourcesBuildPhase section */
@@ -408,7 +586,7 @@
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
@@ -427,10 +605,9 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DRIVERKIT_DEPLOYMENT_TARGET = 27.0;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -447,17 +624,14 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.6.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PROJECT_UNIQUE_VALUE = OV6LARYK;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				TVOS_DEPLOYMENT_TARGET = 27.0;
-				WATCHOS_DEPLOYMENT_TARGET = 27.0;
-				XROS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Debug;
 		};
@@ -478,7 +652,7 @@
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
@@ -497,10 +671,9 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DRIVERKIT_DEPLOYMENT_TARGET = 27.0;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -511,59 +684,81 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.6.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PROJECT_UNIQUE_VALUE = OV6LARYK;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				TVOS_DEPLOYMENT_TARGET = 27.0;
-				WATCHOS_DEPLOYMENT_TARGET = 27.0;
-				XROS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Release;
 		};
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "TCMAdmin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 58E615198A528B3374DAB9F0 /* Pods-TCMAdmin.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = TFTF4873ZK;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PODS_ROOT)/onnxruntime-objc/objectivec",
+				);
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "药房助手";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问您的相机以扫描药品条形码与处方单据";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问您的相册以选择处方图片";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/",
+					"$(SRCROOT)/PaddleOCREngine",
+					"$(SRCROOT)/ThirdParty/Clipper1",
+					"$(SRCROOT)/Models/det",
+					"$(SRCROOT)/Models/rec",
+				);
 				MARKETING_VERSION = 1.0.1;
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -Wno-error=quoted-include-in-framework-header";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcm.admin;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "TCMAdmin-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -572,45 +767,70 @@
 		};
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "TCMAdmin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DEC7EA7248024733644B3878 /* Pods-TCMAdmin.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = TFTF4873ZK;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PODS_ROOT)/onnxruntime-objc/objectivec",
+				);
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "药房助手";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问您的相机以扫描药品条形码与处方单据";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问您的相册以选择处方图片";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/",
+					"$(SRCROOT)/PaddleOCREngine",
+					"$(SRCROOT)/ThirdParty/Clipper1",
+					"$(SRCROOT)/Models/det",
+					"$(SRCROOT)/Models/rec",
+				);
 				MARKETING_VERSION = 1.0.1;
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -Wno-error=quoted-include-in-framework-header";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcm.admin;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "TCMAdmin-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

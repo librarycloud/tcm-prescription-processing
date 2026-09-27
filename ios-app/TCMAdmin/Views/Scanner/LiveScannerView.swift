@@ -1,6 +1,47 @@
 import SwiftUI
 import AVFoundation
-import Vision
+import CoreImage
+import UIKit
+
+@MainActor
+final class SharedOCRManager {
+    static let shared = SharedOCRManager()
+    
+    var engine: OCREngine?
+    var isLoading: Bool = false
+    private var isLoaded: Bool = false
+    
+    private init() {}
+    
+    func preload() {
+        guard !isLoaded && !isLoading else { return }
+        isLoading = true
+        
+        Task {
+            do {
+                let sessionManager = ORTSessionManager()
+                var tuning = ORTSessionTuningOptions.default
+                tuning.intraOpThreads = 4
+                try await sessionManager.loadModels(executionProvider: .cpu, tuning: tuning)
+                let engine = try OCREngine(sessionManager: sessionManager)
+                
+                await MainActor.run {
+                    self.engine = engine
+                    self.isLoaded = true
+                    self.isLoading = false
+                    #if DEBUG
+                    print("PaddleOCR engine loaded globally (CPU EP with 4 threads)")
+                    #endif
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                    print("Failed to preload PaddleOCR engine globally: \(error)")
+                }
+            }
+        }
+    }
+}
 
 @MainActor
 public struct LiveScannerView: View {
@@ -28,7 +69,12 @@ public struct LiveScannerView: View {
             // 扫描瞄准取景框
             VStack {
                 HStack {
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        // Update the cover binding explicitly; this still works when the
+                        // presentation is owned by Router rather than the local dismiss action.
+                        router.isScannerPresented = false
+                        dismiss()
+                    }) {
                         Image(systemName: "xmark.circle.fill")
                             .scaledFont(32)
                             .foregroundStyle(Color.white.opacity(0.8))
@@ -106,6 +152,9 @@ public struct LiveScannerView: View {
             Button("我知道了", role: .cancel) {}
         } message: {
             Text(scanError ?? "")
+        }
+        .onDisappear {
+            router.isScannerPresented = false
         }
     }
     
@@ -185,24 +234,10 @@ public struct LiveScannerView: View {
             }
             
             // 4. 其余所有扫码（药品条形码、商品SKU）-> 进入库存查询
-            await MainActor.run { resolvingMessage = "正在查询库存..." }
-            do {
-                let items = try await ApiClient.shared.fetchInventory(keyword: code, storeId: nil)
-                await MainActor.run {
-                    isResolving = false
-                    dismiss()
-                    if items.count == 1, let firstItem = items.first {
-                        NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"), object: ["code": code, "item": firstItem])
-                    } else {
-                        NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isResolving = false
-                    dismiss()
-                    NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
-                }
+            await MainActor.run {
+                isResolving = false
+                dismiss()
+                NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
             }
         }
     }
@@ -236,11 +271,67 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private var captureSession: AVCaptureSession?
     private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
-    private var hasScanned = false
+    nonisolated(unsafe) private var hasScanned = false
     private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
-    private var lastOcrScanTime: Date = Date.distantPast
-    private var lastOcrResult: String? = nil
-    private var ocrMatchCount: Int = 0
+    nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
+    nonisolated(unsafe) private var consecutiveEmptyFrames: Int = 0
+    nonisolated(unsafe) private var lastOcrResult: String? = nil
+    nonisolated(unsafe) private var ocrMatchCount: Int = 0
+    /// 对标 Android ocrInFlight：防止单次推理 > 500ms 时任务叠加
+    nonisolated(unsafe) private var ocrInFlight: Bool = false
+    nonisolated(unsafe) private var isStopped = false
+
+    // PaddleOCR Engine
+    nonisolated(unsafe) private var ocrEngine: OCREngine?
+    private var isOcrEngineLoading = false
+    // 复用 CIContext，创建代价极高，绝对不能每帧 new 一个
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    // MARK: - Scan state (被误删的原始实现)
+
+    @discardableResult
+    func claimScan() -> Bool {
+        var claimed = false
+        scanStateQueue.sync {
+            if !hasScanned { hasScanned = true; claimed = true }
+        }
+        return claimed
+    }
+
+    func releaseScan() {
+        scanStateQueue.sync { hasScanned = false }
+    }
+
+    nonisolated func isScanClaimed() -> Bool {
+        scanStateQueue.sync { hasScanned }
+    }
+
+    // MARK: - Camera control
+
+    func setTorch(on: Bool) {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        try? device.lockForConfiguration()
+        device.torchMode = on ? .on : .off
+        device.unlockForConfiguration()
+    }
+
+    func stopScanner() {
+        isStopped = true
+        ocrInFlight = false
+        scanStateQueue.sync { hasScanned = false }
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.captureSession?.stopRunning()
+            self.captureSession?.outputs.forEach { output in
+                if let videoOutput = output as? AVCaptureVideoDataOutput {
+                    videoOutput.setSampleBufferDelegate(nil, queue: nil)
+                }
+                if let metadataOutput = output as? AVCaptureMetadataOutput {
+                    metadataOutput.setMetadataObjectsDelegate(nil, queue: nil)
+                }
+            }
+        }
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -249,6 +340,23 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
     
     private func setupCamera() {
+        isStopped = false
+        if enableOCR {
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if SharedOCRManager.shared.engine == nil {
+                    self.isOcrEngineLoading = true
+                    // Wait for preload if it hasn't finished, or trigger it
+                    SharedOCRManager.shared.preload()
+                    // Simple poll until loaded (should be rare)
+                    while SharedOCRManager.shared.engine == nil && SharedOCRManager.shared.isLoading {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+                self.ocrEngine = SharedOCRManager.shared.engine
+                self.isOcrEngineLoading = false
+            }
+        }
         let session = AVCaptureSession()
         // 提升采集分辨率，使小条码在不放大的情况下也能快速识别
         if session.canSetSessionPreset(.hd1920x1080) {
@@ -344,193 +452,288 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
 
 
+    nonisolated private static let tokenCharPattern = try! NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
+    nonisolated private static let skuLabelRegex = try! NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
+    nonisolated private static let candidate9Pattern = try! NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
+    nonisolated private static let standalone9Pattern = try! NSRegularExpression(pattern: #"\b\d{9}\b"#)
+    nonisolated private static let excludeLinePattern = try! NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
+
+
+    private struct LogicalRow {
+        let text: String
+        let top: Float
+        let centerY: Float
+    }
+
+    nonisolated private func buildLogicalRows(_ elements: [OCRResult]) -> [String] {
+        if elements.isEmpty { return [] }
+        
+        struct RawElement {
+            let text: String
+            let left: Float
+            let top: Float
+            let height: Float
+            let centerY: Float
+        }
+        
+        let rawElements = elements.map { res -> RawElement in
+            let p = res.polygon
+            let ys = p.map { Float($0[1]) }
+            let xs = p.map { Float($0[0]) }
+            let top = ys.min() ?? 0
+            let bottom = ys.max() ?? 0
+            let left = xs.min() ?? 0
+            let height = bottom - top
+            let centerY = top + height / 2.0
+            return RawElement(text: normalizeOcrText(res.text), left: left, top: top, height: height, centerY: centerY)
+        }.sorted { $0.centerY < $1.centerY }
+        
+        var clusters: [[RawElement]] = []
+        for elem in rawElements {
+            var matched = false
+            for i in 0..<clusters.count {
+                let cluster = clusters[i]
+                let avgCenterY = cluster.map { $0.centerY }.reduce(0, +) / Float(cluster.count)
+                let avgHeight = cluster.map { $0.height }.reduce(0, +) / Float(cluster.count)
+                let threshold = max(avgHeight, elem.height) * 0.75
+                if abs(elem.centerY - avgCenterY) <= threshold {
+                    clusters[i].append(elem)
+                    matched = true
+                    break
+                }
+            }
+            if !matched {
+                clusters.append([elem])
+            }
+        }
+        
+        let rows = clusters.map { cluster -> LogicalRow in
+            let sortedCluster = cluster.sorted { $0.left < $1.left }
+            let joinedText = sortedCluster.map { $0.text }.joined(separator: " ")
+            let avgTop = cluster.map { $0.top }.min() ?? 0
+            let avgCenterY = cluster.map { $0.centerY }.reduce(0, +) / Float(cluster.count)
+            return LogicalRow(text: joinedText, top: avgTop, centerY: avgCenterY)
+        }.sorted { $0.top < $1.top }
+        
+        return rows.map { $0.text }
+    }
+
+    nonisolated private func extractSku(from texts: [String]) -> String? {
+        let tokenCharPattern = Self.tokenCharPattern
+        let skuLabelRegex = Self.skuLabelRegex
+        let candidate9Pattern = Self.candidate9Pattern
+        let standalone9Pattern = Self.standalone9Pattern
+        let excludeLinePattern = Self.excludeLinePattern
+
+        var skuCandidates: [String] = []
+
+        for (i, rawLine) in texts.enumerated() {
+            // 1. 带标签匹配
+            if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil {
+                let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: " ")
+                let cleaned = cleanDigits(afterLabel)
+                if cleaned.count == 9 { skuCandidates.append(cleaned) }
+                let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(afterLabel.startIndex..., in: afterLabel))
+                for match in matches {
+                    let c = cleanDigits((afterLabel as NSString).substring(with: match.range))
+                    if c.count == 9 { skuCandidates.append(c) }
+                }
+                // 向下看 1-2 行
+                for offset in 1...2 {
+                    guard i + offset < texts.count else { break }
+                    let next = texts[i + offset]
+                    if excludeLinePattern.firstMatch(in: next, range: NSRange(next.startIndex..., in: next)) != nil { continue }
+                    let nc = cleanDigits(next)
+                    if nc.count == 9 { skuCandidates.append(nc) }
+                    for m in candidate9Pattern.matches(in: next, range: NSRange(next.startIndex..., in: next)) {
+                        let c = cleanDigits((next as NSString).substring(with: m.range))
+                        if c.count == 9 { skuCandidates.append(c) }
+                    }
+                }
+            }
+        }
+
+        // 2. 独立纯 9 位数字（兜底）
+        if skuCandidates.isEmpty {
+            for rawLine in texts {
+                if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil { continue }
+                let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: "")
+                if (try? NSRegularExpression(pattern: #"\d{10,}"#))?.firstMatch(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) != nil { continue }
+                for m in standalone9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
+                    skuCandidates.append((collapsed as NSString).substring(with: m.range))
+                }
+                for m in candidate9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
+                    let c = cleanDigits((collapsed as NSString).substring(with: m.range))
+                    if c.count == 9 { skuCandidates.append(c) }
+                }
+            }
+        }
+
+        return skuCandidates.first(where: { $0.count == 9 })
+    }
+
+
+    nonisolated private func normalizeOcrText(_ text: String) -> String {
+        var res = ""
+        for char in text {
+            if char == "\u{3000}" || char == "\u{00A0}" {
+                res.append(" ")
+            } else if char == "〇" {
+                res.append("0")
+            } else if let scalar = char.unicodeScalars.first, scalar.value >= 0xFF10 && scalar.value <= 0xFF19 {
+                // Fullwidth numbers ０..９
+                res.append(Character(UnicodeScalar(scalar.value - 0xFF10 + 0x0030)!))
+            } else if let scalar = char.unicodeScalars.first, scalar.value >= 0xFF21 && scalar.value <= 0xFF3A {
+                // Fullwidth letters Ａ..Ｚ
+                res.append(Character(UnicodeScalar(scalar.value - 0xFF21 + 0x0041)!))
+            } else if let scalar = char.unicodeScalars.first, scalar.value >= 0xFF41 && scalar.value <= 0xFF5A {
+                // Fullwidth letters ａ..ｚ
+                res.append(Character(UnicodeScalar(scalar.value - 0xFF41 + 0x0061)!))
+            } else {
+                res.append(char)
+            }
+        }
+        return res
+    }
+
+    nonisolated private func cleanDigits(_ str: String) -> String {
+        var res = ""
+        for char in str {
+            switch char {
+            case "O", "o", "C", "c", "D", "d", "Q", "q", "〇": res.append("0")
+            case "I", "l", "|", "i", "!", "J", "j", "L": res.append("1")
+            case "Z", "z": res.append("2")
+            case "E": res.append("3")
+            case "S", "s", "$": res.append("5")
+            case "b", "G": res.append("6")
+            case "T", "t": res.append("7")
+            case "B", "R", "r": res.append("8")
+            case "g": res.append("9")
+            default:
+                if char.isNumber { res.append(char) }
+            }
+        }
+        return res
+    }
+
     // MARK: - OCR Video Frame Extraction
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard !isScanClaimed() else { return }
-        
-        let now = Date()
-        // 限制 OCR 频率为 150ms 一次
-        guard now.timeIntervalSince(lastOcrScanTime) > 0.15 else { return }
-        lastOcrScanTime = now
-        
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        
-        let request = VNRecognizeTextRequest { [weak self] request, error in
-            guard let self = self, !self.isScanClaimed() else { return }
-            guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
+    nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        autoreleasepool {
+            guard !isScanClaimed() else { return }
+            guard !isStopped else { return }
+
+            let now = Date()
             
-            if let sku = self.extractSku(observations: observations) {
-                if sku == self.lastOcrResult {
-                    self.ocrMatchCount += 1
+            // --- 动态自适应限流 (对标 Android) ---
+            let throttleMs: TimeInterval
+            if consecutiveEmptyFrames >= 6 {
+                throttleMs = 0.250 // 空白视野：主动拉长至 250ms
+            } else if consecutiveEmptyFrames >= 3 {
+                throttleMs = 0.120 // 过渡阶段
+            } else {
+                throttleMs = 0.0   // 发现目标文字：满速识别，零延迟响应
+            }
+            guard now.timeIntervalSince(lastOcrScanTime) >= throttleMs else { return }
+            // 对标 Android ocrInFlight：推理未结束时跳过本帧，防止任务叠加
+            guard !ocrInFlight else { return }
+            lastOcrScanTime = now
+
+            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+            guard let engine = self.ocrEngine else {
+                #if DEBUG
+                print("PaddleOCR frame skipped: engine is not ready")
+                #endif
+                return
+            }
+
+            // --- ROI 裁剪：只送取景框区域入模型（对标 Android restrictScanningToRect）---
+            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+            // 手机竖屏时相机帧是横向的，先右转 90 度变成竖屏 (比如 1080x1920)
+            let rotated = ciImage.oriented(.right)
+            // oriented 后 origin 可能为负，必须平移回 (0,0) 才能正常计算 crop
+            let translated = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.origin.x, y: -rotated.extent.origin.y))
+            
+            let frameW = translated.extent.width   // 竖屏宽，约 1080
+            let frameH = translated.extent.height  // 竖屏高，约 1920
+            
+            // 取景框 ROI：横向居中占 80%，纵向偏上占 60%
+            let roiX = frameW * 0.1
+            let roiY = frameH * 0.2
+            let roiW = frameW * 0.8
+            let roiH = frameH * 0.6
+            let roiRect = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
+            
+            let cropped = translated.cropped(to: roiRect)
+            
+            // --- 终极核弹级优化：在交由 CPU/GPU 渲染和推理前，直接把图像长宽缩小一半 (面积缩小 4 倍) ---
+            // 这保证了即使底层 YAML 配置没生效，送入 OCR 引擎的图像也只有 432x576，彻底告别 1.3秒的漫长推理！
+            let scaled = cropped.transformed(by: CGAffineTransform(scaleX: 0.5, y: 0.5))
+            
+            guard let cgImage = ciContext.createCGImage(scaled, from: scaled.extent) else { return }
+
+            ocrInFlight = true
+            #if DEBUG
+            print("PaddleOCR inference started: \(cgImage.width)x\(cgImage.height)")
+            #endif
+            Task.detached(priority: .userInitiated) { [weak self] in
+                guard let self = self else { return }
+                defer { 
+                    Task { @MainActor in
+                        self.ocrInFlight = false 
+                    }
+                }
+            guard !self.isScanClaimed() else { return }
+
+            do {
+                let result = try await engine.run(cgImage) { [weak self] results in
+                    guard let self = self else { return false }
+                    return self.extractSku(from: results.map { $0.text }) != nil
+                }
+                let texts = result.results.map(\.text)
+                
+                #if DEBUG
+                print("PaddleOCR inference finished: total=\(Int(result.totalTime * 1000))ms det=\(Int(result.detectionTime * 1000))ms rec=\(Int(result.recognitionTime * 1000))ms text=\(texts)")
+                #endif
+                
+                if texts.isEmpty {
+                    self.consecutiveEmptyFrames += 1
+                    return
                 } else {
-                    self.lastOcrResult = sku
-                    self.ocrMatchCount = 1
+                    self.consecutiveEmptyFrames = 0
                 }
                 
-                if self.ocrMatchCount >= 2 {
-                    guard self.claimScan() else { return }
+                guard let sku = self.extractSku(from: texts) else {
                     DispatchQueue.main.async {
-                        self.onScanned?(sku)
+                        self.ocrMatchCount = 0
+                        self.lastOcrResult = nil
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    if sku == self.lastOcrResult {
+                        self.ocrMatchCount += 1
+                    } else {
+                        self.lastOcrResult = sku
+                        self.ocrMatchCount = 1
+                    }
+                    if self.ocrMatchCount >= 2 {
+                        guard self.claimScan() else { return }
+                        let finalSku = sku
+                        DispatchQueue.main.async {
+                            self.onScanned?(finalSku)
+                        }
                         self.lastOcrResult = nil
                         self.ocrMatchCount = 0
-                        
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             self.releaseScan()
                         }
                     }
                 }
-            } else {
-                self.ocrMatchCount = 0
-                self.lastOcrResult = nil
+            } catch {
+                print("PaddleOCR engine run failed: \(error.localizedDescription)")
             }
         }
-        // Keep the 1080p camera stream, but limit OCR work to the aiming area.
-        request.recognitionLevel = .fast
-        request.usesLanguageCorrection = false
-        request.recognitionLanguages = ["en-US"]
-        request.regionOfInterest = CGRect(x: 0.1, y: 0.25, width: 0.8, height: 0.5)
-        
-        // 手机竖屏时的图像方向通常是 .right
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
-        try? handler.perform([request])
-    }
-    
-    private func extractSku(observations: [VNRecognizedTextObservation]) -> String? {
-        func cleanDigits(_ str: String) -> String {
-            var res = ""
-            for char in str {
-                if char.isNumber { res.append(char) }
-                else if char == "O" || char == "o" { res.append("0") }
-                else if char == "I" || char == "l" { res.append("1") }
-                else if char == "Z" || char == "z" { res.append("2") }
-                else if char == "S" || char == "s" { res.append("5") }
-                else if char == "B" || char == "b" { res.append("8") }
-            }
-            return res
         }
-        
-        func has10PlusConsecutiveDigits(_ text: String) -> Bool {
-            let regex = try? NSRegularExpression(pattern: "\\d{10,}")
-            let nsText = text as NSString
-            return regex?.firstMatch(in: text, range: NSRange(location: 0, length: nsText.length)) != nil
-        }
-        
-        let labelRegex = try? NSRegularExpression(pattern: "(编码|编号|SKU|商品码|批号)", options: .caseInsensitive)
-        let candidate9Regex = try? NSRegularExpression(pattern: "(?i)\\b[0-9A-Za-z]{9}\\b")
-        let standalone9Regex = try? NSRegularExpression(pattern: "\\b\\d{9}\\b")
-        let allSpaces = CharacterSet.whitespacesAndNewlines
-        
-        struct Candidate {
-            let sku: String
-            let distanceToCenter: CGFloat
-        }
-        var candidates: [Candidate] = []
-        
-        // VNRecognizedTextObservation boundingBox is in normalized coordinates (0.0 to 1.0)
-        // Center of the screen is (0.5, 0.5). We calculate distance to center Y (0.5).
-        let centerY: CGFloat = 0.5
-        
-        for (i, obs) in observations.enumerated() {
-            guard let topCandidate = obs.topCandidates(1).first else { continue }
-            let line = topCandidate.string
-            let normalizedLine = line.components(separatedBy: allSpaces).joined()
-            if normalizedLine.isEmpty { continue }
-            
-            // Vision's boundingBox origin is bottom-left
-            let boxMidY = obs.boundingBox.origin.y + (obs.boundingBox.size.height / 2.0)
-            let distance = abs(boxMidY - centerY)
-            
-            let nsLine = normalizedLine as NSString
-            
-            // 1. 标签匹配
-            if let regex = labelRegex, regex.firstMatch(in: normalizedLine, range: NSRange(location: 0, length: nsLine.length)) != nil {
-                for offset in 0...2 {
-                    guard i + offset < observations.count else { break }
-                    let nextObs = observations[i + offset]
-                    guard let nextTop = nextObs.topCandidates(1).first else { continue }
-                    
-                    let checkLine = nextTop.string.components(separatedBy: allSpaces).joined()
-                    if has10PlusConsecutiveDigits(checkLine) { continue }
-                    
-                    let nextBoxMidY = nextObs.boundingBox.origin.y + (nextObs.boundingBox.size.height / 2.0)
-                    let nextDist = abs(nextBoxMidY - centerY)
-                    
-                    let c = cleanDigits(checkLine)
-                    if c.count == 9 { candidates.append(Candidate(sku: c, distanceToCenter: nextDist)); continue }
-                    
-                    if let cRegex = candidate9Regex {
-                        let nsCheck = checkLine as NSString
-                        let matches = cRegex.matches(in: checkLine, range: NSRange(location: 0, length: nsCheck.length))
-                        for match in matches {
-                            let candidate = cleanDigits(nsCheck.substring(with: match.range))
-                            if candidate.count == 9 { candidates.append(Candidate(sku: candidate, distanceToCenter: nextDist)) }
-                        }
-                    }
-                }
-            }
-            
-            // 2. 无标签的纯数字/容错匹配
-            if has10PlusConsecutiveDigits(normalizedLine) { continue }
-            
-            if let sRegex = standalone9Regex, let match = sRegex.firstMatch(in: normalizedLine, range: NSRange(location: 0, length: nsLine.length)) {
-                candidates.append(Candidate(sku: nsLine.substring(with: match.range), distanceToCenter: distance))
-                continue
-            }
-            
-            if let cRegex = candidate9Regex {
-                let matches = cRegex.matches(in: normalizedLine, range: NSRange(location: 0, length: nsLine.length))
-                for match in matches {
-                    let candidate = cleanDigits(nsLine.substring(with: match.range))
-                    if candidate.count == 9 { candidates.append(Candidate(sku: candidate, distanceToCenter: distance)) }
-                }
-            }
-        }
-        
-        // Return the candidate closest to the center Y
-        return candidates.sorted(by: { $0.distanceToCenter < $1.distanceToCenter }).first?.sku
-    }
-
-    private func isScanClaimed() -> Bool {
-        scanStateQueue.sync { hasScanned }
-    }
-
-    private func claimScan() -> Bool {
-        scanStateQueue.sync {
-            guard !hasScanned else { return false }
-            hasScanned = true
-            return true
-        }
-    }
-
-    private func releaseScan() {
-        scanStateQueue.async { [weak self] in
-            self?.hasScanned = false
-        }
-    }
-
-    func stopScanner() {
-        guard let session = captureSession else { return }
-        // AVCaptureSession 激活时系统会强制阻止熄屏，结束后需手动恢复用户设置的值
-        sessionQueue.async {
-            if session.isRunning {
-                session.stopRunning()
-            }
-            DispatchQueue.main.async {
-                let keepAwake = UserDefaults.standard.bool(forKey: "keep_screen_awake")
-                UIApplication.shared.isIdleTimerDisabled = keepAwake
-            }
-        }
-    }
-    
-    deinit {
-        stopScanner()
-    }
-    
-    func setTorch(on: Bool) {
-        let activeDevice = (captureSession?.inputs.first as? AVCaptureDeviceInput)?.device ?? AVCaptureDevice.default(for: .video)
-        guard let device = activeDevice, device.hasTorch else { return }
-        try? device.lockForConfiguration()
-        device.torchMode = on ? .on : .off
-        device.unlockForConfiguration()
     }
 }

@@ -1,0 +1,320 @@
+// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import CoreGraphics
+import Foundation
+
+// MARK: - OCR run result types
+
+/// A single OCR result: one detected text region with its recognized text.
+struct OCRResult {
+    /// Four corner points of the bounding polygon [x, y] in original image coordinates.
+    /// Order: top-left, top-right, bottom-right, bottom-left.
+    let polygon: [[Int32]]
+    /// The recognized text string from CTC decoding.
+    let text: String
+    /// Recognition confidence score (0.0 to 1.0).
+    let confidence: Float
+}
+
+/// Result of one full OCR run on an image, with per-stage timing.
+struct OCRRunResult {
+    /// All detected and recognized text regions, in reading order.
+    let results: [OCRResult]
+    /// Total time spent in the detection stage (preprocess + inference + postprocess).
+    let detectionTime: TimeInterval
+    /// Seconds in detection preprocessing (resize, normalize, HWC-to-CHW).
+    let detectionPreprocessTime: TimeInterval
+    /// Seconds in detection ONNX inference.
+    let detectionInferenceTime: TimeInterval
+    /// Seconds in detection postprocessing (DB map, contours, polygons).
+    let detectionPostprocessTime: TimeInterval
+    /// Total time spent recognizing all text regions (sum of per-line totals).
+    let recognitionTime: TimeInterval
+    /// Sum of recognition preprocess time across all lines (batched work split per line).
+    let recognitionPreprocessTime: TimeInterval
+    /// Sum of recognition inference time across all lines.
+    let recognitionInferenceTime: TimeInterval
+    /// Sum of recognition postprocess (CTC decode) time across all lines.
+    let recognitionPostprocessTime: TimeInterval
+    /// Wall-clock time for the entire run (detect + sort + crop + recognize).
+    let totalTime: TimeInterval
+    /// Time not attributed to detection or recognition totals.
+    let pipelineOverheadTime: TimeInterval
+    /// Number of text lines from detection sent through recognition.
+    let recognitionLineCount: Int
+    /// Detection model input tensor shape for this OCR run, e.g. [1, 3, H, W].
+    let detectionInputTensorShape: [Int]
+    /// Recognition model input tensor shapes for each non-empty recognition batch.
+    let recognitionInputTensorShapes: [[Int]]
+    /// Per-line recognition ONNX inference times in **seconds**.
+    let lineRecognitionInferenceTimes: [TimeInterval]
+    /// Per-line recognition preprocess times in **seconds**.
+    let lineRecognitionPreprocessTimes: [TimeInterval]
+    /// Per-line recognition postprocess times in **seconds**.
+    let lineRecognitionPostprocessTimes: [TimeInterval]
+}
+
+// MARK: - OCR Engine Errors
+
+enum OCREngineError: LocalizedError {
+    case quadTextCropFailed(boxIndex: Int, underlying: Error)
+    case recognitionBatchSizeMismatch(expected: Int, actual: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .quadTextCropFailed(let idx, let err):
+            return "Quad text crop failed for box \(idx): \(err.localizedDescription)"
+        case .recognitionBatchSizeMismatch(let expected, let actual):
+            return "Recognition returned \(actual) results but \(expected) crops were sent"
+        }
+    }
+}
+
+// MARK: - OCREngine
+
+/// End-to-end OCR: detect → sort → crop → recognize.
+///
+/// Composes `DetectionEngine`, `BoxSorter`, `QuadTextCrop`, and `RecognitionEngine`
+/// into a single `run(CGImage)` call.
+///
+/// Runs entirely via async/await. Since `DetectionEngine` and
+/// `RecognitionEngine` delegate to `ORTSessionManager` (a Swift actor), all ORT
+/// calls are off the main thread.
+///
+/// Usage:
+/// ```swift
+/// let manager = ORTSessionManager()
+/// try await manager.loadModels()
+/// let engine = try OCREngine(sessionManager: manager)
+/// let result = try await engine.run(cgImage, params: .noOverrides)
+/// for item in result.results {
+///     print("\(item.text) (\(item.confidence))")
+/// }
+/// ```
+class OCREngine {
+    private let detectionEngine: DetectionEngine
+    private let recognitionEngine: RecognitionEngine
+
+    /// Initialize with an existing ORTSessionManager (models must already be loaded).
+    ///
+    /// Creates both DetectionEngine and RecognitionEngine.
+    ///
+    /// - Parameter sessionManager: A loaded ORTSessionManager.
+    /// - Throws: If either engine's model config cannot be loaded.
+    init(sessionManager: ORTSessionManager) throws {
+        self.detectionEngine = try DetectionEngine(sessionManager: sessionManager)
+        self.recognitionEngine = try RecognitionEngine(sessionManager: sessionManager)
+    }
+
+    func baselineRuntimeDefaults() -> ResolvedOCRRuntimeParams {
+        ResolvedOCRRuntimeParams.fromModelConfig(detectionEngine.modelConfig)
+    }
+
+    /// Run full OCR on an image.
+    ///
+    /// End-to-end OCR flow (detect → sort → crop → recognize):
+    /// 1. **Detect**: Run detection to get bounding polygons
+    /// 2. **Sort**: Sort boxes in reading order (top-to-bottom, left-to-right)
+    /// 3. **Crop + Recognize**: Crop each region, order crops by ascending width/height for batched
+    ///    recognition, then map results back to reading order
+    ///
+    /// - Parameters:
+    ///   - image: The input `CGImage` to process.
+    ///   - params: Optional runtime parameter overrides (see ``OCRRuntimeParams``).
+    /// - Returns: `OCRRunResult` with all line results and timing.
+    func run(_ image: CGImage, params: OCRRuntimeParams = .noOverrides, earlyStopPredicate: (([OCRResult]) -> Bool)? = nil) async throws -> OCRRunResult {
+        let runStart = CFAbsoluteTimeGetCurrent()
+
+        let resolved = params.resolved(detectionEngine.modelConfig)
+
+        let detResult = try await detectionEngine.detect(image, runtimeParams: params)
+        
+        // --- 几何预过滤 (对齐 Android 端逻辑) ---
+        // 排除单字方块中文（如“盒”、“片”、“OTC”等）、排除极小噪点文字、排除无法容纳 9 位数字的极短碎框
+        let filteredBoxes = detResult.boxes.filter { box in
+            guard box.points.count == 4 else { return false }
+            let pt0 = box.points[0], pt1 = box.points[1], pt2 = box.points[2]
+            let dx1 = Double(pt1[0] - pt0[0]), dy1 = Double(pt1[1] - pt0[1])
+            let dx2 = Double(pt2[0] - pt1[0]), dy2 = Double(pt2[1] - pt1[1])
+            let w = sqrt(dx1 * dx1 + dy1 * dy1)
+            let h = sqrt(dx2 * dx2 + dy2 * dy2)
+            
+            // 图像已经经过 0.5 倍缩小，这里的阈值也需减半 (w<16, h<4)
+            if w < 16 || h < 4 { return false }
+            if h == 0 { return false }
+            let aspectRatio = w / h
+            if aspectRatio < 1.25 { return false }
+            return true
+        }
+
+        // 准心中心优先排序识别！
+        let cx = Double(image.width) / 2.0
+        let cy = Double(image.height) / 2.0
+        let sortedByCenter = filteredBoxes.sorted { b1, b2 in
+            let pts1 = b1.points, pts2 = b2.points
+            guard pts1.count == 4, pts2.count == 4 else { return false }
+            let midX1 = Double(pts1[0][0] + pts1[1][0] + pts1[2][0] + pts1[3][0]) / 4.0
+            let midY1 = Double(pts1[0][1] + pts1[1][1] + pts1[2][1] + pts1[3][1]) / 4.0
+            let midX2 = Double(pts2[0][0] + pts2[1][0] + pts2[2][0] + pts2[3][0]) / 4.0
+            let midY2 = Double(pts2[0][1] + pts2[1][1] + pts2[2][1] + pts2[3][1]) / 4.0
+            
+            let dist1 = (midX1 - cx) * (midX1 - cx) + (midY1 - cy) * (midY1 - cy)
+            let dist2 = (midX2 - cx) * (midX2 - cx) + (midY2 - cy) * (midY2 - cy)
+            return dist1 < dist2
+        }
+        
+        // 每帧上限识别 6 个中心候选框，彻底杜绝无目标空转卡顿
+        let topBoxes = Array(sortedByCenter.prefix(6))
+        
+        let (ocrResults, recTiming, perLine) = try await recognizeSortedBoxes(
+            topBoxes,
+            sourceImage: image,
+            resolved: resolved,
+            earlyStopPredicate: earlyStopPredicate
+        )
+
+        let totalTime = CFAbsoluteTimeGetCurrent() - runStart
+        let overhead = totalTime - detResult.totalTime - recTiming.total
+
+        return OCRRunResult(
+            results: ocrResults,
+            detectionTime: detResult.totalTime,
+            detectionPreprocessTime: detResult.preprocessTime,
+            detectionInferenceTime: detResult.inferenceTime,
+            detectionPostprocessTime: detResult.postprocessTime,
+            recognitionTime: recTiming.total,
+            recognitionPreprocessTime: recTiming.preprocess,
+            recognitionInferenceTime: recTiming.inference,
+            recognitionPostprocessTime: recTiming.postprocess,
+            totalTime: totalTime,
+            pipelineOverheadTime: max(0, overhead),
+            recognitionLineCount: perLine.count,
+            detectionInputTensorShape: detResult.inputTensorShape,
+            recognitionInputTensorShapes: perLine.inputTensorShapes,
+            lineRecognitionInferenceTimes: perLine.inference,
+            lineRecognitionPreprocessTimes: perLine.preprocess,
+            lineRecognitionPostprocessTimes: perLine.postprocess
+        )
+    }
+
+    /// Aggregated recognition timing across all lines (sums of per-line split batch times).
+    private struct RecognitionTimingAggregate {
+        let preprocess: TimeInterval
+        let inference: TimeInterval
+        let postprocess: TimeInterval
+        let total: TimeInterval
+    }
+
+    /// Per-line rec timings
+    private struct PerLineRecognitionTimes {
+        let count: Int
+        let inputTensorShapes: [[Int]]
+        let inference: [TimeInterval]
+        let preprocess: [TimeInterval]
+        let postprocess: [TimeInterval]
+    }
+
+    private func recognizeSortedBoxes(
+        _ sortedBoxes: [DetectionBox],
+        sourceImage: CGImage,
+        resolved: ResolvedOCRRuntimeParams,
+        earlyStopPredicate: (([OCRResult]) -> Bool)? = nil
+    ) async throws -> ([OCRResult], RecognitionTimingAggregate, PerLineRecognitionTimes) {
+        struct LineCrop {
+            let lineIndex: Int
+            let crop: CGImage
+            let polygon: [[Int32]]
+        }
+
+        var lines: [LineCrop] = []
+        lines.reserveCapacity(sortedBoxes.count)
+
+        for (index, box) in sortedBoxes.enumerated() {
+            let croppedImage: CGImage
+            do {
+                croppedImage = try QuadTextCrop.crop(sourceImage, polygon: box.points)
+            } catch {
+                throw OCREngineError.quadTextCropFailed(boxIndex: index, underlying: error)
+            }
+            lines.append(LineCrop(lineIndex: index, crop: croppedImage, polygon: box.points))
+        }
+
+        let batchSize = max(1, resolved.textRecBatchSize)
+        var ocrResults: [OCRResult] = []
+        var totalRecTime: TimeInterval = 0
+        var totalRecPre: TimeInterval = 0
+        var totalRecInf: TimeInterval = 0
+        var totalRecPost: TimeInterval = 0
+        var lineInf: [TimeInterval] = []
+        var linePre: [TimeInterval] = []
+        var linePost: [TimeInterval] = []
+        var batchInputShapes: [[Int]] = []
+
+        var chunkStart = 0
+        while chunkStart < lines.count {
+            let chunkEnd = min(chunkStart + batchSize, lines.count)
+            let chunk = Array(lines[chunkStart..<chunkEnd])
+            let crops = chunk.map(\.crop)
+            let recBatch = try await recognitionEngine.recognizeBatch(crops)
+            guard recBatch.count == chunk.count else {
+                throw OCREngineError.recognitionBatchSizeMismatch(expected: chunk.count, actual: recBatch.count)
+            }
+            if let first = recBatch.first {
+                batchInputShapes.append(first.inputTensorShape)
+            }
+            
+            var batchProducedResult = false
+            for (i, item) in chunk.enumerated() {
+                let recResult = recBatch[i]
+                linePre.append(recResult.preprocessTime)
+                lineInf.append(recResult.inferenceTime)
+                linePost.append(recResult.postprocessTime)
+                totalRecTime += recResult.totalTime
+                totalRecPre += recResult.preprocessTime
+                totalRecInf += recResult.inferenceTime
+                totalRecPost += recResult.postprocessTime
+                
+                if recResult.confidence >= resolved.textRecScoreThresh {
+                    ocrResults.append(OCRResult(
+                        polygon: item.polygon,
+                        text: recResult.text,
+                        confidence: recResult.confidence
+                    ))
+                    batchProducedResult = true
+                }
+            }
+            
+            if batchProducedResult, let predicate = earlyStopPredicate, predicate(ocrResults) {
+                break
+            }
+            chunkStart = chunkEnd
+        }
+
+        let aggregate = RecognitionTimingAggregate(
+            preprocess: totalRecPre,
+            inference: totalRecInf,
+            postprocess: totalRecPost,
+            total: totalRecTime
+        )
+        let perLineOut = PerLineRecognitionTimes(
+            count: lines.count,
+            inputTensorShapes: batchInputShapes,
+            inference: lineInf,
+            preprocess: linePre,
+            postprocess: linePost
+        )
+        return (ocrResults, aggregate, perLineOut)
+    }
+}
