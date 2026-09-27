@@ -521,7 +521,6 @@ internal fun E6ImportsScreen(
         ) {
             DatePicker(
                 state = pickerState,
-                modifier = Modifier.height(420.dp),
                 title = null,
                 showModeToggle = false,
             )
@@ -1039,7 +1038,7 @@ internal fun E6ImportConfirmScreen(
                 },
                 dismissButton = { TextButton(onClick = { editingDateBatchIndex = null }) { Text("取消") } }
             ) {
-                DatePicker(state = pickerState, modifier = Modifier.height(420.dp))
+                DatePicker(state = pickerState)
             }
         } else {
             editingDateBatchIndex = null
