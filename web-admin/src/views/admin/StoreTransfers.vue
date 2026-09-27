@@ -98,6 +98,9 @@
             <div class="secondary-text">共 {{ row.items?.length || 0 }} 项</div>
           </template>
         </el-table-column>
+        <el-table-column label="备注" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '-' }}</template>
+        </el-table-column>
         <el-table-column label="状态" align="center">
           <template #default="{ row }">
             <div class="status-tags">

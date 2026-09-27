@@ -238,6 +238,9 @@ public struct TransfersView: View {
                                                     isBold: isItemOverdue
                                                 )
                                             }
+                                            if let rem = item.remark, !rem.isEmpty {
+                                                InfoRowItem(label: "备注", value: rem)
+                                            }
                                         }
                                         .padding(.top, 4)
                                         
@@ -604,6 +607,11 @@ public struct TransferDetailView: View {
     @State private var returnQuantityText: String = ""
     @State private var currentTaskID: UUID = UUID()
     
+    // 二次确认弹窗
+    @State private var showActionConfirm = false
+    @State private var confirmActionMessage = ""
+    @State private var confirmActionBlock: (() -> Void)? = nil
+    
     public init(id: Int) {
         self.id = id
     }
@@ -951,6 +959,14 @@ public struct TransferDetailView: View {
                 }
             }
         }
+        .alert("二次确认", isPresented: $showActionConfirm) {
+            Button("取消", role: .cancel) { }
+            Button("确定") {
+                confirmActionBlock?()
+            }
+        } message: {
+            Text(confirmActionMessage)
+        }
     }
     
     private func loadDetail() async {
@@ -968,6 +984,14 @@ public struct TransferDetailView: View {
     
     private func confirmOutboundAction() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        confirmActionMessage = "确定要确认调出该订单吗？确认后物品将正式发出。"
+        confirmActionBlock = {
+            self.executeConfirmOutbound()
+        }
+        showActionConfirm = true
+    }
+    
+    private func executeConfirmOutbound() {
         isActionBusy = true
         Task {
             do {
@@ -1010,6 +1034,14 @@ public struct TransferDetailView: View {
     
     private func confirmReturnAction(returnId: Int) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        confirmActionMessage = "确定要确认归还这笔物资吗？"
+        confirmActionBlock = {
+            self.executeConfirmReturn(returnId: returnId)
+        }
+        showActionConfirm = true
+    }
+    
+    private func executeConfirmReturn(returnId: Int) {
         isActionBusy = true
         Task {
             do {

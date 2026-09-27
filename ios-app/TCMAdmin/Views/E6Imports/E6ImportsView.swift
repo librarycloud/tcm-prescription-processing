@@ -5,7 +5,11 @@ public struct E6ImportsView: View {
     @Bindable private var router = Router.shared
     @State private var searchText = ""
     @State private var selectedStatus: Int? = nil
-    @State private var orderDate: String = "" // "" for all, or yyyy-MM-dd
+    @State private var orderDate: String = E6ImportsView.dateFormatter.string(from: Date())
+    
+    @State private var page: Int = 1
+    @State private var hasMore: Bool = true
+    @State private var isLoadingMore: Bool = false
     @State private var showDatePicker = false
     @State private var tempPickerDate = Date()
     @State private var e6Imports: [E6ImportItem] = []
@@ -420,7 +424,15 @@ public struct E6ImportsView: View {
     
     private func startLoadE6Imports() {
         loadTask?.cancel()
-        loadTask = Task { await loadE6Imports() }
+        page = 1
+        hasMore = true
+        loadTask = Task { await loadE6Imports(isLoadMore: false) }
+    }
+    
+    private func loadMoreE6Imports() async {
+        guard hasMore && !isLoadingMore && !isLoading else { return }
+        page += 1
+        await loadE6Imports(isLoadMore: true)
     }
 
     private func loadE6Imports() async {

@@ -798,6 +798,7 @@ internal fun E6ImportConfirmScreen(
     var doctors by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var processTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var batches by remember(initial) { mutableStateOf(e6DraftBatches(initial.optInt("doseCount", 1), 1)) }
+    var editingDateBatchIndex by remember { mutableStateOf<Int?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -905,6 +906,11 @@ internal fun E6ImportConfirmScreen(
                         label = { Text("加工日期") },
                         singleLine = true,
                         shape = FieldShape,
+                        trailingIcon = {
+                            IconButton(onClick = { editingDateBatchIndex = index }) {
+                                Icon(Icons.Default.CalendarMonth, contentDescription = "Select Date", tint = Primary)
+                            }
+                        }
                     )
                 }
                 if (index < batches.lastIndex) Spacer(Modifier.height(7.dp))
@@ -984,6 +990,35 @@ internal fun E6ImportConfirmScreen(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         )
         Spacer(Modifier.height(20.dp))
+    }
+
+    if (editingDateBatchIndex != null) {
+        val index = editingDateBatchIndex!!
+        val batch = batches.getOrNull(index)
+        if (batch != null) {
+            val pickerState = androidx.compose.material3.rememberDatePickerState(
+                initialSelectedDateMillis = e6DateMillis(batch.date),
+            )
+            DatePickerDialog(
+                onDismissRequest = { editingDateBatchIndex = null },
+                confirmButton = {
+                    TextButton(
+                        enabled = pickerState.selectedDateMillis != null,
+                        onClick = {
+                            e6DateFromMillis(pickerState.selectedDateMillis)?.let { selectedDate ->
+                                batches = batches.toMutableList().also { it[index] = batch.copy(date = selectedDate) }
+                            }
+                            editingDateBatchIndex = null
+                        }
+                    ) { Text("确定") }
+                },
+                dismissButton = { TextButton(onClick = { editingDateBatchIndex = null }) { Text("取消") } }
+            ) {
+                DatePicker(state = pickerState, modifier = Modifier.height(420.dp))
+            }
+        } else {
+            editingDateBatchIndex = null
+        }
     }
 }
 

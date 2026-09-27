@@ -1,6 +1,8 @@
 import SwiftUI
 import AVFoundation
 import Vision
+import CoreVideo
+import UIKit
 
 @MainActor
 public struct LiveScannerView: View {
@@ -242,6 +244,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     private var lastOcrResult: String? = nil
     private var ocrMatchCount: Int = 0
     
+    // PaddleOCR Engine
+    private var ocrEngine: OCREngine?
+    private var isOcrEngineLoading = false
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -249,6 +255,26 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
     
     private func setupCamera() {
+        if enableOCR {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else { return }
+                self.isOcrEngineLoading = true
+                do {
+                    let inferenceConfig = InferenceConfig(
+                        detModelAsset: Bundle.main.path(forResource: "inference", ofType: "onnx", inDirectory: "Models/det") ?? "",
+                        recModelAsset: Bundle.main.path(forResource: "inference", ofType: "onnx", inDirectory: "Models/rec") ?? "",
+                        recConfigAsset: Bundle.main.path(forResource: "inference", ofType: "yml", inDirectory: "Models/rec") ?? "",
+                        engineConfig: EngineConfig()
+                    )
+                    let sessionManager = try ORTSessionManager(config: inferenceConfig)
+                    self.ocrEngine = try OCREngine(sessionManager: sessionManager)
+                    print("PaddleOCR engine loaded successfully")
+                } catch {
+                    print("Failed to load PaddleOCR engine: \(error)")
+                }
+                self.isOcrEngineLoading = false
+            }
+        }
         let session = AVCaptureSession()
         // 提升采集分辨率，使小条码在不放大的情况下也能快速识别
         if session.canSetSessionPreset(.hd1920x1080) {
@@ -349,27 +375,73 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         guard !isScanClaimed() else { return }
         
         let now = Date()
-        // 限制 OCR 频率为 150ms 一次
-        guard now.timeIntervalSince(lastOcrScanTime) > 0.15 else { return }
+        // 限制 OCR 频率为 500ms 一次，避免过多占用CPU
+        guard now.timeIntervalSince(lastOcrScanTime) > 0.5 else { return }
         lastOcrScanTime = now
         
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         
-        let request = VNRecognizeTextRequest { [weak self] request, error in
+        guard let engine = self.ocrEngine else { return }
+        
+        // 提取图像并运行PaddleOCR
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return }
+        let uiImage = UIImage(cgImage: cgImage, scale: 1.0, orientation: .right)
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self, !self.isScanClaimed() else { return }
-            guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
             
-            if let sku = self.extractSku(observations: observations) {
-                if sku == self.lastOcrResult {
-                    self.ocrMatchCount += 1
-                } else {
-                    self.lastOcrResult = sku
-                    self.ocrMatchCount = 1
+            do {
+                let params = engine.baselineRuntimeDefaults()
+                let result = try engine.run(image: uiImage, params: params)
+                
+                // 拼接识别结果并用正则过滤
+                let texts = result.results.map { $0.text }
+                if texts.isEmpty { return }
+                
+                var skuFound: String? = nil
+                let labelRegex = try? NSRegularExpression(pattern: "(编码|编号|SKU|商品码|批号)", options: .caseInsensitive)
+                let standalone9Regex = try? NSRegularExpression(pattern: "\b\d{9}\b")
+                let candidate9Regex = try? NSRegularExpression(pattern: "(?i)\b[0-9A-Za-z]{9}\b")
+                
+                let combinedText = texts.joined(separator: " ")
+                
+                // 1. 如果有标签，找后面的9位候选
+                if let regex = labelRegex, regex.firstMatch(in: combinedText, range: NSRange(location: 0, length: (combinedText as NSString).length)) != nil {
+                    for text in texts {
+                        if let match = candidate9Regex?.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) {
+                            skuFound = (text as NSString).substring(with: match.range)
+                            break
+                        }
+                    }
                 }
                 
-                if self.ocrMatchCount >= 2 {
-                    guard self.claimScan() else { return }
+                // 2. 否则找独立的9位数字
+                if skuFound == nil {
+                    if let match = standalone9Regex?.firstMatch(in: combinedText, range: NSRange(location: 0, length: (combinedText as NSString).length)) {
+                        skuFound = (combinedText as NSString).substring(with: match.range)
+                    }
+                }
+                
+                guard let sku = skuFound else {
                     DispatchQueue.main.async {
+                        self.ocrMatchCount = 0
+                        self.lastOcrResult = nil
+                    }
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    if sku == self.lastOcrResult {
+                        self.ocrMatchCount += 1
+                    } else {
+                        self.lastOcrResult = sku
+                        self.ocrMatchCount = 1
+                    }
+                    
+                    if self.ocrMatchCount >= 2 {
+                        guard self.claimScan() else { return }
                         self.onScanned?(sku)
                         self.lastOcrResult = nil
                         self.ocrMatchCount = 0
@@ -379,35 +451,14 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                         }
                     }
                 }
-            } else {
-                self.ocrMatchCount = 0
-                self.lastOcrResult = nil
+            } catch {
+                print("PaddleOCR engine run failed: \(error)")
             }
         }
-        // Keep the 1080p camera stream, but limit OCR work to the aiming area.
-        request.recognitionLevel = .fast
-        request.usesLanguageCorrection = false
-        request.recognitionLanguages = ["en-US"]
-        request.regionOfInterest = CGRect(x: 0.1, y: 0.25, width: 0.8, height: 0.5)
-        
-        // 手机竖屏时的图像方向通常是 .right
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
-        try? handler.perform([request])
     }
     
-    private func extractSku(observations: [VNRecognizedTextObservation]) -> String? {
-        func cleanDigits(_ str: String) -> String {
-            var res = ""
-            for char in str {
-                if char.isNumber { res.append(char) }
-                else if char == "O" || char == "o" { res.append("0") }
-                else if char == "I" || char == "l" { res.append("1") }
-                else if char == "Z" || char == "z" { res.append("2") }
-                else if char == "S" || char == "s" { res.append("5") }
-                else if char == "B" || char == "b" { res.append("8") }
-            }
-            return res
-        }
+    // MARK: - Old Extract SKU method (Removed)
+        func extractSkuDummy() {
         
         func has10PlusConsecutiveDigits(_ text: String) -> Bool {
             let regex = try? NSRegularExpression(pattern: "\\d{10,}")
