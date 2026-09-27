@@ -307,6 +307,7 @@ public struct ProcessingPlanFormView: View {
                     .padding(12)
                     .background(Color.pageBackground)
                     .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                 }
                 .disabled(planToEdit != nil)
@@ -329,6 +330,7 @@ public struct ProcessingPlanFormView: View {
                         .padding(10)
                         .background(Color.pageBackground)
                         .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                     }
                     
@@ -347,6 +349,7 @@ public struct ProcessingPlanFormView: View {
                         .padding(10)
                         .background(Color.pageBackground)
                         .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                     }
                 }
@@ -361,6 +364,7 @@ public struct ProcessingPlanFormView: View {
                                 .padding(10)
                                 .background(Color.pageBackground)
                                 .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                         }
                         VStack(alignment: .leading, spacing: 8) {
@@ -371,6 +375,7 @@ public struct ProcessingPlanFormView: View {
                                 .padding(10)
                                 .background(Color.pageBackground)
                                 .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                         }
                     }
@@ -383,6 +388,7 @@ public struct ProcessingPlanFormView: View {
                         .padding(10)
                         .background(Color.pageBackground)
                         .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                 }
             }
@@ -468,6 +474,7 @@ public struct ProcessingPlanFormView: View {
                 .padding(.vertical, 6)
                 .background(Color.pageBackground)
                 .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
             }
             
@@ -564,6 +571,7 @@ public struct ProcessingPlanFormView: View {
                             .padding(10)
                             .background(Color.pageBackground)
                             .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                     }
                 }
@@ -577,6 +585,7 @@ public struct ProcessingPlanFormView: View {
                         .padding(10)
                         .background(Color.pageBackground)
                         .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                 }
                 
@@ -587,6 +596,7 @@ public struct ProcessingPlanFormView: View {
                         .padding(10)
                         .background(Color.pageBackground)
                         .clipShape(.rect(cornerRadius: 8))
+                        .expandTapTarget()
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                 }
             }

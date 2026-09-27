@@ -472,6 +472,7 @@ public struct TransferFormView: View {
                                         .background(Color.surface)
                                         .clipShape(.rect(cornerRadius: 8))
                                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                                        .expandTapTarget()
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 6) {

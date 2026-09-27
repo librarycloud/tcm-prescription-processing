@@ -1323,3 +1323,24 @@ public extension String {
         return false
     }
 }
+
+// MARK: - 扩大输入框点击区域 (Expand TextField Tap Target)
+struct TextFieldTapTargetModifier: ViewModifier {
+    @FocusState private var isFocused: Bool
+    
+    func body(content: Content) -> some View {
+        content
+            .focused($isFocused)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isFocused = true
+            }
+    }
+}
+
+public extension View {
+    /// 让带有 padding 和 background 的 TextField 的整个区域都可以点击聚焦
+    func expandTapTarget() -> some View {
+        self.modifier(TextFieldTapTargetModifier())
+    }
+}

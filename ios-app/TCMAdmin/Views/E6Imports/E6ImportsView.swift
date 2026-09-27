@@ -387,6 +387,13 @@ public struct E6ImportsView: View {
                     DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .padding()
+                        .onChange(of: tempPickerDate) { _, newValue in
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            orderDate = formatter.string(from: newValue)
+                            showDatePicker = false
+                            startLoadE6Imports()
+                        }
                     Spacer()
                 }
                 .navigationTitle("选择订单日期")
@@ -395,16 +402,7 @@ public struct E6ImportsView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("取消") { showDatePicker = false }
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("确认") {
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-                            orderDate = formatter.string(from: tempPickerDate)
-                            showDatePicker = false
-                            startLoadE6Imports()
-                        }
-                        .fontWeight(.bold)
-                    }
+                    // 自动触发 onChange 收起，不再需要确认按钮
                 }
             }
             .presentationDetents([.medium])
