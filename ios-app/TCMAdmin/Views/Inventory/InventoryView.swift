@@ -317,19 +317,6 @@ struct InventoryView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode_DirectlyShowDetail"))) { notif in
-            if let dict = notif.object as? [String: Any],
-               let code = dict["code"] as? String,
-               let item = dict["item"] as? InventoryItem {
-                ApiClient.shared.clearResponseCache()
-                self.hasAutoNavigated = true
-                self.lastSearchedTerm = code
-                self.searchText = code
-                self.addSearchHistory(code)
-                self.items = [item]
-                self.selectedProduct = item
-            }
-        }
         .task {
             await loadInitialData()
         }
@@ -436,9 +423,7 @@ struct InventoryView: View {
             }
             
             // 批次信息
-            Text("库存批次明细")
-                .scaledFont(14, weight: .bold)
-                .foregroundStyle(Color.ink)
+            SectionHeader(title: "库存批次明细")
                 .padding(.top, 8)
             
             if let batches = item.inventories, !batches.isEmpty {
@@ -493,19 +478,29 @@ struct InventoryView: View {
                                     Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("生产日期").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(pDate).scaledFont(10).foregroundStyle(Color.ink).lineLimit(1)
+                                            Text("生产日期").scaledFont(11).foregroundStyle(Color.muted)
+                                            Text(pDate).scaledFont(12).foregroundStyle(Color.ink).lineLimit(1)
                                         }.frame(maxWidth: .infinity, alignment: .leading)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("有效期至").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(eDate).scaledFont(10).foregroundStyle(Color.ink).lineLimit(1)
+                                            Text("有效期至").scaledFont(11).foregroundStyle(Color.muted)
+                                            Text(eDate).scaledFont(12).foregroundStyle(Color.ink).lineLimit(1)
                                         }.frame(maxWidth: .infinity, alignment: .leading)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("入库日期").scaledFont(9).foregroundStyle(Color.muted)
-                                            Text(iDate).scaledFont(10).foregroundStyle(Color.muted).lineLimit(1)
+                                            Text("入库日期").scaledFont(11).foregroundStyle(Color.muted)
+                                            Text(iDate).scaledFont(12).foregroundStyle(Color.muted).lineLimit(1)
                                         }.frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(.top, 2)
+                                }
+                                if let upd = batch.updatedAt, !upd.isEmpty {
+                                    let updFormatted = formatDateTimeToMinute(upd)
+                                    Divider().foregroundStyle(Color.cardBorder).padding(.top, 4)
+                                    HStack {
+                                        Text("更新时间").scaledFont(11).foregroundStyle(Color.muted)
+                                        Spacer()
+                                        Text(updFormatted).scaledFont(11).foregroundStyle(Color.muted)
                                     }
                                     .padding(.top, 2)
                                 }

@@ -12,9 +12,7 @@ public struct InventoryDetailView: View {
         AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Section Header
-                Text("商品信息")
-                    .scaledFont(14, weight: .bold)
-                    .foregroundStyle(Color.ink)
+                SectionHeader(title: "商品信息")
                     .padding(.top, 8)
                 
                 // 基本信息卡片
@@ -89,9 +87,7 @@ public struct InventoryDetailView: View {
                 }
                 
                 // 批次信息
-                Text("库存批次明细")
-                    .scaledFont(14, weight: .bold)
-                    .foregroundStyle(Color.ink)
+                SectionHeader(title: "库存批次明细")
                     .padding(.top, 8)
                 
                 if let batches = item.inventories, !batches.isEmpty {

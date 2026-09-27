@@ -5,7 +5,11 @@ public struct E6ImportsView: View {
     @Bindable private var router = Router.shared
     @State private var searchText = ""
     @State private var selectedStatus: Int? = nil
-    @State private var orderDate: String = "" // "" for all, or yyyy-MM-dd
+    @State private var orderDate: String = E6ImportsView.dateFormatter.string(from: Date())
+    
+    @State private var page: Int = 1
+    @State private var hasMore: Bool = true
+    @State private var isLoadingMore: Bool = false
     @State private var showDatePicker = false
     @State private var tempPickerDate = Date()
     @State private var e6Imports: [E6ImportItem] = []
@@ -303,11 +307,23 @@ public struct E6ImportsView: View {
                             }
                         }
                         .padding(16)
+                        Group {
+                            if hasMore && !e6Imports.isEmpty {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .task {
+                                        await loadMoreE6Imports()
+                                    }
+                            }
+                        }
                         .padding(.bottom, selectedIds.isEmpty ? 0 : 64)
                     }
                     .refreshable {
-            ApiClient.shared.clearResponseCache()
-                        await loadE6Imports()
+                        ApiClient.shared.clearResponseCache()
+                        page = 1
+                        hasMore = true
+                        await loadE6Imports(isLoadMore: false)
                     }
                 
                     .background(Color.pageBackground)
@@ -387,6 +403,16 @@ public struct E6ImportsView: View {
                     DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .padding()
+                        .onChange(of: tempPickerDate) { _, newValue in
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            orderDate = formatter.string(from: newValue)
+                            // 必须延迟收起，否则在 iOS 17 上 SwiftUI 的 sheet 状态机可能会卡住导致无法 dismiss
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showDatePicker = false
+                                startLoadE6Imports()
+                            }
+                        }
                     Spacer()
                 }
                 .navigationTitle("选择订单日期")
@@ -396,14 +422,13 @@ public struct E6ImportsView: View {
                         Button("取消") { showDatePicker = false }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("确认") {
+                        Button("确定") {
                             let formatter = DateFormatter()
                             formatter.dateFormat = "yyyy-MM-dd"
                             orderDate = formatter.string(from: tempPickerDate)
                             showDatePicker = false
                             startLoadE6Imports()
                         }
-                        .fontWeight(.bold)
                     }
                 }
             }
@@ -422,35 +447,53 @@ public struct E6ImportsView: View {
     
     private func startLoadE6Imports() {
         loadTask?.cancel()
-        loadTask = Task { await loadE6Imports() }
+        page = 1
+        hasMore = true
+        loadTask = Task { await loadE6Imports(isLoadMore: false) }
+    }
+    
+    private func loadMoreE6Imports() async {
+        guard hasMore && !isLoadingMore && !isLoading else { return }
+        page += 1
+        await loadE6Imports(isLoadMore: true)
     }
 
-    private func loadE6Imports() async {
+    private func loadE6Imports(isLoadMore: Bool = false) async {
         let taskID = UUID()
         currentTaskID = taskID
-        isLoading = true
+        if !isLoadMore {
+            isLoading = true
+        } else {
+            isLoadingMore = true
+        }
         errorMessage = nil
         defer {
             if currentTaskID == taskID {
                 isLoading = false
+                isLoadingMore = false
             }
         }
         do {
             let res = try await ApiClient.shared.fetchE6Imports(
                 keyword: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
                 status: selectedStatus,
-                orderDate: orderDate
+                orderDate: orderDate,
+                page: page,
+                pageSize: 20
             )
             guard !Task.isCancelled else { return }
-            self.e6Imports = res
+            
+            if isLoadMore {
+                self.e6Imports.append(contentsOf: res)
+            } else {
+                self.e6Imports = res
+            }
+            self.hasMore = res.count == 20
         } catch is CancellationError {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            let desc = error.localizedDescription
-            if !desc.lowercased().contains("cancel") && !desc.isEmpty {
-                self.errorMessage = desc
-            }
+            self.errorMessage = error.localizedDescription
         }
     }
     
@@ -925,8 +968,8 @@ struct E6ConfirmFormSheet: View {
     
     private func initDefaults() {
         if let first = items.first {
-            customerName = first.displayCustomer
-            phone = first.displayPhone
+            customerName = first.customerName ?? first.patientName ?? ""
+            phone = first.phone ?? ""
             if let dId = first.doctorMapping?.doctorId ?? first.doctorMapping?.doctor?.id, dId > 0 {
                 selectedDoctorId = dId
             }

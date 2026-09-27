@@ -43,6 +43,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -180,9 +181,13 @@ internal fun E6ImportsScreen(
     var lastLoadedPage by remember { mutableStateOf(page) }
     val scope = rememberCoroutineScope()
 
-    suspend fun refreshFromServer() {
-        if (refreshing) return
-        refreshing = true
+    suspend fun refreshFromServer(isLoadMore: Boolean = false) {
+        if (refreshing || (isLoadMore && loading)) return
+        if (isLoadMore) {
+            loading = true
+        } else {
+            refreshing = true
+        }
         error = null
         try {
             val data = withContext(Dispatchers.IO) {
@@ -190,14 +195,21 @@ internal fun E6ImportsScreen(
                     keyword = keyword.trim(),
                     orderDate = orderDate,
                     page = page,
-                    pageSize = 10,
+                    pageSize = 20,
                 )
             }
             val list = data.optJSONArray("list") ?: JSONArray()
-            items = (0 until list.length()).map { list.getJSONObject(it) }
+            val newItems = (0 until list.length()).map { list.getJSONObject(it) }
+            
+            if (isLoadMore) {
+                items = (items ?: emptyList()) + newItems
+            } else {
+                items = newItems
+            }
+            
             data.optJSONObject("pagination")?.let { pagination ->
                 listState.pages = pagination.optInt("pages", 1).coerceAtLeast(1)
-                listState.total = pagination.optInt("total", list.length())
+                listState.total = pagination.optInt("total", pagination.optInt("total", (items ?: emptyList()).size))
             }
             if (page > listState.pages) {
                 page = listState.pages
@@ -205,13 +217,16 @@ internal fun E6ImportsScreen(
             }
             ApiClient.saveE6ImportCache(context, data)
             listState.loaded = true
-            selectedIds = emptySet()
+            if (!isLoadMore) {
+                selectedIds = emptySet()
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
             error = failure.message ?: "加载E6导入记录失败"
         } finally {
             refreshing = false
+            loading = false
         }
     }
 
@@ -296,6 +311,8 @@ internal fun E6ImportsScreen(
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
+            page = 1
+            lastLoadedPage = 1
             scope.launch {
                 ApiClient.clearResponseCache(context)
                 refreshFromServer()
@@ -389,6 +406,8 @@ internal fun E6ImportsScreen(
                     }
                     OutlinedButton(
                         onClick = {
+                            page = 1
+                            lastLoadedPage = 1
                             scope.launch {
                                 ApiClient.clearResponseCache(context)
                                 refreshFromServer()
@@ -430,7 +449,7 @@ internal fun E6ImportsScreen(
             } else {
                 item(key = "count_header") {
                     Spacer(Modifier.height(12.dp))
-                    Text("共 ${listState.total} 条记录 · 第 $currentPage / ${listState.pages} 页", color = Muted, fontSize = 12.sp)
+                    Text("共 ${listState.total} 条记录", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(7.dp))
                 }
                 val isStoreStaff = user?.optInt("role", -1) == 3
@@ -461,14 +480,19 @@ internal fun E6ImportsScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                 }
-                if (listState.pages > 1) {
-                    item(key = "pagination") {
-                        AppPagination(
-                            page = currentPage,
-                            pages = listState.pages,
-                            onPrev = { if (currentPage > 1) page-- },
-                            onNext = { if (currentPage < listState.pages) page++ },
-                        )
+                if (page < listState.pages) {
+                    item(key = "loadMore") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = Primary)
+                        }
+                        LaunchedEffect(Unit) {
+                            page++
+                            lastLoadedPage = page
+                            refreshFromServer(isLoadMore = true)
+                        }
                     }
                 }
             }
@@ -497,7 +521,6 @@ internal fun E6ImportsScreen(
         ) {
             DatePicker(
                 state = pickerState,
-                modifier = Modifier.height(420.dp),
                 title = null,
                 showModeToggle = false,
             )
@@ -776,6 +799,7 @@ private fun E6PrescriptionItemRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun E6ImportConfirmScreen(
     initial: JSONObject,
@@ -798,6 +822,7 @@ internal fun E6ImportConfirmScreen(
     var doctors by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var processTypes by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var batches by remember(initial) { mutableStateOf(e6DraftBatches(initial.optInt("doseCount", 1), 1)) }
+    var editingDateBatchIndex by remember { mutableStateOf<Int?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -905,6 +930,11 @@ internal fun E6ImportConfirmScreen(
                         label = { Text("加工日期") },
                         singleLine = true,
                         shape = FieldShape,
+                        trailingIcon = {
+                            IconButton(onClick = { editingDateBatchIndex = index }) {
+                                Icon(Icons.Default.CalendarMonth, contentDescription = "Select Date", tint = Primary)
+                            }
+                        }
                     )
                 }
                 if (index < batches.lastIndex) Spacer(Modifier.height(7.dp))
@@ -984,6 +1014,35 @@ internal fun E6ImportConfirmScreen(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         )
         Spacer(Modifier.height(20.dp))
+    }
+
+    if (editingDateBatchIndex != null) {
+        val index = editingDateBatchIndex!!
+        val batch = batches.getOrNull(index)
+        if (batch != null) {
+            val pickerState = androidx.compose.material3.rememberDatePickerState(
+                initialSelectedDateMillis = e6DateMillis(batch.date),
+            )
+            DatePickerDialog(
+                onDismissRequest = { editingDateBatchIndex = null },
+                confirmButton = {
+                    TextButton(
+                        enabled = pickerState.selectedDateMillis != null,
+                        onClick = {
+                            e6DateFromMillis(pickerState.selectedDateMillis)?.let { selectedDate ->
+                                batches = batches.toMutableList().also { it[index] = batch.copy(date = selectedDate) }
+                            }
+                            editingDateBatchIndex = null
+                        }
+                    ) { Text("确定") }
+                },
+                dismissButton = { TextButton(onClick = { editingDateBatchIndex = null }) { Text("取消") } }
+            ) {
+                DatePicker(state = pickerState)
+            }
+        } else {
+            editingDateBatchIndex = null
+        }
     }
 }
 
