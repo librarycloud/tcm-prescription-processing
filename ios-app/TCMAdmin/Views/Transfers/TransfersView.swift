@@ -173,8 +173,8 @@ public struct TransfersView: View {
                     
                     if isLoading && transfers.isEmpty {
                         ProgressView("正在加载调拨记录...")
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 40)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
                     } else if transfers.isEmpty {
                         AppCard(padding: 32) {
                             VStack(spacing: 8) {
@@ -262,7 +262,7 @@ public struct TransfersView: View {
                 }
                 .padding(16)
             }
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             .refreshable {
                 ApiClient.shared.clearResponseCache()
                 await loadTransfers()

@@ -57,7 +57,10 @@ public class Router {
         navPath.append(route)
     }
     
-        public func presentScanner(enableOCR: Bool = false, onScanned: ((String) -> Void)? = nil) {
+    public func presentScanner(enableOCR: Bool = false, onScanned: ((String) -> Void)? = nil) {
+        // 全局收起键盘，防止扫描框被键盘遮挡
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        
         self.scannerEnableOCR = enableOCR
         self.scannerOnScanned = onScanned
         self.isScannerPresented = true

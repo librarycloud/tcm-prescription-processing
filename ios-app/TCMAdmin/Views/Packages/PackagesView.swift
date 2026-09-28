@@ -76,7 +76,7 @@ public struct PackagesView: View {
                     onSearch: {
                         startLoadPackages()
                     },
-                    onScan: { router.isScannerPresented = true }
+                    onScan: { router.presentScanner() }
                 )
                 .onChange(of: searchText) {
                     searchTask?.cancel()
@@ -151,12 +151,12 @@ public struct PackagesView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 8)
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             
             if isLoading && packages.isEmpty {
-                Spacer()
                 ProgressView("正在查询包裹...")
-                Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
             } else if let error = errorMessage, !error.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
@@ -197,7 +197,7 @@ public struct PackagesView: View {
                     }
                     .padding(16)
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 8) }
-                .background(Color.pageBackground)
+                .background(Color.pageBackground.ignoresSafeArea(.all))
             }
             } // Close VStack
             .refreshable {

@@ -70,7 +70,7 @@ public struct E6ImportsView: View {
                         text: $searchText,
                         placeholder: "搜索订单号、顾客、电话或销售员号",
                         onSearch: { startLoadE6Imports() },
-                        onScan: { router.isScannerPresented = true }
+                        onScan: { router.presentScanner() }
                     )
                     
                     // 日期快捷切换
@@ -153,7 +153,7 @@ public struct E6ImportsView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 8)
                 .onChange(of: selectedStatus) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
                 
                 // 提示栏
                 if let notice = successNotice {
@@ -165,9 +165,9 @@ public struct E6ImportsView: View {
                 
                 // 导入订单列表
                 if isLoading && e6Imports.isEmpty {
-                    Spacer()
                     ProgressView("正在同步 E6 处方导入记录...")
-                    Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
                 } else if let error = errorMessage, !error.isEmpty {
                     Spacer()
                     Text(error).foregroundStyle(Color.danger).scaledFont(14).padding()
@@ -326,7 +326,7 @@ public struct E6ImportsView: View {
                         await loadE6Imports(isLoadMore: false)
                     }
                 
-                    .background(Color.pageBackground)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
                 }
             }
             
@@ -402,6 +402,7 @@ public struct E6ImportsView: View {
                 VStack(spacing: 16) {
                     DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                        .environment(\.locale, Locale(identifier: "zh_CN"))
                         .padding()
                         .onChange(of: tempPickerDate) { _, newValue in
                             let formatter = DateFormatter()
@@ -544,6 +545,26 @@ private struct E6ConfirmItemsWrapper: Identifiable {
     let items: [E6ImportItem]
 }
 
+
+struct BatchDraftDatePicker: View {
+    @Binding var draft: BatchDraft
+
+    var body: some View {
+        DatePicker(
+            "加工日期",
+            selection: $draft.processDate,
+            displayedComponents: .date
+        )
+        .environment(\.locale, Locale(identifier: "zh_CN"))
+        .id(draft.datePickerId)
+        .onChange(of: draft.processDate) { _, _ in
+            draft.datePickerId = UUID()
+        }
+        .scaledFont(13)
+        .padding(.horizontal, 6)
+    }
+}
+
 // MARK: - E6 确认排产 / 合并排产表单 Sheet (对齐 Android E6ImportConfirmScreen)
 struct BatchDraft: Identifiable {
     let id: UUID
@@ -551,6 +572,7 @@ struct BatchDraft: Identifiable {
     var processTypeId: Int = 0
     var scheduleType: Int // 1: 指定日期, 2: 等待通知
     var processDate: Date
+    var datePickerId = UUID()
     
     init(id: UUID = UUID(), dose: String = "1", scheduleType: Int = 1, processDate: Date = Date()) {
         self.id = id
@@ -567,6 +589,7 @@ struct E6ConfirmFormSheet: View {
     
     @State private var customerName = ""
     @State private var phone = ""
+    @State private var prescriptionRemark = ""
     @State private var totalDoseStr = "1"
     @State private var batchCountStr = "1"
     @State private var selectedDoctorId = 0
@@ -839,13 +862,7 @@ struct E6ConfirmFormSheet: View {
                                     .padding(.top, 4)
                                     
                                     if batchDrafts[index].scheduleType == 1 {
-                                        DatePicker(
-                                            "加工日期",
-                                            selection: $batchDrafts[index].processDate,
-                                            displayedComponents: .date
-                                        )
-                                        .scaledFont(13)
-                                        .padding(.horizontal, 6)
+                                        BatchDraftDatePicker(draft: $batchDrafts[index])
                                     }
                                 }
                                 .padding(10)
@@ -951,7 +968,7 @@ struct E6ConfirmFormSheet: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.immediately)
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             .navigationTitle(isMerge ? "合并订单" : "确认导入")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -970,6 +987,7 @@ struct E6ConfirmFormSheet: View {
         if let first = items.first {
             customerName = first.customerName ?? first.patientName ?? ""
             phone = first.phone ?? ""
+            prescriptionRemark = first.remark ?? ""
             if let dId = first.doctorMapping?.doctorId ?? first.doctorMapping?.doctor?.id, dId > 0 {
                 selectedDoctorId = dId
             }
@@ -1079,6 +1097,8 @@ struct E6ConfirmFormSheet: View {
         var payload: [String: Any] = [
             "customerName": customerName.trimmingCharacters(in: .whitespacesAndNewlines),
             "phone": phone.trimmingCharacters(in: .whitespacesAndNewlines),
+            "prescriptionRemark": prescriptionRemark.trimmingCharacters(in: .whitespacesAndNewlines),
+            "remark": prescriptionRemark.trimmingCharacters(in: .whitespacesAndNewlines),
             "totalDose": totalDose,
             "doseCount": totalDose,
             "pickupMethod": pickupMethod,
@@ -1143,8 +1163,8 @@ public struct E6ImportDetailView: View {
             VStack(spacing: 14) {
                 if isLoading && detail == nil {
                     ProgressView("正在加载订单详情...")
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
                 } else if detail == nil {
                     VStack(spacing: 12) {
                         Image(systemName: "doc.text.magnifyingglass")

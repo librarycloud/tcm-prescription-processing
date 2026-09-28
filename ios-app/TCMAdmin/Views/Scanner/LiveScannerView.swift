@@ -3,6 +3,100 @@ import AVFoundation
 import CoreImage
 import UIKit
 
+final class SharedCameraManager {
+    static let shared = SharedCameraManager()
+    
+    let sessionQueue = DispatchQueue(label: "com.tcm.cameraqueue")
+    var captureSession: AVCaptureSession?
+    var metadataOutput: AVCaptureMetadataOutput?
+    var videoDataOutput: AVCaptureVideoDataOutput?
+    var isConfigured = false
+    
+    private init() {}
+    
+    func preload() {
+        sessionQueue.async {
+            guard !self.isConfigured else { return }
+            
+            let session = AVCaptureSession()
+            session.beginConfiguration()
+            
+            if session.canSetSessionPreset(.hd1920x1080) {
+                session.sessionPreset = .hd1920x1080
+            }
+            
+            let deviceTypes: [AVCaptureDevice.DeviceType] = [
+                .builtInDualWideCamera,
+                .builtInTripleCamera,
+                .builtInDualCamera,
+                .builtInWideAngleCamera
+            ]
+            let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes, mediaType: .video, position: .back)
+            
+            guard let videoDevice = discovery.devices.first ?? AVCaptureDevice.default(for: .video),
+                  let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
+                  session.canAddInput(videoInput) else {
+                session.commitConfiguration()
+                return
+            }
+            
+            do {
+                try videoDevice.lockForConfiguration()
+                if videoDevice.isAutoFocusRangeRestrictionSupported {
+                    videoDevice.autoFocusRangeRestriction = .near
+                }
+                if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
+                    videoDevice.focusMode = .continuousAutoFocus
+                }
+                if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
+                    videoDevice.exposureMode = .continuousAutoExposure
+                }
+                videoDevice.unlockForConfiguration()
+            } catch {
+                print("Failed to optimize camera focus: \(error)")
+            }
+            
+            session.addInput(videoInput)
+            
+            let mOutput = AVCaptureMetadataOutput()
+            if session.canAddOutput(mOutput) {
+                session.addOutput(mOutput)
+                mOutput.metadataObjectTypes = [
+                    .qr, .ean13, .ean8, .code128, .code39, .upce
+                ]
+                self.metadataOutput = mOutput
+            }
+            
+            let vOutput = AVCaptureVideoDataOutput()
+            vOutput.videoSettings = [(kCVPixelBufferPixelFormatTypeKey as String): Int(kCVPixelFormatType_32BGRA)]
+            vOutput.alwaysDiscardsLateVideoFrames = true
+            if session.canAddOutput(vOutput) {
+                session.addOutput(vOutput)
+                self.videoDataOutput = vOutput
+            }
+            
+            session.commitConfiguration()
+            self.captureSession = session
+            self.isConfigured = true
+            #if DEBUG
+            print("AVCaptureSession globally pre-configured")
+            #endif
+        }
+    }
+    
+    func start() {
+        sessionQueue.async {
+            self.captureSession?.startRunning()
+        }
+    }
+    
+    func stop() {
+        sessionQueue.async {
+            self.captureSession?.stopRunning()
+        }
+    }
+}
+
 @MainActor
 final class SharedOCRManager {
     static let shared = SharedOCRManager()
@@ -50,6 +144,7 @@ public struct LiveScannerView: View {
     
     @State private var isTorchOn = false
     @State private var isResolving = false
+    @State private var showLoadingOverlay = false
     @State private var resolvingMessage = "正在识别条码..."
     @State private var equipmentAlertData: EquipmentModel? = nil
     @State private var scanError: String? = nil
@@ -60,6 +155,9 @@ public struct LiveScannerView: View {
     
     public var body: some View {
         ZStack {
+            // 相机未就绪时，纯黑背景防止白条/灰色透出
+            Color.black.ignoresSafeArea()
+            
             // 相机层
             BarcodeScannerPreview(torchOn: isTorchOn, enableOCR: enableOCR) { code in
                 handleScannedCode(code)
@@ -100,29 +198,53 @@ public struct LiveScannerView: View {
                 
                 Spacer()
                 
-                // 瞄准框
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.appPrimary, lineWidth: 3)
-                        .frame(width: 260, height: 260)
+                if enableOCR {
+                    // OCR 模式：显示 320x180 瞄准框与局部镂空遮罩
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.appPrimary, lineWidth: 3)
+                            .frame(width: 320, height: 180)
+                        
+                        // 扫描线
+                        Rectangle()
+                            .fill(Color.appPrimary.opacity(0.2))
+                            .frame(width: 300, height: 2)
+                            .shadow(color: .appPrimary, radius: 4)
+                    }
+                    .background(
+                        // 全屏遮罩带中间镂空
+                        Color.black.opacity(0.55)
+                            .frame(width: 4000, height: 4000)
+                            .mask(
+                                Rectangle().fill(Color.white)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .frame(width: 320, height: 180)
+                                            .blendMode(.destinationOut)
+                                    )
+                                    .compositingGroup()
+                            )
+                            .allowsHitTesting(false)
+                    )
                     
-                    Rectangle()
-                        .fill(Color.appPrimary.opacity(0.2))
-                        .frame(width: 240, height: 2)
-                        .shadow(color: .appPrimary, radius: 4)
+                    Text("请将文字/条码放入框内")
+                        .scaledFont(14, weight: .medium)
+                        .foregroundStyle(Color.white.opacity(0.9))
+                        .padding(.top, 24)
+                } else {
+                    // 纯扫码模式：全屏扫描，不加任何遮罩
+                    Text("将条码/二维码放入屏幕内即可自动识别")
+                        .scaledFont(14, weight: .medium)
+                        .foregroundStyle(Color.white.opacity(0.9))
+                        .padding(.top, 24)
                 }
-                
-                Text("将条码/二维码放入框内即可自动识别")
-                    .scaledFont(14, weight: .medium)
-                    .foregroundStyle(Color.white.opacity(0.9))
-                    .padding(.top, 24)
                 
                 Spacer()
                 Spacer()
             }
             
             // 解析中遮罩弹窗
-            if isResolving {
+            if showLoadingOverlay {
                 Color.black.opacity(0.5).ignoresSafeArea()
                 
                 VStack(spacing: 16) {
@@ -156,6 +278,13 @@ public struct LiveScannerView: View {
         .onDisappear {
             router.isScannerPresented = false
         }
+        .preferredColorScheme(.dark)
+        .statusBarHidden(true)
+    }
+    
+    private func closeScanner() {
+        router.isScannerPresented = false
+        dismiss()
     }
     
     // MARK: - 核心 4 路分发路由 (1:1 还原 Android MainActivity.kt 扫码逻辑)
@@ -166,29 +295,35 @@ public struct LiveScannerView: View {
         // 触感反馈（唯一触发点，由 isResolving 保证只振动一次）
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         
-        
-
         if let onScanned = router.scannerOnScanned {
-            dismiss()
+            closeScanner()
             onScanned(code)
             router.scannerOnScanned = nil
             return
         }
         
+        // 1. 取货码核销: TCM:PICKUP:1:xxxx (纯本地路由跳转，无需网络动画)
+        if code.hasPrefix("TCM:PICKUP:1:") {
+            isResolving = true // 只是防抖
+            closeScanner()
+            router.navigate(to: .packageVerify(initialCode: code))
+            return
+        }
+        
+        // 4. 其余所有扫码（药品条形码、商品SKU）-> 进入库存查询 (由库存页面自己负责展示骨架屏加载动画)
+        if !code.hasPrefix("TCM:PLAN:1:") && !code.hasPrefix("TCM:EQUIPMENT:1:") {
+            isResolving = true // 只是防抖
+            closeScanner()
+            NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
+            return
+        }
+        
+        // 对于真正需要网络请求等待的（计划/设备），才弹出黑色的 Loading 遮罩
         isResolving = true
-        resolvingMessage = "正在识别条码..."
+        showLoadingOverlay = true
+        resolvingMessage = "正在查询..."
         
         Task {
-            // 1. 取货码核销: TCM:PICKUP:1:xxxx
-            if code.hasPrefix("TCM:PICKUP:1:") {
-                await MainActor.run {
-                    isResolving = false
-                    dismiss()
-                    router.navigate(to: .packageVerify(initialCode: code))
-                }
-                return
-            }
-            
             // 2. 加工计划二维码: TCM:PLAN:1:xxxx
             if code.hasPrefix("TCM:PLAN:1:") {
                 await MainActor.run { resolvingMessage = "正在定位加工计划..." }
@@ -196,12 +331,14 @@ public struct LiveScannerView: View {
                     let plan = try await ApiClient.shared.fetchProcessingPlanByScan(code: code)
                     await MainActor.run {
                         isResolving = false
-                        dismiss()
+                        showLoadingOverlay = false
+                        closeScanner()
                         router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
                     }
                 } catch {
                     await MainActor.run {
                         isResolving = false
+                        showLoadingOverlay = false
                         scanError = "未找到对应加工计划"
                     }
                 }
@@ -215,29 +352,25 @@ public struct LiveScannerView: View {
                     if let equip = try await ApiClient.shared.fetchEquipmentByCode(code: code) {
                         await MainActor.run {
                             isResolving = false
+                            showLoadingOverlay = false
                             equipmentAlertData = equip
                         }
                     } else {
                         // 如果没查到，给一个兜底以避免卡住，或者给个提示(这里沿用Alert展示错误)
                         await MainActor.run {
                             isResolving = false
+                            showLoadingOverlay = false
                             equipmentAlertData = EquipmentModel(id: 0, name: "设备未找到", typeName: "未知", equipmentNo: code, status: 0, currentUsage: nil)
                         }
                     }
                 } catch {
                     await MainActor.run {
                         isResolving = false
+                        showLoadingOverlay = false
                         equipmentAlertData = EquipmentModel(id: 0, name: "查询失败", typeName: error.localizedDescription, equipmentNo: code, status: 0, currentUsage: nil)
                     }
                 }
                 return
-            }
-            
-            // 4. 其余所有扫码（药品条形码、商品SKU）-> 进入库存查询
-            await MainActor.run {
-                isResolving = false
-                dismiss()
-                NotificationCenter.default.post(name: NSNotification.Name("SearchInventoryByBarcode"), object: code)
             }
         }
     }
@@ -269,10 +402,13 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     var onScanned: ((String) -> Void)?
     var enableOCR: Bool = false
     private var captureSession: AVCaptureSession?
-    private let sessionQueue = DispatchQueue(label: "com.tcm.camera.session", qos: .userInitiated)
+    // 统一使用 SharedCameraManager 的队列，避免多队列竞争同一个 session 导致死锁/卡住
+    private var sessionQueue: DispatchQueue { SharedCameraManager.shared.sessionQueue }
     private var previewLayer: AVCaptureVideoPreviewLayer?
     nonisolated(unsafe) private var hasScanned = false
     private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
+    nonisolated(unsafe) private var hasFadedIn = false
+    nonisolated(unsafe) private let scannerOpenTime = Date()
     nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
     nonisolated(unsafe) private var consecutiveEmptyFrames: Int = 0
     nonisolated(unsafe) private var lastOcrResult: String? = nil
@@ -346,9 +482,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 guard let self = self else { return }
                 if SharedOCRManager.shared.engine == nil {
                     self.isOcrEngineLoading = true
-                    // Wait for preload if it hasn't finished, or trigger it
                     SharedOCRManager.shared.preload()
-                    // Simple poll until loaded (should be rare)
                     while SharedOCRManager.shared.engine == nil && SharedOCRManager.shared.isLoading {
                         try? await Task.sleep(nanoseconds: 100_000_000)
                     }
@@ -357,77 +491,41 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 self.isOcrEngineLoading = false
             }
         }
-        let session = AVCaptureSession()
-        // 提升采集分辨率，使小条码在不放大的情况下也能快速识别
-        if session.canSetSessionPreset(.hd1920x1080) {
-            session.sessionPreset = .hd1920x1080
-        }
         
-        let deviceTypes: [AVCaptureDevice.DeviceType] = [
-            .builtInDualWideCamera,
-            .builtInTripleCamera,
-            .builtInDualCamera,
-            .builtInWideAngleCamera
-        ]
-        let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes, mediaType: .video, position: .back)
-        
-        guard let videoDevice = discovery.devices.first ?? AVCaptureDevice.default(for: .video),
-              let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
-              session.canAddInput(videoInput) else {
-            return
-        }
-        
-        do {
-            try videoDevice.lockForConfiguration()
-            // 对于支持微距的虚拟多镜头系统，.near 会自动切换到超广角微距镜头，实现 10cm 内的极速对焦
-            if videoDevice.isAutoFocusRangeRestrictionSupported {
-                videoDevice.autoFocusRangeRestriction = .near
+        SharedCameraManager.shared.sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Wait for configuration to complete if it's still running
+            while !SharedCameraManager.shared.isConfigured {
+                Thread.sleep(forTimeInterval: 0.05)
             }
-            if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
-                videoDevice.focusMode = .continuousAutoFocus
+            
+            guard let session = SharedCameraManager.shared.captureSession else { return }
+            
+            // Re-bind delegates for the current scanner instance
+            if let mOutput = SharedCameraManager.shared.metadataOutput {
+                mOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
             }
-            if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
-                videoDevice.exposureMode = .continuousAutoExposure
+            if let vOutput = SharedCameraManager.shared.videoDataOutput {
+                let videoQueue = DispatchQueue(label: "com.tcm.videoqueue", qos: .userInteractive)
+                // 强制绑定 delegate，以便捕获第一帧进行淡入动画
+                vOutput.setSampleBufferDelegate(self, queue: videoQueue)
             }
-            videoDevice.unlockForConfiguration()
-        } catch {
-            print("Failed to optimize camera focus: \(error)")
-        }
-        
-        session.addInput(videoInput)
-        
-        // 1. Metadata Output for standard barcodes
-        let metadataOutput = AVCaptureMetadataOutput()
-        if session.canAddOutput(metadataOutput) {
-            session.addOutput(metadataOutput)
-            metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-            metadataOutput.metadataObjectTypes = [
-                .qr, .ean13, .ean8, .code128, .code39, .upce
-            ]
-        }
-        
-        // 2. Video Data Output for OCR Fallback (Optional)
-        if enableOCR {
-            let videoDataOutput = AVCaptureVideoDataOutput()
-            videoDataOutput.videoSettings = [(kCVPixelBufferPixelFormatTypeKey as String): Int(kCVPixelFormatType_32BGRA)]
-            videoDataOutput.alwaysDiscardsLateVideoFrames = true
-            let videoQueue = DispatchQueue(label: "com.tcm.videoqueue", qos: .userInteractive)
-            videoDataOutput.setSampleBufferDelegate(self, queue: videoQueue)
-            if session.canAddOutput(videoDataOutput) {
-                session.addOutput(videoDataOutput)
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                let preview = AVCaptureVideoPreviewLayer(session: session)
+                preview.videoGravity = .resizeAspectFill
+                preview.frame = self.view.layer.bounds
+                preview.opacity = 0 // 初始透明度为 0，等第一帧到来时淡入
+                self.view.layer.insertSublayer(preview, at: 0)
+                
+                self.previewLayer = preview
+                self.captureSession = session
+                
+                SharedCameraManager.shared.start()
             }
-        }
-        
-        let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = .resizeAspectFill
-        preview.frame = view.layer.bounds
-        view.layer.addSublayer(preview)
-        
-        self.previewLayer = preview
-        self.captureSession = session
-        
-        sessionQueue.async {
-            session.startRunning()
         }
     }
     
@@ -454,8 +552,9 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
     nonisolated private static let tokenCharPattern = try! NSRegularExpression(pattern: #"[\s:：#\-_/|]+"#)
     nonisolated private static let skuLabelRegex = try! NSRegularExpression(pattern: #"(?i)(?:^|[^a-zA-Z0-9\x{4e00}-\x{9fa5}])(?:SKU|SHU|SU|5KU|5HU|5U|S0|SK0|SH0|SK|SH|KU|HU|编号|编码|商品码|批号|货号)(?::|：|#|\s|$)"#)
-    nonisolated private static let candidate9Pattern = try! NSRegularExpression(pattern: #"(?i)\b[0-9A-Za-z|!〇\s.\-_]{8,24}\b"#)
-    nonisolated private static let standalone9Pattern = try! NSRegularExpression(pattern: #"\b\d{9}\b"#)
+    // Swift ICU正则中中文算word字符，\b无法匹配“中文+数字”的边界。改用负向前瞻/后顾
+    nonisolated private static let candidate9Pattern = try! NSRegularExpression(pattern: #"(?i)(?<![0-9A-Za-z])[0-9A-Za-z|!〇\s.\-_]{8,24}(?![0-9A-Za-z])"#)
+    nonisolated private static let standalone9Pattern = try! NSRegularExpression(pattern: #"(?<!\d)\d{9}(?!\d)"#)
     nonisolated private static let excludeLinePattern = try! NSRegularExpression(pattern: "(?i)(phone|tel|电话|联系|日期|date|time|时间|网点|门店)")
 
 
@@ -618,11 +717,27 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
     // MARK: - OCR Video Frame Extraction
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        if !hasFadedIn {
+            hasFadedIn = true
+            DispatchQueue.main.async {
+                guard let layer = self.previewLayer else { return }
+                CATransaction.begin()
+                CATransaction.setAnimationDuration(0.12)
+                layer.opacity = 1.0
+                CATransaction.commit()
+            }
+        }
+        
+        guard enableOCR else { return }
+        
         autoreleasepool {
             guard !isScanClaimed() else { return }
             guard !isStopped else { return }
 
             let now = Date()
+            
+            // 等待页面完全弹出后再开始 OCR 推理 (0.15s 动画期间不吃 CPU，保障页面顺滑)
+            guard now.timeIntervalSince(scannerOpenTime) > 0.15 else { return }
             
             // --- 动态自适应限流 (对标 Android) ---
             let throttleMs: TimeInterval

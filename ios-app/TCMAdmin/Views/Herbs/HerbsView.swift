@@ -133,12 +133,12 @@ struct HerbsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .onChange(of: selectedStoreId) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
             
             if isLoading && data == nil {
-                Spacer()
                 ProgressView("正在加载斗谱货位...")
-                Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
             } else if let error = errorMessage {
                 Spacer()
                 Text(error).foregroundStyle(Color.danger)
@@ -212,7 +212,7 @@ struct HerbsView: View {
                     await loadData()
                 }
                 
-                .background(Color.pageBackground)
+                .background(Color.pageBackground.ignoresSafeArea(.all))
             }
         }
         .onChange(of: searchText) { _, _ in updateGroupedUnits() }

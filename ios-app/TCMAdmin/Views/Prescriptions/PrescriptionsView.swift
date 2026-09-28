@@ -81,7 +81,7 @@ public struct PrescriptionsView: View {
                     onSearch: {
                         startLoadPrescriptions()
                     },
-                    onScan: { router.isScannerPresented = true }
+                    onScan: { router.presentScanner() }
                 )
                 
                 // 3. 状态筛选
@@ -157,13 +157,13 @@ public struct PrescriptionsView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 8)
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             
             // 处方列表
             if isLoading && prescriptions.isEmpty {
-                Spacer()
                 ProgressView("正在加载处方记录...")
-                Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
             } else if let error = errorMessage, !error.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
@@ -204,7 +204,7 @@ public struct PrescriptionsView: View {
                     await loadPrescriptions()
                 }
                 
-                .background(Color.pageBackground)
+                .background(Color.pageBackground.ignoresSafeArea(.all))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Prescriptions"))) { _ in
@@ -653,7 +653,7 @@ public struct PrescriptionDetailView: View {
                                                 }
                                             }
                                             .padding(10)
-                                            .background(Color.pageBackground)
+                                            .background(Color.pageBackground.ignoresSafeArea(.all))
                                             .clipShape(.rect(cornerRadius: 8))
                                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 0.5))
                                         }
@@ -772,7 +772,7 @@ public struct PrescriptionDetailView: View {
         } message: {
             Text("确认删除该处方吗？如果该处方已关联加工计划，可能无法删除。")
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("处方详情")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -962,7 +962,7 @@ public struct PrescriptionDetailView: View {
             .padding(.top, 2)
         }
         .padding(10)
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .clipShape(.rect(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 0.5))
         .onTapGesture {
@@ -1023,7 +1023,7 @@ public struct PrescriptionDetailView: View {
             }
         }
         .padding(10)
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .clipShape(.rect(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 0.5))
     }

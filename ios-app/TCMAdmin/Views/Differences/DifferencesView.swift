@@ -271,7 +271,7 @@ public struct DifferencesView: View {
             .padding(16)
         }
         .onChange(of: selectedTab) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("库存差异")
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
@@ -327,7 +327,7 @@ public struct DifferencesView: View {
                     Spacer()
                 }
                 .padding(16)
-                .background(Color.pageBackground)
+                .background(Color.pageBackground.ignoresSafeArea(.all))
                 .navigationTitle(writeOffType == "WRITE_OFF_RECEIPT" ? "入库销账" : "销库销账")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -597,7 +597,7 @@ public struct RegisterDifferenceSheet: View {
                 .padding(16)
             }
             .scrollDismissesKeyboard(.immediately)
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             .navigationTitle("登记差异")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

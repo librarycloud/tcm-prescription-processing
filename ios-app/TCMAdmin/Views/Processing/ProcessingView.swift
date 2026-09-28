@@ -64,7 +64,7 @@ public struct ProcessingView: View {
             VStack(spacing: 12) {
                 // 扫码与新建按钮
                 HStack(spacing: 10) {
-                    Button(action: { router.isScannerPresented = true }) {
+                    Button(action: { router.presentScanner() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "qrcode.viewfinder")
                             Text("扫码作业")
@@ -195,7 +195,7 @@ public struct ProcessingView: View {
                     onSearch: {
                         startLoadData()
                     },
-                    onScan: { router.isScannerPresented = true }
+                    onScan: { router.presentScanner() }
                 )
                 
                 // 超管门店筛选
@@ -234,7 +234,7 @@ public struct ProcessingView: View {
         }
         .onChange(of: activeView) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
         .onChange(of: mode) { _, _ in NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil) }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ListNeedsRefresh_Processing"))) { _ in
             ApiClient.shared.clearResponseCache()
@@ -287,9 +287,9 @@ public struct ProcessingView: View {
     @ViewBuilder
     private var plansContentView: some View {
         if isLoading && plans.isEmpty {
-            Spacer()
             ProgressView("正在加载加工计划...")
-            Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
         } else if let error = errorMessage, !error.isEmpty {
             Spacer()
             Text(error).foregroundStyle(Color.danger).scaledFont(14).padding()
@@ -358,7 +358,7 @@ public struct ProcessingView: View {
                 }
                 .padding(16)
             
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
         }
 
 
@@ -369,9 +369,9 @@ public struct ProcessingView: View {
     @ViewBuilder
     private var pickupContentView: some View {
         if isLoading && pickupPackages.isEmpty {
-            Spacer()
             ProgressView("正在加载领取列表...")
-            Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
         } else if let error = errorMessage, !error.isEmpty {
             Spacer()
             Text(error).foregroundStyle(Color.danger).scaledFont(14).padding()
@@ -408,7 +408,7 @@ public struct ProcessingView: View {
                 }
                 .padding(16)
             
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
         }
     }
 

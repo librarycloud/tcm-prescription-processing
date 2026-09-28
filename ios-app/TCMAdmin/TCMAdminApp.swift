@@ -12,10 +12,11 @@ struct TCMAdminApp: App {
     @State private var showConfirmConfigAlert = false
 
     init() {
-        // App 启动时立即在后台预加载 OCR 引擎，消除扫码界面的冷启动卡顿
+        // App 启动时立即在后台预加载 OCR 引擎和相机模块，消除扫码界面的冷启动卡顿
         Task { @MainActor in
             SharedOCRManager.shared.preload()
         }
+        SharedCameraManager.shared.preload()
     }
 
 
@@ -41,6 +42,8 @@ struct TCMAdminApp: App {
                     .zIndex(1)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             .id(theme.themeId)
             .preferredColorScheme(theme.currentColorScheme)
             .environment(\.sizeCategory, theme.currentSizeCategory)

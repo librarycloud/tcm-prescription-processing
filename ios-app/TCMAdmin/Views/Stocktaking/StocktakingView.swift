@@ -63,14 +63,13 @@ public struct StocktakingView: View {
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 8)
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             
             // 列表
             if isLoading && stocktakings.isEmpty {
-                Spacer()
                 ProgressView("正在加载盘点任务...")
-                    .frame(maxWidth: .infinity)
-                Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
             } else if let error = errorMessage {
                 Spacer()
                 Text(error).foregroundStyle(Color.danger).scaledFont(14).padding()
@@ -163,7 +162,7 @@ public struct StocktakingView: View {
         .onDisappear {
             loadTask?.cancel()
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("商品盘点")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -733,7 +732,7 @@ public struct StocktakingDetailView: View {
                 }
             }
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .navigationTitle("盘点明细")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadDetail() }

@@ -107,7 +107,7 @@ public struct MainShellView: View {
                     // 右侧：扫码按钮 (打开原生相机 4 路分发扫码)
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: {
-                            router.presentScanner(enableOCR: true)
+                            router.presentScanner()
                         }) {
                             Image(systemName: "qrcode.viewfinder")
                                 .foregroundStyle(Color.appPrimary)
@@ -165,20 +165,25 @@ public struct MainShellView: View {
             .overlay(alignment: .leading) {
                 SideMenuView(isShowing: $isMenuShowing, selectedTab: $selectedTab)
             }
+            
+            // 将扫码框作为最高层级的 ZStack 子视图直接覆盖在整个 App 之上，
+            // 彻底绕过 iOS 系统级 fullScreenCover 的所有动画 bug 和白边（安全区塌陷）问题
+            if router.isScannerPresented {
+                LiveScannerView(enableOCR: router.scannerEnableOCR)
+                    .transition(.opacity.animation(.easeIn(duration: 0.15)))
+                    .zIndex(100)
+            }
         }
 
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { _ in
             self.selectedTab = 0
             self.router.popToRoot()
         }
-        .fullScreenCover(isPresented: $router.isScannerPresented) {
-                LiveScannerView(enableOCR: router.scannerEnableOCR)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                TabBarDoubleTapHandler.shared.setup()
             }
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    TabBarDoubleTapHandler.shared.setup()
-                }
-            }
+        }
     }
     
     private func navTitle(for tab: Int) -> String {

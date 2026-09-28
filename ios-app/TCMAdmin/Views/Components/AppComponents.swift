@@ -1032,8 +1032,10 @@ public struct AppScrollView<Content: View>: View {
     }
 
     public var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
+        ZStack {
+            Color.pageBackground.ignoresSafeArea(.all)
+            ScrollViewReader { proxy in
+                ScrollView {
                 // 顶部锚点
                 Color.clear
                     .frame(height: 0)
@@ -1088,6 +1090,7 @@ public struct AppScrollView<Content: View>: View {
                     proxy.scrollTo("SCROLL_TOP_ANCHOR", anchor: .top)
                 }
             }
+        }
         }
     }
 }

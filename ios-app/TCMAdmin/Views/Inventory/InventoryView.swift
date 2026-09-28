@@ -195,7 +195,7 @@ struct InventoryView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 8)
-            .background(Color.pageBackground)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
             
             // 3. 核心内容区域：详情展示 / 搜索结果列表 / 空状态 (可滚动，支持下拉刷新)
             ZStack(alignment: .top) {
@@ -281,7 +281,7 @@ struct InventoryView: View {
                     AppScrollView {
                         productDetailSection(for: product)
                     }
-                    .background(Color.pageBackground)
+                    .background(Color.pageBackground.ignoresSafeArea(.all))
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                     .zIndex(1)
                 }
@@ -301,12 +301,11 @@ struct InventoryView: View {
                 }
             }
         }
-        .background(Color.pageBackground)
+        .background(Color.pageBackground.ignoresSafeArea(.all))
         .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { notif in
             if let code = notif.object as? String, !code.isEmpty {
                 ApiClient.shared.clearResponseCache()
-                self.selectedProduct = nil
                 self.hasAutoNavigated = false
                 self.lastSearchedTerm = code
                 self.searchText = code
@@ -580,13 +579,14 @@ struct InventoryView: View {
             let res = try await ApiClient.shared.fetchInventory(keyword: term, storeId: selectedStoreId)
             guard !Task.isCancelled else { return }
             guard currentTaskID == taskID else { return }
-            if allowAutoNavigate && res.count == 1 && !term.isEmpty && !hasAutoNavigated && selectedProduct == nil {
+            if allowAutoNavigate && res.count == 1 && !term.isEmpty {
                 hasAutoNavigated = true
                 self.items = res
                 self.selectedProduct = res.first
             } else {
                 self.items = res
-                if res.isEmpty {
+                // 如果不是单条结果的自动导航，则退回到列表页展示结果
+                if allowAutoNavigate || res.isEmpty {
                     self.selectedProduct = nil
                 }
             }
