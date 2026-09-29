@@ -1,4 +1,8 @@
 import {
+  getConfigsController,
+  updateConfigsController,
+} from '../controllers/systemConfigController.js';
+import {
   verifyAdmin,
   verifyManager,
   verifySuperAdmin,
@@ -14,6 +18,8 @@ import {
   statsController,
   updateController,
   verifyController,
+  printController,
+  relatedController,
 } from "../controllers/adminPackageController.js";
 import {
   createUserController,
@@ -130,6 +136,7 @@ import {
   herbLocationTemplateController,
   importHerbLocationMovesController,
   importHerbLocationsController,
+  swapHerbLocationsController,
   listHerbLocationsController,
   listHerbLocationStoresController,
   removeHerbLocationAssignmentController,
@@ -218,6 +225,9 @@ import {
 import { getLegalDocsController, saveLegalDocsController } from "../controllers/legalDocsController.js";
 
 export default async function adminRoutes(fastify, options) {
+  fastify.get("/system-configs", getConfigsController);
+  fastify.put("/system-configs", updateConfigsController);
+
   const storeStaffRoute = { config: { storeStaff: true } };
   fastify.addHook("preHandler", fastify.rateLimit());
   fastify.addHook("preHandler", verifyToken);
@@ -233,7 +243,7 @@ export default async function adminRoutes(fastify, options) {
 
   fastify.put(
     "/system/legal-docs",
-    { config: { storeStaff: false } }, // only superadmin or store manager can edit
+    { preHandler: verifySuperAdmin },
     saveLegalDocsController
   );
 
@@ -251,6 +261,11 @@ export default async function adminRoutes(fastify, options) {
   fastify.post(
     "/herb-locations/move-import",
     importHerbLocationMovesController,
+  );
+  fastify.post(
+    "/herb-locations/swap",
+    storeStaffRoute,
+    swapHerbLocationsController,
   );
   fastify.post(
     "/herb-locations/assignments",
@@ -352,9 +367,11 @@ export default async function adminRoutes(fastify, options) {
   fastify.get("/packages", storeStaffRoute, listController);
   fastify.get("/packages/by-code/:pickupCode", storeStaffRoute, pickupCodeDetailController);
   fastify.get("/packages/:id/notifications", packageNotificationsController);
+  fastify.get("/packages/related/:pickupCode", storeStaffRoute, relatedController);
   fastify.get("/packages/:id", storeStaffRoute, detailController);
   fastify.post("/packages", createController);
   fastify.put("/packages/:id", updateController);
+  fastify.post("/packages/:id/print", printController);
   fastify.delete("/packages/:id", deleteController);
   fastify.post(
     "/packages/verify",

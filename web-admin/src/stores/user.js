@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import { login as loginApi } from '@/api/login';
+import { login as loginApi, logout as logoutApi } from '@/api/login';
 import { getProfile } from '@/api/user';
 import {
   getHomePath,
@@ -52,11 +52,17 @@ export const useUserStore = defineStore('user', () => {
     persist(authData);
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      if (token.value) await logoutApi();
+    } catch { /* ignore */ }
     token.value = '';
     user.value = null;
     removeToken();
     removeStorage(USER_KEY);
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.reload();
   }
 
   return {

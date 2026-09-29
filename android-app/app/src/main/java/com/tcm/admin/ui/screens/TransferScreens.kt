@@ -786,7 +786,7 @@ internal fun TransferDetailScreen(
                         shape = FieldShape,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                    ) { Text("取消调拨", fontSize = 12.sp) }
+                    ) { Text(if (transfer?.optInt("status") == 4) "确认取消" else "取消调拨", fontSize = 12.sp) }
                 }
             }
         }

@@ -99,6 +99,9 @@ public struct PackageFormView: View {
     @State private var isBusy = false
     @State private var errorMessage: String? = nil
     @State private var isScannerShowing = false
+    @State private var pickupProxyName = ""
+    @State private var pickupProxyPhone = ""
+    @State private var selectedRelatedIds: Set<Int> = []
     
     public init(initial: PackageModel? = nil, onSaved: @escaping () -> Void) {
         self.initial = initial
@@ -310,6 +313,9 @@ public struct PackageVerifyView: View {
     @State private var verifiedPackage: PackageModel? = nil
     @State private var errorMessage: String? = nil
     @State private var isScannerShowing = false
+    @State private var pickupProxyName = ""
+    @State private var pickupProxyPhone = ""
+    @State private var selectedRelatedIds: Set<Int> = []
     
     private var rawPickupCode: String {
         codeText.filter { $0.isNumber }
@@ -497,6 +503,9 @@ public struct PackageVerifyView: View {
                     code: code,
                     pickupMethod: selectedMethod,
                     expressTrackingNo: tracking,
+                    pickupProxyName: (selectedMethod == 0 || selectedMethod == 1) && !pickupProxyName.isEmpty ? pickupProxyName : nil,
+                    pickupProxyPhone: (selectedMethod == 0 || selectedMethod == 1) && !pickupProxyPhone.isEmpty ? pickupProxyPhone : nil,
+                    additionalPackageIds: Array(selectedRelatedIds),
                     pickupQrContent: signedQrContent
                 )
                 await MainActor.run {

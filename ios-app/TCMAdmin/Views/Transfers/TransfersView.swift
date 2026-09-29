@@ -881,7 +881,7 @@ public struct TransferDetailView: View {
                             
                             if item.permissions?.canCancel == true {
                                 Button(action: cancelTransferAction) {
-                                    Text("取消调拨")
+                                    Text(item.status == 4 ? "确认取消" : "取消调拨")
                                         .scaledFont(14, weight: .bold)
                                         .foregroundStyle(Color.danger)
                                         .frame(maxWidth: .infinity)

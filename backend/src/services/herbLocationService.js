@@ -118,9 +118,12 @@ function publicLayout(layout) {
 }
 
 export function parseLocationCode(value, layout = DEFAULT_LAYOUT) {
-  const code = String(value || "")
+  let code = String(value || "")
     .trim()
     .toUpperCase();
+  if (/^\d/.test(code)) {
+    code = `D-${code}`;
+  }
   const compact = code.replaceAll("-", "");
   let parts;
   if (code.includes("-")) {
@@ -1405,4 +1408,43 @@ export async function importHerbLocations(prisma, actor, storeIdValue, file) {
     updated,
     skipped,
   };
+}
+
+export async function swapHerbLocations(prisma, actor, payload = {}) {
+  const storeId = await resolveBusinessStoreId(prisma, actor, payload.storeId);
+  const layout = await getStoreLayout(prisma, storeId);
+  const sourceCode = String(payload.sourceCode || "").trim();
+  const targetCode = String(payload.targetCode || "").trim();
+  if (!sourceCode || !targetCode) throw new AppError("请提供源位置和目标位置", 400);
+  if (sourceCode === targetCode) throw new AppError("源位置和目标位置不能相同", 400);
+
+  return prisma.$transaction(async (tx) => {
+    const sourceResult = await findOrCreateLocation(tx, storeId, sourceCode, actor, layout);
+    const targetResult = await findOrCreateLocation(tx, storeId, targetCode, actor, layout);
+    
+    const sourceAssignments = await tx.herbLocationAssignment.findMany({ where: { locationId: sourceResult.location.id } });
+    const targetAssignments = await tx.herbLocationAssignment.findMany({ where: { locationId: targetResult.location.id } });
+    
+    await tx.herbLocationAssignment.deleteMany({ where: { locationId: { in: [sourceResult.location.id, targetResult.location.id] } } });
+    
+    for (const a of sourceAssignments) {
+      try {
+        await tx.herbLocationAssignment.create({ data: { locationId: targetResult.location.id, herbId: a.herbId, createdBy: Number(actor.id) } });
+      } catch (err) {}
+    }
+    for (const a of targetAssignments) {
+      try {
+        await tx.herbLocationAssignment.create({ data: { locationId: sourceResult.location.id, herbId: a.herbId, createdBy: Number(actor.id) } });
+      } catch (err) {}
+    }
+
+    await recordOperation(tx, actor, {
+      module: "herb-location",
+      action: "swap",
+      targetId: 0,
+      storeId,
+      description: `交换位置 ${sourceCode} 和 ${targetCode} 的药材`,
+    });
+    return { success: true };
+  });
 }

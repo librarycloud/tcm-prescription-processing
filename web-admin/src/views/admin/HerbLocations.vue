@@ -61,10 +61,15 @@
                   :key="`D-${selectedUnit}-${layer}-${column}`"
                   class="location-cell"
                   :class="{ selected: selectedLocation?.code === dCode(layer, column), empty: !getLocation(dCode(layer, column))?.herbs.length }"
+                  draggable="true"
                   @click="selectLocation(getLocation(dCode(layer, column)))"
+                  @dragstart="handleDragStart($event, dCode(layer, column))"
+                  @dragover.prevent
+                  @drop="handleDrop($event, dCode(layer, column))"
                 >
                   <span v-html="highlightText(displayCode(dCode(layer, column)))" />
                   <strong v-html="highlightHerbText(getLocation(dCode(layer, column)) || null) || '未配置'" />
+                  <el-icon v-if="getLocation(dCode(layer, column))?.herbs?.length > (getLocation(dCode(layer, column))?.medicineCapacity || 3)" class="capacity-warning" color="#f56c6c"><WarningFilled /></el-icon>
                 </button>
               </div>
             </div>
@@ -255,7 +260,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { Close, Delete, Download, Edit, Location, Plus, Search, Upload, UploadFilled } from '@element-plus/icons-vue';
+import { Close, Delete, Download, Edit, Location, Plus, Search, Upload, UploadFilled, WarningFilled } from '@element-plus/icons-vue';
 import { pinyin } from 'pinyin-pro';
 import {
   downloadHerbLocationMoveTemplate,
@@ -267,7 +272,8 @@ import {
   removeHerbLocationAssignment,
   saveHerbLocationAssignment,
   updateHerb,
-  updateHerbLocationAssignment
+  updateHerbLocationAssignment,
+  swapHerbLocations
 } from '@/api/herbLocation';
 import { useUserStore } from '@/stores/user';
 
@@ -645,8 +651,34 @@ onMounted(async () => {
   storeId.value = userStore.isStoreAdmin ? userStore.user?.storeId : stores.value[0]?.id || null;
   await loadData();
 });
-</script>
 
+const draggedLocationCode = ref(null);
+
+function handleDragStart(event, locationCode) {
+  draggedLocationCode.value = locationCode;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', locationCode);
+}
+
+async function handleDrop(event, targetCode) {
+  event.preventDefault();
+  const sourceCode = draggedLocationCode.value;
+  draggedLocationCode.value = null;
+  if (!sourceCode || !targetCode || sourceCode === targetCode) return;
+  
+  const sourceLocation = getLocation(sourceCode);
+  const targetLocation = getLocation(targetCode);
+  if (!sourceLocation?.herbs?.length && !targetLocation?.herbs?.length) return;
+
+  try {
+    await swapHerbLocations({ storeId: storeId.value, sourceCode, targetCode });
+    ElMessage.success(`成功交换位置 ${displayCode(sourceCode)} 和 ${displayCode(targetCode)}`);
+    await loadData();
+  } catch {
+    // Error is handled by interceptor
+  }
+}
+</script>
 <style scoped>
 .herb-page { gap: 18px; }
 .header-actions, .control-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -666,7 +698,7 @@ onMounted(async () => {
 .d-grid { display: flex; flex-direction: column; padding: 14px; gap: 8px; overflow-x: auto; }
 .drawer-row { display: grid; gap: 8px; width: 100%; }
 .grid-axis, .grid-corner { display: flex; align-items: center; justify-content: center; min-height: 28px; color: var(--app-muted); font-size: 12px; font-weight: 600; }
-.location-cell, .large-location, .shelf-location { display: flex; min-width: 0; text-align: left; color: inherit; border: 1px solid var(--app-border); border-radius: 6px; background: var(--el-bg-color); cursor: pointer; }
+.location-cell, .large-location, .shelf-location { display: flex; min-width: 0; text-align: left; color: inherit; border: 1px solid var(--app-border); border-radius: 6px; background: var(--el-bg-color); cursor: pointer; position: relative; }
 .location-cell { min-height: 82px; flex-direction: column; justify-content: space-between; padding: 9px; }
 .location-cell span, .large-location span, .shelf-location span { color: var(--app-muted); font-size: 12px; }
 .location-cell strong, .large-location strong, .shelf-location strong { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin-top: 7px; line-height: 1.4; font-size: 13px; }
@@ -692,6 +724,7 @@ onMounted(async () => {
 .upload-icon { margin-bottom: 10px; font-size: 46px; color: var(--el-color-primary); }
 .position-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .position-form-grid :deep(.el-select) { width: 100%; }
+.capacity-warning { position: absolute; right: 5px; top: 5px; font-size: 16px; }
 @media (max-width: 960px) { .paired-layout { grid-template-columns: 1fr; } .map-main { border-right: 0; border-bottom: 1px solid var(--app-border); } .paired-cabinet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .paired-cabinet .surface-title { grid-column: 1 / -1; } }
 @media (max-width: 680px) { .header-actions { width: 100%; } .header-actions .el-button { flex: 1; } .store-select { width: 100%; } .control-bar { align-items: stretch; } .control-bar :deep(.el-radio-group), .control-bar :deep(.el-input) { width: 100%; } .view-switch { margin-left: 0; } .paired-cabinet { grid-template-columns: 1fr; } .paired-cabinet .surface-title { grid-column: auto; } .position-form-grid { grid-template-columns: 1fr; } }
 </style>

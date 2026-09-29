@@ -681,6 +681,10 @@ internal fun PackageVerifyScreen(
     }
     var method by remember { mutableStateOf(0) }
     var tracking by remember { mutableStateOf("") }
+    var pickupProxyName by remember { mutableStateOf("") }
+    var pickupProxyPhone by remember { mutableStateOf("") }
+    var relatedPackages by remember { mutableStateOf<org.json.JSONArray?>(null) }
+    val selectedRelatedIds = remember { androidx.compose.runtime.mutableStateListOf<Int>() }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

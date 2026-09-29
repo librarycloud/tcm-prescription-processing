@@ -149,7 +149,7 @@ public struct LiveScannerView: View {
     @State private var equipmentAlertData: EquipmentModel? = nil
     @State private var scanError: String? = nil
     
-    var enableOCR: Bool = false
+    nonisolated(unsafe) var enableOCR: Bool = false
     
     public init(enableOCR: Bool = false) { self.enableOCR = enableOCR }
     
@@ -379,7 +379,7 @@ public struct LiveScannerView: View {
 // MARK: - AVFoundation 相机底层实现
 struct BarcodeScannerPreview: UIViewControllerRepresentable {
     var torchOn: Bool
-    var enableOCR: Bool = false
+    nonisolated(unsafe) var enableOCR: Bool = false
     var onScanned: (String) -> Void
     
     func makeUIViewController(context: Context) -> BarcodeScannerViewController {
@@ -398,9 +398,9 @@ struct BarcodeScannerPreview: UIViewControllerRepresentable {
     }
 }
 
-class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
+class BarcodeScannerViewController: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate, @preconcurrency AVCaptureVideoDataOutputSampleBufferDelegate {
     var onScanned: ((String) -> Void)?
-    var enableOCR: Bool = false
+    nonisolated(unsafe) var enableOCR: Bool = false
     private var captureSession: AVCaptureSession?
     // 统一使用 SharedCameraManager 的队列，避免多队列竞争同一个 session 导致死锁/卡住
     private var sessionQueue: DispatchQueue { SharedCameraManager.shared.sessionQueue }
@@ -408,7 +408,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated(unsafe) private var hasScanned = false
     private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     nonisolated(unsafe) private var hasFadedIn = false
-    nonisolated(unsafe) private let scannerOpenTime = Date()
+    private let scannerOpenTime = Date()
     nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
     nonisolated(unsafe) private var consecutiveEmptyFrames: Int = 0
     nonisolated(unsafe) private var lastOcrResult: String? = nil

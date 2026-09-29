@@ -40,6 +40,7 @@ test("workflow states use stable numeric values", () => {
     PART_RETURNED: 1,
     RETURNED: 2,
     CANCELLED: 3,
+    CANCEL_PENDING: 4,
   });
   assert.deepEqual(TRANSFER_OUTBOUND_STATUS, { PENDING: 0, CONFIRMED: 1 });
   assert.deepEqual(TRANSFER_RETURN_STATUS, { PENDING: 0, CONFIRMED: 1 });

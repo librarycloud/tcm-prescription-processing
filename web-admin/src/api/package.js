@@ -28,6 +28,14 @@ export function deletePackage(id) {
   return request.delete(`/admin/packages/${id}`);
 }
 
-export function verifyPackage(pickupCode, pickupMethod, expressTrackingNo = '') {
-  return request.post('/admin/packages/verify', { pickupCode, pickupMethod, expressTrackingNo });
+export function verifyPackage(pickupCode, pickupMethod, expressTrackingNo = '', pickupProxyName = '', pickupProxyPhone = '', additionalPackageIds = []) {
+  return request.post('/admin/packages/verify', { pickupCode, pickupMethod, expressTrackingNo, pickupProxyName, pickupProxyPhone, additionalPackageIds });
+}
+
+export function printPackageCount(id) {
+  return request.post(`/admin/packages/${id}/print`);
+}
+
+export function getRelatedPackages(pickupCode) {
+  return request.get(`/admin/packages/related/${pickupCode}`);
 }

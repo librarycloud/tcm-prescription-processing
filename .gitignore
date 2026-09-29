@@ -57,3 +57,7 @@ DerivedData/
 **/.!*
 ios-app/Pods/
 ios-app/Podfile.lock
+
+# 软著申请自动生成的文件
+软著*
+

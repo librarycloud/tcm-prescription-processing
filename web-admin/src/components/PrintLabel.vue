@@ -10,6 +10,7 @@
       <img v-if="field.id === 'qrcode' && qrDataUrl" :src="qrDataUrl" alt="二维码" />
       <span v-else>{{ fieldValue(field) }}</span>
     </div>
+    <div v-if="printCount > 0" class="reprint-watermark">补打</div>
   </section>
 </template>
 

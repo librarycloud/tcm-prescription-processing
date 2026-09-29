@@ -42,3 +42,18 @@
     border: 0;
   }
 }
+
+.reprint-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: 16mm;
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0.15);
+  border: 1mm solid rgba(0, 0, 0, 0.15);
+  padding: 2mm 5mm;
+  pointer-events: none;
+  z-index: 99;
+  letter-spacing: 2mm;
+}

@@ -27,6 +27,13 @@ const routes = [
     redirect: '/admin/dashboard',
     meta: { requiresAuth: true, allowedRoles: [0, 2] },
     children: [
+
+      {
+        path: 'system-config',
+        name: 'SystemConfig',
+        component: () => import('@/views/admin/SystemConfig.vue'),
+        meta: { title: '系统设置', icon: 'Setting', group: 'system' }
+      },
       {
         path: 'dashboard',
         name: 'AdminDashboard',

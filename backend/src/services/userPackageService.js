@@ -97,6 +97,11 @@ export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, 
   }
 
   if (payload.password !== undefined && String(payload.password).trim() !== '') {
+    const oldPassword = String(payload.oldPassword || "");
+    if (!oldPassword) throw new AppError("请提供当前密码", 400);
+    if (!(await bcrypt.compare(oldPassword, current.password))) {
+      throw new AppError("当前密码不正确", 400);
+    }
     const password = String(payload.password);
     if (password.length < 6) throw new AppError('密码至少 6 位', 400);
     data.password = await bcrypt.hash(password, 10);

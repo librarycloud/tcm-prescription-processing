@@ -117,7 +117,11 @@
       </header>
 
       <main class="content">
-        <router-view />
+        <router-view v-slot="{ Component, route: currentRoute }">
+          <keep-alive include="Packages,Prescriptions,ProcessingPlans,StoreTransfers,ProductDifferences,HerbLocations,Products,E6Imports,E6PharmacyProducts,YdGoodsChecks,Stores,StoreAdmins,Users,OperationLogs,LoginLogs">
+            <component :is="Component" :key="currentRoute.name" />
+          </keep-alive>
+        </router-view>
       </main>
     </div>
 
@@ -375,6 +379,7 @@ const menuIcons = {
   Sort,
   Tickets,
   User,
+  Setting,
   UserFilled
 };
 
@@ -425,6 +430,7 @@ const systemMenuItems = computed(() => {
     'users',
     'login-logs',
     'operation-logs',
+    'system-config',
     'sms-settings',
     'email-settings',
     'upload-settings',

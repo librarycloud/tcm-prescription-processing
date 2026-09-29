@@ -3,6 +3,7 @@ export const TRANSFER_STATUS = Object.freeze({
   PART_RETURNED: 1,
   RETURNED: 2,
   CANCELLED: 3,
+  CANCEL_PENDING: 4,
 });
 
 export const TRANSFER_OUTBOUND_STATUS = Object.freeze({
@@ -18,6 +19,7 @@ export const TRANSFER_RETURN_STATUS = Object.freeze({
 export const ACTIVE_TRANSFER_STATUSES = Object.freeze([
   TRANSFER_STATUS.BORROWING,
   TRANSFER_STATUS.PART_RETURNED,
+  TRANSFER_STATUS.CANCEL_PENDING,
 ]);
 
 export const TRANSFER_STATUS_VALUES = Object.freeze(

@@ -334,15 +334,19 @@ export async function updateStoreAdmin(prisma, id, payload, actor, authSessions 
 }
 
 export async function deleteStoreAdmin(prisma, id, actor, authSessions = null) {
-  if (!isSuperAdmin(actor)) throw new AppError("仅全局管理员可删除门店管理员", 403);
+  assertStoreAccountManager(actor);
   const userId = Number(id);
   if (userId === Number(actor?.id))
     throw new AppError("不能删除当前登录账号", 400);
   const current = await prisma.admin.findFirst({
-    where: { id: userId, role: ROLES.STORE_ADMIN },
-    select: { id: true, storeId: true },
+    where: { id: userId, role: { in: STORE_MEMBER_ROLES } },
+    select: { id: true, storeId: true, role: true, nickname: true, name: true },
   });
-  if (!current) throw new AppError("门店管理员不存在", 404);
+  if (!current) throw new AppError("门店账号不存在", 404);
+  await assertScope(actor, current);
+  if (!isSuperAdmin(actor) && Number(current.role) === ROLES.STORE_ADMIN) {
+    throw new AppError("无权删除其他门店管理员", 403);
+  }
   const packageCount = await prisma.package.count({
     where: {
       OR: [
@@ -353,7 +357,7 @@ export async function deleteStoreAdmin(prisma, id, actor, authSessions = null) {
     },
   });
   if (packageCount)
-    throw new AppError("该管理员存在包裹审计记录，请改为禁用账号", 409);
+    throw new AppError("该账号存在包裹审计记录，请改为禁用账号", 409);
   if (authSessions) {
     await authSessions.revokeAccount({ accountType: 'admin', accountId: userId });
   }
@@ -363,7 +367,7 @@ export async function deleteStoreAdmin(prisma, id, actor, authSessions = null) {
     action: "delete",
     targetId: userId,
     storeId: current.storeId,
-    description: "删除门店管理员",
+    description: `删除门店账号: ${current.nickname || current.name || userId}`,
   });
   return { id: userId };
 }

@@ -1,5 +1,7 @@
 import {
   createPackage,
+  getRelatedPackages,
+  incrementPrintCount,
   deletePackage,
   getPackageByPickupCode,
   getPackageDetail,
@@ -52,4 +54,14 @@ export async function deleteController(request, reply) {
 export async function verifyController(request, reply) {
   const data = await verifyPackage(request.server.prisma, request.user, request.body || {});
   return ok(reply, data, '核销成功');
+}
+
+export async function printController(request, reply) {
+  const data = await incrementPrintCount(request.server.prisma, request.user, request.params.id);
+  return ok(reply, data, '打印成功');
+}
+
+export async function relatedController(request, reply) {
+  const data = await getRelatedPackages(request.server.prisma, request.user, request.params.pickupCode);
+  return ok(reply, data, '获取成功');
 }

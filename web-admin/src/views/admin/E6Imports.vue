@@ -80,8 +80,10 @@
         <el-table-column label="电话"
           ><template #default="{ row }">{{ maskPhone(row.phone) }}</template></el-table-column
         >
-        <el-table-column label="操作员" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.operatorUserMapping?.userName || row.cashierName || '-' }}</template>
+        <el-table-column label="操作员" align="center">
+          <template #default="{ row }">
+            <div style="text-align: center">{{ row.operatorUserMapping?.userName || row.cashierName || '-' }}</div>
+          </template>
         </el-table-column>
         <el-table-column label="销售员">
           <template #default="{ row }">{{ row.salespersonUserMapping?.userName || row.salespersonCode || '-' }}</template>

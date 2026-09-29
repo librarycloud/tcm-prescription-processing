@@ -938,6 +938,10 @@ object ApiClient {
     suspend fun deleteHerbLocationAssignment(id: Int): JSONObject = request("/admin/herb-locations/assignments/$id", "DELETE").getJSONObject("data")
     suspend fun transitionPlan(id: Int, status: Int, createPackage: Boolean = false): JSONObject = request("/admin/processing-plans/$id/transition", "POST", JSONObject().put("status", status).put("createPackage", createPackage)).getJSONObject("data")
     suspend fun generatePackage(id: Int, payload: JSONObject = JSONObject()): JSONObject = request("/admin/processing-plans/$id/generate-package", "POST", payload).getJSONObject("data")
+    suspend fun getRelatedPackages(pickupCode: String): org.json.JSONArray {
+        return request("/admin/packages/related/$pickupCode").optJSONArray("data") ?: org.json.JSONArray()
+    }
+
     suspend fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
     suspend fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
     suspend fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = "", includeSummary: Boolean = true, loadItems: Boolean = true): JSONObject {

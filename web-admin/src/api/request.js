@@ -39,8 +39,16 @@ service.interceptors.response.use(
     const status = error.response?.status;
     const message = error.response?.data?.message || error.message || '网络异常，请稍后重试';
 
+    
     if (status === 401) {
+      // 如果是登录接口自身的 401，直接抛出后端原本的提示（如：账号密码错误），不触发全局的过期弹窗
+      if (error.config && error.config.url && error.config.url.includes('/login')) {
+        ElMessage.error(message);
+        return Promise.reject(new Error(message));
+      }
+
       if (!isRedirectingToLogin) {
+
         isRedirectingToLogin = true;
         clearAppStorage();
         ElMessage.error('登录已过期，请重新登录');

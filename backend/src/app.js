@@ -62,8 +62,20 @@ export async function buildApp() {
   await fastify.register(appRoutes, { prefix: '/app' });
   startRobotDeliveryWorker(fastify);
 
+  const defaultJsonParser = fastify.getDefaultJsonParser('ignore', 'ignore');
+  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, function (req, body, done) {
+    if (body === '' || body == null) {
+      done(null, {});
+    } else {
+      defaultJsonParser(req, body, done);
+    }
+  });
+
   fastify.setErrorHandler((error, request, reply) => {
     request.log.error(error);
+    if (error.code === 'FST_ERR_CTP_EMPTY_JSON_BODY') {
+      return fail(reply, '请求体不能为空', 400);
+    }
     if (error instanceof AppError) {
       return fail(reply, error.message, error.statusCode, error.data);
     }

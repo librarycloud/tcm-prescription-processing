@@ -7,3 +7,7 @@ export function login(data) {
 export function logout() {
   return request.post('/auth/logout');
 }
+
+export function getCaptcha() {
+  return request.get('/admin/auth/captcha');
+}
