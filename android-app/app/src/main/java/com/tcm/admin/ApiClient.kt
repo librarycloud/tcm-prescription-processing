@@ -942,7 +942,7 @@ object ApiClient {
         return request("/admin/packages/related/$pickupCode").optJSONArray("data") ?: org.json.JSONArray()
     }
 
-    suspend fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
+    suspend fun verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = null, pickupProxyName: String = "", pickupProxyPhone: String = ""): JSONObject = request("/admin/packages/verify", "POST", JSONObject().put("pickupCode", code).put("pickupMethod", pickupMethod).put("expressTrackingNo", expressTrackingNo).put("pickupProxyName", pickupProxyName).put("pickupProxyPhone", pickupProxyPhone).also { pickupQrContent?.takeIf { it.isNotBlank() }?.let { value -> it.put("pickupQrContent", value) } }).getJSONObject("data")
     suspend fun createGoodsCheck(name: String, type: Int = 1, storeId: Int? = null): JSONObject = request("/admin/yd-goods-check", "POST", JSONObject().put("checkName", name).put("checkType", type).also { if (storeId != null) it.put("storeId", storeId) }).getJSONObject("data")
     suspend fun goodsCheck(id: Int, page: Int = 1, pageSize: Int = 10, status: String = "", includeSummary: Boolean = true, loadItems: Boolean = true): JSONObject {
         val query = buildList {
