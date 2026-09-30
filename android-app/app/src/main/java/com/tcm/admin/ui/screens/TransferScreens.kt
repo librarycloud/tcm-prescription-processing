@@ -547,6 +547,10 @@ internal fun TransferDetailScreen(
     var error by remember(id) { mutableStateOf<String?>(null) }
     var reload by remember(id) { mutableStateOf(0) }
     var returnItem by remember { mutableStateOf<JSONObject?>(null) }
+    var returnRecordId by remember { mutableStateOf<Int?>(null) }
+    var returnRemark by remember { mutableStateOf("") }
+    var returnDateDialog by remember { mutableStateOf(false) }
+    var returnDateValue by remember { mutableStateOf(serverToday().toString()) }
     var returnQuantity by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var confirmAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -683,7 +687,10 @@ internal fun TransferDetailScreen(
                     OutlinedButton(
                         onClick = {
                             returnItem = item
+                            returnRecordId = null
                             returnQuantity = quantityText(item.opt("availableReturnQuantity"), "0")
+                            returnRemark = ""
+                            returnDateValue = serverToday().toString()
                         },
                         modifier = Modifier.heightIn(min = 34.dp),
                         shape = FieldShape,

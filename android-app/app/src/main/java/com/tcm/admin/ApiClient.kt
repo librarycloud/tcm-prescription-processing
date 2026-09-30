@@ -966,6 +966,7 @@ object ApiClient {
     suspend fun cancelTransfer(id: Int, reason: String): JSONObject = request("/admin/store-transfers/$id/cancel", "POST", JSONObject().put("reason", reason)).getJSONObject("data")
     suspend fun confirmOutbound(id: Int): JSONObject = request("/admin/store-transfers/$id/confirm-outbound", "POST").getJSONObject("data")
     suspend fun confirmReturn(id: Int, returnId: Int): JSONObject = request("/admin/store-transfers/$id/returns/$returnId/confirm", "POST").getJSONObject("data")
+    suspend fun cancelReturn(id: Int, returnId: Int): JSONObject = request("/admin/store-transfers/$id/returns/$returnId", "DELETE").getJSONObject("data")
     suspend fun addTransferReturns(id: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns", "POST", payload).getJSONObject("data")
     suspend fun updateTransferReturn(id: Int, returnId: Int, payload: JSONObject): JSONObject = request("/admin/store-transfers/$id/returns/$returnId", "PUT", payload).getJSONObject("data")
     suspend fun transferDetail(id: Int): JSONObject = request("/admin/store-transfers/$id").getJSONObject("data")
