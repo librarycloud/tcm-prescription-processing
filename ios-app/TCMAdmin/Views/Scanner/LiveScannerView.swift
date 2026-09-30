@@ -602,39 +602,51 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             return LogicalRow(text: joinedText, top: avgTop, centerY: avgCenterY)
         }.sorted { $0.top < $1.top }
         
-        return rows.map { $0.text }
+        return rows
     }
 
-    nonisolated private func extractSku(from texts: [String]) -> String? {
+    private struct CandidateResult {
+        let sku: String
+        let distanceToCenter: Float
+        let isExplicit: Bool
+    }
+
+    nonisolated private func extractSku(from rows: [LogicalRow], boxHeight: Float) -> String? {
         let tokenCharPattern = Self.tokenCharPattern
         let skuLabelRegex = Self.skuLabelRegex
         let candidate9Pattern = Self.candidate9Pattern
         let standalone9Pattern = Self.standalone9Pattern
         let excludeLinePattern = Self.excludeLinePattern
 
-        var skuCandidates: [String] = []
+        var skuCandidates: [CandidateResult] = []
+        let boxCenterY = boxHeight / 2.0
 
-        for (i, rawLine) in texts.enumerated() {
+        for (i, row) in rows.enumerated() {
+            let rawLine = row.text
+            let distance = abs(row.centerY - boxCenterY)
+            
             // 1. 带标签匹配
             if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil {
                 let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: " ")
                 let cleaned = cleanDigits(afterLabel)
-                if cleaned.count == 9 { skuCandidates.append(cleaned) }
+                if cleaned.count == 9 { skuCandidates.append(CandidateResult(sku: cleaned, distanceToCenter: distance, isExplicit: true)) }
                 let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(afterLabel.startIndex..., in: afterLabel))
                 for match in matches {
                     let c = cleanDigits((afterLabel as NSString).substring(with: match.range))
-                    if c.count == 9 { skuCandidates.append(c) }
+                    if c.count == 9 { skuCandidates.append(CandidateResult(sku: c, distanceToCenter: distance, isExplicit: true)) }
                 }
                 // 向下看 1-2 行
                 for offset in 1...2 {
-                    guard i + offset < texts.count else { break }
-                    let next = texts[i + offset]
+                    guard i + offset < rows.count else { break }
+                    let nextRow = rows[i + offset]
+                    let next = nextRow.text
+                    let nextDist = abs(nextRow.centerY - boxCenterY)
                     if excludeLinePattern.firstMatch(in: next, range: NSRange(next.startIndex..., in: next)) != nil { continue }
                     let nc = cleanDigits(next)
-                    if nc.count == 9 { skuCandidates.append(nc) }
+                    if nc.count == 9 { skuCandidates.append(CandidateResult(sku: nc, distanceToCenter: nextDist, isExplicit: true)) }
                     for m in candidate9Pattern.matches(in: next, range: NSRange(next.startIndex..., in: next)) {
                         let c = cleanDigits((next as NSString).substring(with: m.range))
-                        if c.count == 9 { skuCandidates.append(c) }
+                        if c.count == 9 { skuCandidates.append(CandidateResult(sku: c, distanceToCenter: nextDist, isExplicit: true)) }
                     }
                 }
             }
@@ -642,21 +654,27 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
         // 2. 独立纯 9 位数字（兜底）
         if skuCandidates.isEmpty {
-            for rawLine in texts {
+            for row in rows {
+                let rawLine = row.text
+                let distance = abs(row.centerY - boxCenterY)
                 if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil { continue }
                 let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: "")
                 if (try? NSRegularExpression(pattern: #"\d{10,}"#))?.firstMatch(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) != nil { continue }
                 for m in standalone9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
-                    skuCandidates.append((collapsed as NSString).substring(with: m.range))
+                    skuCandidates.append(CandidateResult(sku: (collapsed as NSString).substring(with: m.range), distanceToCenter: distance, isExplicit: false))
                 }
                 for m in candidate9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
                     let c = cleanDigits((collapsed as NSString).substring(with: m.range))
-                    if c.count == 9 { skuCandidates.append(c) }
+                    if c.count == 9 { skuCandidates.append(CandidateResult(sku: c, distanceToCenter: distance, isExplicit: false)) }
                 }
             }
         }
 
-        return skuCandidates.first(where: { $0.count == 9 })
+        // 优先选择显式匹配的，然后再按距离中心点的距离排序，取最近的一个
+        return skuCandidates.sorted {
+            if $0.isExplicit != $1.isExplicit { return $0.isExplicit }
+            return $0.distanceToCenter < $1.distanceToCenter
+        }.first?.sku
     }
 
 
@@ -806,9 +824,11 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             guard !self.isScanClaimed() else { return }
 
             do {
+                let boxHeight = Float(cgImage.height)
                 let result = try await engine.run(cgImage) { [weak self] results in
                     guard let self = self else { return false }
-                    return self.extractSku(from: results.map { $0.text }) != nil
+                    let rows = self.buildLogicalRows(results)
+                    return self.extractSku(from: rows, boxHeight: boxHeight) != nil
                 }
                 let texts = result.results.map(\.text)
                 
@@ -823,7 +843,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     self.consecutiveEmptyFrames = 0
                 }
                 
-                guard let sku = self.extractSku(from: texts) else {
+                let rows = self.buildLogicalRows(result.results)
+                guard let sku = self.extractSku(from: rows, boxHeight: boxHeight) else {
                     DispatchQueue.main.async {
                         self.ocrMatchCount = 0
                         self.lastOcrResult = nil
