@@ -102,8 +102,8 @@ function normalizeImportItems(value) {
     if (seen.has(sequence)) throw new AppError("处方明细 ri 不能重复", 400);
     seen.add(sequence);
     const unit = clean(item?.unit, 10, "药材单位");
-    if (!["g", "条", "个"].includes(unit))
-      throw new AppError("药材单位必须为 g、条或个", 400);
+    if (!["g", "条", "个", "盒", "袋", "包", "瓶", "支"].includes(unit))
+      throw new AppError("药材单位必须为 g、条、个、盒、袋、包、瓶或支", 400);
     return {
       sequence,
       herbName: clean(item?.name, 200, "中药名"),
