@@ -103,18 +103,10 @@ Page({
 
   onKeywordChange(e) {
     const keyword = e.detail.value || '';
-    this.setData({ keyword }, () => {
-      clearTimeout(searchTimer);
-      if (!canSearchKeyword(keyword)) {
-        searchRequestId += 1;
-        this.setData({ searched: false, products: [], selectedProduct: null });
-        return;
-      }
-      searchTimer = setTimeout(() => this.search(), 300);
-    });
+    this.setData({ keyword });
   },
 
-  async search(force = false, autoSelect = false) {
+  async search(force = false, autoSelect = false, isHistoryTap = false) {
     const keyword = this.data.keyword.trim();
     if (!keyword) {
       searchRequestId += 1;
@@ -125,6 +117,12 @@ Page({
       wx.showToast({ title: '请输入至少2个中文或4位数字', icon: 'none' });
       return;
     }
+    
+    // Save history
+    if (!isHistoryTap) {
+      this.saveHistory(keyword);
+    }
+
     const requestId = ++searchRequestId;
     this.setData({ searchLoading: true, searched: true, products: [], selectedProduct: null });
     try {
@@ -149,10 +147,43 @@ Page({
     }
   },
 
+  loadHistory() {
+    const history = wx.getStorageSync('e6InventorySearchHistory') || [];
+    this.setData({ searchHistory: history });
+  },
+
+  saveHistory(keyword) {
+    let history = wx.getStorageSync('e6InventorySearchHistory') || [];
+    history = history.filter(item => item !== keyword);
+    history.unshift(keyword);
+    if (history.length > 20) history = history.slice(0, 20);
+    wx.setStorageSync('e6InventorySearchHistory', history);
+    this.setData({ searchHistory: history });
+  },
+
+  clearHistory() {
+    wx.showModal({
+      title: '清空历史',
+      content: '确定要清空搜索历史吗？',
+      success: (res) => {
+        if (res.confirm) {
+          wx.removeStorageSync('e6InventorySearchHistory');
+          this.setData({ searchHistory: [] });
+        }
+      }
+    });
+  },
+
+  tapHistory(e) {
+    const keyword = e.currentTarget.dataset.keyword;
+    this.setData({ keyword }, () => this.search(true, false, true));
+  },
+
   async onShow() {
     const user = getUser();
     const isSuperAdmin = Number(user?.role) === 0;
     this.setData({ isSuperAdmin });
+    this.loadHistory();
     if (isSuperAdmin && !this.data.stores.length) {
       const data = await getStores({ page: 1, pageSize: 100 });
       const stores = [{ id: '', name: '全部门店' }, ...(data.list || [])];

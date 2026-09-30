@@ -36,10 +36,22 @@
       </view>
     </picker>
 
+    <view wx:if="{{pickupMethod === 0 || pickupMethod === 1}}" class="proxy-row">
+      <t-input label="代领姓名" value="{{pickupProxyName}}" placeholder="选填" bind:change="onProxyNameChange" />
+      <t-input label="代领手机" value="{{pickupProxyPhone}}" placeholder="选填" type="number" bind:change="onProxyPhoneChange" />
+    </view>
+
     <view wx:if="{{pickupMethod === 2}}" class="tracking-row">
       <t-input label="快递单号" value="{{expressTrackingNo}}" maxlength="100" placeholder="输入或扫描顺丰单号" bind:change="onTrackingNoChange" bind:click="scanTrackingNo">
         <t-icon slot="suffix-icon" name="scan" size="40rpx" color="#0052d9" />
       </t-input>
+    </view>
+
+    <view class="related-packages-section" wx:if="{{relatedPackages.length > 0}}">
+      <view class="section-title">同收件人待核销包裹</view>
+      <t-checkbox-group value="{{selectedRelatedPackageIds}}" bind:change="onRelatedPackageChange">
+        <t-checkbox wx:for="{{relatedPackages}}" wx:key="id" value="{{item.id}}" label="{{item.itemName}}" />
+      </t-checkbox-group>
     </view>
 
     <view class="confirm-action">

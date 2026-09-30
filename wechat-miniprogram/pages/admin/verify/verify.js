@@ -1,5 +1,5 @@
 import { safeScanCode } from '../utils/scanner';
-import { getPackageByPickupCode, verifyPackage } from '../../../api/admin';
+import { getPackageByPickupCode, verifyPackage, getRelatedPackages } from '../../../api/admin';
 import {
   formatDate,
   formatPickupCode,
@@ -23,8 +23,12 @@ Page({
     pickupMethodText: '',
     expressTrackingNo: '',
     packageInfo: null,
+    relatedPackages: [],
+    selectedRelatedPackageIds: [],
     lookupLoading: false,
-    verifyLoading: false
+    verifyLoading: false,
+    pickupProxyName: '',
+    pickupProxyPhone: ''
   },
 
   onLoad(options) {
@@ -76,7 +80,11 @@ Page({
     }
     this.setData({ pickupCode: formatPickupCode(pickupCode), lookupLoading: true });
     try {
-      const item = await getPackageByPickupCode(pickupCode);
+      const [item, relatedItems] = await Promise.all([
+        getPackageByPickupCode(pickupCode),
+        getRelatedPackages(pickupCode).catch(() => []) // Default to empty array if fails
+      ]);
+
       const methodIndex = PICKUP_METHOD_OPTIONS.findIndex(
         (option) => option.value === Number(item.pickupMethod)
       );
@@ -85,6 +93,16 @@ Page({
         pickupMethod: methodIndex >= 0 ? item.pickupMethod : null,
         pickupMethodText: pickupMethodText(item.pickupMethod),
         expressTrackingNo: item.expressTrackingNo || '',
+        pickupProxyName: '',
+        pickupProxyPhone: '',
+        selectedRelatedPackageIds: [],
+        relatedPackages: (relatedItems || []).map(p => ({
+          ...p,
+          pickupCode: formatPickupCode(p.pickupCode),
+          createdAtText: formatDate(p.createdAt),
+          statusText: statusText(p.status),
+          statusTheme: statusTheme(p.status)
+        })),
         packageInfo: {
           ...item,
           pickupCode: formatPickupCode(item.pickupCode),
@@ -116,6 +134,18 @@ Page({
     this.setData({ expressTrackingNo: normalizeExpressTrackingNo(e.detail.value) });
   },
 
+  onProxyNameChange(e) {
+    this.setData({ pickupProxyName: e.detail.value });
+  },
+
+  onProxyPhoneChange(e) {
+    this.setData({ pickupProxyPhone: e.detail.value });
+  },
+
+  onRelatedPackageChange(e) {
+    this.setData({ selectedRelatedPackageIds: e.detail.value });
+  },
+
   scanTrackingNo() {
     safeScanCode({
       scanType: ['barCode', 'qrCode'],
@@ -139,9 +169,10 @@ Page({
       return;
     }
 
+    const count = 1 + this.data.selectedRelatedPackageIds.length;
     wx.showModal({
       title: '再次确认核销',
-      content: `确认将“${this.data.packageInfo.itemName}”按“${this.data.pickupMethodText}”方式核销吗？`,
+      content: `确认将这 ${count} 个包裹按“${this.data.pickupMethodText}”方式核销吗？`,
       confirmText: '确认核销',
       success: (res) => {
         if (res.confirm) this.confirmVerify();
@@ -152,11 +183,19 @@ Page({
   async confirmVerify() {
     this.setData({ verifyLoading: true });
     try {
+      const additionalParams = {};
+      if (Number(this.data.pickupMethod) === 0 || Number(this.data.pickupMethod) === 1) {
+        additionalParams.pickupProxyName = this.data.pickupProxyName;
+        additionalParams.pickupProxyPhone = this.data.pickupProxyPhone;
+      }
+      additionalParams.additionalPackageIds = this.data.selectedRelatedPackageIds;
+
       const data = await verifyPackage(
         normalizePickupCode(this.data.packageInfo.pickupCode),
         this.data.pickupMethod,
         this.data.expressTrackingNo,
-        this.data.pickupQrContent
+        this.data.pickupQrContent,
+        additionalParams
       );
       wx.showToast({ title: '核销成功', icon: 'success' });
       setTimeout(() => {

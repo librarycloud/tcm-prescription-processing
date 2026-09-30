@@ -32,16 +32,16 @@ export function deletePrescription(id) {
   return request({ url: `/admin/prescriptions/${id}`, method: 'DELETE' });
 }
 
-export function deletePrescriptionAttachment(id) {
+export function deletePrescriptionAttachment(id, attachmentId) {
   return request({
-    url: `/admin/prescriptions/${id}/attachment`,
+    url: `/admin/prescriptions/${id}/attachments/${attachmentId}`,
     method: 'DELETE'
   });
 }
 
 export function uploadPrescriptionAttachment(id, file) {
   return uploadToS3({
-    url: `/admin/prescriptions/${id}/attachment?originalName=${encodeURIComponent(file.originalName)}`,
+    url: `/admin/prescriptions/${id}/attachments?originalName=${encodeURIComponent(file.originalName)}`,
     filePath: file.filePath,
     name: file.originalName,
     category: 'prescriptions',
@@ -203,11 +203,17 @@ export function updatePackage(id, data) {
   return request({ url: `/admin/packages/${id}`, method: 'PUT', data });
 }
 
-export function verifyPackage(pickupCode, pickupMethod, expressTrackingNo = '', pickupQrContent = '') {
+export function verifyPackage(pickupCode, pickupMethod, expressTrackingNo = '', pickupQrContent = '', additionalParams = {}) {
   return request({
     url: '/admin/packages/verify',
     method: 'POST',
-    data: { pickupCode, pickupMethod, expressTrackingNo, pickupQrContent }
+    data: { pickupCode, pickupMethod, expressTrackingNo, pickupQrContent, ...additionalParams }
+  });
+}
+
+export function getRelatedPackages(pickupCode) {
+  return request({
+    url: `/admin/packages/related/${encodeURIComponent(pickupCode)}`
   });
 }
 
@@ -263,6 +269,13 @@ export function confirmStoreTransferOutbound(id) {
   return request({
     url: `/admin/store-transfers/${id}/confirm-outbound`,
     method: 'POST'
+  });
+}
+
+export function deleteStoreTransferReturn(id, returnId) {
+  return request({
+    url: `/admin/store-transfers/${id}/returns/${returnId}`,
+    method: 'DELETE'
   });
 }
 

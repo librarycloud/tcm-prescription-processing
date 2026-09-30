@@ -21,3 +21,9 @@
 .inventory-row.location-row text:last-child { color: #1f2329; }
 .inventory-row.strong { font-size: 30rpx; font-weight: 600; }
 .inventory-dates { padding-top: 14rpx; border-top: 1rpx solid #eef0f5; line-height: 1.6; }
+
+.search-history { margin-top: 32rpx; }
+.history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24rpx; }
+.history-header .section-title { margin: 0; font-size: 30rpx; color: #1f2329; }
+.history-tags { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.history-tag { font-size: 28rpx; padding: 12rpx 24rpx; }

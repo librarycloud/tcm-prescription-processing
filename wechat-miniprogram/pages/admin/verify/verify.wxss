@@ -37,3 +37,16 @@
   min-width: 0;
   margin-top: 20rpx;
 }
+
+.related-packages-section {
+  margin-top: 32rpx;
+  border-top: 1rpx solid #eef0f5;
+  padding-top: 24rpx;
+}
+
+.section-title {
+  font-size: 28rpx;
+  color: #1f2329;
+  font-weight: 500;
+  margin-bottom: 16rpx;
+}

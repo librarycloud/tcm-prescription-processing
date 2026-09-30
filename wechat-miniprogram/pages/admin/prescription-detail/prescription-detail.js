@@ -135,12 +135,11 @@ Page({
         creatorName: item.creator
           ? item.creator.nickname || item.creator.phone
           : '-',
-        attachment: item.attachment
-          ? {
-              ...item.attachment,
-              fileSizeText: formatAttachmentSize(item.attachment.fileSize)
-            }
-          : null,
+        attachments: (item.attachments || []).map(att => ({
+          ...att,
+          fileSizeText: formatAttachmentSize(att.fileSize),
+          url: `${getBaseUrl()}/admin/prescriptions/${this.data.id}/attachments/${att.id}`
+        })),
         canEdit: !this.data.isStoreStaff && Number(item.status) !== 1,
         canAddPlan: !this.data.isStoreStaff && Number(item.status) === 0
       },
@@ -230,8 +229,11 @@ Page({
     });
   },
 
-  removeAttachment() {
-    if (!this.data.detail?.attachment || this.data.attachmentDeleting) return;
+  removeAttachment(e) {
+    if (this.data.attachmentDeleting) return;
+    const attachmentId = e.currentTarget.dataset.id;
+    if (!attachmentId) return;
+
     wx.showModal({
       title: '删除处方原件',
       content: '确认删除该处方原件？删除后无法恢复。',
@@ -240,7 +242,7 @@ Page({
         if (!result.confirm) return;
         this.setData({ attachmentDeleting: true });
         try {
-          await deletePrescriptionAttachment(this.data.id);
+          await deletePrescriptionAttachment(this.data.id, attachmentId);
           wx.showToast({ title: '已删除', icon: 'success' });
           await this.load();
         } finally {
@@ -276,19 +278,22 @@ Page({
     }
   },
 
-  previewAttachment() {
-    const attachment = this.data.detail?.attachment;
-    if (!attachment || this.data.attachmentPreviewing) return;
+  previewAttachment(e) {
+    if (this.data.attachmentPreviewing) return;
+    const url = e.currentTarget.dataset.url;
+    if (!url) return;
+
     this.setData({ attachmentPreviewing: true });
     wx.downloadFile({
-      url: `${getBaseUrl()}/admin/prescriptions/${this.data.id}/attachment`,
+      url,
       header: { Authorization: `Bearer ${getToken()}` },
       success: (res) => {
         if (res.statusCode !== 200) {
           wx.showToast({ title: '处方原件加载失败', icon: 'none' });
           return;
         }
-        if (String(attachment.mimeType || '').startsWith('image/')) {
+        const mimeType = this.data.detail.attachments?.find(a => a.url === url)?.mimeType;
+        if (String(mimeType || '').startsWith('image/')) {
           wx.previewImage({ urls: [res.tempFilePath] });
           return;
         }

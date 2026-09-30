@@ -10,7 +10,8 @@ import {
   getTransferStores,
   updateExpectedReturnDate,
   updateStoreTransfer,
-  updateStoreTransferReturn
+  updateStoreTransferReturn,
+  deleteStoreTransferReturn
 } from '../../../api/admin';
 import { getUser } from '../../../utils/auth';
 import { clearResponseCache } from '../../../utils/request';
@@ -468,6 +469,26 @@ Page({
     this.setData({ saving: true });
     try { this.setData({ detail: decorateDetail(await confirmStoreTransferReturn(this.data.detail.id, row.id)) }); await this.reload(); }
     finally { this.setData({ saving: false }); }
+  },
+
+  async cancelReturn(e) {
+    const row = this.data.detail.returnRecords[Number(e.currentTarget.dataset.index)];
+    if (
+      !this.data.detail?.permissions?.canSubmitReturn ||
+      Number(row.status) !== TRANSFER_RETURN_STATUS.PENDING
+    )
+      return;
+    const result = await new Promise((resolve) => wx.showModal({ title: '取消归还', content: `确认取消归还 ${row.itemName} ${numberText(row.quantity)} 吗？`, success: resolve }));
+    if (!result.confirm) return;
+    this.setData({ saving: true });
+    try {
+      const detail = await deleteStoreTransferReturn(this.data.detail.id, row.id);
+      this.setData({ detail: decorateDetail(detail) });
+      wx.showToast({ title: '已取消归还', icon: 'success' });
+      await this.reload();
+    } finally {
+      this.setData({ saving: false });
+    }
   },
 
   openDateEditor() {
