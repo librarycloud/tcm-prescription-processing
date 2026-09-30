@@ -621,10 +621,9 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         var skuCandidates: [CandidateResult] = []
         
         // 视觉瞄准框在屏幕约 40% 处，而传给 OCR 的裁剪区域 (ROI) 是从 20% 到 80% (占 60%)。
-        // 所以瞄准框在 ROI 内距离顶部的相对位置是 33.3% (1/3)。
-        // 【关键】：iOS CoreGraphics / PaddleOCR 底层取出的坐标系 Y=0 是在图片的最底部 (Bottom-Up)！
-        // 因此，距离顶部 1/3，在坐标系里其实是 Y 的 2/3 处。
-        let boxCenterY = boxHeight * (2.0 / 3.0)
+        // 因此，瞄准框在 ROI 内部的相对纵坐标为：(40% - 20%) / 60% = 33.3% (即 1/3 处)。
+        // PaddleOCR 处理 CGImage 时像素是 Top-Down，所以准星在 Y = 1/3 处。
+        let boxCenterY = boxHeight / 3.0
 
         for (i, row) in rows.enumerated() {
             let rawLine = row.text
@@ -674,6 +673,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                 }
             }
         }
+
+        #if DEBUG
+        print("OCR Candidates: \(skuCandidates)")
+        #endif
 
         // 优先选择显式匹配的，然后再按距离中心点的距离排序，取最近的一个
         return skuCandidates.sorted {
@@ -830,7 +833,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
             do {
                 let boxHeight = Float(cgImage.height)
-                let result = try await engine.run(cgImage) { [weak self] results in
+                let result = try await engine.run(cgImage, targetCenterY: Double(boxHeight) / 3.0) { [weak self] results in
                     guard let self = self else { return false }
                     let rows = self.buildLogicalRows(results)
                     return self.extractSku(from: rows, boxHeight: boxHeight) != nil
