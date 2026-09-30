@@ -619,7 +619,12 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         let excludeLinePattern = Self.excludeLinePattern
 
         var skuCandidates: [CandidateResult] = []
-        let boxCenterY = boxHeight / 2.0
+        
+        // 视觉瞄准框在屏幕约 40% 处，而传给 OCR 的裁剪区域 (ROI) 是从 20% 到 80% (占 60%)。
+        // 所以瞄准框在 ROI 内距离顶部的相对位置是 33.3% (1/3)。
+        // 【关键】：iOS CoreGraphics / PaddleOCR 底层取出的坐标系 Y=0 是在图片的最底部 (Bottom-Up)！
+        // 因此，距离顶部 1/3，在坐标系里其实是 Y 的 2/3 处。
+        let boxCenterY = boxHeight * (2.0 / 3.0)
 
         for (i, row) in rows.enumerated() {
             let rawLine = row.text
