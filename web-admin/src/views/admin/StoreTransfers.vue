@@ -582,7 +582,6 @@ import {
   cancelStoreTransfer,
   confirmStoreTransferOutbound,
   confirmStoreTransferReturn,
-  deleteStoreTransferReturn,
   createStoreTransfer,
   getStoreTransfer,
   getStoreTransfers,
