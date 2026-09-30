@@ -148,6 +148,7 @@ public struct LiveScannerView: View {
     @State private var resolvingMessage = "正在识别条码..."
     @State private var equipmentAlertData: EquipmentModel? = nil
     @State private var scanError: String? = nil
+    @State private var scanLineScreenPercentage: Double = 0.44
     
     nonisolated(unsafe) var enableOCR: Bool = false
     
@@ -159,7 +160,7 @@ public struct LiveScannerView: View {
             Color.black.ignoresSafeArea()
             
             // 相机层
-            BarcodeScannerPreview(torchOn: isTorchOn, enableOCR: enableOCR) { code in
+            BarcodeScannerPreview(torchOn: isTorchOn, enableOCR: enableOCR, scanLineScreenPercentage: scanLineScreenPercentage) { code in
                 handleScannedCode(code)
             }
             .ignoresSafeArea()
@@ -210,6 +211,17 @@ public struct LiveScannerView: View {
                             .fill(Color.appPrimary.opacity(0.2))
                             .frame(width: 300, height: 2)
                             .shadow(color: .appPrimary, radius: 4)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.onAppear {
+                                        let globalMidY = geo.frame(in: .global).midY
+                                        let screenH = UIScreen.main.bounds.height
+                                        if screenH > 0 {
+                                            self.scanLineScreenPercentage = globalMidY / screenH
+                                        }
+                                    }
+                                }
+                            )
                     }
                     .background(
                         // 全屏遮罩带中间镂空
@@ -380,17 +392,20 @@ public struct LiveScannerView: View {
 struct BarcodeScannerPreview: UIViewControllerRepresentable {
     var torchOn: Bool
     nonisolated(unsafe) var enableOCR: Bool = false
+    var scanLineScreenPercentage: Double
     var onScanned: (String) -> Void
     
     func makeUIViewController(context: Context) -> BarcodeScannerViewController {
         let vc = BarcodeScannerViewController()
         vc.enableOCR = enableOCR
+        vc.scanLineScreenPercentage = scanLineScreenPercentage
         vc.onScanned = onScanned
         return vc
     }
     
     func updateUIViewController(_ uiViewController: BarcodeScannerViewController, context: Context) {
         uiViewController.setTorch(on: torchOn)
+        uiViewController.scanLineScreenPercentage = scanLineScreenPercentage
     }
     
     static func dismantleUIViewController(_ uiViewController: BarcodeScannerViewController, coordinator: ()) {
@@ -401,6 +416,7 @@ struct BarcodeScannerPreview: UIViewControllerRepresentable {
 class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onScanned: ((String) -> Void)?
     nonisolated(unsafe) var enableOCR: Bool = false
+    nonisolated(unsafe) var scanLineScreenPercentage: Double = 0.44
     private var captureSession: AVCaptureSession?
     // 统一使用 SharedCameraManager 的队列，避免多队列竞争同一个 session 导致死锁/卡住
     private var sessionQueue: DispatchQueue { SharedCameraManager.shared.sessionQueue }
@@ -552,7 +568,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         let centerY: Float
     }
 
-    nonisolated private func buildLogicalRows(_ elements: [OCRResult]) -> [String] {
+    nonisolated private func buildLogicalRows(_ elements: [OCRResult]) -> [LogicalRow] {
         if elements.isEmpty { return [] }
         
         struct RawElement {
@@ -602,39 +618,54 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             return LogicalRow(text: joinedText, top: avgTop, centerY: avgCenterY)
         }.sorted { $0.top < $1.top }
         
-        return rows.map { $0.text }
+        return rows
     }
 
-    nonisolated private func extractSku(from texts: [String]) -> String? {
+    private struct CandidateResult {
+        let sku: String
+        let distanceToCenter: Float
+        let isExplicit: Bool
+    }
+
+    nonisolated private func extractSku(from rows: [LogicalRow], boxHeight: Float, scanLineScreenPercentage: Double) -> String? {
         let tokenCharPattern = Self.tokenCharPattern
         let skuLabelRegex = Self.skuLabelRegex
         let candidate9Pattern = Self.candidate9Pattern
         let standalone9Pattern = Self.standalone9Pattern
         let excludeLinePattern = Self.excludeLinePattern
 
-        var skuCandidates: [String] = []
+        var skuCandidates: [CandidateResult] = []
+        
+        // 动态计算：准星在全局屏幕的 Y 坐标百分比，映射到 ROI (20% 到 80% 的 60% 区域)
+        let relativeY = max(0, min(1, (scanLineScreenPercentage - 0.2) / 0.6))
+        let boxCenterY = boxHeight * Float(relativeY)
 
-        for (i, rawLine) in texts.enumerated() {
+        for (i, row) in rows.enumerated() {
+            let rawLine = row.text
+            let distance = abs(row.centerY - boxCenterY)
+            
             // 1. 带标签匹配
             if skuLabelRegex.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil {
                 let afterLabel = skuLabelRegex.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: " ")
                 let cleaned = cleanDigits(afterLabel)
-                if cleaned.count == 9 { skuCandidates.append(cleaned) }
+                if cleaned.count == 9 { skuCandidates.append(CandidateResult(sku: cleaned, distanceToCenter: distance, isExplicit: true)) }
                 let matches = candidate9Pattern.matches(in: afterLabel, range: NSRange(afterLabel.startIndex..., in: afterLabel))
                 for match in matches {
                     let c = cleanDigits((afterLabel as NSString).substring(with: match.range))
-                    if c.count == 9 { skuCandidates.append(c) }
+                    if c.count == 9 { skuCandidates.append(CandidateResult(sku: c, distanceToCenter: distance, isExplicit: true)) }
                 }
                 // 向下看 1-2 行
                 for offset in 1...2 {
-                    guard i + offset < texts.count else { break }
-                    let next = texts[i + offset]
+                    guard i + offset < rows.count else { break }
+                    let nextRow = rows[i + offset]
+                    let next = nextRow.text
+                    let nextDist = abs(nextRow.centerY - boxCenterY)
                     if excludeLinePattern.firstMatch(in: next, range: NSRange(next.startIndex..., in: next)) != nil { continue }
                     let nc = cleanDigits(next)
-                    if nc.count == 9 { skuCandidates.append(nc) }
+                    if nc.count == 9 { skuCandidates.append(CandidateResult(sku: nc, distanceToCenter: nextDist, isExplicit: true)) }
                     for m in candidate9Pattern.matches(in: next, range: NSRange(next.startIndex..., in: next)) {
                         let c = cleanDigits((next as NSString).substring(with: m.range))
-                        if c.count == 9 { skuCandidates.append(c) }
+                        if c.count == 9 { skuCandidates.append(CandidateResult(sku: c, distanceToCenter: nextDist, isExplicit: true)) }
                     }
                 }
             }
@@ -642,21 +673,31 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
         // 2. 独立纯 9 位数字（兜底）
         if skuCandidates.isEmpty {
-            for rawLine in texts {
+            for row in rows {
+                let rawLine = row.text
+                let distance = abs(row.centerY - boxCenterY)
                 if excludeLinePattern.firstMatch(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine)) != nil { continue }
                 let collapsed = tokenCharPattern.stringByReplacingMatches(in: rawLine, range: NSRange(rawLine.startIndex..., in: rawLine), withTemplate: "")
                 if (try? NSRegularExpression(pattern: #"\d{10,}"#))?.firstMatch(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) != nil { continue }
                 for m in standalone9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
-                    skuCandidates.append((collapsed as NSString).substring(with: m.range))
+                    skuCandidates.append(CandidateResult(sku: (collapsed as NSString).substring(with: m.range), distanceToCenter: distance, isExplicit: false))
                 }
                 for m in candidate9Pattern.matches(in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed)) {
                     let c = cleanDigits((collapsed as NSString).substring(with: m.range))
-                    if c.count == 9 { skuCandidates.append(c) }
+                    if c.count == 9 { skuCandidates.append(CandidateResult(sku: c, distanceToCenter: distance, isExplicit: false)) }
                 }
             }
         }
 
-        return skuCandidates.first(where: { $0.count == 9 })
+        #if DEBUG
+        print("OCR Candidates: \(skuCandidates)")
+        #endif
+
+        // 优先选择显式匹配的，然后再按距离中心点的距离排序，取最近的一个
+        return skuCandidates.sorted {
+            if $0.isExplicit != $1.isExplicit { return $0.isExplicit }
+            return $0.distanceToCenter < $1.distanceToCenter
+        }.first?.sku
     }
 
 
@@ -796,6 +837,10 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             #if DEBUG
             print("PaddleOCR inference started: \(cgImage.width)x\(cgImage.height)")
             #endif
+            
+            // Capture MainActor state before detaching
+            let capturedPercentage = self.scanLineScreenPercentage
+            
             Task.detached(priority: .userInitiated) { [weak self] in
                 guard let self = self else { return }
                 defer { 
@@ -806,9 +851,13 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             guard !self.isScanClaimed() else { return }
 
             do {
-                let result = try await engine.run(cgImage) { [weak self] results in
+                let boxHeight = Float(cgImage.height)
+                let relativeY = max(0, min(1, (capturedPercentage - 0.2) / 0.6))
+                
+                let result = try await engine.run(cgImage, targetCenterY: Double(boxHeight) * relativeY) { [weak self] results in
                     guard let self = self else { return false }
-                    return self.extractSku(from: results.map { $0.text }) != nil
+                    let rows = self.buildLogicalRows(results)
+                    return self.extractSku(from: rows, boxHeight: boxHeight, scanLineScreenPercentage: capturedPercentage) != nil
                 }
                 let texts = result.results.map(\.text)
                 
@@ -823,7 +872,8 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
                     self.consecutiveEmptyFrames = 0
                 }
                 
-                guard let sku = self.extractSku(from: texts) else {
+                let rows = self.buildLogicalRows(result.results)
+                guard let sku = self.extractSku(from: rows, boxHeight: boxHeight, scanLineScreenPercentage: capturedPercentage) else {
                     DispatchQueue.main.async {
                         self.ocrMatchCount = 0
                         self.lastOcrResult = nil

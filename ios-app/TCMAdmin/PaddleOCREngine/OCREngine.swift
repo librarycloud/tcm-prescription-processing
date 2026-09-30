@@ -134,7 +134,7 @@ class OCREngine {
     ///   - image: The input `CGImage` to process.
     ///   - params: Optional runtime parameter overrides (see ``OCRRuntimeParams``).
     /// - Returns: `OCRRunResult` with all line results and timing.
-    func run(_ image: CGImage, params: OCRRuntimeParams = .noOverrides, earlyStopPredicate: (([OCRResult]) -> Bool)? = nil) async throws -> OCRRunResult {
+    func run(_ image: CGImage, params: OCRRuntimeParams = .noOverrides, targetCenterY: Double? = nil, earlyStopPredicate: (([OCRResult]) -> Bool)? = nil) async throws -> OCRRunResult {
         let runStart = CFAbsoluteTimeGetCurrent()
 
         let resolved = params.resolved(detectionEngine.modelConfig)
@@ -161,7 +161,7 @@ class OCREngine {
 
         // 准心中心优先排序识别！
         let cx = Double(image.width) / 2.0
-        let cy = Double(image.height) / 2.0
+        let cy = targetCenterY ?? (Double(image.height) / 2.0)
         let sortedByCenter = filteredBoxes.sorted { b1, b2 in
             let pts1 = b1.points, pts2 = b2.points
             guard pts1.count == 4, pts2.count == 4 else { return false }
