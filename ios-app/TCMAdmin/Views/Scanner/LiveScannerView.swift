@@ -552,7 +552,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         let centerY: Float
     }
 
-    nonisolated private func buildLogicalRows(_ elements: [OCRResult]) -> [String] {
+    nonisolated private func buildLogicalRows(_ elements: [OCRResult]) -> [LogicalRow] {
         if elements.isEmpty { return [] }
         
         struct RawElement {
