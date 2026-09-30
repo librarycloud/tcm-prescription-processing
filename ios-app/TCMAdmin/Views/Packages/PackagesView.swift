@@ -10,6 +10,7 @@ public struct PackagesView: View {
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Error>? = nil
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var splitSelectedDetailId: Int? = nil
     @State private var packages: [PackageModel] = []
     @State private var stores: [StoreItem] = []
     @State private var selectedStoreId: Int? = nil
@@ -29,11 +30,51 @@ public struct PackagesView: View {
     
     public init() {}
     
+    public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let detailId = splitSelectedDetailId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("包裹详情")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedDetailId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            PackageDetailView(id: detailId)
+                                .id(detailId)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
+    
     private var showStore: Bool {
         session.currentUser?.role == 0
     }
     
-    public var body: some View {
+    @ViewBuilder
+    private var mainListContent: some View {
         AppScrollView {
             VStack(spacing: 0) {
                 // 头部与搜索过滤区
@@ -191,7 +232,11 @@ public struct PackagesView: View {
                             PackageRowCard(pkg: pkg, showStore: showStore) {
                                 router.navigate(to: .packageVerify(initialCode: pkg.code))
                             } onTap: {
-                                router.navigate(to: .packageDetail(id: pkg.id))
+                                if sizeClass == .regular {
+                                    splitSelectedDetailId = pkg.id
+                                } else {
+                                    router.navigate(to: .packageDetail(id: pkg.id))
+                                }
                             }
                         }
                     }

@@ -11,77 +11,103 @@ final class SharedCameraManager {
     var metadataOutput: AVCaptureMetadataOutput?
     var videoDataOutput: AVCaptureVideoDataOutput?
     var isConfigured = false
+    var configurationError: String?
     
     private init() {}
     
     func preload() {
         sessionQueue.async {
             guard !self.isConfigured else { return }
-            
-            let session = AVCaptureSession()
-            session.beginConfiguration()
-            
-            if session.canSetSessionPreset(.hd1920x1080) {
-                session.sessionPreset = .hd1920x1080
-            }
-            
-            let deviceTypes: [AVCaptureDevice.DeviceType] = [
-                .builtInDualWideCamera,
-                .builtInTripleCamera,
-                .builtInDualCamera,
-                .builtInWideAngleCamera
-            ]
-            let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes, mediaType: .video, position: .back)
-            
-            guard let videoDevice = discovery.devices.first ?? AVCaptureDevice.default(for: .video),
-                  let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
-                  session.canAddInput(videoInput) else {
-                session.commitConfiguration()
+            let status = AVCaptureDevice.authorizationStatus(for: .video)
+            if status == .notDetermined {
+                AVCaptureDevice.requestAccess(for: .video) { granted in
+                    self.sessionQueue.async {
+                        guard !self.isConfigured else { return }
+                        if granted {
+                            self.configureCamera()
+                        } else {
+                            self.failConfiguration("相机权限未开启，请在系统设置中允许访问相机。")
+                        }
+                    }
+                }
                 return
             }
-            
-            do {
-                try videoDevice.lockForConfiguration()
-                if videoDevice.isAutoFocusRangeRestrictionSupported {
-                    videoDevice.autoFocusRangeRestriction = .near
-                }
-                if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
-                    videoDevice.focusMode = .continuousAutoFocus
-                }
-                if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
-                    videoDevice.exposureMode = .continuousAutoExposure
-                }
-                videoDevice.unlockForConfiguration()
-            } catch {
-                print("Failed to optimize camera focus: \(error)")
+            guard status == .authorized else {
+                self.failConfiguration("相机权限未开启，请在系统设置中允许访问相机。")
+                return
             }
-            
-            session.addInput(videoInput)
-            
-            let mOutput = AVCaptureMetadataOutput()
-            if session.canAddOutput(mOutput) {
-                session.addOutput(mOutput)
-                mOutput.metadataObjectTypes = [
-                    .qr, .ean13, .ean8, .code128, .code39, .upce
-                ]
-                self.metadataOutput = mOutput
-            }
-            
-            let vOutput = AVCaptureVideoDataOutput()
-            vOutput.videoSettings = [(kCVPixelBufferPixelFormatTypeKey as String): Int(kCVPixelFormatType_32BGRA)]
-            vOutput.alwaysDiscardsLateVideoFrames = true
-            if session.canAddOutput(vOutput) {
-                session.addOutput(vOutput)
-                self.videoDataOutput = vOutput
-            }
-            
-            session.commitConfiguration()
-            self.captureSession = session
-            self.isConfigured = true
-            #if DEBUG
-            print("AVCaptureSession globally pre-configured")
-            #endif
+            self.configureCamera()
         }
+    }
+
+    private func configureCamera() {
+        let session = AVCaptureSession()
+        session.beginConfiguration()
+
+        if session.canSetSessionPreset(.hd1920x1080) {
+            session.sessionPreset = .hd1920x1080
+        }
+
+        let deviceTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInDualWideCamera,
+            .builtInTripleCamera,
+            .builtInDualCamera,
+            .builtInWideAngleCamera
+        ]
+        let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes, mediaType: .video, position: .back)
+
+        guard let videoDevice = discovery.devices.first ?? AVCaptureDevice.default(for: .video),
+              let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
+              session.canAddInput(videoInput) else {
+            session.commitConfiguration()
+            failConfiguration("无法访问相机，请检查设备是否有可用相机。")
+            return
+        }
+
+        do {
+            try videoDevice.lockForConfiguration()
+            if videoDevice.isAutoFocusRangeRestrictionSupported {
+                videoDevice.autoFocusRangeRestriction = .near
+            }
+            if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
+                videoDevice.focusMode = .continuousAutoFocus
+            }
+            if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
+                videoDevice.exposureMode = .continuousAutoExposure
+            }
+            videoDevice.unlockForConfiguration()
+        } catch {
+            print("Failed to optimize camera focus: \(error)")
+        }
+
+        session.addInput(videoInput)
+
+        let mOutput = AVCaptureMetadataOutput()
+        if session.canAddOutput(mOutput) {
+            session.addOutput(mOutput)
+            mOutput.metadataObjectTypes = [.qr, .ean13, .ean8, .code128, .code39, .upce]
+            self.metadataOutput = mOutput
+        }
+
+        let vOutput = AVCaptureVideoDataOutput()
+        vOutput.videoSettings = [(kCVPixelBufferPixelFormatTypeKey as String): Int(kCVPixelFormatType_32BGRA)]
+        vOutput.alwaysDiscardsLateVideoFrames = true
+        if session.canAddOutput(vOutput) {
+            session.addOutput(vOutput)
+            self.videoDataOutput = vOutput
+        }
+
+        session.commitConfiguration()
+        self.captureSession = session
+        self.isConfigured = true
+        #if DEBUG
+        print("AVCaptureSession globally pre-configured")
+        #endif
+    }
+
+    private func failConfiguration(_ message: String) {
+        configurationError = message
+        isConfigured = true
     }
     
     func start() {
@@ -93,6 +119,17 @@ final class SharedCameraManager {
     func stop() {
         sessionQueue.async {
             self.captureSession?.stopRunning()
+        }
+    }
+
+    func resetConfiguration() {
+        sessionQueue.async {
+            self.captureSession?.stopRunning()
+            self.captureSession = nil
+            self.metadataOutput = nil
+            self.videoDataOutput = nil
+            self.configurationError = nil
+            self.isConfigured = false
         }
     }
 }
@@ -160,9 +197,16 @@ public struct LiveScannerView: View {
             Color.black.ignoresSafeArea()
             
             // 相机层
-            BarcodeScannerPreview(torchOn: isTorchOn, enableOCR: enableOCR, scanLineScreenPercentage: scanLineScreenPercentage) { code in
-                handleScannedCode(code)
-            }
+            BarcodeScannerPreview(
+                torchOn: isTorchOn,
+                enableOCR: enableOCR,
+                scanLineScreenPercentage: scanLineScreenPercentage,
+                onScanned: { code in handleScannedCode(code) },
+                onError: { message in
+                    scanError = message
+                    SharedCameraManager.shared.resetConfiguration()
+                }
+            )
             .ignoresSafeArea()
             
             // 扫描瞄准取景框
@@ -394,12 +438,14 @@ struct BarcodeScannerPreview: UIViewControllerRepresentable {
     nonisolated(unsafe) var enableOCR: Bool = false
     var scanLineScreenPercentage: Double
     var onScanned: (String) -> Void
+    var onError: ((String) -> Void)? = nil
     
     func makeUIViewController(context: Context) -> BarcodeScannerViewController {
         let vc = BarcodeScannerViewController()
         vc.enableOCR = enableOCR
         vc.scanLineScreenPercentage = scanLineScreenPercentage
         vc.onScanned = onScanned
+        vc.onError = onError
         return vc
     }
     
@@ -415,6 +461,7 @@ struct BarcodeScannerPreview: UIViewControllerRepresentable {
 
 class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onScanned: ((String) -> Void)?
+    var onError: ((String) -> Void)?
     nonisolated(unsafe) var enableOCR: Bool = false
     nonisolated(unsafe) var scanLineScreenPercentage: Double = 0.44
     private var captureSession: AVCaptureSession?
@@ -493,6 +540,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     
     private func setupCamera() {
         isStopped = false
+        SharedCameraManager.shared.preload()
         if enableOCR {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
@@ -508,40 +556,63 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
             }
         }
         
-        SharedCameraManager.shared.sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Wait for configuration to complete if it's still running
-            while !SharedCameraManager.shared.isConfigured {
-                Thread.sleep(forTimeInterval: 0.05)
-            }
-            
-            guard let session = SharedCameraManager.shared.captureSession else { return }
-            
-            // Re-bind delegates for the current scanner instance
-            if let mOutput = SharedCameraManager.shared.metadataOutput {
-                mOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-            }
-            if let vOutput = SharedCameraManager.shared.videoDataOutput {
-                let videoQueue = DispatchQueue(label: "com.tcm.videoqueue", qos: .userInteractive)
-                // 强制绑定 delegate，以便捕获第一帧进行淡入动画
-                vOutput.setSampleBufferDelegate(self, queue: videoQueue)
-            }
-            
+        waitForCameraConfiguration()
+    }
+
+    private func waitForCameraConfiguration(attempt: Int = 0) {
+        guard !isStopped else { return }
+        guard attempt < 200 else {
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                let preview = AVCaptureVideoPreviewLayer(session: session)
-                preview.videoGravity = .resizeAspectFill
-                preview.frame = self.view.layer.bounds
-                preview.opacity = 0 // 初始透明度为 0，等第一帧到来时淡入
-                self.view.layer.insertSublayer(preview, at: 0)
-                
-                self.previewLayer = preview
-                self.captureSession = session
-                
-                SharedCameraManager.shared.start()
+                self?.onError?("相机初始化超时，请关闭扫码页后重试。")
             }
+            return
+        }
+
+        sessionQueue.async { [weak self] in
+            guard let self = self, !self.isStopped else { return }
+            guard SharedCameraManager.shared.isConfigured else {
+                self.sessionQueue.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.waitForCameraConfiguration(attempt: attempt + 1)
+                }
+                return
+            }
+            self.bindConfiguredCamera()
+        }
+    }
+
+    private func bindConfiguredCamera() {
+        if let error = SharedCameraManager.shared.configurationError {
+            DispatchQueue.main.async { [weak self] in self?.onError?(error) }
+            return
+        }
+        guard let session = SharedCameraManager.shared.captureSession else {
+            DispatchQueue.main.async { [weak self] in
+                self?.onError?("相机初始化失败，请关闭扫码页后重试。")
+            }
+            return
+        }
+
+        // Re-bind delegates for the current scanner instance.
+        if let mOutput = SharedCameraManager.shared.metadataOutput {
+            mOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+        }
+        if let vOutput = SharedCameraManager.shared.videoDataOutput {
+            let videoQueue = DispatchQueue(label: "com.tcm.videoqueue", qos: .userInteractive)
+            vOutput.setSampleBufferDelegate(self, queue: videoQueue)
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            let preview = AVCaptureVideoPreviewLayer(session: session)
+            preview.videoGravity = .resizeAspectFill
+            preview.frame = self.view.layer.bounds
+            preview.opacity = 0
+            self.view.layer.insertSublayer(preview, at: 0)
+
+            self.previewLayer = preview
+            self.captureSession = session
+            SharedCameraManager.shared.start()
         }
     }
     

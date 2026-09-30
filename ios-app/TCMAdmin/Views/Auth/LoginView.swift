@@ -12,6 +12,7 @@ public struct LoginView: View {
     @AppStorage("tcm_server_api_base_url") private var currentServerURL: String = "http://127.0.0.1:3000"
     @State private var isShowingServerConfig = false
     @State private var configuredBaseURL = ""
+    @State private var serverConfigErrorMessage = ""
     @State private var currentTaskID: UUID = UUID()
     
     public init() {}
@@ -26,6 +27,7 @@ public struct LoginView: View {
                     Spacer()
                     Button(action: {
                         configuredBaseURL = currentServerURL
+                        serverConfigErrorMessage = ""
                         isShowingServerConfig = true
                     }) {
                         HStack(spacing: 4) {
@@ -171,7 +173,12 @@ public struct LoginView: View {
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {
-                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("请输入药房系统的后端服务器地址。如不清楚，请联系系统管理员。")) {
+                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: VStack(alignment: .leading, spacing: 4) {
+                        Text("请输入药房系统的后端服务器地址。如不清楚，请联系系统管理员。")
+                        if !serverConfigErrorMessage.isEmpty {
+                            Text(serverConfigErrorMessage).foregroundStyle(Color.danger)
+                        }
+                    }) {
                         TextField("http://127.0.0.1:3000", text: $configuredBaseURL)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
@@ -188,7 +195,12 @@ public struct LoginView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("保存") {
-                            ApiClient.shared.baseURL = configuredBaseURL
+                            guard let normalized = ApiClient.normalizedBaseURL(configuredBaseURL) else {
+                                serverConfigErrorMessage = "服务器地址无效，请输入包含主机名的 HTTP 或 HTTPS 地址"
+                                return
+                            }
+                            ApiClient.shared.baseURL = normalized
+                            serverConfigErrorMessage = ""
                             isShowingServerConfig = false
                         }
                         .fontWeight(.bold)

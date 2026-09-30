@@ -13,6 +13,8 @@ public struct SettingsView: View {
     @State private var configuredBaseURL = ""
     @State private var isShowingServerChangeAlert = false
     @State private var pendingBaseURL = ""
+    @State private var serverConfigErrorMessage = ""
+    @State private var showServerConfigError = false
     
     public init() {}
     
@@ -74,6 +76,7 @@ public struct SettingsView: View {
                         Divider().padding(.leading, 48)
                         ProfileRow(icon: "server.rack", title: "API 服务器地址", value: currentServerURL) {
                             configuredBaseURL = currentServerURL
+                            serverConfigErrorMessage = ""
                             isShowingServerConfig = true
                         }
                     }
@@ -91,7 +94,12 @@ public struct SettingsView: View {
         .sheet(isPresented: $isShowingServerConfig) {
             NavigationStack {
                 Form {
-                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: Text("请输入药房系统的后端服务器地址。如不清楚，请联系系统管理员。")) {
+                    Section(header: Text("后端服务 API 地址 (Base URL)"), footer: VStack(alignment: .leading, spacing: 4) {
+                        Text("请输入药房系统的后端服务器地址。如不清楚，请联系系统管理员。")
+                        if !serverConfigErrorMessage.isEmpty {
+                            Text(serverConfigErrorMessage).foregroundStyle(Color.danger)
+                        }
+                    }) {
                         TextField("http://127.0.0.1:3000", text: $configuredBaseURL)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
@@ -107,16 +115,21 @@ public struct SettingsView: View {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("保存") {
                             let trimmed = configuredBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard trimmed != ApiClient.shared.baseURL else {
+                            guard let normalized = ApiClient.normalizedBaseURL(trimmed) else {
+                                serverConfigErrorMessage = "服务器地址无效，请输入包含主机名的 HTTP 或 HTTPS 地址"
+                                showServerConfigError = true
+                                return
+                            }
+                            guard normalized != ApiClient.shared.baseURL else {
                                 isShowingServerConfig = false
                                 return
                             }
                             if SessionManager.shared.isAuthenticated {
                                 // 已登录状态切换服务器 → 弹出确认框
-                                pendingBaseURL = trimmed
+                                pendingBaseURL = normalized
                                 isShowingServerChangeAlert = true
                             } else {
-                                ApiClient.shared.baseURL = trimmed
+                                ApiClient.shared.baseURL = normalized
                                 isShowingServerConfig = false
                             }
                         }
@@ -128,15 +141,19 @@ public struct SettingsView: View {
         .alert("切换服务器需要重新登录", isPresented: $isShowingServerChangeAlert) {
             Button("取消", role: .cancel) {}
             Button("确认切换", role: .destructive) {
-                                let newBaseURL = pendingBaseURL
+                let newBaseURL = pendingBaseURL
                 isShowingServerConfig = false
                 Task { @MainActor in
-                    // 通知旧服务器退出当前 session（best-effort，失败不阻断）
+                    // 通知旧服务器退出当前 session；切换服务器时仍会清除本地会话。
                     struct EmptyResponse: Decodable {}
-                    _ = try? await ApiClient.shared.request(
-                        path: "/auth/logout",
-                        method: "POST"
-                    ) as EmptyResponse
+                    do {
+                        _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        serverConfigErrorMessage = "旧服务器退出失败，已清除本地登录状态：\(error.localizedDescription)"
+                        showServerConfigError = true
+                    }
                     
                     ApiClient.shared.baseURL = newBaseURL
                     SessionManager.shared.clearSession()
@@ -144,6 +161,11 @@ public struct SettingsView: View {
             }
         } message: {
             Text("切换到新的服务器地址后，当前账号登录状态将被清除，需要重新登录。\n\n新地址：\(pendingBaseURL)")
+        }
+        .alert("服务器切换提示", isPresented: $showServerConfigError) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(serverConfigErrorMessage)
         }
     }
     
@@ -562,7 +584,7 @@ public struct AboutView: View {
             AppCard(padding: 16) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("功能特性").scaledFont(14, weight: .bold)
-                    Text("• 现代化 SwiftUI 全量原生重构\n• Apple 原生 VisionKit 纸质处方 OCR 极速识别\n• 4路智能条码扫码分发（取货码、加工计划、设备、库存）\n• 适配 iOS 16/17/18 NavigationStack 架构")
+                    Text("• 现代化 SwiftUI 全量原生重构\n• 本地 OCR 与条码识别\n• 4路智能条码扫码分发（取货码、加工计划、设备、库存）\n• 适配 iOS 18 及以上版本")
                         .scaledFont(13)
                         .foregroundStyle(Color.muted)
                         .lineSpacing(4)

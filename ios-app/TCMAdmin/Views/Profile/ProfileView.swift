@@ -5,6 +5,8 @@ struct ProfileView: View {
     @Bindable private var router = Router.shared
     var session = SessionManager.shared
     var updateManager = UpdateManager.shared
+    @State private var updateErrorMessage = ""
+    @State private var showUpdateError = false
     
     var body: some View {
         AppScrollView {
@@ -105,8 +107,20 @@ struct ProfileView: View {
         .onAppear {
             // 当页面显示时触发检查，UpdateManager 内部已加入 1 小时节流间隔
             Task {
-                try? await updateManager.checkUpdate()
+                do {
+                    _ = try await updateManager.checkUpdate()
+                } catch is CancellationError {
+                    return
+                } catch {
+                    updateErrorMessage = error.localizedDescription
+                    showUpdateError = true
+                }
             }
+        }
+        .alert("检查更新失败", isPresented: $showUpdateError) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(updateErrorMessage)
         }
     }
     

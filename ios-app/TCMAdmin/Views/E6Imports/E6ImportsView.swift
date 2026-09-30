@@ -17,7 +17,17 @@ public struct E6ImportsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var splitSelectedDetailId: Int? = nil
     @State private var successNotice: String? = nil
     
     // 驳回弹窗
@@ -46,6 +56,46 @@ public struct E6ImportsView: View {
     public init() {}
     
     public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let detailId = splitSelectedDetailId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("E6导入详情")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedDetailId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            E6ImportDetailView(id: detailId)
+                                .id(detailId)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainListContent: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 // 顶部标题与搜索操作栏
@@ -185,7 +235,7 @@ public struct E6ImportsView: View {
                     Spacer()
                 } else {
                     AppScrollView {
-                        LazyVStack(spacing: 12) {
+                        LazyVGrid(columns: self.gridColumns, spacing: 12) {
                             ForEach(e6Imports) { item in
                                 AppCard(padding: 16) {
                                     VStack(alignment: .leading, spacing: 8) {
@@ -302,7 +352,11 @@ public struct E6ImportsView: View {
                                 }
                                 .onTapGesture {
                                     hideKeyboard()
-                                    router.navigate(to: .e6ImportDetail(id: item.id))
+                                    if sizeClass == .regular {
+                                        splitSelectedDetailId = item.id
+                                    } else {
+                                        router.navigate(to: .e6ImportDetail(id: item.id))
+                                    }
                                 }
                             }
                         }
@@ -604,6 +658,15 @@ struct E6ConfirmFormSheet: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
+    
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     private var isMerge: Bool { items.count > 1 }
     private var hasPrescription: Bool {
@@ -1154,13 +1217,22 @@ public struct E6ImportDetailView: View {
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
     
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     public init(id: Int) {
         self.id = id
     }
     
     public var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            LazyVGrid(columns: self.gridColumns, spacing: 14) {
                 if isLoading && detail == nil {
                     ProgressView("正在加载订单详情...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

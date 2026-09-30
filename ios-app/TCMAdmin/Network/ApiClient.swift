@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CryptoKit
 
 public enum ApiError: LocalizedError {
     case invalidURL
@@ -28,23 +29,45 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     public static let shared = ApiClient()
     
     private let serverUrlKey = "tcm_server_api_base_url"
+    private static let defaultBaseURL = "http://127.0.0.1:3000"
+
+    public static func normalizedBaseURL(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return defaultBaseURL }
+        let lowercased = trimmed.lowercased()
+        if trimmed.contains("://"),
+           !lowercased.hasPrefix("http://"),
+           !lowercased.hasPrefix("https://") {
+            return nil
+        }
+        let candidate = lowercased.hasPrefix("http://") || lowercased.hasPrefix("https://")
+            ? trimmed
+            : "http://\(trimmed)"
+        guard var components = URLComponents(string: candidate),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = components.host, !host.isEmpty,
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil else {
+            return nil
+        }
+        if let port = components.port, !(1...65535).contains(port) { return nil }
+        components.scheme = scheme
+        guard components.url != nil, var result = components.string else { return nil }
+        while result.last == "/" { result.removeLast() }
+        return result
+    }
     
     // 后端服务器地址，支持运行时动态配置与持久化存储
     public var baseURL: String {
         get {
-            let url = UserDefaults.standard.string(forKey: serverUrlKey) ?? "http://127.0.0.1:3000"
-            return url.isEmpty ? "http://127.0.0.1:3000" : url
+            let url = UserDefaults.standard.string(forKey: serverUrlKey) ?? Self.defaultBaseURL
+            return Self.normalizedBaseURL(url) ?? Self.defaultBaseURL
         }
         set {
-            var sanitized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !sanitized.isEmpty {
-                if !sanitized.hasPrefix("http://") && !sanitized.hasPrefix("https://") {
-                    sanitized = "http://" + sanitized
-                }
-                sanitized = sanitized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            } else {
-                sanitized = "http://127.0.0.1:3000"
-            }
+            guard let sanitized = Self.normalizedBaseURL(newValue) else { return }
             UserDefaults.standard.set(sanitized, forKey: serverUrlKey)
             clearResponseCache()
             NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: sanitized)
@@ -82,17 +105,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             return nil
         }
         
-        var finalURL = serverStr
-        if !finalURL.hasPrefix("http://") && !finalURL.hasPrefix("https://") {
-            finalURL = "http://" + finalURL
-        }
-        finalURL = finalURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        
-        guard URL(string: finalURL) != nil else {
-            return nil
-        }
-        
-        return finalURL
+        return Self.normalizedBaseURL(serverStr)
     }
     
     @discardableResult
@@ -121,7 +134,9 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             }
             // 如果是直接填入的标准后端 HTTP/HTTPS API 根地址
             if url.scheme == "http" || url.scheme == "https" {
-                let sanitized = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                guard let sanitized = Self.normalizedBaseURL(trimmed) else {
+                    return (false, nil, "服务器地址无效，请输入包含主机名的 HTTP 或 HTTPS 地址")
+                }
                 self.baseURL = sanitized
                 NotificationCenter.default.post(name: NSNotification.Name("TCMServerConfigImported"), object: sanitized)
                 return (true, sanitized, "成功导入服务器地址: \(sanitized)")
@@ -147,12 +162,13 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         let fileName = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
         let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("api_cache")
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: cacheDir.path)
         return cacheDir.appendingPathComponent(fileName)
     }
     
     private func saveToDiskCache(key: String, data: Data) {
         let fileURL = cacheFileURL(for: key)
-        try? data.write(to: fileURL)
+        try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
     
     private func loadFromDiskCache(key: String, ttl: TimeInterval) -> Data? {
@@ -273,8 +289,12 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         queryParams: [String: String]? = nil,
         baseURLOverride: String? = nil
     ) async throws -> T {
+        let requestBaseURL = baseURLOverride ?? baseURL
+        let requestToken = await SessionManager.shared.token ?? ""
         let queryString = queryParams?.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: "&") ?? ""
-        let cacheKey = path + (queryString.isEmpty ? "" : "?\(queryString)")
+        let cacheScopeData = Data("\(requestBaseURL)|\(requestToken)".utf8)
+        let cacheScope = SHA256.hash(data: cacheScopeData).map { String(format: "%02x", $0) }.joined()
+        let cacheKey = path + (queryString.isEmpty ? "" : "?\(queryString)") + "|scope:\(cacheScope)"
         
         if method == "GET" {
             if let ttl = getCacheTTL(for: path) {
@@ -310,7 +330,6 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             }
         }
         let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
-        let requestBaseURL = baseURLOverride ?? baseURL
         var urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         if let queryParams = queryParams, !queryParams.isEmpty {
             var components = URLComponents(string: urlString)
@@ -329,8 +348,8 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         
         // 自动注入 Bearer Token
-        if let token = await SessionManager.shared.token, !token.isEmpty {
-            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !requestToken.isEmpty {
+            request.addValue("Bearer \(requestToken)", forHTTPHeaderField: "Authorization")
         }
         
         #if os(iOS)
@@ -567,6 +586,8 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     
     // MARK: - 5. 门店列表
     public func fetchStores() async throws -> [StoreItem] {
+        let isSuperAdmin = await MainActor.run { SessionManager.shared.currentUser?.role == 0 }
+        guard isSuperAdmin else { return [] }
         return try await request(path: "/stores", queryParams: ["status": "1"])
     }
     

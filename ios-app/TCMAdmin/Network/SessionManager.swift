@@ -19,14 +19,26 @@ public class SessionManager {
     }
     
     public func saveSession(token: String, user: UserItem) {
+        if self.token != token {
+            ApiClient.shared.clearResponseCache()
+        }
         self.token = token
         self.currentUser = user
         self.isAuthenticated = true
         
         if let tokenData = token.data(using: .utf8) {
-            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: tokenKey, kSecValueData as String: tokenData]
-            SecItemDelete(query as CFDictionary)
-            SecItemAdd(query as CFDictionary, nil)
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: tokenKey
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+            let addQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: tokenKey,
+                kSecValueData as String: tokenData,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            ]
+            SecItemAdd(addQuery as CFDictionary, nil)
         }
         if let encoded = try? JSONEncoder().encode(user) {
             UserDefaults.standard.set(encoded, forKey: userKey)
@@ -44,6 +56,10 @@ public class SessionManager {
                 self.isAuthenticated = true
                 return
             }
+            // A token without a valid user payload cannot authenticate the app.
+            let deleteQuery: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: tokenKey]
+            SecItemDelete(deleteQuery as CFDictionary)
+            UserDefaults.standard.removeObject(forKey: userKey)
         }
         self.token = nil
         self.currentUser = nil
@@ -85,4 +101,3 @@ public class NetworkMonitor {
         monitor.start(queue: queue)
     }
 }
-

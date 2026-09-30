@@ -574,6 +574,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -605,6 +606,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = TFTF4873ZK;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -640,6 +642,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -671,6 +674,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = TFTF4873ZK;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -701,8 +705,7 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
-				DEVELOPMENT_TEAM = TFTF4873ZK;
+				CURRENT_PROJECT_VERSION = 21;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -715,6 +718,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "药房助手";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问您的相机以扫描药品条形码与处方单据";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接您所在药房的局域网 API 服务器以使用库存、处方和加工管理功能。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问您的相册以选择处方图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -746,7 +750,7 @@
 					"$(SRCROOT)/Models/det",
 					"$(SRCROOT)/Models/rec",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -Wno-error=quoted-include-in-framework-header";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcm.admin;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -773,8 +777,7 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
-				DEVELOPMENT_TEAM = TFTF4873ZK;
+				CURRENT_PROJECT_VERSION = 21;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -787,6 +790,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "药房助手";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问您的相机以扫描药品条形码与处方单据";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接您所在药房的局域网 API 服务器以使用库存、处方和加工管理功能。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问您的相册以选择处方图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -818,7 +822,7 @@
 					"$(SRCROOT)/Models/det",
 					"$(SRCROOT)/Models/rec",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -Wno-error=quoted-include-in-framework-header";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcm.admin;
 				PRODUCT_NAME = "$(TARGET_NAME)";

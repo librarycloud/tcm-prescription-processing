@@ -11,10 +11,60 @@ public struct StocktakingView: View {
     @State private var isCreateSheetPresented = false
     @State private var currentTaskID: UUID = UUID()
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var splitSelectedDetailId: Int? = nil
+    
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     
     public init() {}
     
     public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let detailId = splitSelectedDetailId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("盘点明细")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedDetailId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            StocktakingDetailView(checkId: detailId)
+                                .id(detailId)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainListContent: some View {
         VStack(spacing: 0) {
             // 顶部标题与操作栏
             VStack(spacing: 12) {
@@ -87,7 +137,7 @@ public struct StocktakingView: View {
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVGrid(columns: self.gridColumns, spacing: 12) {
                         ForEach(stocktakings) { item in
                             AppCard(padding: 16) {
                                 VStack(alignment: .leading, spacing: 10) {
@@ -315,6 +365,15 @@ public struct StocktakingDetailView: View {
     @State private var isFinishing = false
     @State private var showFinishAlert = false
     
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     // 初盘/复盘录入状态
     @State private var candidateKeyword = ""
     @State private var candidates: [StocktakingCandidateModel] = []
@@ -521,7 +580,8 @@ public struct StocktakingDetailView: View {
                                 }
                             }
                         } else {
-                            ForEach(items) { row in
+                            LazyVGrid(columns: self.gridColumns, spacing: 12) {
+                                ForEach(items) { row in
                                 AppCard(padding: 14) {
                                     VStack(alignment: .leading, spacing: 8) {
                                         HStack {
@@ -627,6 +687,7 @@ public struct StocktakingDetailView: View {
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                     }

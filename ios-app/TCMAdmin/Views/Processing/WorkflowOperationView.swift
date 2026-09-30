@@ -48,6 +48,15 @@ public struct WorkflowOperationView: View {
     @State private var occupiedEquipmentInfo: EquipmentModel? = nil
     @State private var currentTaskID: UUID = UUID()
     
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     public init(planId: Int, planCode: String) {
         self.planId = planId
         self.planCode = planCode
@@ -141,76 +150,80 @@ public struct WorkflowOperationView: View {
     public var body: some View {
         ZStack {
             ScrollView {
-                VStack(spacing: 14) {
-                    // 1. 错误横幅
-                    if let error = errorMessage {
-                        AppCard(padding: 12) {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(Color.danger)
-                                Text(error)
-                                    .scaledFont(13)
-                                    .foregroundStyle(Color.danger)
-                                Spacer()
-                                Button("关闭") { errorMessage = nil }
-                                    .scaledFont(12, weight: .bold)
-                                    .foregroundStyle(Color.appPrimary)
+                LazyVGrid(columns: self.gridColumns, spacing: 14) {
+                    VStack(spacing: 14) {
+                        // 1. 错误横幅
+                        if let error = errorMessage {
+                            AppCard(padding: 12) {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(Color.danger)
+                                    Text(error)
+                                        .scaledFont(13)
+                                        .foregroundStyle(Color.danger)
+                                    Spacer()
+                                    Button("关闭") { errorMessage = nil }
+                                        .scaledFont(12, weight: .bold)
+                                        .foregroundStyle(Color.appPrimary)
+                                }
                             }
+                        }
+                        
+                        // 设备占用卡片 (对齐 Android OccupyingPlanCard)
+                        occupiedEquipmentView
+                        
+                        // 2. 顶部计划信息卡片
+                        topSummaryCard
+                        
+                        remarksView
+                        
+                        // 6. 设备工序流转记录
+                        if !usages.isEmpty {
+                            equipmentHistoryCard
+                        }
+                        
+                        // 7. 异常处理记录
+                        if let exceptions = workflow?.workflowExceptions, !exceptions.isEmpty {
+                            exceptionHistoryCard(exceptions: exceptions)
                         }
                     }
                     
-                    // 设备占用卡片 (对齐 Android OccupyingPlanCard)
-                    occupiedEquipmentView
-                    
-                    // 2. 顶部计划信息卡片
-                    topSummaryCard
-                    
-                    remarksView
-                    
-                    // 3. 待加工时顶部启动按钮
-                    if status == 0 {
-                        Button(action: startDispensingPlan) {
-                            HStack {
-                                if isBusy { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)) }
-                                Text("开始调配")
-                                    .scaledFont(15, weight: .bold)
-                                    .foregroundStyle(Color.white)
+                    VStack(spacing: 14) {
+                        // 3. 待加工时顶部启动按钮
+                        if status == 0 {
+                            Button(action: startDispensingPlan) {
+                                HStack {
+                                    if isBusy { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)) }
+                                    Text("开始调配")
+                                        .scaledFont(15, weight: .bold)
+                                        .foregroundStyle(Color.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 46)
+                                .background(Color.appPrimary)
+                                .clipShape(.rect(cornerRadius: 10))
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 46)
-                            .background(Color.appPrimary)
-                            .clipShape(.rect(cornerRadius: 10))
+                            .disabled(isBusy)
                         }
-                        .disabled(isBusy)
-                    }
-                    
-                    // 4. STEP 1: 调配
-                    stepDispensingCard
-                    
-                    // 5. 代煎专属工序步骤
-                    if isDecoction {
-                        // STEP 2: 浸泡
-                        stepSoakingCard
                         
-                        // STEP 3: 煎煮
-                        stepDecoctionCard
+                        // 4. STEP 1: 调配
+                        stepDispensingCard
                         
-                        // STEP 4: 打包
-                        stepPackagingCard
+                        // 5. 代煎专属工序步骤
+                        if isDecoction {
+                            // STEP 2: 浸泡
+                            stepSoakingCard
+                            
+                            // STEP 3: 煎煮
+                            stepDecoctionCard
+                            
+                            // STEP 4: 打包
+                            stepPackagingCard
+                        }
+                        
+                        // 8. 底部完成按钮
+                        bottomActionButtons
                     }
-                    
-                    // 6. 设备工序流转记录
-                    if !usages.isEmpty {
-                        equipmentHistoryCard
-                    }
-                    
-                    // 7. 异常处理记录
-                    if let exceptions = workflow?.workflowExceptions, !exceptions.isEmpty {
-                        exceptionHistoryCard(exceptions: exceptions)
-                    }
-                    
-                    // 8. 底部完成按钮
-                    bottomActionButtons
                     
                     Spacer().frame(height: 24)
                 }

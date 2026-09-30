@@ -53,6 +53,83 @@ struct InventoryView: View {
         searchHistoryString = ""
     }
     
+    @ViewBuilder
+    private var mainListContent: some View {
+        AppScrollView {
+                    if isLoading && items.isEmpty {
+                        VStack(spacing: 12) {
+                            Spacer().frame(height: 60)
+                            ProgressView("正在查询药品库存...")
+                            Spacer().frame(height: 60)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else if let error = errorMessage, !error.isEmpty {
+                        VStack(spacing: 12) {
+                            Spacer().frame(height: 40)
+                            Text(error)
+                                .foregroundStyle(Color.danger)
+                                .scaledFont(14)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 16)
+                            Button("点击重试") {
+                                ApiClient.shared.clearResponseCache()
+                                Task { await loadInventory(allowAutoNavigate: false) }
+                            }
+                            .scaledFont(14, weight: .bold)
+                            .foregroundStyle(Color.appPrimaryDark)
+                            Spacer().frame(height: 40)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else if items.isEmpty {
+                        VStack(spacing: 12) {
+                            Spacer().frame(height: 50)
+                            Image(systemName: "archivebox")
+                                .scaledFont(48)
+                                .foregroundStyle(Color.muted)
+                            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text("搜索或扫码查看商品库存与批次详情")
+                                    .scaledFont(15)
+                                    .foregroundStyle(Color.muted)
+                            } else {
+                                Text("暂无药品库存数据")
+                                    .scaledFont(15)
+                                    .foregroundStyle(Color.muted)
+                                
+                                Button(action: {
+                                    ApiClient.shared.clearResponseCache()
+                                    Router.shared.presentScanner(enableOCR: true)
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "qrcode.viewfinder")
+                                        Text("重新扫描")
+                                    }
+                                    .scaledFont(13, weight: .semibold)
+                                    .foregroundStyle(Color.appPrimaryDark)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appPrimary, lineWidth: 1))
+                                }
+                            }
+                            Spacer().frame(height: 50)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
+                            ForEach(items) { item in
+                                InventoryRowView(item: item, keyword: searchText)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            self.selectedProduct = item
+                                        }
+                                    }
+                            }
+                        }
+                        .padding(16)
+                    }
+                }
+    }
     var body: some View {
         VStack(spacing: 0) {
             // 1. 顶部搜索栏与扫码入口 (置顶固定，1:1 对齐 Android)
@@ -197,93 +274,53 @@ struct InventoryView: View {
             .padding(.bottom, 8)
             .background(Color.pageBackground.ignoresSafeArea(.all))
             
-            // 3. 核心内容区域：详情展示 / 搜索结果列表 / 空状态 (可滚动，支持下拉刷新)
-            ZStack(alignment: .top) {
-                // 底层：搜索结果列表
-                AppScrollView {
-                    if isLoading && items.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer().frame(height: 60)
-                            ProgressView("正在查询药品库存...")
-                            Spacer().frame(height: 60)
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else if let error = errorMessage, !error.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer().frame(height: 40)
-                            Text(error)
-                                .foregroundStyle(Color.danger)
-                                .scaledFont(14)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 16)
-                            Button("点击重试") {
-                                ApiClient.shared.clearResponseCache()
-                                Task { await loadInventory(allowAutoNavigate: false) }
-                            }
-                            .scaledFont(14, weight: .bold)
-                            .foregroundStyle(Color.appPrimaryDark)
-                            Spacer().frame(height: 40)
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else if items.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer().frame(height: 50)
-                            Image(systemName: "archivebox")
-                                .scaledFont(48)
-                                .foregroundStyle(Color.muted)
-                            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text("搜索或扫码查看商品库存与批次详情")
-                                    .scaledFont(15)
-                                    .foregroundStyle(Color.muted)
-                            } else {
-                                Text("暂无药品库存数据")
-                                    .scaledFont(15)
-                                    .foregroundStyle(Color.muted)
-                                
-                                Button(action: {
-                                    ApiClient.shared.clearResponseCache()
-                                    Router.shared.presentScanner(enableOCR: true)
-                                }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "qrcode.viewfinder")
-                                        Text("重新扫描")
+            // 3. 核心内容区域
+            Group {
+                if sizeClass == .regular {
+                    HStack(spacing: 0) {
+                        mainListContent
+                            .frame(maxWidth: .infinity)
+                        
+                        if let product = selectedProduct {
+                            Divider().ignoresSafeArea()
+                            VStack(spacing: 0) {
+                                HStack {
+                                    Text("库存详情")
+                                        .font(.headline)
+                                        .foregroundStyle(Color.ink)
+                                    Spacer()
+                                    Button(action: { selectedProduct = nil }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundStyle(Color.muted)
                                     }
-                                    .scaledFont(13, weight: .semibold)
-                                    .foregroundStyle(Color.appPrimaryDark)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appPrimary, lineWidth: 1))
                                 }
+                                .padding()
+                                .background(Color.pageBackground)
+                                Divider()
+                                AppScrollView {
+                                    productDetailSection(for: product)
+                                }
+                                .id(product.id)
                             }
-                            Spacer().frame(height: 50)
+                            .frame(width: 420)
+                            .transition(.move(edge: .trailing))
                         }
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        LazyVGrid(columns: gridColumns, spacing: 12) {
-                            ForEach(items) { item in
-                                InventoryRowView(item: item, keyword: searchText)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            self.selectedProduct = item
-                                        }
-                                    }
+                    }
+                } else {
+                    ZStack(alignment: .top) {
+                        mainListContent
+                            .allowsHitTesting(selectedProduct == nil)
+                        
+                        if let product = selectedProduct {
+                            AppScrollView {
+                                productDetailSection(for: product)
                             }
+                            .background(Color.pageBackground.ignoresSafeArea(.all))
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .zIndex(1)
                         }
-                        .padding(16)
                     }
-                }
-                .allowsHitTesting(selectedProduct == nil)
-                
-                // 顶层：详情页
-                if let product = selectedProduct {
-                    AppScrollView {
-                        productDetailSection(for: product)
-                    }
-                    .background(Color.pageBackground.ignoresSafeArea(.all))
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                    .zIndex(1)
                 }
             }
             .refreshable {

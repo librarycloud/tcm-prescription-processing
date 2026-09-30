@@ -1,6 +1,6 @@
 # 药房助手 iOS 管理员端
 
-基于 **SwiftUI** 与 **Apple Vision Framework** 打造的原生 iOS 手持工作台。专为连锁中药房的一线药师、调剂员与库房盘点人员设计，与 Android 端功能 1:1 像素级对齐，提供极致丝滑的移动扫码、加工流水线打卡、库存盘点与取药核销体验。最低支持 `iOS 15.0+`（全面适配 iOS 17 与 Swift 6 严格并发模型）。
+基于 **SwiftUI** 打造的原生 iOS 手持工作台。专为连锁中药房的一线药师、调剂员与库房盘点人员设计，提供移动扫码、加工流水线打卡、库存盘点与取药核销功能。最低支持 `iOS 18.0+`；工程使用 Swift 5 语言模式并启用并发相关编译检查。
 
 ---
 
@@ -10,10 +10,10 @@
   - 100% 采用 SwiftUI 原生构建，响应式状态绑定（`@StateObject`, `@ObservedObject`）。
   - 基于 `NavigationStack` 与全局单例 `Router`，彻底解耦页面导航与弹窗控制，支持深层嵌套子视图随意呼出全屏相机扫码器与页面重定向。
 - **离线智能视觉 OCR 与条码识别**：
-  - 基于原生 `AVFoundation` + 苹果 `Vision` 框架（`VNRecognizeTextRequest`）毫秒级低功耗离线解析。
+  - 基于 `AVFoundation` 相机采集、PaddleOCR ONNX 模型与本地 ONNX Runtime 完成离线识别；当前 OCR 推理使用 CPU 执行提供程序。
   - **视觉容错纠正**：智能识别中药条码标签混淆字符（`O` 自动纠正为 `0`，`l/I` 自动纠正为 `1` 等）。
   - **屏幕中心就近算法**：解析视觉文字候选包围盒（Bounding Box），计算多候选项到视口中心的距离，优先命中取景框正中央的目标 SKU。
-  - **离线安全**：全部 OCR 在神经引擎（Neural Engine）本地运行，无需后端联网计算。
+  - **离线处理**：OCR 图像识别在设备本地完成，无需上传图像到后端进行推理。
 - **多线程与极致性能**：
   - **二维码后台异步绘制**：使用独立 `Task.detached` 后台线程调度 `CoreImage` 引擎合成高清位图，彻底消除页面 Navigation 转场动画的撕裂与丢帧。
   - **布局抗坍塌机制**：针对全屏加载状态注入自适应约束，杜绝轻量占位导致的容器横向缩水。
@@ -66,15 +66,15 @@ ios-app/TCMAdmin/
 ### 环境要求
 
 - macOS 14.0 (Sonoma) 或更高版本
-- Xcode 15.0+ 或 16.0+（支持 iOS 17 SDK / Swift 5.9+ / Swift 6 并发模式）
-- iOS 真机或模拟器（系统版本 iOS 15.0+）
+- Xcode 16.0+（支持 iOS 18 SDK）
+- iOS 真机或模拟器（系统版本 iOS 18.0+）
 
 ### 运行调试步骤
 
 1. 打开 Xcode，选择 **File -> Open...**，定位并选中 `ios-app/TCMAdmin` 所在目录或工程文件。
 2. 配置签名证书（Signing & Capabilities）：
    - 选择自己的 Apple 开发者账号或个人免费团队证书。
-3. 连接 iOS 设备（推荐真机，以完整体验摄像头扫码与 Vision OCR 实时分析）。
+3. 连接 iOS 设备（推荐真机，以完整体验摄像头扫码与本地 OCR 实时分析）。
 4. 点击 **Product -> Run**（快捷键 `Cmd + R`）启动编译并部署。
 
 ### 后端服务连接配置
@@ -84,8 +84,8 @@ ios-app/TCMAdmin/
 - **已登录状态**：进入 **「我的」➔「设置」➔「系统与数据」➔「API 服务器地址」** 即可直接修改。
 - **配置参考**：
   - **Mac 模拟器调试**：填入 `http://127.0.0.1:3000` 或 `http://localhost:3000`（可点击弹窗预设按钮）。
-  - **局域网真机调试**：填入运行 Fastify 后端电脑的局域网 IP（例如 `http://192.168.1.100:3000`）。
-  - **生产环境**：填入线上正式 API 域名（例如 `https://api.tcm.example.com`）。
+  - **局域网/内网调试**：可使用内网 IP 或主机名上的 HTTP 服务（例如 `http://192.168.1.100:3000`）；iOS 首次访问局域网时可能会询问本地网络权限。
+  - **生产环境**：使用 HTTPS API 域名（例如 `https://api.tcm.example.com`）。应用仅对本地网络地址开放 ATS HTTP 例外。
 
 #### 2. 专属链接一键导入（Deep Link）
 可将配置链接发给员工，点击链接即可**自动唤起 App、完成配置并持久化保存**：
@@ -113,7 +113,7 @@ ios-app/TCMAdmin/
 
 ## GitHub Actions 自动化编译 Release (.ipa) 与发版
 
-项目已配置好全自动编译、打包、签名与发布的 GitHub Actions 工作流（`.github/workflows/ios-release.yml`），且与 Android 一样**无缝直连 App Release Hub 同步更新**。
+项目已配置好全自动编译、打包、签名与发布的 GitHub Actions 工作流（`.github/workflows/ios-release.yml`）。流水线可将版本信息同步至 App Release Hub；iOS 客户端的「检查新版本」会按当前 App Store storefront 查询对应区域的 App Store，不会从 Release Hub 获取或安装更新。
 
 ### 1. 准备仓库 Secrets（仅首次需配置）
 
@@ -151,4 +151,4 @@ git push origin ios-v1.0.0
 1. **生成 IPA**：输出标准化 `tcm-admin-release.ipa`。
 2. **生成元数据**：生成 `app-version.ios.json`，内含 sha256 校验和、文件大小与自动截取的 Git Changelog。
 3. **发布 GitHub Release**：自动创建或更新 Release 并上传 IPA 与版本元数据。
-4. **通知 App Release Hub**：自动向更新服务器发起 `POST /admin/apps/{appId}/sync` 请求，客户端打开「关于 ➔ 检查更新」即可无缝检测到新版本。
+4. **同步 App Release Hub 元数据**：配置了 Release Hub 凭据时，流水线会发起 `POST /admin/apps/{appId}/sync`。此同步用于 Release Hub 侧的版本管理；iOS 客户端检查更新仍以用户当前 storefront 对应的 App Store 上架版本为准。

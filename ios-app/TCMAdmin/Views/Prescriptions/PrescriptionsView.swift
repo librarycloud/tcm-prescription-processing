@@ -17,6 +17,7 @@ public struct PrescriptionsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var splitSelectedDetailId: Int? = nil
     
     @State private var currentTaskID: UUID = UUID()
     // 操作状态
@@ -51,6 +52,46 @@ public struct PrescriptionsView: View {
     public init() {}
     
     public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let detailId = splitSelectedDetailId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("处方详情")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedDetailId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            PrescriptionDetailView(id: detailId)
+                                .id(detailId)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainListContent: some View {
         VStack(spacing: 0) {
             // 头部与过滤区
             VStack(spacing: 10) {
@@ -193,7 +234,13 @@ public struct PrescriptionsView: View {
                                 onAddPlan: { planPrescription = item },
                                 onEdit: { router.navigate(to: .prescriptionEdit(id: item.id)) },
                                 onDelete: { itemToDelete = item; showDeleteAlert = true },
-                                onTap: { router.navigate(to: .prescriptionDetail(id: item.id)) }
+                                onTap: {
+                                    if sizeClass == .regular {
+                                        splitSelectedDetailId = item.id
+                                    } else {
+                                        router.navigate(to: .prescriptionDetail(id: item.id))
+                                    }
+                                }
                             )
                         }
                     }
@@ -304,6 +351,16 @@ public struct PrescriptionDetailView: View {
     // 加工批次操作状态
     @State private var planToCreateFor: PrescriptionItem? = nil
     @State private var planToEdit: ProcessingPlanItem? = nil
+    
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     @State private var planToDelete: ProcessingPlanItem? = nil
     @State private var showDeletePlanAlert = false
     @State private var confirmCancelPlanId: Int? = nil
@@ -344,7 +401,7 @@ public struct PrescriptionDetailView: View {
                     .padding(16)
                 } else if let rx = prescription {
                     AppScrollView {
-                        VStack(spacing: 16) {
+                        LazyVGrid(columns: self.gridColumns, spacing: 16) {
                             if let err = errorMessage {
                                 AppCard(padding: 12) {
                                     HStack {

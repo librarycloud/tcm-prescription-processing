@@ -20,6 +20,9 @@ public struct ProcessingView: View {
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var splitSelectedPlanId: Int? = nil
+    @State private var splitSelectedPlanCode: String = ""
+    @State private var splitSelectedPackageId: Int? = nil
     @Environment(\.horizontalSizeClass) private var sizeClass
     
     private var gridColumns: [GridItem] {
@@ -58,6 +61,70 @@ public struct ProcessingView: View {
     public init() {}
     
     public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let planId = splitSelectedPlanId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("工序操作")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedPlanId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            WorkflowOperationView(planId: planId, planCode: splitSelectedPlanCode)
+                                .id(planId)
+                        }
+                        .frame(width: 480)
+                        .transition(.move(edge: .trailing))
+                    } else if let pkgId = splitSelectedPackageId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("包裹详情")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedPackageId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            PackageDetailView(id: pkgId)
+                                .id(pkgId)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainListContent: some View {
         AppScrollView {
             VStack(spacing: 0) {
                 // 1. 顶部操作栏与模式切换
@@ -267,7 +334,7 @@ public struct ProcessingView: View {
                 await loadData()
             }
         }
-        .alert("扫码提示", isPresented: $showQuickScanAlert) {
+        .alert(quickScanNeedPhotoPlanId == nil ? "操作提示" : "扫码提示", isPresented: $showQuickScanAlert) {
             if let planId = quickScanNeedPhotoPlanId {
                 Button("去传照片") {
                     quickScanErrorMessage = nil
@@ -318,15 +385,13 @@ public struct ProcessingView: View {
                                 }
                             },
                             onStartClick: {
-                                Task {
-                                    _ = try? await ApiClient.shared.transitionPlan(id: plan.id, status: 1)
-                                    startLoadData()
+                                runProcessingAction("开工") {
+                                    _ = try await ApiClient.shared.transitionPlan(id: plan.id, status: 1)
                                 }
                             },
                             onDelayClick: {
-                                Task {
-                                    _ = try? await ApiClient.shared.delayPlan(id: plan.id, days: 1)
-                                    startLoadData()
+                                runProcessingAction("延期") {
+                                    _ = try await ApiClient.shared.delayPlan(id: plan.id, days: 1)
                                 }
                             },
                             onScanClick: {
@@ -336,7 +401,13 @@ public struct ProcessingView: View {
                                 }
                             },
                             onWorkflowClick: {
-                                router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
+                                if sizeClass == .regular {
+                                    splitSelectedPackageId = nil
+                                    splitSelectedPlanId = plan.id
+                                    splitSelectedPlanCode = plan.planCode
+                                } else {
+                                    router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
+                                }
                             },
                             onGeneratePackageClick: {
                                 planForPackage = plan
@@ -345,13 +416,18 @@ public struct ProcessingView: View {
                                 planToEdit = plan
                             },
                             onCancelClick: {
-                                Task {
-                                    _ = try? await ApiClient.shared.cancelPlan(id: plan.id)
-                                    startLoadData()
+                                runProcessingAction("取消计划") {
+                                    _ = try await ApiClient.shared.cancelPlan(id: plan.id)
                                 }
                             },
                             onTap: {
-                                router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
+                                if sizeClass == .regular {
+                                    splitSelectedPackageId = nil
+                                    splitSelectedPlanId = plan.id
+                                    splitSelectedPlanCode = plan.planCode
+                                } else {
+                                    router.navigate(to: .workflowOperation(planId: plan.id, planCode: plan.planCode))
+                                }
                             }
                         )
                     }
@@ -395,13 +471,17 @@ public struct ProcessingView: View {
                             pkg: pkg,
                             isSuperAdmin: isSuperAdmin,
                             onQuickVerify: {
-                                Task {
-                                    _ = try? await ApiClient.shared.verifyPackage(code: pkg.code, pickupMethod: 0)
-                                    startLoadData()
+                                runProcessingAction("取药核销") {
+                                    _ = try await ApiClient.shared.verifyPackage(code: pkg.code, pickupMethod: 0)
                                 }
                             },
                             onTap: {
-                                router.navigate(to: .packageDetail(id: pkg.id))
+                                if sizeClass == .regular {
+                                    splitSelectedPlanId = nil
+                                    splitSelectedPackageId = pkg.id
+                                } else {
+                                    router.navigate(to: .packageDetail(id: pkg.id))
+                                }
                             }
                         )
                     }
@@ -446,6 +526,21 @@ public struct ProcessingView: View {
     private func startLoadData() {
         loadTask?.cancel()
         loadTask = Task { await loadData() }
+    }
+
+    private func runProcessingAction(_ title: String, operation: @escaping () async throws -> Void) {
+        Task {
+            do {
+                try await operation()
+            } catch is CancellationError {
+                return
+            } catch {
+                quickScanNeedPhotoPlanId = nil
+                quickScanErrorMessage = "\(title)失败：\(error.localizedDescription)"
+                showQuickScanAlert = true
+            }
+            await loadData()
+        }
     }
 
     private func loadData() async {
@@ -604,7 +699,7 @@ struct GeneratePackageDialog: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("计划信息")) {
                     InfoRowItem(label: "患者", value: plan.patientName ?? "-")

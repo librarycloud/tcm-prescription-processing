@@ -11,15 +11,6 @@ struct TCMAdminApp: App {
     @State private var pendingConfigURL: URL? = nil
     @State private var showConfirmConfigAlert = false
 
-    init() {
-        // App 启动时立即在后台预加载 OCR 引擎和相机模块，消除扫码界面的冷启动卡顿
-        Task { @MainActor in
-            SharedOCRManager.shared.preload()
-        }
-        SharedCameraManager.shared.preload()
-    }
-
-
     var body: some Scene {
         WindowGroup {
             ZStack {
@@ -36,6 +27,7 @@ struct TCMAdminApp: App {
                         onAgree: {
                             UserDefaults.standard.set(true, forKey: "agreed_privacy")
                             hasAgreedPrivacy = true
+                            preloadLocalEngines()
                             // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
                         }
                     )
@@ -71,17 +63,25 @@ struct TCMAdminApp: App {
                     
                     Task { @MainActor in
                         let wasLoggedIn = SessionManager.shared.isAuthenticated
+                        var logoutWarning: String?
                         if wasLoggedIn {
                             struct EmptyResponse: Decodable {}
-                            _ = try? await ApiClient.shared.request(
-                                path: "/auth/logout",
-                                method: "POST"
-                            ) as EmptyResponse
+                            do {
+                                _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                            } catch is CancellationError {
+                                return
+                            } catch {
+                                logoutWarning = "旧服务器退出失败，本地登录状态已清除：\(error.localizedDescription)"
+                            }
                             SessionManager.shared.clearSession()
                         }
                         
                         let res = ApiClient.shared.importServerConfig(from: pendingUrl)
-                        importedAlertMessage = res.success ? "已成功自动导入并切换服务器地址：\n\n\(res.newURL ?? "")" : res.message
+                        if res.success {
+                            importedAlertMessage = [logoutWarning, "已成功自动导入并切换服务器地址：\n\n\(res.newURL ?? "")"].compactMap { $0 }.joined(separator: "\n\n")
+                        } else {
+                            importedAlertMessage = [logoutWarning, res.message].compactMap { $0 }.joined(separator: "\n\n")
+                        }
                         showImportAlert = true
                     }
                 }
@@ -97,6 +97,9 @@ struct TCMAdminApp: App {
                 }
             }
             .onAppear {
+                if hasAgreedPrivacy {
+                    preloadLocalEngines()
+                }
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
             }
             .onChange(of: keepScreenAwake) { _, newValue in
@@ -111,5 +114,11 @@ struct TCMAdminApp: App {
             }
         }
     }
-}
 
+    private func preloadLocalEngines() {
+        SharedCameraManager.shared.preload()
+        Task { @MainActor in
+            SharedOCRManager.shared.preload()
+        }
+    }
+}

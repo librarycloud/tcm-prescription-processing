@@ -18,15 +18,65 @@ public struct TransfersView: View {
     @State private var errorMessage: String? = nil
     @State private var isCreateSheetShowing = false
     @State private var currentTaskID: UUID = UUID()
+    
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var splitSelectedDetailId: Int? = nil
     
     public init() {}
+    
+    public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let detailId = splitSelectedDetailId {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("调拨详情")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedDetailId = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            TransferDetailView(id: detailId)
+                                .id(detailId)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
     
     private var showStore: Bool {
         session.currentUser?.role == 0
     }
     
-    public var body: some View {
+    @ViewBuilder
+    private var mainListContent: some View {
         VStack(spacing: 0) {
             // 头部与过滤区
             VStack(spacing: 12) {
@@ -189,7 +239,7 @@ public struct TransfersView: View {
                         }
                         .padding(.top, 20)
                     } else {
-                        LazyVStack(spacing: 12) {
+                        LazyVGrid(columns: self.gridColumns, spacing: 12) {
                             ForEach(transfers) { item in
                                 AppCard(padding: 16) {
                                     VStack(alignment: .leading, spacing: 10) {
@@ -254,7 +304,11 @@ public struct TransfersView: View {
                                 }
                                 .onTapGesture {
                                     hideKeyboard()
-                                    router.navigate(to: .transferDetail(id: item.id))
+                                    if sizeClass == .regular {
+                                        splitSelectedDetailId = item.id
+                                    } else {
+                                        router.navigate(to: .transferDetail(id: item.id))
+                                    }
                                 }
                             }
                         }
@@ -521,7 +575,7 @@ public struct TransferFormView: View {
             .background(Color.pageBackground.ignoresSafeArea(.all))
             .navigationTitle("新建调拨")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+                                .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
                 }
@@ -610,6 +664,15 @@ public struct TransferDetailView: View {
     @State private var returnRemark: String = ""
     @State private var currentTaskID: UUID = UUID()
     
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     // 二次确认弹窗
     @State private var showActionConfirm = false
     @State private var confirmActionMessage = ""
@@ -621,7 +684,7 @@ public struct TransferDetailView: View {
     
     public var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            LazyVGrid(columns: self.gridColumns, spacing: 16) {
                 if let error = errorMessage, transfer != nil {
                     AppCard(padding: 12) {
                         HStack {
@@ -698,6 +761,7 @@ public struct TransferDetailView: View {
                         }
                     }
                     
+                    VStack(alignment: .leading, spacing: 8) {
                     // 调拨信息
                     SectionHeader(title: "调拨信息")
                     AppCard(padding: 16) {
@@ -722,7 +786,9 @@ public struct TransferDetailView: View {
                             }
                         }
                     }
+                    }
                     
+                    VStack(alignment: .leading, spacing: 8) {
                     // 借出确认
                     SectionHeader(title: "借出确认")
                     AppCard(padding: 16) {
@@ -740,9 +806,11 @@ public struct TransferDetailView: View {
                                     InfoRowItem(label: "确认时间", value: formatDateTimeToMinute(confTime))
                                 }
                             }
+                    }
                         }
                     }
                     
+                    VStack(alignment: .leading, spacing: 8) {
                     // 调拨明细
                     if let items = item.items, !items.isEmpty {
                         SectionHeader(title: "调拨明细 (\(items.count) 项)")
@@ -801,7 +869,9 @@ public struct TransferDetailView: View {
                             }
                         }
                     }
+                    }
                     
+                    VStack(alignment: .leading, spacing: 8) {
                     // 归还记录
                     SectionHeader(title: "归还记录")
                     if let records = item.returnRecords, !records.isEmpty {
@@ -896,6 +966,7 @@ public struct TransferDetailView: View {
                                 .foregroundStyle(Color.muted)
                                 .frame(maxWidth: .infinity)
                         }
+                    }
                     }
                     
                     // 底部主操作区 (确认调出 / 取消调拨)
@@ -992,7 +1063,7 @@ public struct TransferDetailView: View {
                 .background(Color.pageBackground.ignoresSafeArea(.all))
                 .navigationTitle("申请归还")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
+                                .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button("取消") { returnDialogItem = nil }
                     }

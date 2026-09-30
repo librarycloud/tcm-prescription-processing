@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Observation
+import StoreKit
 
 public struct AppUpdateInfo: Decodable {
     public let hasUpdate: Bool
@@ -77,7 +78,14 @@ public class UpdateManager {
         let bundleId = Bundle.main.bundleIdentifier ?? "com.tcm.admin"
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         
-        guard let url = URL(string: "https://itunes.apple.com/cn/lookup?bundleId=\(bundleId)") else {
+        let storefront = await Storefront.current
+        let countryCode = (storefront?.countryCode ?? Locale.current.region?.identifier ?? "CN").lowercased()
+        var components = URLComponents(string: "https://itunes.apple.com/lookup")
+        components?.queryItems = [
+            URLQueryItem(name: "bundleId", value: bundleId),
+            URLQueryItem(name: "country", value: countryCode)
+        ]
+        guard let url = components?.url else {
             throw URLError(.badURL)
         }
         

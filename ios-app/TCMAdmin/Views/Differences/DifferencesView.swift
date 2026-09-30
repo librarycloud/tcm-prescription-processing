@@ -31,6 +31,15 @@ public struct DifferencesView: View {
     // 登记差异弹窗
     @State private var isRegisterSheetShowing = false
     
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     public init() {}
     
     public var body: some View {
@@ -137,7 +146,7 @@ public struct DifferencesView: View {
                             .frame(maxWidth: .infinity)
                         }
                     } else {
-                        LazyVStack(spacing: 10) {
+                        LazyVGrid(columns: self.gridColumns, spacing: 12) {
                             ForEach(products) { item in
                                 AppCard(padding: 16) {
                                     VStack(alignment: .leading, spacing: 10) {
@@ -237,7 +246,7 @@ public struct DifferencesView: View {
                             .frame(maxWidth: .infinity)
                         }
                     } else {
-                        LazyVStack(spacing: 10) {
+                        LazyVGrid(columns: self.gridColumns, spacing: 12) {
                             ForEach(logs) { log in
                                 AppCard(padding: 16) {
                                     VStack(alignment: .leading, spacing: 10) {

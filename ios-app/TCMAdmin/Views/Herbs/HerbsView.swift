@@ -16,6 +16,7 @@ struct HerbsView: View {
     @State private var stores: [StoreItem] = []
     @State private var data: HerbLocationData? = nil
     @State private var isLoading = false
+    @State private var splitSelectedLocation: HerbLocationItem? = nil
     @State private var errorMessage: String? = nil
     @State private var currentTaskID: UUID = UUID()
     @State private var loadTask: Task<Void, Never>? = nil
@@ -96,7 +97,47 @@ struct HerbsView: View {
         }
     }
     
-    var body: some View {
+    public var body: some View {
+        Group {
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    mainListContent
+                        .frame(maxWidth: .infinity)
+                    
+                    if let loc = splitSelectedLocation {
+                        Divider().ignoresSafeArea()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("分配货位")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.ink)
+                                Spacer()
+                                Button(action: { splitSelectedLocation = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(Color.muted)
+                                }
+                            }
+                            .padding()
+                            .background(Color.pageBackground)
+                            
+                            Divider()
+                            
+                            HerbLocationAssignView(location: loc)
+                                .id(loc.id)
+                        }
+                        .frame(width: 420)
+                        .transition(.move(edge: .trailing))
+                    }
+                }
+            } else {
+                mainListContent
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainListContent: some View {
         VStack(spacing: 0) {
             VStack(spacing: 10) {
                 SearchBarField(
@@ -328,7 +369,11 @@ struct HerbsView: View {
                     .clipShape(.rect(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                     .onTapGesture {
-                        Router.shared.navigate(to: .herbLocationAssign(location: loc))
+                        if sizeClass == .regular {
+                            splitSelectedLocation = loc
+                        } else {
+                            Router.shared.navigate(to: .herbLocationAssign(location: loc))
+                        }
                     }
                 }
             }

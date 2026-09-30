@@ -129,8 +129,14 @@ public struct ProfileDetailView: View {
             Button("退出登录", role: .destructive) {
                 Task {
                     struct EmptyResponse: Decodable {}
-                    _ = try? await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
-                    await MainActor.run { session.clearSession() }
+                    do {
+                        _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
+                        session.clearSession()
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        errorMessage = "退出登录失败：\(error.localizedDescription)"
+                    }
                 }
             }
             Button("取消", role: .cancel) {}

@@ -578,13 +578,22 @@ public struct PackageDetailView: View {
     @State private var errorMessage: String? = nil
     @State private var isEditSheetShowing = false
     
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var gridColumns: [GridItem] {
+        if sizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 340, maximum: .infinity), spacing: 12, alignment: .top)]
+        } else {
+            return [GridItem(.flexible())]
+        }
+    }
+    
     public init(id: Int) {
         self.id = id
     }
     
     public var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            LazyVGrid(columns: self.gridColumns, spacing: 16) {
                 if let error = errorMessage, package != nil {
                     AppCard(padding: 12) {
                         HStack {
