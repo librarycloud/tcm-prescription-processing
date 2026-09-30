@@ -1085,15 +1085,18 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     }
     
     public func confirmReturn(transferId: Int, returnId: Int) async throws {
-        let _: [String: Any] = try await request("/admin/store-transfers/\(transferId)/returns/\(returnId)/confirm", method: "POST")
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)/confirm", method: "POST")
     }
     
     func cancelTransferReturn(transferId: Int, returnId: Int) async throws {
-        let _: [String: Any] = try await request("/admin/store-transfers/\(transferId)/returns/\(returnId)", method: "DELETE")
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)", method: "DELETE")
     }
     
     func updateTransferReturn(transferId: Int, returnId: Int, payload: [String: Any]) async throws {
-        let _: [String: Any] = try await request("/admin/store-transfers/\(transferId)/returns/\(returnId)", method: "PUT", body: payload)
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)", method: "PUT", body: payload)
     }
     
     func confirmReturnOld(transferId: Int, returnId: Int) async throws {

@@ -398,7 +398,7 @@ struct BarcodeScannerPreview: UIViewControllerRepresentable {
     }
 }
 
-class BarcodeScannerViewController: UIViewController {
+@MainActor(unsafe) class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onScanned: ((String) -> Void)?
     nonisolated(unsafe) var enableOCR: Bool = false
     private var captureSession: AVCaptureSession?
@@ -704,28 +704,23 @@ class BarcodeScannerViewController: UIViewController {
     }
 
     // MARK: - OCR Video Frame Extraction
-}
 
-nonisolated extension BarcodeScannerViewController: AVCaptureMetadataOutputObjectsDelegate {
-    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        MainActor.assumeIsolated {
-            guard let metadataObj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-                  let stringValue = metadataObj.stringValue else {
-                return
-            }
-            guard claimScan() else { return }
-            onScanned?(stringValue)
-            
-            // 延迟 1.5 秒后允许下一次扫描，避免重复触发
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.releaseScan()
-            }
+
+    @objc func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard let metadataObj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let stringValue = metadataObj.stringValue else {
+            return
+        }
+        guard claimScan() else { return }
+        onScanned?(stringValue)
+        
+        // 延迟 1.5 秒后允许下一次扫描，避免重复触发
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.releaseScan()
         }
     }
-}
 
-nonisolated extension BarcodeScannerViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         if !hasFadedIn {
             hasFadedIn = true
             DispatchQueue.main.async {

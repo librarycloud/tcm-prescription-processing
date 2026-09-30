@@ -605,6 +605,9 @@ public struct TransferDetailView: View {
     // 申请归还弹窗
     @State private var returnDialogItem: TransferItemModel? = nil
     @State private var returnQuantityText: String = ""
+    @State private var returnRecordId: Int? = nil
+    @State private var returnDate: Date = Date()
+    @State private var returnRemark: String = ""
     @State private var currentTaskID: UUID = UUID()
     
     // 二次确认弹窗

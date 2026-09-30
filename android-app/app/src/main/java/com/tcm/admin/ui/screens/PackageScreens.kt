@@ -514,6 +514,8 @@ internal fun PackageFormScreen(
     var receiverPhone by remember(initial) { mutableStateOf(initial?.phone?.takeIf { it != "-" }.orEmpty()) }
     var method by remember(initial) { mutableStateOf(initial?.methodCode ?: 0) }
     var tracking by remember(initial) { mutableStateOf(initial?.expressTrackingNo.orEmpty()) }
+    var pickupProxyName by remember { mutableStateOf("") }
+    var pickupProxyPhone by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

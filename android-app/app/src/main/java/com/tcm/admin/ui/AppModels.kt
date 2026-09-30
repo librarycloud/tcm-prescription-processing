@@ -16,6 +16,8 @@ internal data class PackageItem(
     val statusCode: Int = 0,
     val methodCode: Int = 0,
     val expressTrackingNo: String = "",
+    val pickupProxyName: String = "",
+    val pickupProxyPhone: String = "",
     val pickupQrContent: String = "",
     val createdAt: String = "-",
     val pickedAt: String = "",
