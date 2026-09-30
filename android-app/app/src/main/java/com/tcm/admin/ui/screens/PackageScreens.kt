@@ -662,6 +662,8 @@ internal fun PackageFormScreen(
                     .put("receiverPhone", receiverPhone.trim())
                     .put("pickupMethod", method)
                     .put("expressTrackingNo", tracking.trim())
+                    .put("pickupProxyName", pickupProxyName.trim())
+                    .put("pickupProxyPhone", pickupProxyPhone.trim())
 
                 scope.launch {
                     runCatching {
