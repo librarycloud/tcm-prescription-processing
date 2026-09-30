@@ -7,3 +7,7 @@ export function getSystemConfigs() {
 export function updateSystemConfigs(data) {
   return request.put('/admin/system-configs', data);
 }
+
+export function getPublicConfigs() {
+  return request.get('/auth/public-configs');
+}

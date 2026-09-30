@@ -36,7 +36,7 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
-import { getSystemConfigs } from '@/api/systemConfig';
+import { getPublicConfigs } from '@/api/systemConfig';
 import { useRoute, useRouter } from 'vue-router';
 import { Iphone, Lock } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
@@ -51,7 +51,7 @@ let geetestInstance = null;
 
 onMounted(async () => {
   try {
-    const res = await getSystemConfigs();
+    const res = await getPublicConfigs();
     if (res && res.enable_captcha === '1' && res.geetest_captcha_id) {
       captchaConfig.value.enabled = true;
       captchaConfig.value.id = res.geetest_captcha_id;
