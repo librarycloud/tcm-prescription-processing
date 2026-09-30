@@ -48,6 +48,7 @@ const formRef = ref(null);
 const errorCount = ref(Number(localStorage.getItem('loginErrorCount') || '0'));
 const captchaConfig = ref({ enabled: false, id: '' });
 let geetestInstance = null;
+const geetestStatus = ref(''); // 'loading', 'success', 'error'
 
 onMounted(async () => {
   try {
@@ -63,9 +64,15 @@ onMounted(async () => {
 });
 
 function loadGeetestScript() {
-  if (window.initGeetest4) return;
+  if (window.initGeetest4) {
+    geetestStatus.value = 'success';
+    return;
+  }
+  geetestStatus.value = 'loading';
   const script = document.createElement('script');
   script.src = 'https://static.geetest.com/v4/gt4.js';
+  script.onload = () => { geetestStatus.value = 'success'; };
+  script.onerror = () => { geetestStatus.value = 'error'; };
   document.head.appendChild(script);
 }
 
@@ -118,7 +125,11 @@ async function handleLogin() {
   await formRef.value.validate();
   
   if (captchaConfig.value.enabled && errorCount.value >= 3) {
-    if (!window.initGeetest4) {
+    if (geetestStatus.value === 'error') {
+      ElMessage.error('极验安全组件加载失败，请关闭浏览器去广告插件或检查网络');
+      return;
+    }
+    if (geetestStatus.value === 'loading' || !window.initGeetest4) {
       ElMessage.warning('正在加载安全组件，请稍候重试');
       return;
     }
