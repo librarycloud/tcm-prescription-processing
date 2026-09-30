@@ -19,3 +19,4 @@ export const confirmStoreTransferReturn = (id, returnId) =>
   request.post(`/admin/store-transfers/${id}/returns/${returnId}/confirm`);
 export const cancelStoreTransfer = (id, data) =>
   request.post(`/admin/store-transfers/${id}/cancel`, data);
+export const deleteStoreTransferReturn = (id, returnId) => request.delete(`/admin/store-transfers/${id}/returns/${returnId}`);

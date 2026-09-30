@@ -162,8 +162,14 @@ async function loadDetail() {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate();
+  if (saving.value) return;
   saving.value = true;
+  try {
+    await formRef.value.validate();
+  } catch {
+    saving.value = false;
+    return;
+  }
   try {
     const id = props.id ?? route.params.id;
     await updatePackage(id, form);

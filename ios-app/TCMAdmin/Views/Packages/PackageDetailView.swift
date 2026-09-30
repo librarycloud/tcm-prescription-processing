@@ -99,6 +99,9 @@ public struct PackageFormView: View {
     @State private var isBusy = false
     @State private var errorMessage: String? = nil
     @State private var isScannerShowing = false
+    @State private var pickupProxyName = ""
+    @State private var pickupProxyPhone = ""
+    @State private var selectedRelatedIds: Set<Int> = []
     
     public init(initial: PackageModel? = nil, onSaved: @escaping () -> Void) {
         self.initial = initial
@@ -195,6 +198,28 @@ public struct PackageFormView: View {
                             }
                             
                             // 快递单号 (仅快递时展示)
+                            
+                            if method == 0 || method == 1 {
+                                HStack(spacing: 8) {
+                                    TextField("代领人姓名 (选填)", text: $pickupProxyName)
+                                        .scaledFont(14)
+                                        .padding(.horizontal, 14)
+                                        .frame(height: 44)
+                                        .background(Color.surface)
+                                        .clipShape(.rect(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                                    
+                                    TextField("手机号 (选填)", text: $pickupProxyPhone)
+                                        .scaledFont(14)
+                                        .keyboardType(.phonePad)
+                                        .padding(.horizontal, 14)
+                                        .frame(height: 44)
+                                        .background(Color.surface)
+                                        .clipShape(.rect(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                                }
+                            }
+
                             if method == 2 {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("快递单号 *").scaledFont(13, weight: .medium).foregroundStyle(Color.ink)
@@ -310,6 +335,9 @@ public struct PackageVerifyView: View {
     @State private var verifiedPackage: PackageModel? = nil
     @State private var errorMessage: String? = nil
     @State private var isScannerShowing = false
+    @State private var pickupProxyName = ""
+    @State private var pickupProxyPhone = ""
+    @State private var selectedRelatedIds: Set<Int> = []
     
     private var rawPickupCode: String {
         codeText.filter { $0.isNumber }
@@ -387,6 +415,28 @@ public struct PackageVerifyView: View {
                             }
                         }
                         
+                        
+                        if selectedMethod == 0 || selectedMethod == 1 {
+                            HStack(spacing: 8) {
+                                TextField("代领人姓名 (选填)", text: $pickupProxyName)
+                                    .scaledFont(14)
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 44)
+                                    .background(Color.surface)
+                                    .clipShape(.rect(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                                
+                                TextField("手机号 (选填)", text: $pickupProxyPhone)
+                                    .scaledFont(14)
+                                    .keyboardType(.phonePad)
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 44)
+                                    .background(Color.surface)
+                                    .clipShape(.rect(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                            }
+                        }
+
                         if selectedMethod == 2 {
                             HStack {
                                 TextField("输入或扫描快递单号 *", text: $expressTrackingNo)
@@ -497,6 +547,9 @@ public struct PackageVerifyView: View {
                     code: code,
                     pickupMethod: selectedMethod,
                     expressTrackingNo: tracking,
+                    pickupProxyName: (selectedMethod == 0 || selectedMethod == 1) && !pickupProxyName.isEmpty ? pickupProxyName : nil,
+                    pickupProxyPhone: (selectedMethod == 0 || selectedMethod == 1) && !pickupProxyPhone.isEmpty ? pickupProxyPhone : nil,
+                    additionalPackageIds: Array(selectedRelatedIds),
                     pickupQrContent: signedQrContent
                 )
                 await MainActor.run {

@@ -30,3 +30,5 @@ export const importHerbLocationMoves = (storeId, file) => {
   formData.append('file', file);
   return request.post('/admin/herb-locations/move-import', formData);
 };
+
+export const swapHerbLocations = (data) => request.post('/admin/herb-locations/swap', data);

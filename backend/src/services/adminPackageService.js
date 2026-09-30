@@ -518,6 +518,7 @@ export async function deletePackage(prisma, actor, id) {
 }
 
 export async function verifyPackage(prisma, actor, payload) {
+  const additionalIds = Array.isArray(payload.additionalPackageIds) ? payload.additionalPackageIds.map(Number) : [];
   const qrContent = String(payload.pickupQrContent || "").trim();
   const signedQr = qrContent ? parsePickupQrContent(qrContent) : null;
   if (qrContent && !signedQr) throw new AppError("二维码无效或已被篡改", 400);
@@ -539,25 +540,30 @@ export async function verifyPackage(prisma, actor, payload) {
 
   const updated = await prisma.$transaction(async (tx) => {
     const claimed = await packageRepository.updateMany(tx, {
-      where: { id: current.id, status: PACKAGE_STATUS.READY_PICKUP },
-      data: {
+      where: { id: { in: [current.id, ...additionalIds] }, storeId: current.storeId, status: PACKAGE_STATUS.READY_PICKUP },
+            data: {
         status: PACKAGE_STATUS.PICKED,
         pickedAt: new Date(),
         pickupMethod,
         expressTrackingNo: pickupMethod === 2 ? expressTrackingNo : null,
+        pickupProxyName: [0, 1].includes(pickupMethod) ? (payload.pickupProxyName || null) : null,
+        pickupProxyPhone: [0, 1].includes(pickupMethod) ? (payload.pickupProxyPhone || null) : null,
         verifiedBy: actor.id,
         updatedBy: actor.id,
       },
     });
-    if (claimed.count !== 1)
+    if (claimed.count === 0)
       throw new AppError("该包裹已核销，不能重复核销", 400);
-    const updated = await packageRepository.findUnique(tx, {
-      where: { id: current.id },
+    const updatedList = await prisma.package.findMany({
+      where: { id: { in: [current.id, ...additionalIds] } },
       include: packageInclude(),
     });
-    if (updated.processingPlanId) {
-      await syncPlanAfterPackagePickup(tx, updated.processingPlanId, actor.id);
+    for (const pkg of updatedList) {
+      if (pkg.processingPlanId) {
+        await syncPlanAfterPackagePickup(tx, pkg.processingPlanId, actor.id);
+      }
     }
+    const updated = updatedList.find(p => p.id === current.id);
     await recordOperation(tx, actor, {
       module: "package",
       action: "verify",
@@ -569,4 +575,42 @@ export async function verifyPackage(prisma, actor, payload) {
   });
   await publishPackageRobotEvent(prisma, "PACKAGE_VERIFIED", updated, actor);
   return withPickupQrContent(updated);
+}
+
+export async function incrementPrintCount(prisma, actor, id) {
+  const current = await getAccessiblePackage(prisma, actor, { id: Number(id) });
+  const updated = await prisma.package.update({
+    where: { id: current.id },
+    data: { printCount: { increment: 1 } },
+  });
+  await recordOperation(prisma, actor, {
+    module: "package",
+    action: "print",
+    targetId: updated.id,
+    storeId: updated.storeId,
+    description: `打印包裹标签 (第 ${updated.printCount} 次)`,
+  });
+  return updated;
+}
+
+export async function getRelatedPackages(prisma, actor, pickupCode) {
+  const current = await getAccessiblePackage(prisma, actor, { pickupCode });
+  if (!current.receiverPhone && !current.receiverName) return [];
+  
+  const OR = [];
+  if (current.receiverPhone) OR.push({ receiverPhone: current.receiverPhone });
+  if (current.receiverName) OR.push({ receiverName: current.receiverName });
+  
+  const related = await prisma.package.findMany({
+    where: {
+      id: { not: current.id },
+      storeId: current.storeId,
+      status: PACKAGE_STATUS.READY_PICKUP,
+      deletedAt: null,
+      OR,
+    },
+    include: packageInclude(),
+    orderBy: { createdAt: 'desc' },
+  });
+  return related;
 }

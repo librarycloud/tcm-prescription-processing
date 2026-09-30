@@ -95,11 +95,15 @@
                   :value="item.value"
                 />
               </el-select>
-              <div v-if="Number(form.pickupMethod) === 2" class="tracking-row">
+                            <div v-if="Number(form.pickupMethod) === 2" class="tracking-row">
                 <TrackingNumberInput
                   v-model="form.expressTrackingNo"
                   class="tracking-input"
                 />
+              </div>
+              <div v-if="Number(form.pickupMethod) === 0 || Number(form.pickupMethod) === 1" class="proxy-row" style="margin-top: 12px; display: flex; gap: 8px;">
+                <el-input v-model="form.pickupProxyName" placeholder="代领人姓名 (选填)" :disabled="isPicked(packageInfo.status)" />
+                <el-input v-model="form.pickupProxyPhone" placeholder="代领人手机号 (选填)" :disabled="isPicked(packageInfo.status)" />
               </div>
               <el-button
                 type="success"
@@ -249,7 +253,25 @@ onMounted(() => {
 });
 </script>
 
+
 <style scoped>
+.related-packages-box {
+  margin-top: 20px;
+  padding: 16px;
+  background-color: #f6f8fa;
+  border-radius: 8px;
+  border: 1px solid #e1e4e8;
+}
+.related-title {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #e6a23c;
+}
+.related-package-item {
+  margin-bottom: 8px;
+}
+
 .verify-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

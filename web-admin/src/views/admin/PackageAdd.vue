@@ -164,8 +164,14 @@ const rules = {
 };
 
 async function handleSubmit() {
-  await formRef.value.validate();
+  if (loading.value) return;
   loading.value = true;
+  try {
+    await formRef.value.validate();
+  } catch {
+    loading.value = false;
+    return;
+  }
   try {
     await createPackage(form);
     ElMessage.success('新增成功');

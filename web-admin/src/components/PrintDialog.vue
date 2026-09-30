@@ -28,6 +28,7 @@
           :package-info="packageInfo"
           :qr-data-url="qrDataUrl"
           :template="activeTemplate"
+          :print-count="packageInfo?.printCount || 0"
         />
       </div>
     </div>
@@ -54,13 +55,14 @@ import printLabelCss from '@/styles/print-label.css?raw';
 import { getPrintTemplates } from '@/api/printTemplate';
 import { createQRCodeDataUrl } from '@/utils/qrcode';
 import { DEFAULT_PICKUP_TEMPLATE, PACKAGE_PICKUP_TEMPLATE_TYPE } from '@/utils/printTemplate';
+import { printPackageCount } from '@/api/package';
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   packageInfo: { type: Object, default: null }
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'printed']);
 const printAreaRef = ref(null);
 const qrDataUrl = ref('');
 const templates = ref([DEFAULT_PICKUP_TEMPLATE]);
@@ -148,6 +150,13 @@ async function printLabels() {
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
   window.setTimeout(cleanup, 60000);
+
+  try {
+    await printPackageCount(props.packageInfo.id);
+    emit('printed');
+  } catch (e) {
+    console.error('Failed to increment print count', e);
+  }
 }
 </script>
 

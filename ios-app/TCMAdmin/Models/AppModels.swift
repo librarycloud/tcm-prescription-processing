@@ -1712,7 +1712,8 @@ public struct TransferModel: Codable, Identifiable , Equatable {
     public var statusTags: [String] {
         var tags = [String]()
         
-        if status == 3 { tags.append("已取消") }
+        if status == 4 { tags.append("待确认取消") }
+        else if status == 3 { tags.append("已取消") }
         else if status == 2 { tags.append("已调平") }
         else if status == 1 { tags.append("部分归还") }
         else if outboundStatus == 0 { tags.append("待确认调出") }

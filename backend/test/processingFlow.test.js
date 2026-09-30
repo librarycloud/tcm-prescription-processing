@@ -563,12 +563,17 @@ function pickupFixture() {
             item.deletedAt == null,
         ) || null,
       updateMany: async ({ where, data }) => {
-        const item = state.packages.find(
-          (entry) => entry.id === where.id && entry.status === where.status,
+        const ids = where.id?.in ? where.id.in : [where.id];
+        const items = state.packages.filter(
+          (entry) => ids.includes(entry.id) && entry.status === where.status,
         );
-        if (!item) return { count: 0 };
-        Object.assign(item, data);
-        return { count: 1 };
+        if (items.length === 0) return { count: 0 };
+        items.forEach(item => Object.assign(item, data));
+        return { count: items.length };
+      },
+      findMany: async ({ where }) => {
+        const ids = where.id?.in ? where.id.in : [where.id];
+        return state.packages.filter((entry) => ids.includes(entry.id)).map(item => ({ ...item, store: { id: 3, name: "苏州店" } }));
       },
       findUnique: async ({ where }) => {
         const item = state.packages.find((entry) => entry.id === where.id);

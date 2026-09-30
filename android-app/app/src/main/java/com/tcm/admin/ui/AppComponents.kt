@@ -301,6 +301,7 @@ internal fun pickupMethodLabel(method: Int): String = when (method) {
 }
 
 internal fun transferStatusLabel(status: Int, outboundStatus: Int, hasPendingReturn: Boolean = false): String = when {
+    status == 4 -> "待确认取消"
     status == 3 -> "已取消"
     status == 2 -> "已调平"
     hasPendingReturn -> "待确认归还"

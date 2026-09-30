@@ -605,6 +605,9 @@ public struct TransferDetailView: View {
     // 申请归还弹窗
     @State private var returnDialogItem: TransferItemModel? = nil
     @State private var returnQuantityText: String = ""
+    @State private var returnRecordId: Int? = nil
+    @State private var returnDate: Date = Date()
+    @State private var returnRemark: String = ""
     @State private var currentTaskID: UUID = UUID()
     
     // 二次确认弹窗
@@ -780,6 +783,9 @@ public struct TransferDetailView: View {
                                             Button(action: {
                                                 returnDialogItem = tItem
                                                 returnQuantityText = "\(String(format: "%g", tItem.availableReturnQuantity ?? 1.0))"
+                                                returnRecordId = nil
+                                                returnDate = Date()
+                                                returnRemark = ""
                                             }) {
                                                 Text("申请归还")
                                                     .scaledFont(12, weight: .bold)
@@ -829,19 +835,53 @@ public struct TransferDetailView: View {
                                     }
                                     
                                     // 确认归还操作按钮
-                                    if record.status != 1 && item.permissions?.canConfirmReturn == true {
-                                        HStack {
+                                    if record.status != 1 {
+                                        HStack(spacing: 8) {
                                             Spacer()
-                                            Button(action: {
-                                                confirmReturnAction(returnId: record.id)
-                                            }) {
-                                                Text("确认归还")
-                                                    .scaledFont(12, weight: .bold)
-                                                    .foregroundStyle(Color.white)
-                                                    .padding(.horizontal, 14)
-                                                    .padding(.vertical, 6)
-                                                    .background(Color.success)
-                                                    .clipShape(.rect(cornerRadius: 6))
+                                            if item.permissions?.canSubmitReturn == true {
+                                                Button(action: {
+                                                    if let items = item.items, let rItem = items.first(where: { $0.id == record.transferItemId }) {
+                                                        returnDialogItem = rItem
+                                                        returnRecordId = record.id
+                                                        returnQuantityText = "\(String(format: "%g", record.quantity ?? 1.0))"
+                                                        if let dateStr = record.returnDate {
+                                                            let formatter = DateFormatter()
+                                                            formatter.dateFormat = "yyyy-MM-dd"
+                                                            returnDate = formatter.date(from: dateStr) ?? Date()
+                                                        }
+                                                        returnRemark = record.remark ?? ""
+                                                    }
+                                                }) {
+                                                    Text("修改")
+                                                        .scaledFont(12, weight: .bold)
+                                                        .foregroundStyle(Color.appPrimary)
+                                                        .padding(.horizontal, 14)
+                                                        .padding(.vertical, 6)
+                                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.appPrimary, lineWidth: 1))
+                                                }
+                                                Button(action: {
+                                                    cancelReturnAction(returnId: record.id)
+                                                }) {
+                                                    Text("取消")
+                                                        .scaledFont(12, weight: .bold)
+                                                        .foregroundStyle(Color.danger)
+                                                        .padding(.horizontal, 14)
+                                                        .padding(.vertical, 6)
+                                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.danger, lineWidth: 1))
+                                                }
+                                            }
+                                            if item.permissions?.canConfirmReturn == true {
+                                                Button(action: {
+                                                    confirmReturnAction(returnId: record.id)
+                                                }) {
+                                                    Text("确认")
+                                                        .scaledFont(12, weight: .bold)
+                                                        .foregroundStyle(Color.white)
+                                                        .padding(.horizontal, 14)
+                                                        .padding(.vertical, 6)
+                                                        .background(Color.success)
+                                                        .clipShape(.rect(cornerRadius: 6))
+                                                }
                                             }
                                         }
                                         .padding(.top, 4)
@@ -881,7 +921,7 @@ public struct TransferDetailView: View {
                             
                             if item.permissions?.canCancel == true {
                                 Button(action: cancelTransferAction) {
-                                    Text("取消调拨")
+                                    Text(item.status == 4 ? "确认取消" : "取消调拨")
                                         .scaledFont(14, weight: .bold)
                                         .foregroundStyle(Color.danger)
                                         .frame(maxWidth: .infinity)
@@ -1032,6 +1072,36 @@ public struct TransferDetailView: View {
         }
     }
     
+    
+    private func cancelReturnAction(returnId: Int) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        confirmActionMessage = "确定要取消这条归还申请吗？"
+        confirmActionBlock = {
+            self.executeCancelReturn(returnId: returnId)
+        }
+        showActionConfirm = true
+    }
+    
+    private func executeCancelReturn(returnId: Int) {
+        isActionBusy = true
+        Task {
+            do {
+                try await ApiClient.shared.cancelTransferReturn(transferId: id, returnId: returnId)
+                await MainActor.run {
+                    isActionBusy = false
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+                await loadDetail()
+            } catch {
+                await MainActor.run {
+                    isActionBusy = false
+                    errorMessage = error.localizedDescription
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                }
+            }
+        }
+    }
+
     private func confirmReturnAction(returnId: Int) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         confirmActionMessage = "确定要确认归还这笔物资吗？"

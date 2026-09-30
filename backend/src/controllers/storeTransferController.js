@@ -12,6 +12,7 @@ import {
   updateExpectedReturnDate,
   updateStoreTransfer,
   updateStoreTransferReturn,
+  deleteStoreTransferReturn,
 } from "../services/storeTransferService.js";
 
 export async function listController(request, reply) {
@@ -70,4 +71,14 @@ export async function confirmReturnController(request, reply) {
 
 export async function cancelController(request, reply) {
   return ok(reply, await cancelStoreTransfer(request.server.prisma, request.user, request.params.id, request.body || {}), "调拨已取消");
+}
+
+
+export async function deleteReturnController(request, reply) {
+  return ok(reply, await deleteStoreTransferReturn(
+    request.server.prisma,
+    request.user,
+    request.params.id,
+    request.params.returnId,
+  ), "已取消归还申请");
 }

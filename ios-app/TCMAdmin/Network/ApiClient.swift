@@ -529,10 +529,23 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         return res.list ?? []
     }
     
-    public func verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupQrContent: String? = nil) async throws -> PackageModel {
+    public func getRelatedPackages(pickupCode: String) async throws -> [PackageModel] {
+        return try await request(path: "/admin/packages/related/\(pickupCode)")
+    }
+
+    public func verifyPackage(code: String, pickupMethod: Int = 0, expressTrackingNo: String = "", pickupProxyName: String? = nil, pickupProxyPhone: String? = nil, additionalPackageIds: [Int]? = nil, pickupQrContent: String? = nil) async throws -> PackageModel {
         var body: [String: Any] = ["pickupCode": code, "pickupMethod": pickupMethod]
+        if let ids = additionalPackageIds, !ids.isEmpty {
+            body["additionalPackageIds"] = ids
+        }
         if !expressTrackingNo.isEmpty {
             body["expressTrackingNo"] = expressTrackingNo
+        }
+        if let pn = pickupProxyName, !pn.isEmpty {
+            body["pickupProxyName"] = pn
+        }
+        if let pp = pickupProxyPhone, !pp.isEmpty {
+            body["pickupProxyPhone"] = pp
         }
         if let qr = pickupQrContent, !qr.isEmpty {
             body["pickupQrContent"] = qr
@@ -1072,6 +1085,21 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     }
     
     public func confirmReturn(transferId: Int, returnId: Int) async throws {
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)/confirm", method: "POST")
+    }
+    
+    func cancelTransferReturn(transferId: Int, returnId: Int) async throws {
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)", method: "DELETE")
+    }
+    
+    func updateTransferReturn(transferId: Int, returnId: Int, payload: [String: Any]) async throws {
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)", method: "PUT", body: payload)
+    }
+    
+    func confirmReturnOld(transferId: Int, returnId: Int) async throws {
         struct EmptyResponse: Decodable {}
         let _: EmptyResponse = try await request(path: "/admin/store-transfers/\(transferId)/returns/\(returnId)/confirm", method: "POST")
     }

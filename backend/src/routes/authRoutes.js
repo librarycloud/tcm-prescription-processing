@@ -1,5 +1,6 @@
 import {
   bindWechatController,
+  getCaptchaController,
   bindWechatByPickupCodeController,
   loginController,
   logoutController,
@@ -12,10 +13,14 @@ import {
   revokeSessionController
 } from '../controllers/authController.js';
 import { verifyToken } from '../middlewares/auth.js';
+import { getPublicConfigsController } from '../controllers/systemConfigController.js';
 
 export default async function authRoutes(fastify) {
   fastify.addHook('preHandler', fastify.rateLimit());
 
+  fastify.get('/public-configs', getPublicConfigsController);
+
+  fastify.get('/captcha', { preHandler: fastify.rateLimit() }, getCaptchaController);
   fastify.post('/login', { preHandler: fastify.rateLimit() }, loginController);
   fastify.post('/user-login', { preHandler: fastify.rateLimit() }, userLoginController);
   fastify.post('/wechat-login', { preHandler: fastify.rateLimit() }, wechatLoginController);

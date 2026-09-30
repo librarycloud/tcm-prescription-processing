@@ -1,3 +1,5 @@
+import { verifyGeetest4 } from '../utils/geetest.js';
+import { getSystemConfigValue } from '../services/systemConfigService.js';
 import {
   bindWechat,
   bindWechatByPickupCode,
@@ -14,8 +16,31 @@ import { ok } from '../utils/response.js';
 
 async function runLoggedLogin(request, loginType, operation) {
   const attemptedIdentifier = String(request.body?.identifier || '').trim() || null;
+  
   try {
+    // 检查验证码配置
+    const enableCaptcha = await getSystemConfigValue(request.server.prisma, 'enable_captcha');
+    const captchaId = await getSystemConfigValue(request.server.prisma, 'geetest_captcha_id');
+    const captchaKey = await getSystemConfigValue(request.server.prisma, 'geetest_captcha_key');
+    
+    if (enableCaptcha === '1' && captchaId) {
+      const errorCount = parseInt(request.body?.errorCount || '0', 10);
+      if (errorCount >= 3) {
+        
+        const { geetest } = request.body || {};
+        if (!geetest || !geetest.lot_number) {
+          const { AppError } = await import('../utils/appError.js'); throw new AppError('请完成安全验证', 400);
+        }
+        
+        const isValid = await verifyGeetest4(captchaId, captchaKey, geetest);
+        if (!isValid) {
+          const { AppError: AppErr } = await import('../utils/appError.js'); throw new AppErr('安全验证失败，请重试', 400);
+        }
+      }
+    }
+
     const data = await operation();
+
     const completed = Boolean(data?.token && data?.user);
     await recordLoginLog(request, {
       userId: data?.user?.id,
@@ -158,4 +183,9 @@ export async function revokeSessionController(request, reply) {
     jti,
   });
   return ok(reply, null, '已退出该设备登录');
+}
+
+export async function getCaptchaController(request, reply) {
+  const captcha = generateCaptcha();
+  return ok(reply, captcha, '获取成功');
 }

@@ -359,16 +359,7 @@
           </el-table-column>
           <el-table-column label="操作" align="center">
             <template #default="{ row }">
-              <el-button
-                link
-                type="primary"
-                :disabled="
-                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
-                  !detail.permissions?.canSubmitReturn
-                "
-                @click="openReturnEdit(row)"
-                >修改</el-button
-              >
+              
               <el-button
                 link
                 type="primary"
@@ -424,6 +415,26 @@
                 type="primary"
                 :disabled="
                   row.status !== TRANSFER_RETURN_STATUS.PENDING ||
+                  !detail.permissions?.canSubmitReturn
+                "
+                @click="openReturnEdit(row)"
+                >修改</el-button
+              >
+              <el-button
+                link
+                type="danger"
+                :disabled="
+                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
+                  !detail.permissions?.canSubmitReturn
+                "
+                @click="cancelReturn(row)"
+                >取消</el-button
+              >
+              <el-button
+                link
+                type="primary"
+                :disabled="
+                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
                   !detail.permissions?.canConfirmReturn
                 "
                 @click="confirmReturn(row)"
@@ -441,8 +452,7 @@
             type="danger"
             plain
             @click="cancelTransfer"
-            >取消调拨</el-button
-          >
+            >{{ detail?.status === TRANSFER_STATUS.CANCEL_PENDING ? '确认取消' : '取消调拨' }}</el-button>
           <span class="footer-spacer" />
           <template v-if="drawerMode === 'create' || drawerMode === 'edit'">
             <el-button @click="drawerMode === 'edit' ? (drawerMode = 'detail') : (drawerVisible = false)"
@@ -589,7 +599,8 @@ const statusOptions = Object.freeze([
   { label: '部分归还', value: TRANSFER_STATUS.PART_RETURNED },
   { label: '待确认', value: 'pendingConfirm' },
   { label: '已调平', value: TRANSFER_STATUS.RETURNED },
-  { label: '已取消', value: TRANSFER_STATUS.CANCELLED }
+  { label: '已取消', value: TRANSFER_STATUS.CANCELLED },
+  { label: '待确认取消', value: TRANSFER_STATUS.CANCEL_PENDING }
 ]);
 
 const route = useRoute();
@@ -688,7 +699,8 @@ function statusType(status) {
       [TRANSFER_STATUS.BORROWING]: 'primary',
       [TRANSFER_STATUS.PART_RETURNED]: 'warning',
       [TRANSFER_STATUS.RETURNED]: 'success',
-      [TRANSFER_STATUS.CANCELLED]: 'info'
+      [TRANSFER_STATUS.CANCELLED]: 'info',
+      [TRANSFER_STATUS.CANCEL_PENDING]: 'danger'
     }[status] || 'info'
   );
 }
@@ -840,17 +852,18 @@ function removeCreateItem(index) {
 }
 
 async function saveCreate() {
-  await createFormRef.value?.validate();
-  if (createForm.expectedReturnDate < createForm.transferDate) {
-    ElMessage.warning('预计归还日期不能早于调拨日期');
-    return;
-  }
-  if (createForm.items.some((item) => !item.itemName || !item.unit || Number(item.quantity) <= 0)) {
-    ElMessage.warning('请完整填写每项明细的名称、数量和单位');
-    return;
-  }
+  if (saving.value) return;
   saving.value = true;
   try {
+    await createFormRef.value?.validate();
+    if (createForm.expectedReturnDate < createForm.transferDate) {
+      ElMessage.warning('预计归还日期不能早于调拨日期');
+      return;
+    }
+    if (createForm.items.some((item) => !item.itemName || !item.unit || Number(item.quantity) <= 0)) {
+      ElMessage.warning('请完整填写每项明细的名称、数量和单位');
+      return;
+    }
     await createStoreTransfer(createForm);
     ElMessage.success('调拨申请已提交，等待调出门店确认');
     drawerVisible.value = false;
@@ -861,17 +874,18 @@ async function saveCreate() {
 }
 
 async function saveEdit() {
-  await createFormRef.value?.validate();
-  if (createForm.expectedReturnDate < createForm.transferDate) {
-    ElMessage.warning('预计归还日期不能早于调拨日期');
-    return;
-  }
-  if (createForm.items.some((item) => !item.itemName || !item.unit || Number(item.quantity) <= 0)) {
-    ElMessage.warning('请完整填写每项明细的名称、数量和单位');
-    return;
-  }
+  if (saving.value) return;
   saving.value = true;
   try {
+    await createFormRef.value?.validate();
+    if (createForm.expectedReturnDate < createForm.transferDate) {
+      ElMessage.warning('预计归还日期不能早于调拨日期');
+      return;
+    }
+    if (createForm.items.some((item) => !item.itemName || !item.unit || Number(item.quantity) <= 0)) {
+      ElMessage.warning('请完整填写每项明细的名称、数量和单位');
+      return;
+    }
     detail.value = await updateStoreTransfer(detail.value.id, createForm);
     drawerMode.value = 'detail';
     ElMessage.success('调拨已修改');
@@ -1017,7 +1031,7 @@ async function cancelTransfer() {
     }
   );
   detail.value = await cancelStoreTransfer(detail.value.id, { reason: result.value });
-  ElMessage.success('调拨已取消');
+  ElMessage.success(detail.value.status === TRANSFER_STATUS.CANCEL_PENDING ? '取消申请已提交，等待对方确认' : '调拨已取消');
   await reload();
 }
 

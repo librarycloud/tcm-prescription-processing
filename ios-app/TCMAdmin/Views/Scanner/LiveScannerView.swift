@@ -149,7 +149,7 @@ public struct LiveScannerView: View {
     @State private var equipmentAlertData: EquipmentModel? = nil
     @State private var scanError: String? = nil
     
-    var enableOCR: Bool = false
+    nonisolated(unsafe) var enableOCR: Bool = false
     
     public init(enableOCR: Bool = false) { self.enableOCR = enableOCR }
     
@@ -379,7 +379,7 @@ public struct LiveScannerView: View {
 // MARK: - AVFoundation 相机底层实现
 struct BarcodeScannerPreview: UIViewControllerRepresentable {
     var torchOn: Bool
-    var enableOCR: Bool = false
+    nonisolated(unsafe) var enableOCR: Bool = false
     var onScanned: (String) -> Void
     
     func makeUIViewController(context: Context) -> BarcodeScannerViewController {
@@ -400,7 +400,7 @@ struct BarcodeScannerPreview: UIViewControllerRepresentable {
 
 class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onScanned: ((String) -> Void)?
-    var enableOCR: Bool = false
+    nonisolated(unsafe) var enableOCR: Bool = false
     private var captureSession: AVCaptureSession?
     // 统一使用 SharedCameraManager 的队列，避免多队列竞争同一个 session 导致死锁/卡住
     private var sessionQueue: DispatchQueue { SharedCameraManager.shared.sessionQueue }
@@ -408,7 +408,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     nonisolated(unsafe) private var hasScanned = false
     private let scanStateQueue = DispatchQueue(label: "com.tcm.camera.scan-state")
     nonisolated(unsafe) private var hasFadedIn = false
-    nonisolated(unsafe) private let scannerOpenTime = Date()
+    private let scannerOpenTime = Date()
     nonisolated(unsafe) private var lastOcrScanTime: Date = Date.distantPast
     nonisolated(unsafe) private var consecutiveEmptyFrames: Int = 0
     nonisolated(unsafe) private var lastOcrResult: String? = nil
@@ -426,7 +426,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     // MARK: - Scan state (被误删的原始实现)
 
     @discardableResult
-    func claimScan() -> Bool {
+    nonisolated func claimScan() -> Bool {
         var claimed = false
         scanStateQueue.sync {
             if !hasScanned { hasScanned = true; claimed = true }
@@ -434,7 +434,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         return claimed
     }
 
-    func releaseScan() {
+    nonisolated func releaseScan() {
         scanStateQueue.sync { hasScanned = false }
     }
 
@@ -534,19 +534,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
         previewLayer?.frame = view.bounds
     }
     
-    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        guard let metadataObj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let stringValue = metadataObj.stringValue else {
-            return
-        }
-        guard claimScan() else { return }
-        onScanned?(stringValue)
-        
-        // 延迟 1.5 秒后允许下一次扫描，避免重复触发
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.releaseScan()
-        }
-    }
+
     
 
 
@@ -716,6 +704,24 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
     }
 
     // MARK: - OCR Video Frame Extraction
+
+
+    nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard let metadataObj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let stringValue = metadataObj.stringValue else {
+            return
+        }
+        guard claimScan() else { return }
+        Task { @MainActor [weak self] in
+            self?.onScanned?(stringValue)
+        }
+        
+        // 延迟 1.5 秒后允许下一次扫描，避免重复触发
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.releaseScan()
+        }
+    }
+
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         if !hasFadedIn {
             hasFadedIn = true

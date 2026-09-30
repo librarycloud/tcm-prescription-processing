@@ -92,7 +92,7 @@ async function normalizeNotifyType(prisma, value) {
       : Number(value);
   if (notifyTypeId !== null && (!Number.isInteger(notifyTypeId) || notifyTypeId <= 0))
     throw new AppError("提醒方式不正确", 400);
-  const notifyTypeItem = await prisma.dictionary.findFirst({
+  let notifyTypeItem = await prisma.dictionary.findFirst({
     where: {
       ...(notifyTypeId === null
         ? { code: NOTIFY_TYPE.NONE }
@@ -103,6 +103,17 @@ async function normalizeNotifyType(prisma, value) {
     },
     select: { id: true },
   });
+  if (!notifyTypeItem && notifyTypeId === null) {
+    notifyTypeItem = await prisma.dictionary.create({
+      data: {
+        type: DICTIONARY_TYPES.NOTIFY_TYPE,
+        code: NOTIFY_TYPE.NONE,
+        name: '不提醒',
+        status: RECORD_STATUS.ENABLED,
+        sort: 0,
+      }
+    });
+  }
   if (!notifyTypeItem) throw new AppError("提醒方式不存在或已停用", 400);
   return notifyTypeItem.id;
 }
@@ -1306,10 +1317,15 @@ export async function restoreProcessingQueue(prisma, actor, payload = {}) {
 
 export async function getProcessingCalendar(prisma, actor, query = {}) {
   const monthText = String(query.month || "").trim();
-  const match = /^(\d{4})-(\d{2})$/.exec(monthText);
+  const match = /^(\d{4})[^\d]?(\d{1,2})/.exec(monthText);
   if (!match) throw new AppError("月份格式不正确", 400);
-  const start = new Date(Number(match[1]), Number(match[2]) - 1, 1);
-  const end = new Date(Number(match[1]), Number(match[2]), 1);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const start = new Date();
+  start.setFullYear(year, month - 1, 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
   const plans = await processingPlanRepository.findMany(prisma, {
     where: {
       ...scope(actor, isSuperAdmin(actor) ? query.storeId : undefined),

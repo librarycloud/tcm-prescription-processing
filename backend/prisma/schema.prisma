@@ -399,6 +399,9 @@ model Package {
   pickupMethod       Int?      @map("pickup_method") @db.TinyInt
   expressTrackingNo  String?   @map("express_tracking_no") @db.VarChar(100)
   expressAddress     String?   @map("express_address") @db.VarChar(500)
+  pickupProxyName    String?   @map("pickup_proxy_name") @db.VarChar(64)
+  pickupProxyPhone   String?   @map("pickup_proxy_phone") @db.VarChar(20)
+  printCount         Int       @default(0) @map("print_count")
   createdAt          DateTime  @default(now()) @map("created_at")
   pickedAt           DateTime? @map("picked_at")
   modifiedAt         DateTime? @map("modified_at")

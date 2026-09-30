@@ -514,6 +514,8 @@ internal fun PackageFormScreen(
     var receiverPhone by remember(initial) { mutableStateOf(initial?.phone?.takeIf { it != "-" }.orEmpty()) }
     var method by remember(initial) { mutableStateOf(initial?.methodCode ?: 0) }
     var tracking by remember(initial) { mutableStateOf(initial?.expressTrackingNo.orEmpty()) }
+    var pickupProxyName by remember { mutableStateOf("") }
+    var pickupProxyPhone by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -596,6 +598,31 @@ internal fun PackageFormScreen(
                 }
             }
 
+            
+            if (method == 0) {
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = pickupProxyName,
+                        onValueChange = { pickupProxyName = it },
+                        label = { Text("代领人姓名") },
+                        placeholder = { Text("选填") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = FieldShape,
+                    )
+                    OutlinedTextField(
+                        value = pickupProxyPhone,
+                        onValueChange = { pickupProxyPhone = it },
+                        label = { Text("代领人手机") },
+                        placeholder = { Text("选填") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.weight(1.5f),
+                        shape = FieldShape,
+                    )
+                }
+            }
             if (method == 2) {
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
@@ -635,6 +662,8 @@ internal fun PackageFormScreen(
                     .put("receiverPhone", receiverPhone.trim())
                     .put("pickupMethod", method)
                     .put("expressTrackingNo", tracking.trim())
+                    .put("pickupProxyName", pickupProxyName.trim())
+                    .put("pickupProxyPhone", pickupProxyPhone.trim())
 
                 scope.launch {
                     runCatching {
@@ -681,6 +710,10 @@ internal fun PackageVerifyScreen(
     }
     var method by remember { mutableStateOf(0) }
     var tracking by remember { mutableStateOf("") }
+    var pickupProxyName by remember { mutableStateOf("") }
+    var pickupProxyPhone by remember { mutableStateOf("") }
+    var relatedPackages by remember { mutableStateOf<org.json.JSONArray?>(null) }
+    val selectedRelatedIds = remember { androidx.compose.runtime.mutableStateListOf<Int>() }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -732,6 +765,31 @@ internal fun PackageVerifyScreen(
                 }
             }
 
+            
+            if (method == 0) {
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = pickupProxyName,
+                        onValueChange = { pickupProxyName = it },
+                        label = { Text("代领人姓名") },
+                        placeholder = { Text("选填") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = FieldShape,
+                    )
+                    OutlinedTextField(
+                        value = pickupProxyPhone,
+                        onValueChange = { pickupProxyPhone = it },
+                        label = { Text("代领人手机") },
+                        placeholder = { Text("选填") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.weight(1.5f),
+                        shape = FieldShape,
+                    )
+                }
+            }
             if (method == 2) {
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
@@ -768,7 +826,7 @@ internal fun PackageVerifyScreen(
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
-                            ApiClient.verifyPackage(rawPickupCode, method, tracking.trim(), signedQrContent)
+                            ApiClient.verifyPackage(rawPickupCode, method, tracking.trim(), signedQrContent, pickupProxyName.trim(), pickupProxyPhone.replace(Regex("[^0-9]"), ""))
                         }
                     }.onSuccess {
                         onVerified()

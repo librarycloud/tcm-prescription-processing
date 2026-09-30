@@ -139,6 +139,12 @@ internal fun AboutScreen(
                                 if (uriString != null && uriString.contains("versionCode=")) {
                                     val parsedUri = runCatching { Uri.parse(uriString) }.getOrNull()
                                     val versionCode = parsedUri?.getQueryParameter("versionCode")?.toIntOrNull()
+                                    
+                                    if (versionCode != null && versionCode <= BuildConfig.VERSION_CODE) {
+                                        runCatching { downloadManager.remove(id) }
+                                        continue
+                                    }
+                                    
                                     if (versionCode != null) {
                                         downloadFileName = "update_${versionCode}.apk"
                                         downloadVersionName = latest?.optString("versionName", "").orEmpty()

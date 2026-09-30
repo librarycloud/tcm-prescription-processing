@@ -110,3 +110,12 @@ export async function importHerbLocationMovesController(request, reply) {
     "斗谱位置批量修改完成",
   );
 }
+
+export async function swapHerbLocationsController(req, reply) {
+  const result = await herbLocationService.swapHerbLocations(
+    req.server.prisma,
+    req.user,
+    req.body
+  );
+  reply.send(result);
+}

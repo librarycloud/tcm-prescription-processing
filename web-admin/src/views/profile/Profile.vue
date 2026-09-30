@@ -40,6 +40,15 @@
         <el-form-item label="手机号" prop="phone">
           <el-input v-model.trim="form.phone" maxlength="11" />
         </el-form-item>
+        <el-form-item label="当前密码" prop="oldPassword">
+          <el-input
+            v-model="form.oldPassword"
+            type="password"
+            show-password
+            placeholder="修改密码时必填"
+            maxlength="32"
+          />
+        </el-form-item>
         <el-form-item label="新密码" prop="password">
           <el-input
             v-model="form.password"
@@ -85,6 +94,7 @@ const form = reactive({
   nickname: '',
   username: '',
   phone: '',
+  oldPassword: '',
   password: '',
   confirmPassword: ''
 });
@@ -108,6 +118,15 @@ const rules = {
         else callback(new Error('手机号和用户名至少填写一个'));
       },
       trigger: ['blur', 'change']
+    }
+  ],
+  oldPassword: [
+    {
+      validator: (_rule, value, callback) => {
+        if (form.password && !value) callback(new Error('请输入当前密码'));
+        else callback();
+      },
+      trigger: 'blur'
     }
   ],
   password: [
@@ -145,6 +164,7 @@ function fillForm() {
   form.nickname = userStore.user?.nickname || '';
   form.phone = userStore.user?.phone || '';
   form.username = userStore.user?.username || '';
+  form.oldPassword = '';
   form.password = '';
   form.confirmPassword = '';
 }
@@ -168,8 +188,16 @@ async function handleSubmit() {
       username: form.username || null,
       phone: form.phone
     };
-    if (form.password) data.password = form.password;
+    if (form.password) {
+      data.password = form.password;
+      data.oldPassword = form.oldPassword;
+    }
     const authData = await updateProfile(data);
+    if (form.password) {
+      ElMessage.success('密码修改成功，请重新登录');
+      await userStore.logout();
+      return;
+    }
     userStore.updateAuth(authData);
     ElMessage.success('保存成功');
     editing.value = false;

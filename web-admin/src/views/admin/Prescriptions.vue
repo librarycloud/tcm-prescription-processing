@@ -153,7 +153,7 @@
             <el-input v-model.trim="form.customerName" maxlength="64" />
           </el-form-item>
           <el-form-item label="手机号" prop="phone">
-            <el-input v-model.trim="form.phone" maxlength="11" placeholder="选填，留空不创建用户" />
+            <el-input v-model.trim="form.phone" maxlength="11" placeholder="选填，留空不创建用户" @input="form.phone = form.phone.replace(/\D/g, '')" />
           </el-form-item>
           <el-form-item label="医生" prop="doctorId">
             <el-select v-model="form.doctorId" filterable placeholder="请选择医生">
@@ -290,7 +290,7 @@
 
 <script setup>
 import { defineAsyncComponent } from "vue";
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTable } from '@/utils/useTable';
 import { Plus, Printer, Search } from '@element-plus/icons-vue';
@@ -408,10 +408,12 @@ function statusType(status) {
 function openCreate() {
   resetForm();
   formVisible.value = true;
+  nextTick(() => formRef.value?.clearValidate());
 }
 
 function openEdit(row) {
   Object.assign(form, {
+
     id: row.id,
     storeId: row.storeId,
     customerName: row.customerName,
@@ -427,6 +429,7 @@ function openEdit(row) {
     status: row.status
   });
   formVisible.value = true;
+  nextTick(() => formRef.value?.clearValidate());
 }
 
 function viewDetail(row) {
@@ -465,8 +468,15 @@ function handlePackageDrawerVerified() {
 }
 
 async function save() {
-  await formRef.value?.validate();
+  if (saving.value) return;
   saving.value = true;
+  try {
+    await formRef.value?.validate();
+  
+  } catch {
+    saving.value = false;
+    return;
+  }
   try {
     const payload = {
       customerName: form.customerName,
