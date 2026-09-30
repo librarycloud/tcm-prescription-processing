@@ -847,3 +847,62 @@ export async function cancelStoreTransfer(prisma, actor, idValue, payload) {
   await publishTransferRobotEvent(prisma, "TRANSFER_CANCELLED", result, actor);
   return result;
 }
+
+
+export async function deleteStoreTransferReturn(
+  prisma,
+  actor,
+  idValue,
+  returnIdValue,
+) {
+  const returnId = Number(returnIdValue);
+  if (!Number.isInteger(returnId) || returnId <= 0)
+    throw new AppError("归还记录不正确", 400);
+
+  return prisma.$transaction(
+    async (tx) => {
+      const transfer = await storeTransferRepository.findFirst(tx, {
+        where: { id: Number(idValue), AND: [transferScope(actor)] },
+        include: detailInclude(),
+      });
+      if (!transfer) throw new AppError("调拨单不存在", 404);
+      assertCanSubmitTransferReturn(actor, transfer);
+      if (
+        [TRANSFER_STATUS.RETURNED, TRANSFER_STATUS.CANCELLED].includes(
+          transfer.status,
+        )
+      )
+        throw new AppError("已调平或已取消的调拨不能取消归还记录", 409);
+
+      const item = transfer.items.find((candidate) =>
+        candidate.returns.some((record) => record.id === returnId),
+      );
+      const returnRecord = item?.returns.find(
+        (record) => record.id === returnId,
+      );
+      if (!returnRecord) throw new AppError("归还记录不属于当前调拨单", 404);
+      if (returnRecord.status !== RETURN_STATUS.PENDING)
+        throw new AppError("已确认的归还记录不能取消", 409);
+
+      await tx.storeTransferReturn.delete({
+        where: { id: returnId },
+      });
+      await storeTransferRepository.update(tx, {
+        where: { id: transfer.id },
+        data: { updatedBy: Number(actor.id) },
+      });
+      await recordOperation(tx, actor, {
+        module: "store-transfer",
+        action: "delete-return",
+        targetId: transfer.id,
+        storeId: transfer.fromStoreId,
+        description: `取消归还: ${item.itemName} ${returnRecord.quantity}${item.unit}`,
+      });
+      return await storeTransferRepository.findFirst(tx, {
+        where: { id: transfer.id },
+        include: detailInclude(),
+      });
+    },
+    { isolationLevel: "ReadCommitted" },
+  );
+}

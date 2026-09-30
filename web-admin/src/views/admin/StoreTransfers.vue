@@ -359,16 +359,7 @@
           </el-table-column>
           <el-table-column label="操作" align="center">
             <template #default="{ row }">
-              <el-button
-                link
-                type="primary"
-                :disabled="
-                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
-                  !detail.permissions?.canSubmitReturn
-                "
-                @click="openReturnEdit(row)"
-                >修改</el-button
-              >
+              
               <el-button
                 link
                 type="primary"
@@ -419,6 +410,26 @@
           </el-table-column>
           <el-table-column label="操作" align="center">
             <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                :disabled="
+                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
+                  !detail.permissions?.canSubmitReturn
+                "
+                @click="openReturnEdit(row)"
+                >修改</el-button
+              >
+              <el-button
+                link
+                type="danger"
+                :disabled="
+                  row.status !== TRANSFER_RETURN_STATUS.PENDING ||
+                  !detail.permissions?.canSubmitReturn
+                "
+                @click="cancelReturn(row)"
+                >取消</el-button
+              >
               <el-button
                 link
                 type="primary"
@@ -571,6 +582,7 @@ import {
   cancelStoreTransfer,
   confirmStoreTransferOutbound,
   confirmStoreTransferReturn,
+  deleteStoreTransferReturn,
   createStoreTransfer,
   getStoreTransfer,
   getStoreTransfers,

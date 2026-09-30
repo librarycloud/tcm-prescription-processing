@@ -65,7 +65,7 @@ onMounted(async () => {
 function loadGeetestScript() {
   if (window.initGeetest4) return;
   const script = document.createElement('script');
-  script.src = 'https://static.geetest.com/v4/initGeetest4.js';
+  script.src = 'https://static.geetest.com/v4/gt4.js';
   document.head.appendChild(script);
 }
 

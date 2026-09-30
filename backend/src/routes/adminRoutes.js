@@ -127,6 +127,7 @@ import {
   updateController as updateTransferController,
   updateExpectedReturnDateController,
   updateReturnController as updateTransferReturnController,
+  deleteReturnController as deleteTransferReturnController,
 } from "../controllers/storeTransferController.js";
 import {
   assignHerbLocationController,
@@ -352,6 +353,11 @@ export default async function adminRoutes(fastify, options) {
     "/store-transfers/:id/returns/:returnId",
     storeStaffRoute,
     updateTransferReturnController,
+  );
+  fastify.delete(
+    "/store-transfers/:id/returns/:returnId",
+    storeStaffRoute,
+    deleteTransferReturnController,
   );
   fastify.post(
     "/store-transfers/:id/confirm-outbound",
