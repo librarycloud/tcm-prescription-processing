@@ -617,18 +617,24 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         storeId: Int? = nil,
         page: Int = 1,
         pageSize: Int = 20
-    ) async throws -> [E6ImportItem] {
+    ) async throws -> (items: [E6ImportItem], total: Int) {
         var params: [String: String] = ["page": "\(page)", "pageSize": "\(pageSize)"]
         if let s = status { params["status"] = "\(s)" }
         if let od = orderDate, !od.isEmpty { params["orderDate"] = od }
         if let st = storeId { params["storeId"] = "\(st)" }
         if !keyword.isEmpty { params["keyword"] = keyword }
         
+        struct E6Pagination: Decodable {
+            let total: Int?
+        }
         struct E6Response: Decodable {
             let list: [E6ImportItem]?
+            let pagination: E6Pagination?
         }
         let res: E6Response = try await request(path: "/admin/e6/imports", queryParams: params)
-        return res.list ?? []
+        let list = res.list ?? []
+        let total = res.pagination?.total ?? list.count
+        return (list, total)
     }
     
     // MARK: - 8. 斗谱与货位

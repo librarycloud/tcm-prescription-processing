@@ -155,6 +155,8 @@ public struct MainShellView: View {
                     SecurityPrivacyView()
                 case .themeAppearance:
                     ThemeAppearanceView()
+                case .notificationSound:
+                    NotificationSoundView()
                 case .about:
                     AboutView()
                 case .profileDetail:

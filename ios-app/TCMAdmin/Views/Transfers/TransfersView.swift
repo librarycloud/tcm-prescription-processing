@@ -1041,13 +1041,26 @@ public struct TransferDetailView: View {
                                 .background(Color.surface)
                                 .clipShape(.rect(cornerRadius: 8))
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                            
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("归还日期").scaledFont(13).foregroundStyle(Color.muted)
+                                DatePicker("", selection: $returnDate, displayedComponents: .date)
+                                    .labelsHidden()
+                            }
+                            
+                            TextField("备注 (选填)", text: $returnRemark)
+                                .padding(.horizontal, 12)
+                                .frame(height: 44)
+                                .background(Color.surface)
+                                .clipShape(.rect(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
                         }
                     }
                     
                     Button(action: {
                         submitReturnAction(item: item)
                     }) {
-                        Text("提交归还申请")
+                        Text(returnRecordId != nil ? "保存修改" : "提交归还申请")
                             .scaledFont(15, weight: .bold)
                             .foregroundStyle(Color.white)
                             .frame(maxWidth: .infinity)
@@ -1055,17 +1068,17 @@ public struct TransferDetailView: View {
                             .background(Color.appPrimary)
                             .clipShape(.rect(cornerRadius: 8))
                     }
-                    .disabled((Double(returnQuantityText) ?? 0.0) <= 0)
+                    .disabled((Double(returnQuantityText) ?? 0.0) <= 0 || isActionBusy)
                     
                     Spacer()
                 }
                 .padding(16)
                 .background(Color.pageBackground.ignoresSafeArea(.all))
-                .navigationTitle("申请归还")
+                .navigationTitle(returnRecordId != nil ? "修改归还" : "申请归还")
                 .navigationBarTitleDisplayMode(.inline)
-                                .toolbar {
+                .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
-                        Button("取消") { returnDialogItem = nil }
+                        Button("取消") { returnDialogItem = nil; returnRecordId = nil }
                     }
                 }
             }
@@ -1205,25 +1218,38 @@ public struct TransferDetailView: View {
     private func submitReturnAction(item: TransferItemModel) {
         guard let qty = Double(returnQuantityText), qty > 0 else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let rId = returnRecordId
         returnDialogItem = nil
+        returnRecordId = nil
         isActionBusy = true
         
         Task {
             do {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd"
-                let todayStr = formatter.string(from: Date())
+                let dateStr = formatter.string(from: returnDate)
                 
-                let payload: [String: Any] = [
-                    "returnDate": todayStr,
-                    "items": [
-                        [
-                            "transferItemId": item.id,
-                            "quantity": qty
+                if let rId = rId {
+                    let payload: [String: Any] = [
+                        "returnDate": dateStr,
+                        "quantity": qty,
+                        "remark": returnRemark
+                    ]
+                    try await ApiClient.shared.updateTransferReturn(transferId: id, returnId: rId, payload: payload)
+                } else {
+                    let payload: [String: Any] = [
+                        "returnDate": dateStr,
+                        "items": [
+                            [
+                                "transferItemId": item.id,
+                                "quantity": qty,
+                                "remark": returnRemark
+                            ]
                         ]
                     ]
-                ]
-                try await ApiClient.shared.addTransferReturns(transferId: id, payload: payload)
+                    try await ApiClient.shared.addTransferReturns(transferId: id, payload: payload)
+                }
+                
                 await MainActor.run {
                     isActionBusy = false
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
