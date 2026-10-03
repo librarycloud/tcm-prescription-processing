@@ -49,8 +49,9 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                             return@launch
                         }
                     }
-                    Log.w(TAG, "Registration ID still unavailable after 30s — will rely on onRegister callback")
-                    showToast(context, "获取推送ID超时，可能无法收到推送")
+                    val isConnected = JPushInterface.getConnectionState(context)
+                    Log.w(TAG, "Registration ID still unavailable after 30s. Connected: $isConnected")
+                    showToast(context, "极光异常: 超时未获取到ID (网络连通状态: $isConnected)。请检查后台包名/AppKey是否匹配")
                 }
                 return
             }
