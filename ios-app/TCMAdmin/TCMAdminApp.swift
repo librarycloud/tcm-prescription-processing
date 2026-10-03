@@ -42,8 +42,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
 
         if let route = destination {
-            // 调拨类通知：先进调拨列表，再进详情（方便返回）
-            // 加工类通知：直接进详情
             let isTransferRoute: Bool
             if case .transferDetail = route { isTransferRoute = true } else { isTransferRoute = false }
 
