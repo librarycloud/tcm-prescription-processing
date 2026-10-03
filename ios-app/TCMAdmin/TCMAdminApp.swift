@@ -28,8 +28,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         if let transferIdStr = userInfo["transferId"] as? String,
            let transferId = Int(transferIdStr) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                Router.shared.navigate(to: .transfers)
-                Router.shared.navigate(to: .transferDetail(id: transferId))
+                // 先清空当前导航栈，避免叠加导致 SwiftUI 状态混乱
+                Router.shared.popToRoot()
+                // 小延迟等待清空动画完成
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    Router.shared.navigate(to: .transfers)
+                    Router.shared.navigate(to: .transferDetail(id: transferId))
+                }
             }
         }
         // 点击通知后清除角标
