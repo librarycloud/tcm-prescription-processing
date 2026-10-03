@@ -470,41 +470,28 @@ public struct E6ImportsView: View {
         }
         .sheet(isPresented: $showDatePicker) {
             NavigationStack {
-                VStack(spacing: 16) {
-                    DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .environment(\.locale, Locale(identifier: "zh_CN"))
-                        .padding()
-                        .onChange(of: tempPickerDate) { _, newValue in
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-                            orderDate = formatter.string(from: newValue)
-                            // 必须延迟收起，否则在 iOS 17 上 SwiftUI 的 sheet 状态机可能会卡住导致无法 dismiss
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .environment(\.locale, Locale(identifier: "zh_CN"))
+                    .padding()
+                    .navigationTitle("选择订单日期")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("取消") { showDatePicker = false }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("确定") {
+                                let formatter = DateFormatter()
+                                formatter.dateFormat = "yyyy-MM-dd"
+                                orderDate = formatter.string(from: tempPickerDate)
                                 showDatePicker = false
                                 startLoadE6Imports()
                             }
                         }
-                    Spacer()
-                }
-                .navigationTitle("选择订单日期")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { showDatePicker = false }
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("确定") {
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-                            orderDate = formatter.string(from: tempPickerDate)
-                            showDatePicker = false
-                            startLoadE6Imports()
-                        }
-                    }
-                }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.height(420), .medium])
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
