@@ -5,7 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("com.google.gms.google-services")
 }
 
 android {
@@ -184,11 +183,7 @@ dependencies {
     implementation("androidx.paging:paging-runtime:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
 
-    // Firebase Cloud Messaging (push notifications — for Google Play devices)
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    implementation("com.google.firebase:firebase-messaging-ktx")
-
-    // JPush (极光推送) — for domestic Android devices without Google Play
+    // JPush (极光推送) — handles both GMS and non-GMS Android devices automatically
     implementation("cn.jiguang.sdk:jpush:5.4.0")
     implementation("cn.jiguang.sdk:jcore:4.2.0")
 

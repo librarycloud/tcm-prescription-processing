@@ -32,15 +32,6 @@
         </activity>
         <activity android:name=".ScannerActivity" android:screenOrientation="portrait" android:exported="false" />
 
-        <!-- FCM push notification service -->
-        <service
-            android:name=".TcmFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <!-- JPush (极光推送) configuration -->
         <!-- Replace YOUR_JPUSH_APP_KEY with the AppKey from JPush console -->
         <meta-data

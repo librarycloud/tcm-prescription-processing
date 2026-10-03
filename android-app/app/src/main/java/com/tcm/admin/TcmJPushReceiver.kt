@@ -44,7 +44,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         }
 
         private fun uploadToken(context: Context, regId: String) {
-            if (!ApiClient.isLoggedIn) return
+            if (!ApiClient.isAuthenticated) return
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     ApiClient.registerDeviceToken(context, platform = "jpush", token = regId)

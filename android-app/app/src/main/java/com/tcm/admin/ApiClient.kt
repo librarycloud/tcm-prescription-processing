@@ -399,9 +399,6 @@ object ApiClient {
     val isAuthenticated: Boolean
         get() = token != null
 
-    // Alias used by TcmFirebaseMessagingService
-    val isLoggedIn: Boolean get() = isAuthenticated
-
     suspend fun logout() {
         request("/auth/logout", "POST")
     }
