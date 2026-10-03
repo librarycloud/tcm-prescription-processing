@@ -128,22 +128,43 @@ public struct E6ImportsView: View {
                     HStack(spacing: 8) {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                SegmentedButton(
-                                    label: "今日订单",
-                                    isSelected: orderDate == todayString,
-                                    action: {
-                                        orderDate = orderDate == todayString ? "" : todayString
-                                        startLoadE6Imports()
-                                    }
-                                )
-                                SegmentedButton(
-                                    label: "全部日期",
-                                    isSelected: orderDate.isEmpty,
-                                    action: {
-                                        orderDate = ""
-                                        startLoadE6Imports()
-                                    }
-                                )
+                                Button(action: {
+                                    orderDate = orderDate == todayString ? "" : todayString
+                                    startLoadE6Imports()
+                                }) {
+                                    Text("今日订单")
+                                        .scaledFont(12, weight: orderDate == todayString ? .semibold : .medium)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                        .foregroundStyle(orderDate == todayString ? Color.appPrimary : Color.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(orderDate == todayString ? Color.appPrimarySoft : Color.surface)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(orderDate == todayString ? Color.appPrimary.opacity(0.4) : Color.cardBorder, lineWidth: 1)
+                                        )
+                                }
+                                
+                                Button(action: {
+                                    orderDate = ""
+                                    startLoadE6Imports()
+                                }) {
+                                    Text("全部日期")
+                                        .scaledFont(12, weight: orderDate.isEmpty ? .semibold : .medium)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                        .foregroundStyle(orderDate.isEmpty ? Color.appPrimary : Color.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(orderDate.isEmpty ? Color.appPrimarySoft : Color.surface)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(orderDate.isEmpty ? Color.appPrimary.opacity(0.4) : Color.cardBorder, lineWidth: 1)
+                                        )
+                                }
                             }
                         }
                         
