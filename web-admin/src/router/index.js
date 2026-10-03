@@ -188,7 +188,7 @@ const routes = [
         path: 'robot-notifications',
         name: 'RobotNotifications',
         component: () => import('@/views/admin/RobotNotifications.vue'),
-        meta: { title: '群机器人通知', icon: 'Bell', group: 'system', allowedRoles: [0, 2] }
+        meta: { title: '通知设置', icon: 'Bell', group: 'system', allowedRoles: [0, 2] }
       },
       {
         path: 'processing-equipment',

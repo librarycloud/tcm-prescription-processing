@@ -2,8 +2,8 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">群机器人通知</h1>
-        <p class="page-subtitle">按总部或门店向内部工作群推送业务动态</p>
+        <h1 class="page-title">通知设置</h1>
+        <p class="page-subtitle">按总部或门店管理消息通知与推送模板</p>
       </div>
       <div class="header-actions">
         <el-button :icon="Refresh" :loading="loading" @click="refreshCurrent">刷新</el-button>
@@ -12,15 +12,15 @@
           type="primary"
           :icon="Plus"
           @click="openRobotDialog()"
-          >新增机器人</el-button
+          >新增配置</el-button
         >
       </div>
     </div>
 
     <el-tabs v-model="activeTab" class="notification-tabs" @tab-change="handleTabChange">
-      <el-tab-pane label="机器人配置" name="robots">
+      <el-tab-pane label="渠道配置" name="robots">
         <el-table v-loading="loading" :data="robots" border table-layout="auto">
-          <el-table-column prop="name" label="机器人名称" />
+          <el-table-column prop="name" label="名称" />
           <el-table-column label="平台"
             ><template #default="{ row }">{{
               platformName(row.platform)
@@ -56,15 +56,15 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-if="!loading && !robots.length" description="还没有配置群机器人" />
+        <el-empty v-if="!loading && !robots.length" description="还没有配置通知配置" />
       </el-tab-pane>
 
       <el-tab-pane label="事件配置" name="events">
         <div class="event-toolbar">
-          <span class="toolbar-label">选择机器人</span>
+          <span class="toolbar-label">选择渠道</span>
           <el-select
             v-model="selectedRobotId"
-            placeholder="请选择机器人"
+            placeholder="请选择渠道"
             filterable
             @change="syncSelectedRobot"
           >
@@ -96,12 +96,12 @@
             ></el-table-column
           >
         </el-table>
-        <el-empty v-else description="请选择一个机器人配置事件" />
+        <el-empty v-else description="请选择一个渠道配置事件" />
       </el-tab-pane>
 
       <el-tab-pane label="发送记录" name="logs">
         <div class="log-filters">
-          <el-select v-model="logQuery.robotId" clearable placeholder="全部机器人" @change="searchLogs"
+          <el-select v-model="logQuery.robotId" clearable placeholder="全部" @change="searchLogs"
             ><el-option v-for="item in robots" :key="item.id" :label="item.name" :value="item.id"
           /></el-select>
           <el-select v-model="logQuery.eventCode" clearable placeholder="全部事件" @change="searchLogs"
@@ -134,7 +134,7 @@
           <el-table-column label="业务编号"
             ><template #default="{ row }">{{ row.event.businessId }}</template></el-table-column
           >
-          <el-table-column label="机器人"
+          <el-table-column label="渠道"
             ><template #default="{ row }">{{ row.robot.name }}</template></el-table-column
           >
           <el-table-column label="平台"
@@ -174,12 +174,12 @@
 
     <el-dialog
       v-model="robotDialogVisible"
-      :title="robotForm.id ? '编辑群机器人' : '新增群机器人'"
+      :title="robotForm.id ? '编辑通知配置' : '新增通知配置'"
       width="620px"
     >
       <el-form label-position="top" :model="robotForm">
         <div class="form-grid">
-          <el-form-item label="机器人名称"
+          <el-form-item label="名称"
             ><el-input v-model.trim="robotForm.name" maxlength="100"
           /></el-form-item>
           <el-form-item label="平台"
@@ -208,7 +208,7 @@
             type="password"
             show-password
             :placeholder="
-              robotForm.webhookConfigured ? '已配置，留空不修改' : '请输入官方机器人 Webhook'
+              robotForm.webhookConfigured ? '已配置，留空不修改' : '请输入官方Webhook'
             "
         /></el-form-item>
         <el-form-item v-if="robotForm.platform !== 'app_push'" label="签名 Secret"
@@ -223,7 +223,7 @@
         <el-form-item label="备注"
           ><el-input v-model="robotForm.remark" type="textarea" :rows="2" maxlength="500"
         /></el-form-item>
-        <el-form-item label="启用机器人"><el-switch v-model="robotForm.enabled" /></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="robotForm.enabled" /></el-form-item>
       </el-form>
       <template #footer
         ><el-button @click="robotDialogVisible = false">取消</el-button
@@ -275,7 +275,7 @@
 
     <el-dialog v-model="testDialogVisible" title="发送测试消息" width="460px">
       <el-form label-position="top"
-        ><el-form-item label="测试机器人"
+        ><el-form-item label="测试推送"
           ><el-input :model-value="testRobotTarget?.name" disabled /></el-form-item
         ><el-form-item label="测试事件"
           ><el-select v-model="testEventCode" class="full-width"
@@ -294,7 +294,7 @@
     <el-dialog v-model="logDialogVisible" title="发送记录详情" width="720px">
       <div v-if="logDetail" class="log-detail">
         <div><span>事件</span>{{ eventName(logDetail.event.eventCode) }}</div>
-        <div><span>机器人</span>{{ logDetail.robot.name }}</div>
+        <div><span>渠道</span>{{ logDetail.robot.name }}</div>
         <div><span>状态</span>{{ statusName(logDetail.status) }}</div>
         <div><span>发送次数</span>{{ logDetail.attemptCount }}</div>
         <section>
@@ -520,7 +520,7 @@ async function saveRobot() {
     if (!payload.secret) delete payload.secret;
     if (robotForm.id) await updateRobot(robotForm.id, payload);
     else await createRobot(payload);
-    ElMessage.success('群机器人已保存');
+    ElMessage.success('通知配置已保存');
     robotDialogVisible.value = false;
     await loadRobots();
   } finally {
@@ -528,11 +528,11 @@ async function saveRobot() {
   }
 }
 async function removeRobot(row) {
-  await ElMessageBox.confirm(`确认删除机器人“${row.name}”？历史发送记录会保留。`, '删除机器人', {
+  await ElMessageBox.confirm(`确认删除配置“${row.name}”？历史发送记录会保留。`, '删除配置', {
     type: 'warning'
   });
   await deleteRobot(row.id);
-  ElMessage.success('群机器人已删除');
+  ElMessage.success('通知配置已删除');
   await loadRobots();
 }
 function openTestDialog(row) {
