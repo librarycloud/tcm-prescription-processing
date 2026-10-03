@@ -427,6 +427,66 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             throw ApiError.decodingError(error)
         }
     }
+
+    /// 发送不需要解析 JSON 返回体的请求，只要 HTTP Status 为 2xx 即算成功
+    public func requestRaw(
+        path: String,
+        method: String = "GET",
+        body: [String: Any]? = nil
+    ) async throws -> Data {
+        let requestBaseURL = baseURL
+        let requestToken = await SessionManager.shared.token ?? ""
+        let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        
+        guard let url = URL(string: urlString) else {
+            throw ApiError.invalidURL
+        }
+        
+        var request = URLRequest(url: url, timeoutInterval: 15.0)
+        request.httpMethod = method
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        if !requestToken.isEmpty {
+            request.addValue("Bearer \(requestToken)", forHTTPHeaderField: "Authorization")
+        }
+        
+        #if os(iOS)
+        let deviceName = await UIDevice.current.name
+        request.addValue(deviceName, forHTTPHeaderField: "X-Device-Name")
+        #endif
+        
+        if let body = body {
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
+        
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await defaultSession.data(for: request)
+        } catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled || error is CancellationError {
+                throw CancellationError()
+            }
+            throw ApiError.networkError(error)
+        }
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ApiError.invalidResponse(statusCode: -1, message: "服务器未响应")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            await MainActor.run { SessionManager.shared.clearSession() }
+            throw ApiError.unauthorized
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String ?? "请求失败 (\(httpResponse.statusCode))"
+            throw ApiError.invalidResponse(statusCode: httpResponse.statusCode, message: errorMsg)
+        }
+        
+        return data
+    }
     
     // MARK: - 1. 认证接口
     public func login(identifier: String, password: String) async throws -> (token: String, user: UserItem) {
