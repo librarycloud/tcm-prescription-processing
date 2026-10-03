@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -36,10 +37,12 @@
         <!-- Replace YOUR_JPUSH_APP_KEY with the AppKey from JPush console -->
         <meta-data
             android:name="JPUSH_APPKEY"
-            android:value="${jpushAppKey}" />
+            android:value="${jpushAppKey}"
+            tools:replace="android:value" />
         <meta-data
             android:name="JPUSH_CHANNEL"
-            android:value="default" />
+            android:value="default"
+            tools:replace="android:value" />
         <receiver
             android:name=".TcmJPushReceiver"
             android:exported="false">
