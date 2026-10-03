@@ -186,7 +186,7 @@
             ><el-select v-model="robotForm.platform" class="full-width"
               ><el-option label="企业微信" value="wecom" /><el-option
                 label="钉钉"
-                value="dingtalk" /><el-option label="飞书" value="feishu" /></el-select
+                value="dingtalk" /><el-option label="飞书" value="feishu" /><el-option label="APP推送" value="app_push" /></el-select
           ></el-form-item>
           <el-form-item v-if="userStore.isSuperAdmin" label="归属"
             ><el-segmented v-model="robotForm.scopeType" :options="scopeOptions"
@@ -202,7 +202,7 @@
                 :value="item.id" /></el-select
           ></el-form-item>
         </div>
-        <el-form-item label="Webhook"
+        <el-form-item v-if="robotForm.platform !== 'app_push'" label="Webhook"
           ><el-input
             v-model.trim="robotForm.webhook"
             type="password"
@@ -211,7 +211,7 @@
               robotForm.webhookConfigured ? '已配置，留空不修改' : '请输入官方机器人 Webhook'
             "
         /></el-form-item>
-        <el-form-item label="签名 Secret"
+        <el-form-item v-if="robotForm.platform !== 'app_push'" label="签名 Secret"
           ><el-input
             v-model.trim="robotForm.secret"
             type="password"
@@ -442,7 +442,7 @@ const {
 );
 
 function platformName(value) {
-  return { wecom: '企业微信', dingtalk: '钉钉', feishu: '飞书' }[value] || value;
+  return { wecom: '企业微信', dingtalk: '钉钉', feishu: '飞书', app_push: 'APP推送' }[value] || value;
 }
 function eventName(code) {
   return eventDefinitions.value.find((item) => item.eventCode === code)?.name || code;
