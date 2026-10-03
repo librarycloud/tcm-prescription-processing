@@ -3,7 +3,12 @@ package com.tcm.admin
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import cn.jpush.android.api.JPushInterface
 import dagger.hilt.android.HiltAndroidApp
 
@@ -24,11 +29,32 @@ class TcmApplication : Application() {
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
         }
-        // 极光推送初始化 — AppKey 在 AndroidManifest meta-data 中配置
-        // 极光新版 SDK 强制要求合规授权，如果不调用 setAuth = true，JPush 将静默失效并不输出任何日志
-        cn.jpush.android.api.JPushInterface.setDebugMode(true) // 强制开启日志以便排查
+
+        // 极光推送初始化
+        JPushInterface.setDebugMode(true) // 强制开启日志以便排查
+
         @Suppress("DEPRECATION")
         cn.jiguang.api.utils.JCollectionAuth.setAuth(this, true)
-        cn.jpush.android.api.JPushInterface.init(this)
+
+        JPushInterface.init(this)
+
+        // 诊断：启动后 3 秒检查极光初始化状态
+        Handler(Looper.getMainLooper()).postDelayed({
+            val connected = JPushInterface.getConnectionState(this)
+            val regId = JPushInterface.getRegistrationID(this)
+
+            // 读取 Manifest 中实际注入的 JPUSH_APPKEY 值
+            var manifestAppKey = "读取失败"
+            try {
+                val ai = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+                manifestAppKey = ai.metaData?.getString("JPUSH_APPKEY") ?: "未找到"
+            } catch (e: Exception) {
+                manifestAppKey = "异常: ${e.message}"
+            }
+
+            val msg = "极光诊断:\n连接=${connected}\nRegID=${if (regId.isNullOrEmpty()) "空" else regId.take(16) + "..."}\nAppKey=${manifestAppKey}\n包名=${packageName}"
+            Log.w("TcmJPush", msg)
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+        }, 3000)
     }
 }
