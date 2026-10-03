@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Required for push notifications on Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application android:name=".TcmApplication"
         android:allowBackup="false"
         android:label="@string/app_name"
@@ -29,6 +31,16 @@
 
         </activity>
         <activity android:name=".ScannerActivity" android:screenOrientation="portrait" android:exported="false" />
+
+        <!-- FCM push notification service -->
+        <service
+            android:name=".TcmFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -40,3 +52,4 @@
         </provider>
     </application>
 </manifest>
+

@@ -1,7 +1,37 @@
 import SwiftUI
+import UserNotifications
+
+// MARK: - AppDelegate for APNs token callbacks
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        // Store token data so we can upload it after login too
+        PushTokenStore.shared.latestToken = deviceToken
+        // Upload immediately if already logged in
+        if SessionManager.shared.isAuthenticated {
+            Task { await ApiClient.shared.registerDeviceToken(deviceToken) }
+        }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("[Push] APNs registration failed:", error.localizedDescription)
+    }
+}
+
+// MARK: - Token store (survives across scenes)
+final class PushTokenStore {
+    static let shared = PushTokenStore()
+    var latestToken: Data?
+}
 
 @main
 struct TCMAdminApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var session = SessionManager.shared
     @State private var theme = ThemeManager.shared
     @State private var importedAlertMessage: String? = nil
@@ -28,7 +58,7 @@ struct TCMAdminApp: App {
                             UserDefaults.standard.set(true, forKey: "agreed_privacy")
                             hasAgreedPrivacy = true
                             preloadLocalEngines()
-                            // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
+                            requestPushPermission()
                         }
                     )
                     .zIndex(1)
@@ -99,18 +129,38 @@ struct TCMAdminApp: App {
             .onAppear {
                 if hasAgreedPrivacy {
                     preloadLocalEngines()
+                    requestPushPermission()
                 }
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
             }
             .onChange(of: keepScreenAwake) { _, newValue in
                 UIApplication.shared.isIdleTimerDisabled = newValue
             }
-            .onChange(of: session.isAuthenticated) { _, _ in
+            .onChange(of: session.isAuthenticated) { _, isAuth in
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
+                if isAuth {
+                    // Just logged in — upload any already-obtained APNs token
+                    if let token = PushTokenStore.shared.latestToken {
+                        Task { await ApiClient.shared.registerDeviceToken(token) }
+                    }
+                    // Also request permission if not yet granted (first login)
+                    requestPushPermission()
+                }
             }
             // 每次 App 回到前台时也强制重置，防止 AVCaptureSession 等系统行为修改过该值
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
+            }
+        }
+    }
+
+    /// Asks for notification permission and registers for remote notifications.
+    private func requestPushPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            if granted {
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
             }
         }
     }

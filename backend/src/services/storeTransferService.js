@@ -22,6 +22,7 @@ import { nextStoreTransferNo } from "./storeTransferNoService.js";
 import { prescriptionBusinessDate } from "./prescriptionNoService.js";
 import { storeTransferRepository } from "../repositories/storeTransferRepository.js";
 import { publishTransferRobotEvent } from "./robotBusinessEventService.js";
+import { sendPushToStores } from "./pushNotificationService.js";
 
 const MAX_ITEMS = 50;
 const RETURN_STATUS = TRANSFER_RETURN_STATUS;
@@ -412,6 +413,17 @@ export async function createStoreTransfer(prisma, actor, payload) {
     return withComputed(created, actor);
   });
   await publishTransferRobotEvent(prisma, "TRANSFER_REQUESTED", created, actor);
+  // 通知调出门店：有新的调拨申请待确认调出
+  await sendPushToStores(
+    prisma,
+    [created.fromStoreId],
+    {
+      title: "📦 新调拨申请",
+      body: `${created.toStore?.name} 申请借调物资，请确认调出`,
+      data: { type: "transfer", transferId: String(created.id) },
+    },
+    [Number(actor.id)],
+  );
   return created;
 }
 
@@ -530,6 +542,17 @@ export async function confirmStoreTransferOutbound(prisma, actor, idValue) {
     result,
     actor,
   );
+  // 通知调入门店：调出门店已确认调出，物资即将到达
+  await sendPushToStores(
+    prisma,
+    [result.toStoreId],
+    {
+      title: "✅ 调拨已确认调出",
+      body: `${result.fromStore?.name} 已确认调出，单号 ${result.transferNo}`,
+      data: { type: "transfer", transferId: String(result.id) },
+    },
+    [Number(actor.id)],
+  );
   return result;
 }
 
@@ -638,6 +661,17 @@ export async function submitStoreTransferReturns(
     transactionResult.transfer,
     actor,
     transactionResult.createdReturnIds.join("-"),
+  );
+  // 通知调出门店：调入门店已提交归还申请，请确认收货
+  await sendPushToStores(
+    prisma,
+    [transactionResult.transfer.fromStoreId],
+    {
+      title: "🔄 新归还申请",
+      body: `${transactionResult.transfer.toStore?.name} 提交了归还申请，请确认收货`,
+      data: { type: "transfer", transferId: String(transactionResult.transfer.id) },
+    },
+    [Number(actor.id)],
   );
   return transactionResult.transfer;
 }
@@ -811,6 +845,17 @@ export async function confirmStoreTransferReturn(
     result,
     actor,
     returnId,
+  );
+  // 通知调入门店：调出门店已确认收到归还物资
+  await sendPushToStores(
+    prisma,
+    [result.toStoreId],
+    {
+      title: "✅ 归还已确认收货",
+      body: `${result.fromStore?.name} 已确认收到归还物资，单号 ${result.transferNo}`,
+      data: { type: "transfer", transferId: String(result.id) },
+    },
+    [Number(actor.id)],
   );
   return result;
 }

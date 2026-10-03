@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -175,6 +176,11 @@ dependencies {
     
     implementation("androidx.paging:paging-runtime:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
+
+    // Firebase Cloud Messaging (push notifications)
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

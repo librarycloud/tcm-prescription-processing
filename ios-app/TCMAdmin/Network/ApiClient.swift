@@ -441,8 +441,41 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         )
         return (res.token, res.user)
     }
-    
-    
+
+    /// Registers an APNs device token with the backend. Called after login and on token refresh.
+    public func registerDeviceToken(_ tokenData: Data) async {
+        let token = tokenData.map { String(format: "%02x", $0) }.joined()
+        guard !token.isEmpty else { return }
+        do {
+            struct Empty: Decodable {}
+            let _: Empty = try await request(
+                path: "/admin/device-tokens",
+                method: "POST",
+                body: ["platform": "ios", "token": token]
+            )
+        } catch {
+            // Non-critical: log but don't surface to user
+            print("[Push] registerDeviceToken failed:", error.localizedDescription)
+        }
+    }
+
+    /// Removes the APNs device token from the backend on logout.
+    public func unregisterDeviceToken(_ tokenData: Data) async {
+        let token = tokenData.map { String(format: "%02x", $0) }.joined()
+        guard !token.isEmpty else { return }
+        do {
+            struct Empty: Decodable {}
+            let _: Empty = try await request(
+                path: "/admin/device-tokens",
+                method: "DELETE",
+                body: ["token": token]
+            )
+        } catch {
+            print("[Push] unregisterDeviceToken failed:", error.localizedDescription)
+        }
+    }
+
+
     public func updateMe(nickname: String?, username: String?, phone: String?, password: String?) async throws -> (token: String, user: UserItem) {
         var body: [String: Any] = [:]
         if let nickname = nickname { body["nickname"] = nickname }
