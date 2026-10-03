@@ -623,6 +623,7 @@ private fun TcmAdminApp() {
                         SettingsScreen(
                             onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
                             onOpenSecurityPrivacy = { navigateTo(Route.SecurityPrivacy) },
+                            onOpenNotificationSettings = { navigateTo(Route.NotificationSettings) },
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
@@ -635,6 +636,11 @@ private fun TcmAdminApp() {
                                 }
                             }
                         )
+                    }
+                }
+                composable<Route.NotificationSettings> {
+                    DetailShell("通知和声音", onBack = { navigateBack() }) {
+                        NotificationSettingsScreen()
                     }
                 }
                 composable<Route.SecurityPrivacy> {
