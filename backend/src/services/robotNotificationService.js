@@ -70,7 +70,7 @@ export async function publishRobotNotificationEvent(prisma, payload) {
           },
         },
       },
-      include: { robot: true, event: true },
+      include: { robot: true },
     });
     const deliveries = [
       ...new Map(eventConfigs.map((item) => [item.robotId, item])).values(),
