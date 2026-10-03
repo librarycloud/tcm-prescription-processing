@@ -2,8 +2,22 @@ import SwiftUI
 import UserNotifications
 
 // MARK: - AppDelegate for APNs token callbacks
-class AppDelegate: NSObject, UIApplicationDelegate {
-    
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    /// 前台收到推送时，也弹出横幅 + 播放声音 + 更新角标
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
     private func showAlert(title: String, message: String) {
         DispatchQueue.main.async {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -22,7 +36,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
         showAlert(title: "APNs Success", message: "Token length: \(hex.count)")
-        
         PushTokenStore.shared.latestToken = deviceToken
         NotificationCenter.default.post(name: NSNotification.Name("APNsTokenUpdated"), object: nil)
     }
