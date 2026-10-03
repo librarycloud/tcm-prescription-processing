@@ -22,6 +22,7 @@ import { nextStoreTransferNo } from "./storeTransferNoService.js";
 import { prescriptionBusinessDate } from "./prescriptionNoService.js";
 import { storeTransferRepository } from "../repositories/storeTransferRepository.js";
 import { publishTransferRobotEvent } from "./robotBusinessEventService.js";
+import { sendPushToStores } from "./pushNotificationService.js";
 
 const MAX_ITEMS = 50;
 const RETURN_STATUS = TRANSFER_RETURN_STATUS;
