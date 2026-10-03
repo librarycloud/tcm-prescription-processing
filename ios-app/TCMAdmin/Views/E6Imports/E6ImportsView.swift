@@ -498,7 +498,7 @@ public struct E6ImportsView: View {
                     }
                 }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.height(450)])
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
