@@ -447,8 +447,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         let token = tokenData.map { String(format: "%02x", $0) }.joined()
         guard !token.isEmpty else { return }
         do {
-            struct Empty: Decodable {}
-            let _: Empty = try await request(
+            let _ = try await requestRaw(
                 path: "/admin/device-tokens",
                 method: "POST",
                 body: ["platform": "ios", "token": token]
@@ -464,8 +463,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         let token = tokenData.map { String(format: "%02x", $0) }.joined()
         guard !token.isEmpty else { return }
         do {
-            struct Empty: Decodable {}
-            let _: Empty = try await request(
+            let _ = try await requestRaw(
                 path: "/admin/device-tokens",
                 method: "DELETE",
                 body: ["token": token]

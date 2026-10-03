@@ -170,14 +170,20 @@ function getApnsJwt() {
 
   const keyId = process.env.APNS_KEY_ID;
   const teamId = process.env.APNS_TEAM_ID;
-  if (!keyId || !teamId) return null;
+  if (!keyId || !teamId) {
+    console.warn('[Push] APNs Key ID or Team ID missing. keyId:', !!keyId, 'teamId:', !!teamId);
+    return null;
+  }
 
   // APNS_KEY_P8 can be:
   //   1. A file path: "./AuthKey_XXXXXXXX.p8"  (relative to process.cwd())
   //   2. Inline key content (starts with "-----BEGIN")
   let p8 = '';
   const raw = (process.env.APNS_KEY_P8 || '').trim();
-  if (!raw) return null;
+  if (!raw) {
+    console.warn('[Push] APNS_KEY_P8 missing');
+    return null;
+  }
 
   if (raw.startsWith('-----')) {
     // Inline content — unescape \n sequences written in .env
@@ -193,16 +199,25 @@ function getApnsJwt() {
     }
   }
 
-  if (!p8) return null;
+  if (!p8) {
+    console.warn('[Push] APNs p8 is empty');
+    return null;
+  }
 
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', kid: keyId })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ iss: teamId, iat: now })).toString('base64url');
 
   const sign = crypto.createSign('SHA256');
   sign.update(`${header}.${payload}`);
-  _apnsJwt = `${header}.${payload}.${sign.sign({ key: p8, dsaEncoding: 'ieee-p1363' }, 'base64url')}`;
-  _apnsJwtIssuedAt = now;
-  return _apnsJwt;
+  try {
+    _apnsJwt = `${header}.${payload}.${sign.sign({ key: p8, dsaEncoding: 'ieee-p1363' }, 'base64url')}`;
+    _apnsJwtIssuedAt = now;
+    console.log('[Push] APNs JWT generated successfully');
+    return _apnsJwt;
+  } catch (err) {
+    console.error('[Push] APNs JWT signing failed:', err.message);
+    return null;
+  }
 }
 
 /**
@@ -213,10 +228,18 @@ function sendApnsNotification(deviceToken, { title, body, data = {} }) {
   return new Promise((resolve) => {
     const jwt = getApnsJwt();
     const bundleId = process.env.APNS_BUNDLE_ID;
-    if (!jwt || !bundleId) return resolve();
+    if (!jwt) {
+      console.warn('[Push] APNs abort: JWT missing');
+      return resolve();
+    }
+    if (!bundleId) {
+      console.warn('[Push] APNs abort: APNS_BUNDLE_ID missing');
+      return resolve();
+    }
 
     const isProduction = process.env.APNS_PRODUCTION === 'true';
     const host = isProduction ? 'api.push.apple.com' : 'api.sandbox.push.apple.com';
+    console.log(`[Push] Sending APNs to ${deviceToken.slice(0, 10)}... via ${host} for bundle ${bundleId}`);
 
     const apnsPayload = JSON.stringify({
       aps: {
@@ -247,10 +270,11 @@ function sendApnsNotification(deviceToken, { title, body, data = {} }) {
         let raw = '';
         res.on('data', (chunk) => { raw += chunk; });
         res.on('end', () => {
-          console.warn('[Push] APNs send failed:', res.statusCode, raw.slice(0, 200));
+          console.warn('[Push] APNs send failed:', res.statusCode, raw.slice(0, 200), 'Token:', deviceToken.slice(0, 10) + '...');
           resolve();
         });
       } else {
+        console.log(`[Push] APNs send success to token: ${deviceToken.slice(0, 10)}...`);
         res.resume();
         resolve();
       }
