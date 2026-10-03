@@ -3,10 +3,26 @@ import UserNotifications
 
 // MARK: - AppDelegate for APNs token callbacks
 class AppDelegate: NSObject, UIApplicationDelegate {
+    
+    private func showAlert(title: String, message: String) {
+        DispatchQueue.main.async {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController { topVC = presented }
+            topVC.present(alert, animated: true)
+        }
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        showAlert(title: "APNs Success", message: "Token length: \(hex.count)")
+        
         PushTokenStore.shared.latestToken = deviceToken
         NotificationCenter.default.post(name: NSNotification.Name("APNsTokenUpdated"), object: nil)
     }
@@ -15,6 +31,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
+        showAlert(title: "APNs Failed", message: error.localizedDescription)
         print("[Push] APNs registration failed:", error.localizedDescription)
     }
 }
