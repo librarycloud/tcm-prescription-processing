@@ -507,7 +507,7 @@ private fun TcmAdminApp() {
                         loginError = null
                         scope.launch {
                             runCatching {
-                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password) }
+                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password, context) }
                             }.onSuccess { value ->
                                 ApiClient.saveSession(appContext, value)
                                 session = value

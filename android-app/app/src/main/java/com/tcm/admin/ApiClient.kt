@@ -403,12 +403,15 @@ object ApiClient {
         request("/auth/logout", "POST")
     }
 
-    suspend fun login(identifier: String, password: String): AdminSession {
+    suspend fun login(identifier: String, password: String, context: Context? = null): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
         val receivedToken = sanitizeToken(result.getString("token"))
             ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
-        return AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
+        val session = AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
+        // Attempt to upload token immediately after session starts. Context needed since JPush SDK needs it.
+        context?.let { TcmJPushReceiver.registerCurrentToken(it) }
+        return session
     }
 
     /** Registers a push notification device token with the backend. */
