@@ -18,6 +18,7 @@
  */
 
 import https from 'https';
+import http2 from 'http2';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -250,39 +251,44 @@ function sendApnsNotification(deviceToken, { title, body, data = {} }) {
       ...data,
     });
 
-    const options = {
-      hostname: host,
-      port: 443,
-      path: `/3/device/${deviceToken}`,
-      method: 'POST',
-      headers: {
-        authorization: `bearer ${jwt}`,
-        'apns-topic': bundleId,
-        'apns-push-type': 'alert',
-        'apns-priority': '10',
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(apnsPayload),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      if (res.statusCode !== 200) {
-        let raw = '';
-        res.on('data', (chunk) => { raw += chunk; });
-        res.on('end', () => {
-          console.warn('[Push] APNs send failed:', res.statusCode, raw.slice(0, 200), 'Token:', deviceToken.slice(0, 10) + '...');
-          resolve();
-        });
-      } else {
-        console.log(`[Push] APNs send success to token: ${deviceToken.slice(0, 10)}...`);
-        res.resume();
-        resolve();
-      }
-    });
-    req.on('error', (err) => {
-      console.warn('[Push] APNs request error:', err.message);
+    const client = http2.connect(`https://${host}`);
+    client.on('error', (err) => {
+      console.warn('[Push] APNs http2 client error:', err.message);
       resolve();
     });
+
+    const req = client.request({
+      [http2.constants.HTTP2_HEADER_METHOD]: 'POST',
+      [http2.constants.HTTP2_HEADER_PATH]: `/3/device/${deviceToken}`,
+      authorization: `bearer ${jwt}`,
+      'apns-topic': bundleId,
+      'apns-push-type': 'alert',
+      'apns-priority': '10',
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(apnsPayload),
+    });
+
+    req.on('response', (headers, flags) => {
+      const status = headers[http2.constants.HTTP2_HEADER_STATUS];
+      let raw = '';
+      req.on('data', (chunk) => { raw += chunk; });
+      req.on('end', () => {
+        client.close();
+        if (status !== 200) {
+          console.warn('[Push] APNs send failed:', status, raw.slice(0, 200), 'Token:', deviceToken.slice(0, 10) + '...');
+        } else {
+          console.log(`[Push] APNs send success to token: ${deviceToken.slice(0, 10)}...`);
+        }
+        resolve();
+      });
+    });
+
+    req.on('error', (err) => {
+      console.warn('[Push] APNs request error:', err.message);
+      client.close();
+      resolve();
+    });
+
     req.write(apnsPayload);
     req.end();
   });
