@@ -36,17 +36,23 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         } else if let planIdStr = userInfo["planId"] as? String,
                   let planId = Int(planIdStr),
                   action == "processing_completed" {
-            // 加工完成通知 → 加工工作流详情（暂跳转到详情，planId）
-            // 当前无独立的 workflowOperation Route，先跳转到主界面
-            _ = planId  // 预留：将来可用 .workflowOperation(planId: planId, planCode: "")
-            destination = nil
+            // 加工完成通知 → 加工工作流详情
+            let planCode = userInfo["planCode"] as? String ?? ""
+            destination = .workflowOperation(planId: planId, planCode: planCode)
         }
 
         if let route = destination {
+            // 调拨类通知：先进调拨列表，再进详情（方便返回）
+            // 加工类通知：直接进详情
+            let isTransferRoute: Bool
+            if case .transferDetail = route { isTransferRoute = true } else { isTransferRoute = false }
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 Router.shared.popToRoot()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    Router.shared.navigate(to: .transfers)
+                    if isTransferRoute {
+                        Router.shared.navigate(to: .transfers)
+                    }
                     Router.shared.navigate(to: route)
                 }
             }
