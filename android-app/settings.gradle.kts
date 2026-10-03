@@ -11,6 +11,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // JPush (极光推送) SDK repository
+        maven { url = uri("https://dl.bintray.com/cps/maven") }
+        maven { url = uri("https://jcenter.bintray.com") }
     }
 }
 

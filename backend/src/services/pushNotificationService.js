@@ -21,6 +21,7 @@ import https from 'https';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { sendJPushNotification } from './jpushService.js';
 
 
 // ─── FCM ─────────────────────────────────────────────────────────────────────
@@ -267,8 +268,8 @@ function sendApnsNotification(deviceToken, { title, body, data = {} }) {
 
 /**
  * Sends a push notification to a single device token.
- * @param {'android'|'ios'} platform
- * @param {string} token  — FCM registration token or APNs device token
+ * @param {'android'|'ios'|'jpush'} platform
+ * @param {string} token  — FCM token / APNs hex token / JPush registration ID
  * @param {{ title: string, body: string, data?: Record<string,string> }} payload
  */
 export async function sendPushToToken(platform, token, payload) {
@@ -277,6 +278,8 @@ export async function sendPushToToken(platform, token, payload) {
       await sendFcmNotification(token, payload);
     } else if (platform === 'ios') {
       await sendApnsNotification(token, payload);
+    } else if (platform === 'jpush') {
+      await sendJPushNotification([token], payload);
     }
   } catch (err) {
     console.warn('[Push] Unexpected error sending to', platform, err?.message);
@@ -285,6 +288,7 @@ export async function sendPushToToken(platform, token, payload) {
 
 /**
  * Loads all device tokens for the given admin IDs and sends push notifications.
+ * JPush tokens are batched into a single API call for efficiency.
  * Errors on individual tokens are swallowed — one bad token won't block others.
  *
  * @param {object} prisma
@@ -303,7 +307,15 @@ export async function sendPushToAdmins(prisma, adminIds, payload) {
     console.warn('[Push] Failed to load device tokens:', err?.message);
     return;
   }
-  await Promise.allSettled(tokens.map((t) => sendPushToToken(t.platform, t.token, payload)));
+
+  // Batch JPush tokens — one API call for all registration IDs
+  const jpushTokens = tokens.filter((t) => t.platform === 'jpush').map((t) => t.token);
+  const otherTokens = tokens.filter((t) => t.platform !== 'jpush');
+
+  await Promise.allSettled([
+    ...(jpushTokens.length ? [sendJPushNotification(jpushTokens, payload)] : []),
+    ...otherTokens.map((t) => sendPushToToken(t.platform, t.token, payload)),
+  ]);
 }
 
 /**

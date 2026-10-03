@@ -1,15 +1,36 @@
 import SwiftUI
 import UserNotifications
+import JPUSHService
 
-// MARK: - AppDelegate for APNs token callbacks
-class AppDelegate: NSObject, UIApplicationDelegate {
+// MARK: - AppDelegate for APNs token callbacks + JPush init
+class AppDelegate: NSObject, UIApplicationDelegate, JPUSHRegisterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // ─── JPush 初始化 ───────────────────────────────────────────
+        // AppKey 需在极光控制台创建 iOS 应用后获取
+        let jpushAppKey = Bundle.main.object(forInfoDictionaryKey: "JPUSH_APP_KEY") as? String ?? ""
+        let entity = JPUSHRegisterEntity()
+        entity.types = Int(JPAuthorizationOptions.alert.rawValue |
+                          JPAuthorizationOptions.badge.rawValue |
+                          JPAuthorizationOptions.sound.rawValue)
+        JPUSHService.register(forRemoteNotificationConfig: entity, delegate: self)
+        JPUSHService.setup(withOption: launchOptions,
+                           appKey: jpushAppKey,
+                           channel: "App Store",
+                           apsForProduction: true)
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        // Store token data so we can upload it after login too
+        // Forward APNs token to JPush (JPush needs it to deliver iOS notifications)
+        JPUSHService.registerDeviceToken(deviceToken)
+        // Also store and upload natively in case JPush is not configured
         PushTokenStore.shared.latestToken = deviceToken
-        // Upload immediately if already logged in
         if SessionManager.shared.isAuthenticated {
             Task { await ApiClient.shared.registerDeviceToken(deviceToken) }
         }
@@ -21,12 +42,29 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         print("[Push] APNs registration failed:", error.localizedDescription)
     }
+
+    // MARK: JPUSHRegisterDelegate — called when JPush obtains a Registration ID
+    func jpushNotificationAuthorization(_ type: JPAuthorizationStatus, withInfo info: [AnyHashable: Any]!) { }
+
+    func jpushNotificationCenter(_ center: UNUserNotificationCenter!,
+                                  willPresent notification: UNNotification!,
+                                  withCompletionHandler completionHandler: ((Int) -> Void)!) {
+        completionHandler(Int(UNNotificationPresentationOptions.alert.rawValue |
+                              UNNotificationPresentationOptions.sound.rawValue))
+    }
+
+    func jpushNotificationCenter(_ center: UNUserNotificationCenter!,
+                                  didReceive response: UNNotificationResponse!,
+                                  withCompletionHandler completionHandler: (() -> Void)!) {
+        completionHandler()
+    }
 }
 
 // MARK: - Token store (survives across scenes)
 final class PushTokenStore {
     static let shared = PushTokenStore()
     var latestToken: Data?
+    var jpushRegistrationId: String?
 }
 
 @main
@@ -139,11 +177,14 @@ struct TCMAdminApp: App {
             .onChange(of: session.isAuthenticated) { _, isAuth in
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
                 if isAuth {
-                    // Just logged in — upload any already-obtained APNs token
+                    // Upload APNs token (native channel)
                     if let token = PushTokenStore.shared.latestToken {
                         Task { await ApiClient.shared.registerDeviceToken(token) }
                     }
-                    // Also request permission if not yet granted (first login)
+                    // Upload JPush Registration ID (China channel)
+                    if let regId = JPUSHService.registrationID(), !regId.isEmpty {
+                        Task { await ApiClient.shared.registerJPushToken(regId) }
+                    }
                     requestPushPermission()
                 }
             }

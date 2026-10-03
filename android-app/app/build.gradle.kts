@@ -91,18 +91,25 @@ android {
         }
     }
 
+    val jpushAppKey = providers.gradleProperty("JPUSH_APP_KEY")
+        .orElse(providers.environmentVariable("JPUSH_APP_KEY"))
+        .orElse("")
+        .get()
+
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
             buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
             buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
             manifestPlaceholders["cleartextTraffic"] = true
+            manifestPlaceholders["jpushAppKey"] = jpushAppKey
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
             buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
             buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
             manifestPlaceholders["cleartextTraffic"] = false
+            manifestPlaceholders["jpushAppKey"] = jpushAppKey
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -177,9 +184,13 @@ dependencies {
     implementation("androidx.paging:paging-runtime:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
 
-    // Firebase Cloud Messaging (push notifications)
+    // Firebase Cloud Messaging (push notifications — for Google Play devices)
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging-ktx")
+
+    // JPush (极光推送) — for domestic Android devices without Google Play
+    implementation("cn.jiguang.sdk:jpush:5.4.0")
+    implementation("cn.jiguang.sdk:jcore:4.2.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

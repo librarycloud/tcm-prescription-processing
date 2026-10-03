@@ -16,7 +16,7 @@ const MAX_TOKENS_PER_ADMIN = 10;
  * @param {string} token
  */
 export async function registerDeviceToken(prisma, adminId, platform, token) {
-  if (!token || !['android', 'ios'].includes(platform)) return;
+  if (!token || !['android', 'ios', 'jpush'].includes(platform)) return;
   const tokenStr = String(token).trim();
   if (!tokenStr) return;
 

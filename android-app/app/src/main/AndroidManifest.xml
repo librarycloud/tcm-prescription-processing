@@ -41,6 +41,23 @@
             </intent-filter>
         </service>
 
+        <!-- JPush (极光推送) configuration -->
+        <!-- Replace YOUR_JPUSH_APP_KEY with the AppKey from JPush console -->
+        <meta-data
+            android:name="JPUSH_APPKEY"
+            android:value="${jpushAppKey}" />
+        <meta-data
+            android:name="JPUSH_CHANNEL"
+            android:value="default" />
+        <receiver
+            android:name=".TcmJPushReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="cn.jpush.android.intent.RECEIVE_MESSAGE" />
+                <category android:name="${applicationId}" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

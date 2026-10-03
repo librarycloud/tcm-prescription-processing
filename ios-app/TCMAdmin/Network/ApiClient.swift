@@ -475,6 +475,21 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         }
     }
 
+    /// Registers a JPush Registration ID with the backend (China push channel).
+    public func registerJPushToken(_ registrationId: String) async {
+        guard !registrationId.isEmpty else { return }
+        do {
+            struct Empty: Decodable {}
+            let _: Empty = try await request(
+                path: "/admin/device-tokens",
+                method: "POST",
+                body: ["platform": "jpush", "token": registrationId]
+            )
+        } catch {
+            print("[Push] registerJPushToken failed:", error.localizedDescription)
+        }
+    }
+
 
     public func updateMe(nickname: String?, username: String?, phone: String?, password: String?) async throws -> (token: String, user: UserItem) {
         var body: [String: Any] = [:]
