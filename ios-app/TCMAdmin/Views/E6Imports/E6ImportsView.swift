@@ -157,11 +157,12 @@ public struct E6ImportsView: View {
                                     .scaledFont(12)
                                     .foregroundStyle(orderDate.isEmpty ? Color.ink : Color.appPrimary)
                                 
-                                Text(orderDate.isEmpty ? "选择日期" : orderDate)
+                                Text(orderDate.isEmpty ? "选择日期" : "日期: \(orderDate)")
                                     .scaledFont(12, weight: orderDate.isEmpty ? .medium : .semibold)
                                     .foregroundStyle(orderDate.isEmpty ? Color.ink : Color.appPrimary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 
                                 if !orderDate.isEmpty {
                                     Button(action: {
@@ -173,8 +174,14 @@ public struct E6ImportsView: View {
                                             .foregroundStyle(Color.appPrimary.opacity(0.8))
                                     }
                                     .buttonStyle(.plain)
+                                } else {
+                                    // 占位符保证按钮不显示时宽度完全一致
+                                    Image(systemName: "xmark.circle.fill")
+                                        .scaledFont(11)
+                                        .opacity(0)
                                 }
                             }
+                            .frame(width: 140)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(orderDate.isEmpty ? Color.surface : Color.appPrimarySoft)
