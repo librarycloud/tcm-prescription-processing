@@ -27,6 +27,7 @@ class TcmApplication : Application() {
         // 极光推送初始化 — AppKey 在 AndroidManifest meta-data 中配置
         // 极光新版 SDK 强制要求合规授权，如果不调用 setAuth = true，JPush 将静默失效并不输出任何日志
         cn.jpush.android.api.JPushInterface.setDebugMode(BuildConfig.DEBUG)
+        @Suppress("DEPRECATION")
         cn.jiguang.api.utils.JCollectionAuth.setAuth(this, true)
         cn.jpush.android.api.JPushInterface.init(this)
     }

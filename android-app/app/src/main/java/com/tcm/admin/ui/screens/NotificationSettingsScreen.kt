@@ -87,7 +87,7 @@ internal fun NotificationSettingsScreen() {
                         saveBoolean("soundEffectsEnabled", it)
                     }
                 )
-                Divider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
                 ToggleRow(
                     title = "震动反馈",
                     subtitle = "重要操作成功或失败时的震动反馈",
@@ -121,7 +121,7 @@ internal fun NotificationSettingsScreen() {
                     }
                 )
                 if (receiveNotifications) {
-                    Divider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
                     ToggleRow(
                         title = "处方与导入提醒",
                         subtitle = "E6处方导入及新处方待审提醒",
@@ -131,7 +131,7 @@ internal fun NotificationSettingsScreen() {
                             saveBoolean("prescriptionNotify", it)
                         }
                     )
-                    Divider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
                     ToggleRow(
                         title = "调拨与盘点待办提醒",
                         subtitle = "门店物资借调、归还及盘点任务提醒",
