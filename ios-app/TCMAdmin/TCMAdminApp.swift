@@ -25,19 +25,33 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
+        let action = userInfo["action"] as? String
+
+        var destination: AppRoute? = nil
+
         if let transferIdStr = userInfo["transferId"] as? String,
            let transferId = Int(transferIdStr) {
+            // 所有调拨相关通知 → 调拨详情
+            destination = .transferDetail(id: transferId)
+        } else if let planIdStr = userInfo["planId"] as? String,
+                  let planId = Int(planIdStr),
+                  action == "processing_completed" {
+            // 加工完成通知 → 加工工作流详情（暂跳转到详情，planId）
+            // 当前无独立的 workflowOperation Route，先跳转到主界面
+            _ = planId  // 预留：将来可用 .workflowOperation(planId: planId, planCode: "")
+            destination = nil
+        }
+
+        if let route = destination {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                // 先清空当前导航栈，避免叠加导致 SwiftUI 状态混乱
                 Router.shared.popToRoot()
-                // 小延迟等待清空动画完成
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     Router.shared.navigate(to: .transfers)
-                    Router.shared.navigate(to: .transferDetail(id: transferId))
+                    Router.shared.navigate(to: route)
                 }
             }
         }
-        // 点击通知后清除角标
+
         UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
         completionHandler()
     }

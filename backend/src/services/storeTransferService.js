@@ -890,6 +890,17 @@ export async function cancelStoreTransfer(prisma, actor, idValue, payload) {
   });
   const result = withComputed(updated, actor);
   await publishTransferRobotEvent(prisma, "TRANSFER_CANCELLED", result, actor);
+  // 通知双方门店（排除操作人自己）
+  sendPushToStores(
+    prisma,
+    [result.fromStoreId, result.toStoreId].filter(Boolean),
+    {
+      title: "调拨已取消",
+      body: `调拨单 ${result.transferNo} 已取消`,
+      data: { action: "transfer_cancelled", transferId: String(result.id) },
+    },
+    [Number(actor.id)],
+  ).catch(() => {});
   return result;
 }
 
