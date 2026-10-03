@@ -12,9 +12,6 @@ target 'TCMAdmin' do
 
   # OpenCV
   pod 'OpenCV', '~> 4.3.0'
-
-  # JPush (极光推送) — domestic China push notifications
-  pod 'JPush', '~> 5.4.0'
 end
 
 post_install do |installer|

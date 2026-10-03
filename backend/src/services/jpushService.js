@@ -32,21 +32,14 @@ export async function sendJPushNotification(registrationIds, { title, body, data
   if (!auth) return;
 
   const message = {
-    platform: 'all',
+    platform: 'android',   // iOS uses native APNs directly, not JPush
     audience: { registration_id: registrationIds },
     notification: {
-      alert: body,
       android: {
         title,
         alert: body,
         extras: data,
         channel_id: 'transfer_alerts',
-      },
-      ios: {
-        alert: { title, body },
-        sound: 'default',
-        badge: '+1',
-        extras: data,
       },
     },
     options: {
