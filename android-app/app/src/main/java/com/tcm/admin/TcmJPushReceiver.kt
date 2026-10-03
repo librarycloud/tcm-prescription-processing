@@ -7,6 +7,7 @@ import cn.jpush.android.api.JPushMessage
 import cn.jpush.android.service.JPushMessageReceiver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -25,7 +26,21 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         fun registerCurrentToken(context: Context) {
             val regId = JPushInterface.getRegistrationID(context)
             if (regId.isNullOrEmpty()) {
-                Log.d(TAG, "Registration ID not yet available, will be uploaded on onRegister callback")
+                Log.d(TAG, "Registration ID not yet available, polling every 5s for up to 30s")
+                // JPush may not have registered yet (first launch after install).
+                // Poll until it becomes available, then upload.
+                CoroutineScope(Dispatchers.IO).launch {
+                    repeat(6) { attempt ->
+                        delay(5_000L)
+                        val retryRegId = JPushInterface.getRegistrationID(context)
+                        if (!retryRegId.isNullOrEmpty()) {
+                            Log.d(TAG, "Registration ID available after ${(attempt + 1) * 5}s, uploading...")
+                            uploadToken(context, retryRegId)
+                            return@launch
+                        }
+                    }
+                    Log.w(TAG, "Registration ID still unavailable after 30s — will rely on onRegister callback")
+                }
                 return
             }
             uploadToken(context, regId)
