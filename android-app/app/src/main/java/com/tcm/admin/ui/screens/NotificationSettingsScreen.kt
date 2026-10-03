@@ -1,4 +1,4 @@
-package com.tcm.admin.ui.screens
+package com.tcm.admin
 
 import android.Manifest
 import android.content.Context
@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.tcm.admin.ui.*
 import cn.jpush.android.api.JPushInterface
 
 @Composable

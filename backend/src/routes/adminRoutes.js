@@ -611,23 +611,23 @@ export default async function adminRoutes(fastify, options) {
     { preHandler: verifySuperAdmin },
     listOperationLogsController,
   );
-  fastify.get("/robot-notifications/robots", listRobotsController);
-  fastify.post("/robot-notifications/robots", createRobotController);
-  fastify.get("/robot-notifications/robots/:id", robotDetailController);
-  fastify.put("/robot-notifications/robots/:id", updateRobotController);
-  fastify.delete("/robot-notifications/robots/:id", deleteRobotController);
-  fastify.post("/robot-notifications/robots/:id/test", testRobotController);
+  fastify.get("/notifications/robots", listRobotsController);
+  fastify.post("/notifications/robots", createRobotController);
+  fastify.get("/notifications/robots/:id", robotDetailController);
+  fastify.put("/notifications/robots/:id", updateRobotController);
+  fastify.delete("/notifications/robots/:id", deleteRobotController);
+  fastify.post("/notifications/robots/:id/test", testRobotController);
   fastify.put(
-    "/robot-notifications/robots/:id/events/:eventCode",
+    "/notifications/robots/:id/events/:eventCode",
     updateRobotEventController,
   );
   fastify.post(
-    "/robot-notifications/robots/:id/events/:eventCode/reset-template",
+    "/notifications/robots/:id/events/:eventCode/reset-template",
     resetRobotEventController,
   );
-  fastify.get("/robot-notifications/logs", listRobotLogsController);
-  fastify.get("/robot-notifications/logs/:id", robotLogDetailController);
-  fastify.post("/robot-notifications/logs/:id/retry", retryRobotLogController);
+  fastify.get("/notifications/logs", listRobotLogsController);
+  fastify.get("/notifications/logs/:id", robotLogDetailController);
+  fastify.post("/notifications/logs/:id/retry", retryRobotLogController);
   fastify.get(
     "/client-display",
     { preHandler: verifySuperAdmin },

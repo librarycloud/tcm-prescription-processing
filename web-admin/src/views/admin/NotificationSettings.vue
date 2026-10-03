@@ -330,10 +330,10 @@ import {
   testRobot,
   updateRobot,
   updateRobotEvent
-} from '@/api/robotNotification';
+} from '@/api/notificationSettings';
 import { useUserStore } from '@/stores/user';
 import { formatDate } from '@/utils/date';
-import { ROBOT_DELIVERY_STATUS } from '@/constants/robotNotification';
+import { ROBOT_DELIVERY_STATUS } from '@/constants/notificationSettings';
 import { useTable } from '@/utils/useTable';
 
 const userStore = useUserStore();

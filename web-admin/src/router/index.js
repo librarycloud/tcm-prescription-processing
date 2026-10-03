@@ -185,9 +185,9 @@ const routes = [
         meta: { title: '法律文档', icon: 'Document', group: 'system', allowedRoles: [0] }
       },
       {
-        path: 'robot-notifications',
-        name: 'RobotNotifications',
-        component: () => import('@/views/admin/RobotNotifications.vue'),
+        path: 'notifications',
+        name: 'NotificationSettings',
+        component: () => import('@/views/admin/NotificationSettings.vue'),
         meta: { title: '通知设置', icon: 'Bell', group: 'system', allowedRoles: [0, 2] }
       },
       {
