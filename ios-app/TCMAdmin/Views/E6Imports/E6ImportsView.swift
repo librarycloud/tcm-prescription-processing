@@ -157,9 +157,11 @@ public struct E6ImportsView: View {
                                     .scaledFont(12)
                                     .foregroundStyle(orderDate.isEmpty ? Color.ink : Color.appPrimary)
                                 
-                                Text(orderDate.isEmpty ? "选择日期" : "日期: \(orderDate)")
+                                Text(orderDate.isEmpty ? "选择日期" : orderDate)
                                     .scaledFont(12, weight: orderDate.isEmpty ? .medium : .semibold)
                                     .foregroundStyle(orderDate.isEmpty ? Color.ink : Color.appPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                                 
                                 if !orderDate.isEmpty {
                                     Button(action: {
