@@ -8,9 +8,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         PushTokenStore.shared.latestToken = deviceToken
-        if SessionManager.shared.isAuthenticated {
-            Task { await ApiClient.shared.registerDeviceToken(deviceToken) }
-        }
+        NotificationCenter.default.post(name: NSNotification.Name("APNsTokenUpdated"), object: nil)
     }
 
     func application(
@@ -25,6 +23,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 final class PushTokenStore {
     static let shared = PushTokenStore()
     var latestToken: Data?
+
+    func uploadIfNeeded() {
+        guard let token = latestToken else { return }
+        Task {
+            await ApiClient.shared.registerDeviceToken(token)
+        }
+    }
 }
 
 @main
@@ -137,11 +142,13 @@ struct TCMAdminApp: App {
             .onChange(of: session.isAuthenticated) { _, isAuth in
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
                 if isAuth {
-                    // Upload APNs token on login
-                    if let token = PushTokenStore.shared.latestToken {
-                        Task { await ApiClient.shared.registerDeviceToken(token) }
-                    }
+                    PushTokenStore.shared.uploadIfNeeded()
                     requestPushPermission()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("APNsTokenUpdated"))) { _ in
+                if session.isAuthenticated {
+                    PushTokenStore.shared.uploadIfNeeded()
                 }
             }
             // 每次 App 回到前台时也强制重置，防止 AVCaptureSession 等系统行为修改过该值
