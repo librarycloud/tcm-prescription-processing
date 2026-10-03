@@ -260,6 +260,9 @@ struct SegmentedButton: View {
         Button(action: action) {
             Text(label)
                 .scaledFont(13, weight: isSelected ? .semibold : .regular)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(isSelected ? Color.white : Color.ink)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)

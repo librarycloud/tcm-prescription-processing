@@ -126,24 +126,28 @@ public struct E6ImportsView: View {
                     
                     // 日期快捷切换与日期选择（选择与展示合二为一）
                     HStack(spacing: 8) {
-                        SegmentedButton(
-                            label: "全部日期",
-                            isSelected: orderDate.isEmpty,
-                            action: {
-                                orderDate = ""
-                                startLoadE6Imports()
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                SegmentedButton(
+                                    label: "今日订单",
+                                    isSelected: orderDate == todayString,
+                                    action: {
+                                        orderDate = orderDate == todayString ? "" : todayString
+                                        startLoadE6Imports()
+                                    }
+                                )
+                                SegmentedButton(
+                                    label: "全部日期",
+                                    isSelected: orderDate.isEmpty,
+                                    action: {
+                                        orderDate = ""
+                                        startLoadE6Imports()
+                                    }
+                                )
                             }
-                        )
-                        SegmentedButton(
-                            label: "今日订单",
-                            isSelected: orderDate == todayString,
-                            action: {
-                                orderDate = orderDate == todayString ? "" : todayString
-                                startLoadE6Imports()
-                            }
-                        )
+                        }
                         
-                        Spacer()
+                        Spacer(minLength: 4)
                         
                         // 自定义日期选择与当前日期展示合二为一
                         Button(action: {
@@ -470,28 +474,31 @@ public struct E6ImportsView: View {
         }
         .sheet(isPresented: $showDatePicker) {
             NavigationStack {
-                DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
-                    .datePickerStyle(.graphical)
-                    .environment(\.locale, Locale(identifier: "zh_CN"))
-                    .padding()
-                    .navigationTitle("选择订单日期")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("取消") { showDatePicker = false }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("确定") {
-                                let formatter = DateFormatter()
-                                formatter.dateFormat = "yyyy-MM-dd"
-                                orderDate = formatter.string(from: tempPickerDate)
-                                showDatePicker = false
-                                startLoadE6Imports()
-                            }
+                VStack(spacing: 0) {
+                    DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .environment(\.locale, Locale(identifier: "zh_CN"))
+                        .padding()
+                    Spacer()
+                }
+                .navigationTitle("选择订单日期")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { showDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("确定") {
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            orderDate = formatter.string(from: tempPickerDate)
+                            showDatePicker = false
+                            startLoadE6Imports()
                         }
                     }
+                }
             }
-            .presentationDetents([.height(420), .medium])
+            .presentationDetents([.medium])
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
