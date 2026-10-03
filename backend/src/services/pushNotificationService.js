@@ -169,8 +169,30 @@ function getApnsJwt() {
 
   const keyId = process.env.APNS_KEY_ID;
   const teamId = process.env.APNS_TEAM_ID;
-  const p8 = (process.env.APNS_KEY_P8 || '').replace(/\\n/g, '\n');
-  if (!keyId || !teamId || !p8) return null;
+  if (!keyId || !teamId) return null;
+
+  // APNS_KEY_P8 can be:
+  //   1. A file path: "./AuthKey_XXXXXXXX.p8"  (relative to process.cwd())
+  //   2. Inline key content (starts with "-----BEGIN")
+  let p8 = '';
+  const raw = (process.env.APNS_KEY_P8 || '').trim();
+  if (!raw) return null;
+
+  if (raw.startsWith('-----')) {
+    // Inline content — unescape \n sequences written in .env
+    p8 = raw.replace(/\\n/g, '\n');
+  } else {
+    // Treat as file path
+    const filePath = path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+    try {
+      p8 = fs.readFileSync(filePath, 'utf8').trim();
+    } catch (err) {
+      console.error('[Push] Failed to read APNs .p8 file:', filePath, err.message);
+      return null;
+    }
+  }
+
+  if (!p8) return null;
 
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', kid: keyId })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ iss: teamId, iat: now })).toString('base64url');
