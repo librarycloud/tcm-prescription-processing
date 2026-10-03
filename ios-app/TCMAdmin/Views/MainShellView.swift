@@ -181,6 +181,10 @@ public struct MainShellView: View {
             self.selectedTab = 0
             self.router.popToRoot()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // 回到前台时清除桌面角标
+            UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
+        }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 TabBarDoubleTapHandler.shared.setup()

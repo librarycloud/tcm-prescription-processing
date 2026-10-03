@@ -9,7 +9,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
 
-    /// 前台收到推送时，也弹出横幅 + 播放声音 + 更新角标
+    // MARK: 前台收到推送 → 照常弹横幅
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -18,24 +18,29 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         completionHandler([.banner, .sound, .badge])
     }
 
-    private func showAlert(title: String, message: String) {
-        DispatchQueue.main.async {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            topVC.present(alert, animated: true)
+    // MARK: 用户点击通知 → 深链跳转
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        if let transferIdStr = userInfo["transferId"] as? String,
+           let transferId = Int(transferIdStr) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                Router.shared.navigate(to: .transfers)
+                Router.shared.navigate(to: .transferDetail(id: transferId))
+            }
         }
+        // 点击通知后清除角标
+        UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
+        completionHandler()
     }
 
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-        showAlert(title: "APNs Success", message: "Token length: \(hex.count)")
         PushTokenStore.shared.latestToken = deviceToken
         NotificationCenter.default.post(name: NSNotification.Name("APNsTokenUpdated"), object: nil)
     }
@@ -44,7 +49,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        showAlert(title: "APNs Failed", message: error.localizedDescription)
         print("[Push] APNs registration failed:", error.localizedDescription)
     }
 }
