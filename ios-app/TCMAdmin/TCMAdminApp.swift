@@ -160,12 +160,11 @@ struct TCMAdminApp: App {
 
     /// Asks for notification permission and registers for remote notifications.
     private func requestPushPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            if granted {
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        // Always register for remote notifications to get the APNs token, 
+        // regardless of whether the user granted alert permissions (needed for silent push / logic).
+        DispatchQueue.main.async {
+            UIApplication.shared.registerForRemoteNotifications()
         }
     }
 
