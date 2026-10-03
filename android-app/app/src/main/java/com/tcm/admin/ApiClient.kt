@@ -1190,12 +1190,19 @@ object ApiClient {
 
         client.newCall(requestBuilder.build()).execute().use { response ->
             val responseBodyString = response.body?.string().orEmpty()
+            
+            // Handle 204 No Content specifically to avoid JSON parse errors (like /admin/device-tokens)
+            if (response.code == 204 || (response.isSuccessful && responseBodyString.isBlank())) {
+                if (normalizedMethod != "GET") invalidateCacheForMutation(path)
+                return@use JSONObject().put("code", 0).put("message", "ok")
+            }
+
             val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
             if (response.code == 401) {
                 token = null
                 onUnauthorized?.invoke()
             }
-            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败: ${response.code}"), json.optInt("code", -1), json.optJSONObject("data"))
             if (normalizedMethod != "GET") invalidateCacheForMutation(path)
             else if (cacheTtl != null) cacheResponse(path, json.toString())
             json
