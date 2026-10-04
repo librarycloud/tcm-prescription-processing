@@ -174,7 +174,10 @@ object ServerConfigNotifier {
 class MainActivity : ComponentActivity() {
 
     companion object {
-        val pushExtrasFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
+        val pushExtrasChannel = kotlinx.coroutines.channels.Channel<String>(
+            capacity = 1,
+            onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        )
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -185,7 +188,7 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: android.content.Intent?) {
         val jpushExtras = intent?.getStringExtra("jpush_extras")
         if (jpushExtras != null) {
-            pushExtrasFlow.tryEmit(jpushExtras)
+            pushExtrasChannel.trySend(jpushExtras)
         }
         if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
             val uri = intent.data!!
@@ -235,6 +238,9 @@ class MainActivity : ComponentActivity() {
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
+    
+    var session by remember { mutableStateOf(restoredSession) }
+    val initialStart = remember { if (restoredSession != null) Route.Inventory() else Route.Login }
 
     LaunchedEffect(restoredSession) {
         if (restoredSession != null) {
@@ -245,20 +251,29 @@ private fun TcmAdminApp() {
     val navController = rememberNavController()
 
     LaunchedEffect(Unit) {
-        MainActivity.pushExtrasFlow.collect { extrasJson ->
+        for (extrasJson in MainActivity.pushExtrasChannel) {
             try {
                 val json = org.json.JSONObject(extrasJson)
                 val transferId = json.optString("transferId")
                 val planId = json.optString("planId")
                 val action = json.optString("action")
                 
+                if (session == null) return@collect
+                
                 if (transferId.isNotEmpty()) {
-                    navController.popBackStack(navController.graph.id, inclusive = true)
+                    // Navigate to home, clearing everything else
+                    navController.navigate(initialStart) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                    // Push the intermediate transfers list
                     navController.navigate(Route.Transfers)
+                    // Push the final detail page
                     navController.navigate(Route.TransferDetail(transferId.toInt()))
                 } else if (planId.isNotEmpty() && action == "processing_completed") {
                     val planCode = json.optString("planCode", "")
-                    navController.popBackStack(navController.graph.id, inclusive = true)
+                    navController.navigate(initialStart) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
                     navController.navigate(Route.WorkflowOperation(planId, "processing_completed", action))
                 }
             } catch (e: Exception) {
@@ -302,7 +317,6 @@ private fun TcmAdminApp() {
             ServerConfigNotifier.consume()
         }
     }
-    var session by remember { mutableStateOf(restoredSession) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
     var stocktakingDetailRevision by remember { mutableStateOf(0) }
@@ -531,7 +545,6 @@ private fun TcmAdminApp() {
                 }
             )
         }
-        val initialStart = remember { if (restoredSession != null) Route.Inventory() else Route.Login }
         NavHost(
             navController = navController,
             startDestination = initialStart,
