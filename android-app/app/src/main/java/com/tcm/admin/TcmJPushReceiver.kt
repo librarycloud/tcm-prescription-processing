@@ -50,19 +50,10 @@ class TcmJPushReceiver : JPushMessageReceiver() {
             TcmFcmService.unregisterToken(context)
         }
 
-        /** Call on logout to remove this device's JPush token from the backend. */
-        fun unregisterToken(context: Context) {
-            val regId = JPushInterface.getRegistrationID(context) ?: return
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    ApiClient.unregisterDeviceToken(context, regId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
-                }
-            }
-        }
-
         private fun uploadToken(context: Context, regId: String) {
+            // Cache the token so we can unregister it later even if JPush isn't fully initialized
+            context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("last_jpush_token", regId).apply()
+
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
             }
@@ -75,6 +66,24 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                     Log.d(TAG, "JPush Registration ID uploaded: ${regId.take(20)}...")
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload JPush Registration ID: ${e.message}")
+                }
+            }
+        }
+
+        /** Call on logout or FCM takeover to remove this device's JPush token from the backend. */
+        fun unregisterToken(context: Context) {
+            val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
+            val regId = JPushInterface.getRegistrationID(context).takeIf { !it.isNullOrEmpty() } 
+                ?: prefs.getString("last_jpush_token", null) 
+                ?: return
+
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    ApiClient.unregisterDeviceToken(context, regId)
+                    prefs.edit().remove("last_jpush_token").apply()
+                    Log.d(TAG, "JPush Token unregistered from backend")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
                 }
             }
         }

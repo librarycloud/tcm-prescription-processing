@@ -28,12 +28,15 @@ class TcmFcmService : FirebaseMessagingService() {
         }
 
         fun unregisterToken(context: Context) {
+            val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val token = task.result
+                val token = if (task.isSuccessful) task.result else prefs.getString("last_fcm_token", null)
+                if (!token.isNullOrEmpty()) {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             ApiClient.unregisterDeviceToken(context, token)
+                            prefs.edit().remove("last_fcm_token").apply()
+                            Log.d(TAG, "FCM Token unregistered from backend")
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to unregister FCM token: ${e.message}")
                         }
@@ -43,6 +46,8 @@ class TcmFcmService : FirebaseMessagingService() {
         }
 
         private fun uploadToken(context: Context, token: String) {
+            context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("last_fcm_token", token).apply()
+
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
             }
