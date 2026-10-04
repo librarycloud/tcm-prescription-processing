@@ -151,10 +151,12 @@ jobs:
           test -n "$version_name"
           gradle_args=(
             --no-daemon assembleRelease
-            -PAPI_BASE_URL="$API_BASE_URL"
             -PVERSION_CODE="$version_code"
             -PVERSION_NAME="$version_name"
           )
+          if [ -n "$API_BASE_URL" ]; then
+            gradle_args+=("-PAPI_BASE_URL=$API_BASE_URL")
+          fi
           if [ -n "$UPDATE_BASE_URL" ]; then
             gradle_args+=("-PUPDATE_BASE_URL=$UPDATE_BASE_URL")
           fi
