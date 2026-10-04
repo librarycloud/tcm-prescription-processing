@@ -36,6 +36,7 @@ public enum AppRoute: Hashable {
     // 设置与关于
     case settings
     case themeAppearance
+    case notificationSound
     case about
     case profileDetail
     case securityPrivacy

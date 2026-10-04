@@ -155,6 +155,8 @@ public struct MainShellView: View {
                     SecurityPrivacyView()
                 case .themeAppearance:
                     ThemeAppearanceView()
+                case .notificationSound:
+                    NotificationSoundView()
                 case .about:
                     AboutView()
                 case .profileDetail:
@@ -178,6 +180,10 @@ public struct MainShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchInventoryByBarcode"))) { _ in
             self.selectedTab = 0
             self.router.popToRoot()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // 回到前台时清除桌面角标
+            UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

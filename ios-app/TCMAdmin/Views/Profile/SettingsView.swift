@@ -1,4 +1,6 @@
 import SwiftUI
+import AudioToolbox
+import UserNotifications
 
 @MainActor
 public struct SettingsView: View {
@@ -31,6 +33,10 @@ public struct SettingsView: View {
                         let modeText = ThemeManager.shared.colorSchemeMode == 1 ? "浅色模式" : (ThemeManager.shared.colorSchemeMode == 2 ? "深色模式" : "跟随系统")
                         ProfileRow(icon: "paintpalette.fill", title: "主题与外观", value: modeText) {
                             router.navigate(to: .themeAppearance)
+                        }
+                        Divider().padding(.leading, 48)
+                        ProfileRow(icon: "bell.badge.fill", title: "通知和声音", showArrow: true) {
+                            router.navigate(to: .notificationSound)
                         }
                         Divider().padding(.leading, 48)
                         HStack(spacing: 12) {
@@ -886,5 +892,210 @@ struct SessionRow: View {
         } message: {
             Text("确认将当前账号在 \(session.deviceName.isEmpty ? "该设备" : session.deviceName) 上退出登录吗？")
         }
+    }
+}
+
+// MARK: - 通知和声音设置
+@MainActor
+public struct NotificationSoundView: View {
+    @AppStorage("scan_sound_enabled") private var scanSoundEnabled: Bool = true
+    @AppStorage("scan_haptic_enabled") private var scanHapticEnabled: Bool = true
+    @AppStorage("action_haptic_enabled") private var actionHapticEnabled: Bool = true
+    @AppStorage("receive_notifications") private var receiveNotifications: Bool = true
+    @AppStorage("prescription_notify") private var prescriptionNotify: Bool = true
+    @AppStorage("transfer_notify") private var transferNotify: Bool = true
+    
+    @State private var systemNotificationAuthorized: Bool? = nil
+    
+    public init() {}
+    
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // 1. 声音与音效
+                Text("声音与音效")
+                    .scaledFont(16, weight: .bold)
+                    .foregroundStyle(Color.ink)
+                    .padding(.horizontal, 4)
+                
+                AppCard(padding: 0) {
+                    VStack(spacing: 0) {
+                        ToggleRow(
+                            icon: "speaker.wave.2.fill",
+                            title: "扫码成功提示音",
+                            subtitle: "条码或二维码识别成功时播放提示音",
+                            isOn: $scanSoundEnabled
+                        )
+                        .onChange(of: scanSoundEnabled) { _, enabled in
+                            if enabled {
+                                AudioServicesPlaySystemSound(1057)
+                            }
+                        }
+                        
+                        Divider().padding(.leading, 48)
+                        
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.circle.fill")
+                                .foregroundStyle(Color.appPrimary)
+                                .frame(width: 20)
+                            Text("试听扫码提示音")
+                                .scaledFont(15)
+                                .foregroundStyle(Color.ink)
+                            Spacer()
+                            Button("试听") {
+                                AudioServicesPlaySystemSound(1057)
+                            }
+                            .scaledFont(13, weight: .medium)
+                            .foregroundStyle(Color.appPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.appPrimarySoft)
+                            .clipShape(.rect(cornerRadius: 6))
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 52)
+                        .padding(.vertical, 6)
+                    }
+                }
+                
+                // 2. 震动与触感反馈
+                Text("震动与触感反馈")
+                    .scaledFont(16, weight: .bold)
+                    .foregroundStyle(Color.ink)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
+                
+                AppCard(padding: 0) {
+                    VStack(spacing: 0) {
+                        ToggleRow(
+                            icon: "iphone.radiowaves.left.and.right",
+                            title: "扫码成功震动",
+                            subtitle: "扫码成功时提供短促触感震动反馈",
+                            isOn: $scanHapticEnabled
+                        )
+                        .onChange(of: scanHapticEnabled) { _, enabled in
+                            if enabled {
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
+                        }
+                        
+                        Divider().padding(.leading, 48)
+                        
+                        ToggleRow(
+                            icon: "hand.tap.fill",
+                            title: "关键操作触感反馈",
+                            subtitle: "核销、提交等关键操作成功时提供触感反馈",
+                            isOn: $actionHapticEnabled
+                        )
+                        .onChange(of: actionHapticEnabled) { _, enabled in
+                            if enabled {
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            }
+                        }
+                    }
+                }
+                
+                // 3. 业务通知提醒
+                Text("消息与推送通知")
+                    .scaledFont(16, weight: .bold)
+                    .foregroundStyle(Color.ink)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
+                
+                AppCard(padding: 0) {
+                    VStack(spacing: 0) {
+                        ToggleRow(
+                            icon: "bell.fill",
+                            title: "接收系统业务通知",
+                            subtitle: "及时获取处方、加工与调拨状态变更",
+                            isOn: $receiveNotifications
+                        )
+                        
+                        if receiveNotifications {
+                            Divider().padding(.leading, 48)
+                            ToggleRow(
+                                icon: "doc.text.fill",
+                                title: "处方与导入提醒",
+                                subtitle: "E6处方导入及新处方待审提醒",
+                                isOn: $prescriptionNotify
+                            )
+                            
+                            Divider().padding(.leading, 48)
+                            ToggleRow(
+                                icon: "arrow.triangle.swap",
+                                title: "调拨与盘点待办提醒",
+                                subtitle: "门店物资借调、归还及盘点任务提醒",
+                                isOn: $transferNotify
+                            )
+                        }
+                    }
+                }
+                
+                if systemNotificationAuthorized == false {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.warning)
+                        Text("系统通知权限已关闭，建议前往系统设置开启通知，以便及时收到业务消息。")
+                            .scaledFont(12)
+                            .foregroundStyle(Color.muted)
+                        Spacer()
+                        Button("去开启") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .scaledFont(12, weight: .bold)
+                        .foregroundStyle(Color.appPrimary)
+                    }
+                    .padding(12)
+                    .background(Color.warning.opacity(0.1))
+                    .clipShape(.rect(cornerRadius: 10))
+                    .padding(.horizontal, 4)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.pageBackground.ignoresSafeArea())
+        .navigationTitle("通知和声音")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            systemNotificationAuthorized = (settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional)
+        }
+    }
+}
+
+@MainActor
+struct ToggleRow: View {
+    let icon: String
+    let title: String
+    var subtitle: String? = nil
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.appPrimary)
+                .frame(width: 20)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .scaledFont(15)
+                    .foregroundStyle(Color.ink)
+                if let sub = subtitle {
+                    Text(sub)
+                        .scaledFont(12)
+                        .foregroundStyle(Color.muted)
+                }
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 52)
+        .padding(.vertical, 8)
     }
 }

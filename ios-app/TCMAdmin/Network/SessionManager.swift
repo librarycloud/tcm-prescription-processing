@@ -74,6 +74,11 @@ public class SessionManager {
         SecItemDelete(query as CFDictionary)
         UserDefaults.standard.removeObject(forKey: userKey)
         ApiClient.shared.clearResponseCache()
+        
+        // 彻底清空所有路由栈，防止下一次登录时旧页面“复活”
+        Task { @MainActor in
+            Router.shared.popToRoot()
+        }
     }
 }
 
