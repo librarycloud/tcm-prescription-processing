@@ -67,6 +67,48 @@ class TcmFcmService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
-        // Handle foreground notifications or background data payloads if needed
+        
+        // When the app is in the foreground, FCM does NOT display notifications automatically.
+        // We must build and display it manually to ensure the user gets alerted (with sound).
+        val notification = remoteMessage.notification
+        if (notification != null) {
+            val title = notification.title ?: "新通知"
+            val body = notification.body ?: ""
+            
+            // Convert data payload to a JSON string for MainActivity to parse
+            val dataMap = remoteMessage.data
+            val extrasJson = if (dataMap.isNotEmpty()) {
+                org.json.JSONObject(dataMap as Map<*, *>).toString()
+            } else {
+                "{}"
+            }
+
+            val intent = android.content.Intent(this, MainActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("jpush_extras", extrasJson) // Reuse the same intent extra logic as JPush
+            }
+
+            val pendingIntent = android.app.PendingIntent.getActivity(
+                this,
+                System.currentTimeMillis().toInt(),
+                intent,
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            val channelId = "transfer_alerts"
+            val builder = androidx.core.app.NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            val notificationManager = androidx.core.app.NotificationManagerCompat.from(this)
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+            }
+        }
     }
 }
