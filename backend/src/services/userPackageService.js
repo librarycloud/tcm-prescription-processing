@@ -93,7 +93,15 @@ export async function updateCurrentUser(prisma, jwt, authSessions, currentUser, 
   }
 
   if (payload.nickname !== undefined) {
-    data.nickname = String(payload.nickname || '').trim() || null;
+    const nickname = String(payload.nickname || '').trim();
+    if (nickname.length > 64) throw new AppError('昵称不能超过 64 个字符', 400);
+    data.nickname = nickname || null;
+  }
+
+  if (payload.name !== undefined) {
+    const name = String(payload.name || '').trim();
+    if (name.length > 64) throw new AppError('姓名不能超过 64 个字符', 400);
+    data.name = name || null;
   }
 
   if (payload.password !== undefined && String(payload.password).trim() !== '') {

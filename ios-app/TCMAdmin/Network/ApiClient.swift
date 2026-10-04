@@ -535,8 +535,9 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
 
 
 
-    public func updateMe(nickname: String?, username: String?, phone: String?, password: String?) async throws -> (token: String, user: UserItem) {
+    public func updateMe(name: String? = nil, nickname: String?, username: String?, phone: String?, password: String?) async throws -> (token: String, user: UserItem) {
         var body: [String: Any] = [:]
+        if let name = name { body["name"] = name }
         if let nickname = nickname { body["nickname"] = nickname }
         if let username = username { body["username"] = username }
         if let phone = phone { body["phone"] = phone }

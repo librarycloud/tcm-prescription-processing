@@ -23,6 +23,7 @@ export function publicUser(user) {
         }
       : null,
     nickname: user.nickname,
+    name: user.name ?? null,
     email: user.email,
     emailVerified: Boolean(user.emailVerifiedAt),
     emailVerifiedAt: user.emailVerifiedAt,

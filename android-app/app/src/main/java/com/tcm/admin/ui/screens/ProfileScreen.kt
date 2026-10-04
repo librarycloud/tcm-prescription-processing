@@ -28,13 +28,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -80,7 +76,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -103,7 +98,9 @@ internal fun ProfileScreen(
     onSessionUpdated: (AdminSession) -> Unit,
 ) {
     val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
-        user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
+        user?.displayField("name", "").orEmpty().ifBlank {
+            user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
+        }
     }
     val role = when (user?.optInt("role", 0)) {
         0 -> "全局管理员"
@@ -1811,7 +1808,9 @@ internal fun ProfileDetailScreen(
     onSessionUpdated: (AdminSession) -> Unit,
 ) {
     val displayName = user?.displayField("nickname", "").orEmpty().ifBlank {
-        user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
+        user?.displayField("name", "").orEmpty().ifBlank {
+            user?.displayField("username", "").orEmpty().ifBlank { "管理员" }
+        }
     }
     val role = when (user?.optInt("role", 0)) {
         0 -> "全局管理员"
@@ -1820,14 +1819,17 @@ internal fun ProfileDetailScreen(
         else -> "管理员"
     }
     val isSuperAdmin = user?.optInt("role", -1) == 0
-    var editVisible by remember { mutableStateOf(false) }
-    var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    var name by remember(user?.toString()) { mutableStateOf(user?.displayField("name", "").orEmpty()) }
     var nickname by remember(user?.toString()) { mutableStateOf(user?.displayField("nickname", "").orEmpty()) }
     var username by remember(user?.toString()) { mutableStateOf(user?.displayField("username", "").orEmpty()) }
     var phone by remember(user?.toString()) { mutableStateOf(user?.displayField("phone", "").orEmpty()) }
     var password by remember { mutableStateOf("") }
+
     var saveError by remember { mutableStateOf<String?>(null) }
+    var saveSuccess by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -1872,77 +1874,145 @@ internal fun ProfileDetailScreen(
                         color = Ink,
                     )
                     Spacer(Modifier.height(4.dp))
-                    StatusPill(text = role)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        StatusPill(text = role)
+                        val storeName = user?.optJSONObject("store")?.displayField("name", "")
+                        if (!storeName.isNullOrBlank()) {
+                            Text(storeName, fontSize = 12.sp, color = Muted)
+                        } else if (isSuperAdmin) {
+                            Text("全部门店（全局权限）", fontSize = 12.sp, color = Muted)
+                        }
+                    }
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        // Account Details Card
+        // Direct Edit Form Card (no popup, exactly like iOS)
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = CardShape,
             border = BorderStroke(0.5.dp, CardBorderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                ProfileDetailRow(
-                    icon = Icons.Default.Person,
-                    label = "姓名/昵称",
-                    value = user?.displayField("nickname", "")?.takeIf { it.isNotBlank() } ?: "未设置",
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it; saveSuccess = false; saveError = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("真实姓名") },
+                    placeholder = { Text("请输入真实姓名") },
+                    singleLine = true,
+                    shape = FieldShape,
                 )
-                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                ProfileDetailRow(
-                    icon = Icons.Default.Person,
-                    label = "用户名",
-                    value = user?.displayField("username") ?: "-",
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { nickname = it; saveSuccess = false; saveError = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("昵称") },
+                    placeholder = { Text("请输入昵称") },
+                    singleLine = true,
+                    shape = FieldShape,
                 )
-                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                ProfileDetailRow(
-                    icon = Icons.Default.Phone,
-                    label = "手机号",
-                    value = maskPhone(user?.displayField("phone", "")),
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it; saveSuccess = false; saveError = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("登录账号") },
+                    placeholder = { Text("请输入登录账号") },
+                    singleLine = true,
+                    shape = FieldShape,
                 )
-                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                if (isSuperAdmin) {
-                    ProfileDetailRow(
-                        icon = Icons.Default.Business,
-                        label = "所属门店",
-                        value = user?.optJSONObject("store")?.displayField("name", "")?.ifBlank { "全部门店（全局权限）" }
-                            ?: "全部门店（全局权限）",
-                    )
-                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                }
-                ProfileDetailRow(
-                    icon = Icons.Default.Shield,
-                    label = "权限角色",
-                    value = role,
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it; saveSuccess = false; saveError = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("手机号码") },
+                    placeholder = { Text("请输入手机号码") },
+                    singleLine = true,
+                    shape = FieldShape,
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; saveSuccess = false; saveError = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("重置密码") },
+                    placeholder = { Text("不修改请留空") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = FieldShape,
                 )
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        saveError?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        }
 
-        OutlinedButton(
+        if (saveSuccess) {
+            Spacer(Modifier.height(10.dp))
+            Text("个人资料已更新", color = Success, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Save Button
+        Button(
+            enabled = !saving && (username.isNotBlank() || phone.isNotBlank()),
             onClick = {
-                nickname = user?.displayField("nickname", "").orEmpty()
-                username = user?.displayField("username", "").orEmpty()
-                phone = user?.displayField("phone", "").orEmpty()
-                password = ""
+                if (saving) return@Button
+                if (username.isBlank() && phone.isBlank()) {
+                    saveError = "登录账号和手机号码至少填写一个"
+                    return@Button
+                }
+                saving = true
                 saveError = null
-                editVisible = true
+                saveSuccess = false
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            ApiClient.updateMe(
+                                JSONObject()
+                                    .put("name", name.trim())
+                                    .put("nickname", nickname.trim())
+                                    .put("username", username.trim())
+                                    .put("phone", phone.trim())
+                                    .also { if (password.isNotBlank()) it.put("password", password) }
+                            )
+                        }
+                    }.onSuccess { updatedSession ->
+                        onSessionUpdated(updatedSession)
+                        saveSuccess = true
+                        password = ""
+                    }.onFailure { err ->
+                        saveError = err.message ?: "资料保存失败"
+                    }
+                    saving = false
+                }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = FieldShape,
         ) {
-            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("编辑资料", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = if (saving) "保存中..." else "保存修改",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
+        // Logout Button
         OutlinedButton(
             onClick = { showLogoutConfirm = true },
             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -1954,6 +2024,8 @@ internal fun ProfileDetailScreen(
             Spacer(Modifier.width(8.dp))
             Text("退出登录", fontSize = 15.sp, fontWeight = FontWeight.Medium)
         }
+
+        Spacer(Modifier.height(24.dp))
     }
 
     if (showLogoutConfirm) {
@@ -1977,99 +2049,6 @@ internal fun ProfileDetailScreen(
                     Text("取消")
                 }
             }
-        )
-    }
-
-    if (editVisible) {
-        AlertDialog(
-            onDismissRequest = { if (!saving) editVisible = false },
-            title = { Text("个人资料", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(nickname, { nickname = it }, Modifier.fillMaxWidth(), label = { Text("姓名或昵称") }, singleLine = true, shape = FieldShape)
-                    OutlinedTextField(username, { username = it }, Modifier.fillMaxWidth(), label = { Text("用户名") }, singleLine = true, shape = FieldShape)
-                    OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("手机号") }, singleLine = true, shape = FieldShape)
-                    OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("新密码（不修改请留空）") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = FieldShape)
-                    saveError?.let { Text(it, color = Danger, fontSize = 12.sp) }
-                }
-            },
-            confirmButton = {
-                Button(
-                    enabled = !saving && (username.isNotBlank() || phone.isNotBlank()),
-                    onClick = {
-                        saving = true
-                        saveError = null
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    ApiClient.updateMe(JSONObject()
-                                        .put("nickname", nickname.trim())
-                                        .put("username", username.trim())
-                                        .put("phone", phone.trim())
-                                        .also { if (password.isNotBlank()) it.put("password", password) })
-                                }
-                            }.onSuccess {
-                                onSessionUpdated(it)
-                                editVisible = false
-                            }.onFailure {
-                                saveError = it.message ?: "资料保存失败"
-                            }
-                            saving = false
-                        }
-                    },
-                ) { Text(if (saving) "保存中" else "保存修改") }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        onClick = {
-                            editVisible = false
-                            showLogoutConfirm = true
-                        },
-                        enabled = !saving
-                    ) {
-                        Text("退出登录", color = Danger)
-                    }
-                    TextButton(onClick = { editVisible = false }, enabled = !saving) {
-                        Text("取消")
-                    }
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ProfileDetailRow(
-    icon: ImageVector,
-    label: String,
-    value: String,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = Muted,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = label,
-            color = RegularText,
-            fontSize = 14.sp,
-            modifier = Modifier.width(80.dp),
-        )
-        Text(
-            text = value,
-            color = Ink,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Normal,
-            modifier = Modifier.weight(1f),
         )
     }
 }
