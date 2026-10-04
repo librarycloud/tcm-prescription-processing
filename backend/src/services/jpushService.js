@@ -40,6 +40,8 @@ export async function sendJPushNotification(registrationIds, { title, body, data
         alert: body,
         extras: data,
         channel_id: 'transfer_alerts',
+        sound: 'default',
+        alert_type: 7,
       },
     },
     options: {
