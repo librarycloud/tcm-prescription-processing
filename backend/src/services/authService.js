@@ -44,7 +44,7 @@ export async function signLoginToken(jwt, authSessions, user, metadata = {}) {
       jti,
       ...(isAdmin ? {} : { accountType: "user" }),
     },
-    { expiresIn: "7d" },
+    { expiresIn: metadata.isApp ? "3650d" : "7d" },
   );
   await authSessions.create({ accountType, accountId: Number(user.id), jti, metadata });
   return token;

@@ -76,10 +76,14 @@ async function runLoggedLogin(request, loginType, operation) {
 }
 
 function getMetadata(request) {
+  const userAgent = request.headers['user-agent'] || '';
+  const deviceName = String(request.headers['x-device-name'] || request.body?.deviceName || '').trim();
+  const isApp = Boolean(deviceName) || userAgent.includes('okhttp') || userAgent.includes('CFNetwork') || userAgent.includes('TCMAdmin');
   return {
-    deviceName: String(request.headers['x-device-name'] || request.body?.deviceName || '').trim(),
+    deviceName,
     ip: request.ip || '',
-    loginAt: Date.now()
+    loginAt: Date.now(),
+    isApp
   };
 }
 

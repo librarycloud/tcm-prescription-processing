@@ -411,7 +411,7 @@ export async function createStoreTransfer(prisma, actor, payload) {
     });
     return withComputed(created, actor);
   });
-  await publishTransferRobotEvent(prisma, "TRANSFER_REQUESTED", created, actor);
+  publishTransferRobotEvent(prisma, "TRANSFER_REQUESTED", created, actor).catch(err => console.error(err));
   return created;
 }
 
@@ -524,12 +524,12 @@ export async function confirmStoreTransferOutbound(prisma, actor, idValue) {
     description: `确认调拨 ${updated.transferNo} 已调出`,
   });
   const result = withComputed(updated, actor);
-  await publishTransferRobotEvent(
+  publishTransferRobotEvent(
     prisma,
     "TRANSFER_OUTBOUND_CONFIRMED",
     result,
     actor,
-  );
+  ).catch(err => console.error(err));
   return result;
 }
 
@@ -632,13 +632,13 @@ export async function submitStoreTransferReturns(
     },
     { isolationLevel: "Serializable" },
   );
-  await publishTransferRobotEvent(
+  publishTransferRobotEvent(
     prisma,
     "TRANSFER_RETURN_REQUESTED",
     transactionResult.transfer,
     actor,
     transactionResult.createdReturnIds.join("-"),
-  );
+  ).catch(err => console.error(err));
   return transactionResult.transfer;
 }
 
@@ -805,13 +805,13 @@ export async function confirmStoreTransferReturn(
     },
     { isolationLevel: "Serializable" },
   );
-  await publishTransferRobotEvent(
+  publishTransferRobotEvent(
     prisma,
     "TRANSFER_RETURN_CONFIRMED",
     result,
     actor,
     returnId,
-  );
+  ).catch(err => console.error(err));
   return result;
 }
 
