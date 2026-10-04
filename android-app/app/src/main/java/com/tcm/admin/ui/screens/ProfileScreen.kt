@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -1060,6 +1061,7 @@ private fun TextScalingCard(
 internal fun SettingsScreen(
     onOpenThemeAppearance: () -> Unit,
     onOpenSecurityPrivacy: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     selectedTheme: String,
     themeAccentKey: String,
     textScale: Float,
@@ -1178,6 +1180,47 @@ internal fun SettingsScreen(
                     )
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = "进入安全与隐私", tint = Muted)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = CardShape,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenNotificationSettings)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = PrimarySoft,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = Primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("通知和声音", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "系统消息、铃声、震动及权限管理",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = "进入通知和声音", tint = Muted)
             }
         }
 
@@ -1358,7 +1401,7 @@ internal fun SettingsScreen(
                             }
                             if (ApiClient.isAuthenticated) {
                                 // Logged in — show confirmation first
-                                pendingServerUrl = newUrl
+                                pendingServerUrl = ApiClient.extractServerUrl(android.net.Uri.parse(newUrl)) ?: newUrl
                                 showEditDialog = false
                                 showServerChangeConfirmDialog = true
                             } else {

@@ -1,15 +1,22 @@
 package com.tcm.admin
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
-import com.tcm.admin.util.DeviceUtils
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
+import com.tcm.admin.util.DeviceUtils
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -64,6 +71,7 @@ import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -173,12 +181,23 @@ object ServerConfigNotifier {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        val pushExtrasChannel = kotlinx.coroutines.channels.Channel<String>(
+            capacity = 1,
+            onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        )
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent?.let { handleIntent(it) }
     }
 
     private fun handleIntent(intent: android.content.Intent?) {
+        val jpushExtras = intent?.getStringExtra("jpush_extras")
+        if (jpushExtras != null) {
+            pushExtrasChannel.trySend(jpushExtras)
+        }
         if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
             val uri = intent.data!!
             if (uri.scheme == "tcmadmin" || uri.scheme == "tcm") {
@@ -196,15 +215,15 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
         setContent { 
             val context = androidx.compose.ui.platform.LocalContext.current
-            val sharedPrefs = context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+            val sharedPrefs = context.getSharedPreferences("privacy_prefs", android.content.Context.MODE_PRIVATE)
             var hasAgreedPrivacy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(sharedPrefs.getBoolean("agreed_privacy", false)) }
             
             if (!hasAgreedPrivacy) {
                 PrivacyPolicyDialog(
                     onAgree = {
                         sharedPrefs.edit().putBoolean("agreed_privacy", true).apply()
+                        TcmApplication.initializeJPush(this@MainActivity)
                         hasAgreedPrivacy = true
-                        // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
                     }
                 )
             } else {
@@ -227,7 +246,60 @@ class MainActivity : ComponentActivity() {
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
+    
+    var session by remember { mutableStateOf(restoredSession) }
+    val initialStart = remember { if (restoredSession != null) Route.Inventory() else Route.Login }
+
+    LaunchedEffect(restoredSession) {
+        if (restoredSession != null) {
+            val googleApiAvailability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+            val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(appContext)
+            if (resultCode == com.google.android.gms.common.ConnectionResult.SUCCESS) {
+                // Device has GMS -> Use FCM and it will auto-unregister JPush
+                TcmFcmService.registerCurrentToken(appContext)
+            } else {
+                // No GMS (e.g. domestic Chinese phone) -> fallback to JPush completely
+                TcmJPushReceiver.registerCurrentToken(appContext)
+            }
+        }
+    }
+
     val navController = rememberNavController()
+
+    LaunchedEffect(Unit) {
+        for (extrasJson in MainActivity.pushExtrasChannel) {
+            try {
+                val json = org.json.JSONObject(extrasJson)
+                val transferId = json.optString("transferId")
+                val planId = json.optString("planId")
+                val action = json.optString("action")
+                
+                val currentSession = session ?: ApiClient.loadSession(appContext)?.also { session = it }
+                if (currentSession == null) continue
+                
+                val targetTransferId = transferId.toIntOrNull()
+                if (targetTransferId != null) {
+                    // Navigate to home, clearing everything else
+                    navController.navigate(Route.Inventory()) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                    // Push the intermediate transfers list
+                    navController.navigate(Route.Transfers)
+                    // Push the final detail page
+                    navController.navigate(Route.TransferDetail(targetTransferId))
+                } else if (planId.isNotEmpty() && action == "processing_completed") {
+                    navController.navigate(Route.Inventory()) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                    navController.navigate(Route.Processing)
+                    navController.navigate(Route.WorkflowOperation(planId, "processing_completed", action))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PushNav", "Failed to parse push extras", e)
+            }
+        }
+    }
+
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
     val processingListState = rememberLazyListState()
@@ -263,7 +335,6 @@ private fun TcmAdminApp() {
             ServerConfigNotifier.consume()
         }
     }
-    var session by remember { mutableStateOf(restoredSession) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
     var stocktakingDetailRevision by remember { mutableStateOf(0) }
@@ -295,6 +366,35 @@ private fun TcmAdminApp() {
                 ?.let { versionCode -> versionCode > BuildConfig.VERSION_CODE }
                 ?: false,
         )
+    }
+
+    var showNotificationPermissionDialog by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            showNotificationPermissionDialog = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val hasPrompted = settingsPreferences.getBoolean("has_prompted_notification_permission", false)
+        if (!hasPrompted) {
+            settingsPreferences.edit().putBoolean("has_prompted_notification_permission", true).apply()
+            val isEnabled = NotificationManagerCompat.from(appContext).areNotificationsEnabled()
+            if (!isEnabled) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        showNotificationPermissionDialog = true
+                    }
+                } else {
+                    showNotificationPermissionDialog = true
+                }
+            }
+        }
     }
 
     val scope = rememberCoroutineScope()
@@ -436,7 +536,7 @@ private fun TcmAdminApp() {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
 
         pendingServerConfig?.let { uri ->
-            val displayUrl = uri.getQueryParameter("url") ?: uri.toString()
+            val displayUrl = ApiClient.extractServerUrl(uri) ?: uri.toString()
             AlertDialog(
                 onDismissRequest = { pendingServerConfig = null },
                 title = { Text("确认切换服务器") },
@@ -492,10 +592,48 @@ private fun TcmAdminApp() {
                 }
             )
         }
-                        NavHost(
-    navController = navController,
-    startDestination = if (session != null) Route.Inventory() else Route.Login,
-    modifier = Modifier.fillMaxSize(),
+
+        if (showNotificationPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showNotificationPermissionDialog = false },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        text = "开启通知权限提醒",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text("为了能及时接收门店调拨申请、归还确认及库存预警等重要消息提醒，建议开启通知权限。")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showNotificationPermissionDialog = false
+                            openNotificationSettings(appContext)
+                        }
+                    ) {
+                        Text("去开启")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNotificationPermissionDialog = false }) {
+                        Text("稍后再说")
+                    }
+                }
+            )
+        }
+        NavHost(
+            navController = navController,
+            startDestination = initialStart,
+            modifier = Modifier.fillMaxSize(),
     enterTransition = { EnterTransition.None },
     exitTransition = { ExitTransition.None },
     popEnterTransition = { EnterTransition.None },
@@ -507,7 +645,7 @@ private fun TcmAdminApp() {
                         loginError = null
                         scope.launch {
                             runCatching {
-                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password) }
+                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password, appContext) }
                             }.onSuccess { value ->
                                 ApiClient.saveSession(appContext, value)
                                 session = value
@@ -623,6 +761,7 @@ private fun TcmAdminApp() {
                         SettingsScreen(
                             onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
                             onOpenSecurityPrivacy = { navigateTo(Route.SecurityPrivacy) },
+                            onOpenNotificationSettings = { navigateTo(Route.NotificationSettings) },
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
@@ -635,6 +774,11 @@ private fun TcmAdminApp() {
                                 }
                             }
                         )
+                    }
+                }
+                composable<Route.NotificationSettings> {
+                    DetailShell("通知和声音", onBack = { navigateBack() }) {
+                        NotificationSettingsScreen()
                     }
                 }
                 composable<Route.SecurityPrivacy> {
@@ -1582,5 +1726,28 @@ private fun ScrollToTopButton(
             contentDescription = "返回顶部",
             modifier = Modifier.size(22.dp),
         )
+    }
+}
+
+private fun openNotificationSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        } else {
+            action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+            data = Uri.parse("package:${context.packageName}")
+        }
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        try {
+            val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallbackIntent)
+        } catch (_: Exception) {}
     }
 }
