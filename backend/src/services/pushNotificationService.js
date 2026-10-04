@@ -23,7 +23,14 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { sendJPushNotification } from './jpushService.js';
+import { ProxyAgent } from 'undici';
 
+let _proxyDispatcher = null;
+const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+if (proxyUrl) {
+  _proxyDispatcher = new ProxyAgent(proxyUrl);
+  console.log('[Push] Using proxy for Google API requests:', proxyUrl);
+}
 
 // ─── FCM ─────────────────────────────────────────────────────────────────────
 
@@ -120,6 +127,7 @@ async function getFcmAccessToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
+    ...(_proxyDispatcher ? { dispatcher: _proxyDispatcher } : {}),
   });
   if (!response.ok) {
     console.error('[Push] FCM token exchange failed:', await response.text());
@@ -170,6 +178,7 @@ async function sendFcmNotification(deviceToken, { title, body, data = {} }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(message),
+        ...(_proxyDispatcher ? { dispatcher: _proxyDispatcher } : {}),
       },
     );
     if (!response.ok) {
