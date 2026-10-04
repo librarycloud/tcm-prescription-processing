@@ -44,6 +44,10 @@
             android:name="JPUSH_CHANNEL"
             android:value="${JPUSH_CHANNEL}"
             tools:replace="android:value" />
+        <meta-data
+            android:name="JPUSH_PKGNAME"
+            android:value="${applicationId}"
+            tools:replace="android:value" />
         <receiver
             android:name=".TcmJPushReceiver"
             android:exported="false">
