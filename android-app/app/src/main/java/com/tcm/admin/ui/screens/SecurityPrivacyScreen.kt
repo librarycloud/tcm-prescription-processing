@@ -33,6 +33,7 @@ internal fun SecurityPrivacyScreen() {
             isLoading = true
             runCatching {
                 sessions = ApiClient.fetchSessions()
+                    .sortedWith(compareByDescending<SessionItem> { it.isCurrent }.thenByDescending { it.lastActiveAt })
             }
             isLoading = false
         }

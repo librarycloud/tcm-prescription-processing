@@ -98,9 +98,12 @@ internal fun TransfersScreen(
 
     val transfers = viewModel.transfersFlow.collectAsLazyPagingItems()
 
+    val isSuperAdmin = user?.optInt("role", -1) == 0
+    val userStoreId = user?.optInt("storeId")?.takeIf { it > 0 }?.toString().orEmpty()
+
     var createVisible by remember { mutableStateOf(false) }
-    var fromStoreId by remember { mutableStateOf(user?.optInt("storeId")?.takeIf { it > 0 }?.toString() ?: "") }
-    var toStoreId by remember { mutableStateOf("") }
+    var fromStoreId by remember { mutableStateOf("") }
+    var toStoreId by remember { mutableStateOf(if (!isSuperAdmin) userStoreId else "") }
     var expectedReturnDate by remember { mutableStateOf(serverToday().plusDays(7).toString()) }
     var itemName by remember { mutableStateOf("") }
     var itemSpecification by remember { mutableStateOf("") }
@@ -112,6 +115,13 @@ internal fun TransfersScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadStores()
+    }
+
+    LaunchedEffect(createVisible) {
+        if (createVisible && !isSuperAdmin && userStoreId.isNotBlank()) {
+            toStoreId = userStoreId
+            if (fromStoreId == userStoreId) fromStoreId = ""
+        }
     }
 
     LaunchedEffect(stores) {
@@ -420,27 +430,50 @@ internal fun TransfersScreen(
             title = { Text("新建门店调拨", fontWeight = FontWeight.Bold) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text("调出门店", color = Muted, fontSize = 12.sp)
+                    Text("调出门店 (借出方)", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(4.dp))
+                    val availableFromStores = stores.filter {
+                        val id = it.opt("id")?.toString().orEmpty()
+                        if (!isSuperAdmin && userStoreId.isNotBlank()) id != userStoreId else id != toStoreId
+                    }
                     Row(
                         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        stores.forEach { store ->
+                        availableFromStores.forEach { store ->
                             val id = store.opt("id")?.toString().orEmpty()
                             SegmentedButton(store.displayField("name", "门店"), fromStoreId == id, onClick = { fromStoreId = id })
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    Text("调入门店", color = Muted, fontSize = 12.sp)
+                    Text("调入门店 (申请方)", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(4.dp))
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        stores.forEach { store ->
-                            val id = store.opt("id")?.toString().orEmpty()
-                            SegmentedButton(store.displayField("name", "门店"), toStoreId == id, onClick = { toStoreId = id })
+                    if (!isSuperAdmin && userStoreId.isNotBlank()) {
+                        val myStoreName = stores.find { it.opt("id")?.toString() == userStoreId }?.displayField("name", "本门店")
+                            ?: user?.optJSONObject("store")?.optString("name")?.takeIf { it.isNotBlank() } ?: "当前门店"
+                        Surface(
+                            shape = FieldShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(0.5.dp, CardBorderColor),
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text("$myStoreName (本门店锁定)", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    } else {
+                        val availableToStores = stores.filter {
+                            val id = it.opt("id")?.toString().orEmpty()
+                            id != fromStoreId
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            availableToStores.forEach { store ->
+                                val id = store.opt("id")?.toString().orEmpty()
+                                SegmentedButton(store.displayField("name", "门店"), toStoreId == id, onClick = { toStoreId = id })
+                            }
                         }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -727,25 +760,65 @@ internal fun TransferDetailScreen(
                     InfoRowItem("确认时间", transferDateTime(record.opt("confirmedAt")))
                     val recordRemark = displayText(record.opt("remark"))
                     if (recordRemark != "-") InfoRowItem("备注", recordRemark)
-                    if (!confirmed && permissions?.optBoolean("canConfirmReturn") == true) {
+                    if (!confirmed) {
                         Spacer(Modifier.height(6.dp))
-                        Button(
-                            onClick = {
-                                confirmMessage = "确定要确认归还这笔物资吗？"
-                                confirmAction = {
-                                    saving = true
-                                    scope.launch {
-                                        runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(id, record.optInt("id")) } }
-                                            .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
-                                            .onFailure { saving = false; error = it.message ?: "确认归还失败" }
-                                    }
-                                }
-                            },
-                            modifier = Modifier.heightIn(min = 34.dp),
-                            enabled = !saving,
-                            shape = FieldShape,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        ) { Text("确认归还", fontSize = 12.sp) }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (permissions?.optBoolean("canSubmitReturn") == true) {
+                                OutlinedButton(
+                                    onClick = {
+                                        returnItem = transfer?.optJSONArray("items")?.let { items ->
+                                            (0 until items.length()).map { items.getJSONObject(it) }.find { it.optInt("id") == record.optInt("transferItemId") }
+                                        }
+                                        returnRecordId = record.optInt("id")
+                                        returnQuantity = quantityText(record.opt("quantity"), "0")
+                                        returnRemark = record.optString("remark", "")
+                                        returnDateValue = serverDateOnly(record.opt("returnDate"), "-")
+                                    },
+                                    modifier = Modifier.weight(1f).heightIn(min = 34.dp),
+                                    enabled = !saving,
+                                    shape = FieldShape,
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
+                                ) { Text("修改", fontSize = 12.sp) }
+                                
+                                OutlinedButton(
+                                    onClick = {
+                                        confirmMessage = "确定要取消这条归还申请吗？"
+                                        confirmAction = {
+                                            saving = true
+                                            scope.launch {
+                                                runCatching { withContext(Dispatchers.IO) { ApiClient.cancelReturn(id, record.optInt("id")) } }
+                                                    .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
+                                                    .onFailure { saving = false; error = it.message ?: "取消失败" }
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).heightIn(min = 34.dp),
+                                    enabled = !saving,
+                                    shape = FieldShape,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
+                                ) { Text("取消", fontSize = 12.sp) }
+                            }
+                            if (permissions?.optBoolean("canConfirmReturn") == true) {
+                                Button(
+                                    onClick = {
+                                        confirmMessage = "确定要确认归还这笔物资吗？"
+                                        confirmAction = {
+                                            saving = true
+                                            scope.launch {
+                                                runCatching { withContext(Dispatchers.IO) { ApiClient.confirmReturn(id, record.optInt("id")) } }
+                                                    .onSuccess { saving = false; reload++; invalidateRetainedList("transfers") }
+                                                    .onFailure { saving = false; error = it.message ?: "确认归还失败" }
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).heightIn(min = 34.dp),
+                                    enabled = !saving,
+                                    shape = FieldShape,
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
+                                ) { Text("确认归还", fontSize = 12.sp) }
+                            }
+                        }
                     }
                 }
             }
@@ -806,8 +879,8 @@ internal fun TransferDetailScreen(
 
     returnItem?.let { item ->
         AlertDialog(
-            onDismissRequest = { returnItem = null },
-            title = { Text("申请归还", fontWeight = FontWeight.Bold) },
+            onDismissRequest = { returnItem = null; returnRecordId = null },
+            title = { Text(if (returnRecordId != null) "修改归还" else "申请归还", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text(item.displayField("itemName", "物资"), fontWeight = FontWeight.SemiBold)
@@ -821,6 +894,24 @@ internal fun TransferDetailScreen(
                         singleLine = true,
                         shape = FieldShape,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = returnDateValue,
+                        onValueChange = { returnDateValue = it },
+                        label = { Text("归还日期 (YYYY-MM-DD)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = FieldShape,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = returnRemark,
+                        onValueChange = { returnRemark = it },
+                        label = { Text("备注 (选填)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = FieldShape,
+                    )
                 }
             },
             confirmButton = {
@@ -831,21 +922,32 @@ internal fun TransferDetailScreen(
                         scope.launch {
                             runCatching {
                                 withContext(Dispatchers.IO) {
-                                    ApiClient.addTransferReturns(
-                                        id,
-                                        JSONObject()
-                                            .put("returnDate", serverToday().toString())
-                                            .put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()))),
-                                    )
+                                    if (returnRecordId != null) {
+                                        ApiClient.updateTransferReturn(
+                                            id,
+                                            returnRecordId!!,
+                                            JSONObject()
+                                                .put("returnDate", returnDateValue)
+                                                .put("quantity", returnQuantity.toDouble())
+                                                .put("remark", returnRemark)
+                                        )
+                                    } else {
+                                        ApiClient.addTransferReturns(
+                                            id,
+                                            JSONObject()
+                                                .put("returnDate", returnDateValue)
+                                                .put("items", JSONArray().put(JSONObject().put("transferItemId", item.optInt("id")).put("quantity", returnQuantity.toDouble()).put("remark", returnRemark))),
+                                        )
+                                    }
                                 }
-                            }.onSuccess { saving = false; returnItem = null; reload++; invalidateRetainedList("transfers") }
-                                .onFailure { saving = false; error = it.message ?: "提交归还失败" }
+                            }.onSuccess { saving = false; returnItem = null; returnRecordId = null; reload++; invalidateRetainedList("transfers") }
+                                .onFailure { saving = false; error = it.message ?: "操作失败" }
                         }
                     },
                     shape = FieldShape,
                 ) { Text("提交") }
             },
-            dismissButton = { TextButton(onClick = { returnItem = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { returnItem = null; returnRecordId = null }) { Text("取消") } },
         )
     }
 
