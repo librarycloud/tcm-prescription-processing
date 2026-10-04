@@ -39,3 +39,7 @@
 -keep class cn.jiguang.** { *; }
 -keep class * extends cn.jpush.android.service.JPushMessageReceiver { *; }
 -keep class com.tcm.admin.TcmJPushReceiver { *; }
+
+# JPush explicit optimization preventions
+-dontoptimize
+-dontpreverify
