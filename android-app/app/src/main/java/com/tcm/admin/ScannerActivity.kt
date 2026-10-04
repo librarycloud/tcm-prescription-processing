@@ -209,7 +209,9 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
             window.isNavigationBarContrastEnforced = false
+            @Suppress("DEPRECATION")
             window.isStatusBarContrastEnforced = false
         }
         @Suppress("DEPRECATION")

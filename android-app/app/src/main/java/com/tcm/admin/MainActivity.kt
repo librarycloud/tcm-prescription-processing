@@ -221,7 +221,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
             window.isNavigationBarContrastEnforced = false
+            @Suppress("DEPRECATION")
             window.isStatusBarContrastEnforced = false
         }
         @Suppress("DEPRECATION")
@@ -577,7 +579,9 @@ private fun TcmAdminApp() {
             if (window != null) {
                 window.setBackgroundDrawable(ColorDrawable(colorScheme.surface.toArgb()))
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    @Suppress("DEPRECATION")
                     window.isNavigationBarContrastEnforced = false
+                    @Suppress("DEPRECATION")
                     window.isStatusBarContrastEnforced = false
                 }
                 @Suppress("DEPRECATION")
