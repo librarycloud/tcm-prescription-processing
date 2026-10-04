@@ -49,6 +49,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                             return@launch
                         }
                     }
+                    @Suppress("DEPRECATION")
                     val isConnected = JPushInterface.getConnectionState(context)
                     Log.w(TAG, "Registration ID still unavailable after 30s. Connected: $isConnected")
                     showToast(context, "极光异常: 超时未获取到ID (网络连通状态: $isConnected)。请检查后台包名/AppKey是否匹配")
