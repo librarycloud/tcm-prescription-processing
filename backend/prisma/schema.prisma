@@ -72,6 +72,7 @@ model Admin {
   robotEventConfigsUpdated       RobotEventConfig[]            @relation("RobotEventConfigUpdatedBy")
   robotNotificationEvents        RobotNotificationEvent[]      @relation("RobotNotificationEventOperator")
   productDiffLogsCreated         ProductsDiffLog[]             @relation("ProductsDiffLogCreatedBy")
+  deviceTokens                   AdminDeviceToken[]
 
   @@index([role])
   @@index([status])
@@ -1118,4 +1119,22 @@ model SystemConfig {
   @@index([class])
   @@index([isPublic])
   @@map("system_configs")
+}
+
+/// Push notification tokens — multiple provider tokens may share an admin and device.
+/// platform: "android" (FCM) | "jpush" | "ios" (APNs)
+model AdminDeviceToken {
+  id        Int      @id @default(autoincrement())
+  adminId   Int      @map("admin_id")
+  deviceId  String?  @map("device_id") @db.VarChar(64)
+  platform  String   @db.VarChar(10)
+  token     String   @unique @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([adminId, deviceId])
+  @@map("admin_device_tokens")
 }

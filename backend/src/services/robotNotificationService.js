@@ -2,7 +2,7 @@ import {
   ROBOT_DELIVERY_STATUS,
   ROBOT_DELIVERY_STATUS_VALUES,
   ROBOT_EVENT_DEFINITIONS,
-  ROBOT_SCOPE_TYPES,
+  ROBOT_SCOPE_TYPES, ROBOT_PLATFORMS,
 } from "../constants/robotNotification.js";
 import { isSuperAdmin } from "../constants/roles.js";
 import { sendRobotMessage } from "../providers/robot/index.js";
@@ -10,6 +10,7 @@ import { AppError } from "../utils/appError.js";
 import { decryptSetting } from "../utils/settingsEncryption.js";
 import { recordOperation } from "./operationLogService.js";
 import { renderRobotTemplate } from "./robotTemplateService.js";
+import { sendPushToStores } from "./pushNotificationService.js";
 
 const RETRY_DELAYS = [10_000, 60_000, 300_000];
 
@@ -239,13 +240,38 @@ async function deliverClaimed(prisma, log, logger) {
       throw Object.assign(new Error("机器人已停用或删除"), {
         code: "ROBOT_DISABLED",
       });
-    const result = await sendRobotMessage(log.platform, {
-      webhook: decryptSetting(log.robot.webhookEncrypted),
-      secret: log.robot.secretEncrypted
-        ? decryptSetting(log.robot.secretEncrypted)
-        : "",
-      content: log.renderedContent,
-    });
+    let result = { requestId: null, response: "OK" };
+    if (log.platform === ROBOT_PLATFORMS.APP_PUSH) {
+      let storeIds = log.event?.relatedStoreIds || [];
+      if (log.robot.scopeType === "STORE") storeIds = [log.robot.storeId];
+      if (storeIds.length) {
+        const lines = log.renderedContent.trim().split("\n");
+        let title = lines[0] || "系统通知";
+        title = title.replace(/^【(.*?)】/, "$1").trim();
+        const body = lines.slice(1).join("\n").trim() || title;
+        
+        const extraData = { 
+          eventCode: log.event?.eventCode,
+          action: log.event?.eventCode?.toLowerCase()
+        };
+        if (log.event?.variables) {
+          const v = typeof log.event.variables === 'string' ? JSON.parse(log.event.variables) : log.event.variables;
+          if (v.transferId) extraData.transferId = String(v.transferId);
+          if (v.planId) extraData.planId = String(v.planId);
+          if (v.planCode) extraData.planCode = String(v.planCode);
+        }
+        
+        await sendPushToStores(prisma, storeIds, { title, body, data: extraData }, log.event?.operatorId ? [log.event.operatorId] : []);
+      }
+    } else {
+      result = await sendRobotMessage(log.platform, {
+        webhook: decryptSetting(log.robot.webhookEncrypted),
+        secret: log.robot.secretEncrypted
+          ? decryptSetting(log.robot.secretEncrypted)
+          : "",
+        content: log.renderedContent,
+      });
+    }
     await prisma.robotDeliveryLog.update({
       where: { id: log.id },
       data: {
@@ -316,7 +342,7 @@ export async function processRobotDeliveryBatch(
         { status: ROBOT_DELIVERY_STATUS.RETRYING, nextRetryAt: { lte: now } },
       ],
     },
-    include: { robot: true },
+    include: { robot: true, event: true },
     orderBy: { createdAt: "asc" },
     take: limit,
   });

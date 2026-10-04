@@ -30,8 +30,8 @@ echo "🖥️ [3/3] 正在构建 Web 管理后台静态资源..."
 cd web-admin
 echo "  - 安装前端依赖..."
 npm install
-echo "  - 执行 Vite 打包构建..."
-npm run build
+echo "  - 执行 Vite 打包构建 (限制内存占用)..."
+NODE_OPTIONS="--max-old-space-size=1536" npm run build
 cd ..
 
 echo "======================================================="

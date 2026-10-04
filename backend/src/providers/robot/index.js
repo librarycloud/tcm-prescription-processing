@@ -11,6 +11,7 @@ const HOSTS = {
 };
 
 export function validateRobotWebhook(platform, webhookValue) {
+  if (platform === ROBOT_PLATFORMS.APP_PUSH) return '';
   const webhook = String(webhookValue || '').trim();
   let url;
   try {

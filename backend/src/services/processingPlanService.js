@@ -977,6 +977,7 @@ async function finishProcessingPlan(
       return updated;
     });
     await publishProcessingCompletedRobotEvent(prisma, result, actor);
+    // 通知门店其他人员：加工已完成
     return result;
   } catch (error) {
     if (error?.code === "P2002")

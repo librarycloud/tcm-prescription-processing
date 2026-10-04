@@ -23,6 +23,7 @@ export function publicUser(user) {
         }
       : null,
     nickname: user.nickname,
+    name: user.name ?? null,
     email: user.email,
     emailVerified: Boolean(user.emailVerifiedAt),
     emailVerifiedAt: user.emailVerifiedAt,
@@ -44,7 +45,7 @@ export async function signLoginToken(jwt, authSessions, user, metadata = {}) {
       jti,
       ...(isAdmin ? {} : { accountType: "user" }),
     },
-    { expiresIn: "7d" },
+    { expiresIn: metadata.isApp ? "3650d" : "7d" },
   );
   await authSessions.create({ accountType, accountId: Number(user.id), jti, metadata });
   return token;

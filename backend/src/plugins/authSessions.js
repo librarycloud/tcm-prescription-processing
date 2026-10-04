@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import { AppError } from '../utils/appError.js';
 import { lookupIp } from '../utils/ipLookup.js';
 
-const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+
 
 function accountKey(accountType, accountId) {
   return `auth:sessions:${accountType}:${accountId}`;
@@ -26,15 +26,17 @@ function createSessionStore(redis) {
   return {
     async create({ accountType, accountId, jti, metadata = {} }) {
       const sessionsKey = accountKey(accountType, accountId);
-      const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
+      const isApp = metadata.isApp === true;
+      const TTL_SECONDS = isApp ? (3650 * 24 * 60 * 60) : (7 * 24 * 60 * 60);
+      const expiresAt = Math.floor(Date.now() / 1000) + TTL_SECONDS;
       try {
         const pipeline = redis.multi()
           .zRemRangeByScore(sessionsKey, 0, Math.floor(Date.now() / 1000))
           .set(sessionKey(accountType, accountId, jti), '1', {
-            expiration: { type: 'EX', value: SESSION_TTL_SECONDS }
+            expiration: { type: 'EX', value: TTL_SECONDS }
           })
           .zAdd(sessionsKey, { score: expiresAt, value: jti })
-          .expire(sessionsKey, SESSION_TTL_SECONDS);
+          .expire(sessionsKey, TTL_SECONDS);
 
         if (Object.keys(metadata).length > 0) {
           const metaKeyStr = metaKey(accountType, accountId, jti);
@@ -44,7 +46,7 @@ function createSessionStore(redis) {
             loginAt: String(metadata.loginAt || Date.now()),
             lastActiveAt: String(Date.now())
           });
-          pipeline.expire(metaKeyStr, SESSION_TTL_SECONDS);
+          pipeline.expire(metaKeyStr, TTL_SECONDS);
         }
         await pipeline.exec();
       } catch (error) {

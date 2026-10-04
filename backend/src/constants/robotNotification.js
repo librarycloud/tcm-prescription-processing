@@ -2,6 +2,7 @@ export const ROBOT_PLATFORMS = Object.freeze({
   WECOM: "wecom",
   DINGTALK: "dingtalk",
   FEISHU: "feishu",
+  APP_PUSH: "app_push",
 });
 
 export const ROBOT_SCOPE_TYPES = Object.freeze({
