@@ -45,15 +45,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             let isTransferRoute: Bool
             if case .transferDetail = route { isTransferRoute = true } else { isTransferRoute = false }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                Router.shared.popToRoot()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    if isTransferRoute {
-                        Router.shared.navigate(to: .transfers)
-                    }
-                    Router.shared.navigate(to: route)
-                }
+            Router.shared.popToRoot()
+            if isTransferRoute {
+                Router.shared.navigate(to: .transfers)
             }
+            Router.shared.navigate(to: route)
         }
 
         UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
