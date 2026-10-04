@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: android.content.Intent?) {
         val jpushExtras = intent?.getStringExtra("jpush_extras")
         if (jpushExtras != null) {
+            ApiClient.clearResponseCache(applicationContext)
             pushExtrasChannel.trySend(jpushExtras)
         }
         if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {

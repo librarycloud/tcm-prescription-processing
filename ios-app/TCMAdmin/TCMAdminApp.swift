@@ -45,6 +45,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             let isTransferRoute: Bool
             if case .transferDetail = route { isTransferRoute = true } else { isTransferRoute = false }
 
+            ApiClient.shared.clearResponseCache()
             Router.shared.popToRoot()
             if isTransferRoute {
                 Router.shared.navigate(to: .transfers)
