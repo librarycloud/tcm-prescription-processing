@@ -110,13 +110,13 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
             buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
             buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
-            manifestPlaceholders["cleartextTraffic"] = false
+            manifestPlaceholders["cleartextTraffic"] = true
             manifestPlaceholders["jpushAppKey"] = jpushAppKey
             manifestPlaceholders["JPUSH_APPKEY"] = jpushAppKey
             manifestPlaceholders["JPUSH_CHANNEL"] = "default"
             manifestPlaceholders["JPUSH_PKGNAME"] = "com.tcm.admin"
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

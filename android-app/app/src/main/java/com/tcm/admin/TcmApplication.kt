@@ -26,7 +26,7 @@ class TcmApplication : Application() {
 
         JPushInterface.setDebugMode(true)
         @Suppress("DEPRECATION")
-        cn.jiguang.api.utils.JCollectionAuth.setAuth(this, true)
-        JPushInterface.init(this)
+        cn.jiguang.api.utils.JCollectionAuth.setAuth(this.applicationContext, true)
+        JPushInterface.init(this.applicationContext)
     }
 }
