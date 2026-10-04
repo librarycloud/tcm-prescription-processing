@@ -87,6 +87,19 @@ jobs:
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
+      - name: Inject Google & Huawei Configs
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          AGCONNECT_SERVICES_JSON: ${{ secrets.AGCONNECT_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "Injected google-services.json"
+          fi
+          if [ -n "$AGCONNECT_SERVICES_JSON" ]; then
+            echo "$AGCONNECT_SERVICES_JSON" > app/agconnect-services.json
+            echo "Injected agconnect-services.json"
+          fi
       - name: Build signed release APK
         env:
           VARS_API_BASE_URL: ${{ vars.API_BASE_URL }}
@@ -138,10 +151,12 @@ jobs:
           test -n "$version_name"
           gradle_args=(
             --no-daemon assembleRelease
-            -PAPI_BASE_URL="$API_BASE_URL"
             -PVERSION_CODE="$version_code"
             -PVERSION_NAME="$version_name"
           )
+          if [ -n "$API_BASE_URL" ]; then
+            gradle_args+=("-PAPI_BASE_URL=$API_BASE_URL")
+          fi
           if [ -n "$UPDATE_BASE_URL" ]; then
             gradle_args+=("-PUPDATE_BASE_URL=$UPDATE_BASE_URL")
           fi

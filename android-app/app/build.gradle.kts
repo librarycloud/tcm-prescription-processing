@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -90,18 +91,38 @@ android {
         }
     }
 
+    val jpushAppKey = providers.gradleProperty("JPUSH_APP_KEY")
+        .orElse(providers.environmentVariable("JPUSH_APP_KEY"))
+        .orElse("")
+        .get()
+        
+    val honorAppId = providers.gradleProperty("HONOR_APP_ID")
+        .orElse(providers.environmentVariable("HONOR_APP_ID"))
+        .orElse("")
+        .get()
+
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
             buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
             buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
             manifestPlaceholders["cleartextTraffic"] = true
+            manifestPlaceholders["jpushAppKey"] = jpushAppKey
+            manifestPlaceholders["JPUSH_APPKEY"] = jpushAppKey
+            manifestPlaceholders["JPUSH_CHANNEL"] = "default"
+            manifestPlaceholders["JPUSH_PKGNAME"] = "com.tcm.admin"
+            manifestPlaceholders["HONOR_APPID"] = honorAppId
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
             buildConfigField("String", "UPDATE_BASE_URL", "\"$configuredUpdateBaseUrl\"")
             buildConfigField("String", "UPDATE_APP_ID", "\"$configuredUpdateAppId\"")
-            manifestPlaceholders["cleartextTraffic"] = false
+            manifestPlaceholders["cleartextTraffic"] = true
+            manifestPlaceholders["jpushAppKey"] = jpushAppKey
+            manifestPlaceholders["JPUSH_APPKEY"] = jpushAppKey
+            manifestPlaceholders["JPUSH_CHANNEL"] = "default"
+            manifestPlaceholders["JPUSH_PKGNAME"] = "com.tcm.admin"
+            manifestPlaceholders["HONOR_APPID"] = honorAppId
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -175,6 +196,14 @@ dependencies {
     
     implementation("androidx.paging:paging-runtime:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
+
+    // JPush (极光推送)
+    implementation("cn.jiguang.sdk:jpush:6.2.1")
+    // JPush FCM 插件
+    implementation("cn.jiguang.sdk.plugin:fcm:6.2.1")
+    implementation("com.google.firebase:firebase-messaging:23.4.1")
+    implementation("cn.jiguang.sdk.plugin:honor:6.2.1")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
