@@ -36,10 +36,11 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
+      reportCompressedSize: false,
+      chunkSizeWarningLimit: 2000,
       rollupOptions: {
         output: {
           manualChunks: {
-            'element-plus': ['element-plus', '@element-plus/icons-vue'],
             vendor: ['vue', 'vue-router', 'pinia', 'axios']
           }
         }
