@@ -104,19 +104,7 @@ struct ProfileView: View {
         }
         .background(Color.pageBackground)
         .navigationTitle("我的")
-        .onAppear {
-            // 当页面显示时触发检查，UpdateManager 内部已加入 1 小时节流间隔
-            Task {
-                do {
-                    _ = try await updateManager.checkUpdate()
-                } catch is CancellationError {
-                    return
-                } catch {
-                    updateErrorMessage = error.localizedDescription
-                    showUpdateError = true
-                }
-            }
-        }
+
         .alert("检查更新失败", isPresented: $showUpdateError) {
             Button("确定", role: .cancel) { }
         } message: {
