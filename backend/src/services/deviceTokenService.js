@@ -40,6 +40,7 @@ export async function registerDeviceToken(prisma, adminId, platform, token) {
     if (tokens.length > MAX_TOKENS_PER_ADMIN) {
       const staleIds = tokens.slice(MAX_TOKENS_PER_ADMIN).map((t) => t.id);
       await tx.adminDeviceToken.deleteMany({ where: { id: { in: staleIds } } });
+    }
     console.log(`[DeviceToken] Registered token for adminId=${adminId}, platform=${platform}, token=${tokenStr.slice(0, 15)}...`);
   });
 }
