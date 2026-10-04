@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -138,6 +137,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -216,6 +217,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        hideSystemNavigationBar()
         ApiClient.initBaseUrl(this)
         handleIntent(intent)
         setContent { 
@@ -235,6 +237,28 @@ class MainActivity : ComponentActivity() {
                 TcmAdminApp() 
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideSystemNavigationBar()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemNavigationBar()
+        }
+    }
+
+    private fun hideSystemNavigationBar() {
+        val w = window ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            w.isNavigationBarContrastEnforced = false
+        }
+        val insetsController = WindowCompat.getInsetsController(w, w.decorView)
+        insetsController.hide(WindowInsetsCompat.Type.navigationBars())
+        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
     override fun onTrimMemory(level: Int) {
@@ -566,11 +590,16 @@ private fun TcmAdminApp() {
                     @Suppress("DEPRECATION")
                     window.statusBarColor = colorScheme.surface.toArgb()
                     @Suppress("DEPRECATION")
-                    window.navigationBarColor = colorScheme.surface.toArgb()
+                    window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced = false
                 }
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark
+                insetsController.hide(WindowInsetsCompat.Type.navigationBars())
+                insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         }
     }
@@ -1676,15 +1705,13 @@ private fun BottomNav(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth(),
         ) {
             HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 58.dp)
+                    .height(60.dp)
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
