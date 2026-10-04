@@ -43,3 +43,10 @@
 # JPush explicit optimization preventions
 -dontoptimize
 -dontpreverify
+
+# Firebase Cloud Messaging
+-dontwarn com.google.firebase.**
+-keep class com.google.firebase.** { *; }
+-keep class com.tcm.admin.TcmFcmService { *; }
+-keepclassmembers class com.tcm.admin.TcmFcmService** { *; }
+-keep class * extends com.google.firebase.messaging.FirebaseMessagingService { *; }
