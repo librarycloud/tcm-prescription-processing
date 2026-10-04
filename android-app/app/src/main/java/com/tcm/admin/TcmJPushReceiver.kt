@@ -99,4 +99,35 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         }
         context.startActivity(intent)
     }
+    override fun onNotifyMessageArrived(context: Context, message: cn.jpush.android.api.NotificationMessage) {
+        Log.d(TAG, "JPush Message arrived: ${message.notificationTitle}")
+        
+        // When app is in foreground, manually build notification so sound plays
+        val intent = android.content.Intent(context, MainActivity::class.java).apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("jpush_extras", message.notificationExtras)
+        }
+
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            context,
+            System.currentTimeMillis().toInt(),
+            intent,
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val channelId = "transfer_alerts"
+        val builder = androidx.core.app.NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(message.notificationTitle ?: "新通知")
+            .setContentText(message.notificationContent ?: "")
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+
+        val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+        }
+    }
 }

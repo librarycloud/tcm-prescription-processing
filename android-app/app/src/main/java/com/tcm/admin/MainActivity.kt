@@ -253,13 +253,13 @@ private fun TcmAdminApp() {
 
     LaunchedEffect(restoredSession) {
         if (restoredSession != null) {
-            val googleApiAvailability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
-            val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(appContext)
-            if (resultCode == com.google.android.gms.common.ConnectionResult.SUCCESS) {
-                // Device has GMS -> Use FCM and it will auto-unregister JPush
+            try {
+                // Directly attempt FCM registration.
+                // If GMS is completely missing, this will fail or throw,
+                // and the FCM Service's OnCompleteListener will catch it and fallback to JPush.
                 TcmFcmService.registerCurrentToken(appContext)
-            } else {
-                // No GMS (e.g. domestic Chinese phone) -> fallback to JPush completely
+            } catch (e: Exception) {
+                // Absolute fallback just in case the FCM API classes are completely missing
                 TcmJPushReceiver.registerCurrentToken(appContext)
             }
         }
