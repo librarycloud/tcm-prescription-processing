@@ -173,12 +173,20 @@ object ServerConfigNotifier {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        val pushExtrasFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent?.let { handleIntent(it) }
     }
 
     private fun handleIntent(intent: android.content.Intent?) {
+        val jpushExtras = intent?.getStringExtra("jpush_extras")
+        if (jpushExtras != null) {
+            pushExtrasFlow.tryEmit(jpushExtras)
+        }
         if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
             val uri = intent.data!!
             if (uri.scheme == "tcmadmin" || uri.scheme == "tcm") {
@@ -235,6 +243,30 @@ private fun TcmAdminApp() {
     }
 
     val navController = rememberNavController()
+
+    LaunchedEffect(Unit) {
+        MainActivity.pushExtrasFlow.collect { extrasJson ->
+            try {
+                val json = org.json.JSONObject(extrasJson)
+                val transferId = json.optString("transferId")
+                val planId = json.optString("planId")
+                val action = json.optString("action")
+                
+                if (transferId.isNotEmpty()) {
+                    navController.popBackStack(navController.graph.id, inclusive = true)
+                    navController.navigate(Route.Transfers)
+                    navController.navigate(Route.TransferDetail(transferId.toInt()))
+                } else if (planId.isNotEmpty() && action == "processing_completed") {
+                    val planCode = json.optString("planCode", "")
+                    navController.popBackStack(navController.graph.id, inclusive = true)
+                    navController.navigate(Route.WorkflowOperation(planId, "processing_completed", action))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PushNav", "Failed to parse push extras", e)
+            }
+        }
+    }
+
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
     val processingListState = rememberLazyListState()

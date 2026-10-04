@@ -88,4 +88,13 @@ class TcmJPushReceiver : JPushMessageReceiver() {
             Log.d(TAG, "JPush connected")
         }
     }
+
+    override fun onNotifyMessageOpened(context: Context, message: cn.jpush.android.api.NotificationMessage) {
+        Log.d(TAG, "Notification clicked. Extras: ${message.notificationExtras}")
+        val intent = android.content.Intent(context, MainActivity::class.java).apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("jpush_extras", message.notificationExtras)
+        }
+        context.startActivity(intent)
+    }
 }
