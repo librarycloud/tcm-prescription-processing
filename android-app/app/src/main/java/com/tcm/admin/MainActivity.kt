@@ -1,15 +1,22 @@
 package com.tcm.admin
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
-import com.tcm.admin.util.DeviceUtils
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
+import com.tcm.admin.util.DeviceUtils
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -32,9 +39,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import android.graphics.drawable.ColorDrawable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -64,6 +73,7 @@ import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -107,6 +117,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -136,9 +147,13 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tcm.admin.util.CacheManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.json.JSONObject
 
 import dagger.hilt.android.AndroidEntryPoint
@@ -173,12 +188,24 @@ object ServerConfigNotifier {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        val pushExtrasChannel = kotlinx.coroutines.channels.Channel<String>(
+            capacity = 1,
+            onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        )
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent?.let { handleIntent(it) }
     }
 
     private fun handleIntent(intent: android.content.Intent?) {
+        val jpushExtras = intent?.getStringExtra("jpush_extras")
+        if (jpushExtras != null) {
+            ApiClient.clearResponseCache(applicationContext)
+            pushExtrasChannel.trySend(jpushExtras)
+        }
         if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
             val uri = intent.data!!
             if (uri.scheme == "tcmadmin" || uri.scheme == "tcm") {
@@ -192,19 +219,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
+            window.isNavigationBarContrastEnforced = false
+            @Suppress("DEPRECATION")
+            window.isStatusBarContrastEnforced = false
+        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         ApiClient.initBaseUrl(this)
         handleIntent(intent)
         setContent { 
             val context = androidx.compose.ui.platform.LocalContext.current
-            val sharedPrefs = context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+            val sharedPrefs = context.getSharedPreferences("privacy_prefs", android.content.Context.MODE_PRIVATE)
             var hasAgreedPrivacy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(sharedPrefs.getBoolean("agreed_privacy", false)) }
             
             if (!hasAgreedPrivacy) {
                 PrivacyPolicyDialog(
                     onAgree = {
                         sharedPrefs.edit().putBoolean("agreed_privacy", true).apply()
+                        TcmApplication.initializeJPush(this@MainActivity)
                         hasAgreedPrivacy = true
-                        // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
                     }
                 )
             } else {
@@ -227,7 +265,60 @@ class MainActivity : ComponentActivity() {
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
+    
+    var session by remember { mutableStateOf(restoredSession) }
+    val initialStart = remember { if (restoredSession != null) Route.Inventory() else Route.Login }
+
+    LaunchedEffect(restoredSession) {
+        if (restoredSession != null) {
+            try {
+                // Directly attempt FCM registration.
+                // If GMS is completely missing, this will fail or throw,
+                // and the FCM Service's OnCompleteListener will catch it and fallback to JPush.
+                TcmFcmService.registerCurrentToken(appContext)
+            } catch (e: Exception) {
+                // Absolute fallback just in case the FCM API classes are completely missing
+                TcmJPushReceiver.registerCurrentToken(appContext)
+            }
+        }
+    }
+
     val navController = rememberNavController()
+
+    LaunchedEffect(Unit) {
+        for (extrasJson in MainActivity.pushExtrasChannel) {
+            try {
+                val json = org.json.JSONObject(extrasJson)
+                val transferId = json.optString("transferId")
+                val planId = json.optString("planId")
+                val action = json.optString("action")
+                
+                val currentSession = session ?: ApiClient.loadSession(appContext)?.also { session = it }
+                if (currentSession == null) continue
+                
+                val targetTransferId = transferId.toIntOrNull()
+                if (targetTransferId != null) {
+                    // Navigate to home, clearing everything else
+                    navController.navigate(Route.Inventory()) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                    // Push the intermediate transfers list
+                    navController.navigate(Route.Transfers)
+                    // Push the final detail page
+                    navController.navigate(Route.TransferDetail(targetTransferId))
+                } else if (planId.isNotEmpty() && action == "processing_completed") {
+                    navController.navigate(Route.Inventory()) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                    navController.navigate(Route.Processing)
+                    navController.navigate(Route.WorkflowOperation(planId, "processing_completed", action))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PushNav", "Failed to parse push extras", e)
+            }
+        }
+    }
+
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
     val processingListState = rememberLazyListState()
@@ -263,7 +354,6 @@ private fun TcmAdminApp() {
             ServerConfigNotifier.consume()
         }
     }
-    var session by remember { mutableStateOf(restoredSession) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
     var stocktakingDetailRevision by remember { mutableStateOf(0) }
@@ -297,6 +387,35 @@ private fun TcmAdminApp() {
         )
     }
 
+    var showNotificationPermissionDialog by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            showNotificationPermissionDialog = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val hasPrompted = settingsPreferences.getBoolean("has_prompted_notification_permission", false)
+        if (!hasPrompted) {
+            settingsPreferences.edit().putBoolean("has_prompted_notification_permission", true).apply()
+            val isEnabled = NotificationManagerCompat.from(appContext).areNotificationsEnabled()
+            if (!isEnabled) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        showNotificationPermissionDialog = true
+                    }
+                } else {
+                    showNotificationPermissionDialog = true
+                }
+            }
+        }
+    }
+
     val scope = rememberCoroutineScope()
 
     DisposableEffect(appContext) {
@@ -311,13 +430,68 @@ private fun TcmAdminApp() {
         }
         onDispose { ApiClient.onUnauthorized = null }
     }
+    val performLogout: () -> Unit = {
+        val tokenToRevoke = ApiClient.token ?: session?.token
+        // 1. Immediately clear local session & navigate to Login (0ms instant response)
+        ApiClient.clearSession(appContext)
+        clearRetainedListValues()
+        session = null
+        navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
 
-    fun navigateTo(target: Route) {
-    navController.navigate(target) {
-        if (target is Route.Inventory && currentDestination?.hasRoute<Route.Inventory>() == true) {
-            popUpTo<Route.Inventory> { inclusive = true }
+        // 2. Unregister push tokens and notify server asynchronously in background
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                TcmJPushReceiver.unregisterToken(appContext)
+                TcmFcmService.unregisterToken(appContext)
+                if (!tokenToRevoke.isNullOrBlank()) {
+                    ApiClient.logout(tokenToRevoke)
+                }
+            }
         }
     }
+
+    val refreshUserProfile: () -> Unit = {
+        val currentToken = session?.token ?: ApiClient.token
+        if (!currentToken.isNullOrBlank()) {
+            scope.launch {
+                runCatching {
+                    val latestUser = withContext(Dispatchers.IO) { ApiClient.me() }
+                    val updatedSession = AdminSession(currentToken, latestUser)
+                    ApiClient.saveSession(appContext, updatedSession)
+                    session = updatedSession
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(session?.token) {
+        if (session != null) {
+            refreshUserProfile()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, session?.token) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (session != null) {
+                    refreshUserProfile()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    fun navigateTo(target: Route) {
+        navController.navigate(target) {
+            launchSingleTop = true
+            if (target is Route.Inventory && currentDestination?.hasRoute<Route.Inventory>() == true) {
+                popUpTo<Route.Inventory> { inclusive = true }
+            }
+        }
     }
 
     fun navigateBack(): Boolean {
@@ -403,12 +577,18 @@ private fun TcmAdminApp() {
         SideEffect {
             val window = (view.context as? android.app.Activity)?.window
             if (window != null) {
-                if (Build.VERSION.SDK_INT < 35) {
+                window.setBackgroundDrawable(ColorDrawable(colorScheme.surface.toArgb()))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     @Suppress("DEPRECATION")
-                    window.statusBarColor = colorScheme.surface.toArgb()
+                    window.isNavigationBarContrastEnforced = false
                     @Suppress("DEPRECATION")
-                    window.navigationBarColor = colorScheme.surface.toArgb()
+                    window.isStatusBarContrastEnforced = false
                 }
+                @Suppress("DEPRECATION")
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                @Suppress("DEPRECATION")
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark
@@ -436,7 +616,7 @@ private fun TcmAdminApp() {
         Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
 
         pendingServerConfig?.let { uri ->
-            val displayUrl = uri.getQueryParameter("url") ?: uri.toString()
+            val displayUrl = ApiClient.extractServerUrl(uri) ?: uri.toString()
             AlertDialog(
                 onDismissRequest = { pendingServerConfig = null },
                 title = { Text("确认切换服务器") },
@@ -453,24 +633,30 @@ private fun TcmAdminApp() {
                     TextButton(onClick = {
                         val target = pendingServerConfig ?: return@TextButton
                         pendingServerConfig = null
-                        scope.launch {
-                            var wasLoggedIn = false
-                            if (session != null) {
-                                wasLoggedIn = true
-                                runCatching { withContext(Dispatchers.IO) { ApiClient.logout() } }
-                                ApiClient.clearSession(appContext)
-                                clearRetainedListValues()
-                                session = null
+                        val wasLoggedIn = session != null
+                        val oldToken = ApiClient.token ?: session?.token
+                        if (wasLoggedIn) {
+                            ApiClient.clearSession(appContext)
+                            clearRetainedListValues()
+                            session = null
+                            navController.navigate(Route.Login) {
+                                popUpTo(navController.graph.id) { inclusive = true }
                             }
+                            CoroutineScope(Dispatchers.IO).launch {
+                                runCatching {
+                                    TcmJPushReceiver.unregisterToken(appContext)
+                                    TcmFcmService.unregisterToken(appContext)
+                                    if (!oldToken.isNullOrBlank()) {
+                                        ApiClient.logout(oldToken)
+                                    }
+                                }
+                            }
+                        }
+                        scope.launch {
                             val result = withContext(Dispatchers.IO) {
                                 ApiClient.importServerConfig(appContext, target)
                             }
                             ServerConfigNotifier.notify(result.first, result.second)
-                            if (wasLoggedIn) {
-                                navController.navigate(Route.Login) {
-                                    popUpTo(navController.graph.id) { inclusive = true }
-                                }
-                            }
                         }
                     }) { Text("确认") }
                 },
@@ -492,10 +678,48 @@ private fun TcmAdminApp() {
                 }
             )
         }
-                        NavHost(
-    navController = navController,
-    startDestination = if (session != null) Route.Inventory() else Route.Login,
-    modifier = Modifier.fillMaxSize(),
+
+        if (showNotificationPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showNotificationPermissionDialog = false },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        text = "开启通知权限提醒",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text("为了能及时接收门店调拨申请、归还确认及库存预警等重要消息提醒，建议开启通知权限。")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showNotificationPermissionDialog = false
+                            openNotificationSettings(appContext)
+                        }
+                    ) {
+                        Text("去开启")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNotificationPermissionDialog = false }) {
+                        Text("稍后再说")
+                    }
+                }
+            )
+        }
+        NavHost(
+            navController = navController,
+            startDestination = initialStart,
+            modifier = Modifier.fillMaxSize(),
     enterTransition = { EnterTransition.None },
     exitTransition = { ExitTransition.None },
     popEnterTransition = { EnterTransition.None },
@@ -507,7 +731,7 @@ private fun TcmAdminApp() {
                         loginError = null
                         scope.launch {
                             runCatching {
-                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password) }
+                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password, appContext) }
                             }.onSuccess { value ->
                                 ApiClient.saveSession(appContext, value)
                                 session = value
@@ -583,7 +807,10 @@ private fun TcmAdminApp() {
                             onOpenDetails = { navigateTo(Route.ProfileDetail) },
                             onOpenSettings = { navigateTo(Route.Settings) },
                             onOpenAbout = { navigateTo(Route.About) },
-                            onEntered = ::checkForAppUpdateIfDue,
+                            onEntered = {
+                                checkForAppUpdateIfDue()
+                                refreshUserProfile()
+                            },
                             hasAppUpdate = hasAppUpdate,
                             scrollState = profileScrollState,
                             onSessionUpdated = { updated ->
@@ -599,18 +826,13 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.ProfileDetail> {
+                    LaunchedEffect(Unit) {
+                        refreshUserProfile()
+                    }
                     DetailShell("个人资料", onBack = { navigateBack() }) {
                         ProfileDetailScreen(
                             user = session?.user,
-                            onLogout = {
-                                scope.launch {
-                                    runCatching { ApiClient.logout() }
-                                    ApiClient.clearSession(appContext)
-                                    clearRetainedListValues()
-                                    session = null
-                                    navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
-                                }
-                            },
+                            onLogout = performLogout,
                             onSessionUpdated = { updated ->
                                 ApiClient.saveSession(appContext, updated)
                                 session = updated
@@ -623,18 +845,17 @@ private fun TcmAdminApp() {
                         SettingsScreen(
                             onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
                             onOpenSecurityPrivacy = { navigateTo(Route.SecurityPrivacy) },
+                            onOpenNotificationSettings = { navigateTo(Route.NotificationSettings) },
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
-                            onLogout = {
-                                scope.launch {
-                                    runCatching { ApiClient.logout() }
-                                    ApiClient.clearSession(appContext)
-                                    session = null
-                                    navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
-                                }
-                            }
+                            onLogout = performLogout
                         )
+                    }
+                }
+                composable<Route.NotificationSettings> {
+                    DetailShell("通知和声音", onBack = { navigateBack() }) {
+                        NotificationSettingsScreen()
                     }
                 }
                 composable<Route.SecurityPrivacy> {
@@ -857,27 +1078,24 @@ private fun TcmAdminApp() {
 @Composable
 private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, String) -> Unit) {
     val context = LocalContext.current
+    val baseUrl by ApiClient.baseUrlFlow.collectAsState()
+    var configInput by remember { mutableStateOf("") }
+    var showConfigDialog by remember { mutableStateOf(false) }
+
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
             val uri = android.net.Uri.parse(value)
             val importResult = ApiClient.importServerConfig(context, uri)
             Toast.makeText(context, importResult.second, Toast.LENGTH_LONG).show()
+            if (importResult.first) {
+                configInput = ApiClient.currentBaseUrl
+            }
         }
     }
 
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var baseUrl by remember { mutableStateOf(ApiClient.currentBaseUrl) }
-
-    LaunchedEffect(Unit) {
-        ServerConfigNotifier.importResult.collect {
-            baseUrl = ApiClient.currentBaseUrl
-        }
-    }
-
-    var showConfigDialog by remember { mutableStateOf(false) }
-    var configInput by remember { mutableStateOf("") }
 
     if (showConfigDialog) {
         androidx.compose.material3.AlertDialog(
@@ -909,7 +1127,6 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                         val result = ApiClient.importServerConfig(context, android.net.Uri.parse(configInput))
                         Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
                         if (result.first) {
-                            baseUrl = ApiClient.currentBaseUrl
                             showConfigDialog = false
                         }
                     }
@@ -928,6 +1145,8 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -1051,12 +1270,28 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                     Spacer(Modifier.height(4.dp))
                     Text(baseUrl, fontSize = 12.sp, color = Muted, maxLines = 1)
                 }
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = "Edit config",
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.IconButton(
+                        onClick = {
+                            scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            contentDescription = "扫码配置服务器",
+                            tint = Primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit config",
+                        tint = Muted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
@@ -1582,5 +1817,28 @@ private fun ScrollToTopButton(
             contentDescription = "返回顶部",
             modifier = Modifier.size(22.dp),
         )
+    }
+}
+
+private fun openNotificationSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        } else {
+            action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+            data = Uri.parse("package:${context.packageName}")
+        }
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        try {
+            val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallbackIntent)
+        } catch (_: Exception) {}
     }
 }

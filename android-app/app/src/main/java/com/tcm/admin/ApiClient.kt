@@ -17,6 +17,8 @@ import okhttp3.ConnectionPool
 import java.security.MessageDigest
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class AdminSession(val token: String, val user: JSONObject)
 
@@ -63,62 +65,109 @@ object ApiClient {
     private const val OPERATION_CACHE_TTL = 30 * 1000L
     private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
     @Volatile
-    private var token: String? = null
+    var token: String? = null
+        private set
+    private val _baseUrlFlow = MutableStateFlow(BuildConfig.API_BASE_URL)
+    val baseUrlFlow = _baseUrlFlow.asStateFlow()
+
     @Volatile
     var currentBaseUrl: String = BuildConfig.API_BASE_URL
-        private set
+        private set(value) {
+            field = value
+            _baseUrlFlow.value = value
+        }
     @Volatile
     private var cacheContext: Context? = null
     private data class CacheEntry(val route: String, val savedAt: Long, val data: String)
 
     
-    fun importServerConfig(context: Context, uri: android.net.Uri): Pair<Boolean, String> {
-        var targetServer: String? = null
-        
-        // 1. 优先解析 Query 参数: ?server=... 或 ?url=... 或 ?baseURL=... 或 ?api=...
-        val queryNames = listOf("server", "url", "baseurl", "baseURL", "api")
+    fun extractServerUrl(uri: android.net.Uri): String? {
+        var rawUrl: String? = null
+        val queryNames = listOf("server", "url", "baseurl", "baseURL", "api", "target")
         for (name in queryNames) {
             val valStr = uri.getQueryParameter(name)
             if (!valStr.isNullOrBlank()) {
-                targetServer = valStr
+                rawUrl = valStr
                 break
             }
         }
-        
-        // 2. 如果是直接扫描的标准后端 HTTP/HTTPS API 根地址 (无 Query 参数)
+
+        // If no query parameter, check if scheme is http/https
         val scheme = uri.scheme?.lowercase()
-        if (targetServer == null && (scheme == "http" || scheme == "https")) {
-            targetServer = uri.toString()
+        if (rawUrl == null && (scheme == "http" || scheme == "https")) {
+            rawUrl = uri.toString()
         }
-        
-        // 3. 若以上都不符合，解析 Host/Port 形式: 如 tcmadmin://192.168.1.100:3000
-        if (targetServer == null) {
+
+        // If uri is tcmadmin://... without query parameter (e.g. tcmadmin://192.168.1.10:3000)
+        if (rawUrl == null) {
             val host = uri.host
             if (!host.isNullOrBlank() && host != "config" && host != "server") {
                 val port = uri.port
                 val portStr = if (port != -1) ":$port" else ""
-                targetServer = "http://$host$portStr"
+                rawUrl = "http://$host$portStr"
             }
         }
-        
-        // 4. 若传入的是纯 IP/域名 (如 192.168.1.100:3000)，直接使用
-        if (targetServer == null) {
-            val rawString = uri.toString()
-            if (!rawString.contains("://") && rawString.isNotBlank()) {
-                targetServer = "http://$rawString"
+
+        // If passed as raw string without scheme
+        if (rawUrl == null) {
+            val s = uri.toString()
+            if (!s.contains("://") && s.isNotBlank()) {
+                rawUrl = s
             }
         }
-        
-        val serverStr = targetServer?.trim()
-        if (serverStr.isNullOrBlank()) {
-            return false to "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=http://...)"
+
+        if (rawUrl.isNullOrBlank()) {
+            return null
         }
-        
-        var finalURL = serverStr
-        if (!finalURL.startsWith("http://", ignoreCase = true) && !finalURL.startsWith("https://", ignoreCase = true)) {
-            finalURL = "http://$finalURL"
+
+        var result = rawUrl.trim()
+
+        // Decode any percent-encoded characters (like %3A -> :, %2F -> /)
+        while (result.contains("%3A", ignoreCase = true) || result.contains("%2F", ignoreCase = true)) {
+            val decoded = runCatching { java.net.URLDecoder.decode(result, "UTF-8") }.getOrNull() ?: break
+            if (decoded == result) break
+            result = decoded
         }
-        finalURL = finalURL.trimEnd('/')
+
+        // If string still starts with tcmadmin:// or tcm:// (e.g. nested scheme)
+        if (result.startsWith("tcmadmin://", ignoreCase = true)) {
+            result = result.substring("tcmadmin://".length)
+        } else if (result.startsWith("tcm://", ignoreCase = true)) {
+            result = result.substring("tcm://".length)
+        }
+
+        // If it still contains config?server= or similar query prefix
+        for (name in queryNames) {
+            val prefix = "$name="
+            val idx = result.indexOf(prefix, ignoreCase = true)
+            if (idx != -1) {
+                result = result.substring(idx + prefix.length)
+                val andIdx = result.indexOf('&')
+                if (andIdx != -1) {
+                    result = result.substring(0, andIdx)
+                }
+                break
+            }
+        }
+
+        // Final URL decode in case query parameter was extracted
+        if (result.contains("%3A", ignoreCase = true) || result.contains("%2F", ignoreCase = true)) {
+            result = runCatching { java.net.URLDecoder.decode(result, "UTF-8") }.getOrDefault(result)
+        }
+
+        result = result.trim()
+        if (!result.startsWith("http://", ignoreCase = true) && !result.startsWith("https://", ignoreCase = true)) {
+            result = "https://$result"
+        }
+
+        return result.trimEnd('/')
+    }
+
+    fun importServerConfig(context: Context, uri: android.net.Uri): Pair<Boolean, String> {
+        val finalURL = extractServerUrl(uri)
+        if (finalURL.isNullOrBlank()) {
+            return false to "未找到有效的服务器地址参数 (例如: tcmadmin://config?server=https://...)"
+        }
 
         if (!BuildConfig.DEBUG && finalURL.startsWith("http://", ignoreCase = true)) {
             return false to "正式版仅支持 HTTPS 服务器地址"
@@ -134,16 +183,18 @@ object ApiClient {
         val changed = currentBaseUrl != finalURL
         currentBaseUrl = finalURL
         if (changed) clearResponseCache(context)
-        runCatching {
-            getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
-        }.onFailure { Log.w(LOG_TAG, "无法保存自定义服务器地址到加密存储", it) }
+        
+        // Save to standard SharedPreferences to avoid EncryptedSharedPreferences Keystore invalidation bugs on updates
+        val plainPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        plainPrefs.edit().putString(CUSTOM_BASE_URL_KEY, finalURL).commit()
+        
         return true to "成功导入服务器地址:\n\n$finalURL"
     }
 
     fun initBaseUrl(context: Context) {
-        val saved = runCatching {
-            getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
-        }.getOrNull()
+        val plainPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val saved = plainPrefs.getString(CUSTOM_BASE_URL_KEY, null)
+        
         if (!saved.isNullOrBlank()) {
             currentBaseUrl = saved
         }
@@ -399,16 +450,40 @@ object ApiClient {
     val isAuthenticated: Boolean
         get() = token != null
 
-    suspend fun logout() {
-        request("/auth/logout", "POST")
+    suspend fun logout(tokenOverride: String? = null) {
+        request("/auth/logout", "POST", tokenOverride = tokenOverride)
     }
 
-    suspend fun login(identifier: String, password: String): AdminSession {
+    suspend fun login(identifier: String, password: String, context: Context? = null): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
         val receivedToken = sanitizeToken(result.getString("token"))
             ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
-        return AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
+        val session = AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
+        context?.let { TcmFcmService.registerCurrentToken(it) }
+        return session
+    }
+
+    /** Registers a push notification device token with the backend. */
+    suspend fun registerDeviceToken(context: Context, platform: String, token: String, deviceId: String): Boolean {
+        try {
+            val body = JSONObject().put("platform", platform).put("token", token).put("deviceId", deviceId)
+            request("/admin/device-tokens", "POST", body)
+            return true
+        } catch (e: Exception) {
+            android.util.Log.w("TcmApiClient", "registerDeviceToken failed: ${e.message}")
+            return false
+        }
+    }
+
+    /** Removes a push notification device token from the backend (logout). */
+    suspend fun unregisterDeviceToken(context: Context, token: String) {
+        try {
+            val body = JSONObject().put("token", token)
+            request("/admin/device-tokens", "DELETE", body)
+        } catch (e: Exception) {
+            android.util.Log.w("TcmApiClient", "unregisterDeviceToken failed: ${e.message}")
+        }
     }
 
     suspend fun updateMe(payload: JSONObject): AdminSession {
@@ -993,11 +1068,11 @@ object ApiClient {
         else -> JSONArray()
     }
 
-    private fun applyAuthorizationHeader(builder: Request.Builder) {
-        val currentToken = sanitizeToken(token)
+    private fun applyAuthorizationHeader(builder: Request.Builder, tokenOverride: String? = null) {
+        val currentToken = sanitizeToken(tokenOverride ?: token)
         if (currentToken != null) {
             builder.header("Authorization", "Bearer $currentToken")
-        } else if (token != null) {
+        } else if (token != null && tokenOverride == null) {
             token = null
             onUnauthorized?.invoke()
             throw ApiException("登录凭证异常，请重新登录", 401)
@@ -1135,7 +1210,12 @@ object ApiClient {
         return null
     }
 
-    private suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun request(
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+        tokenOverride: String? = null
+    ): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val normalizedMethod = method.uppercase()
         val cacheTtl = if (normalizedMethod == "GET") cacheTtlMillis(path) else null
         if (cacheTtl != null) {
@@ -1151,7 +1231,7 @@ object ApiClient {
             requestBuilder.header("Content-Type", "application/json")
         }
 
-        applyAuthorizationHeader(requestBuilder)
+        applyAuthorizationHeader(requestBuilder, tokenOverride)
 
         val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
 
@@ -1167,12 +1247,19 @@ object ApiClient {
 
         client.newCall(requestBuilder.build()).execute().use { response ->
             val responseBodyString = response.body?.string().orEmpty()
+            
+            // Handle 204 No Content specifically to avoid JSON parse errors (like /admin/device-tokens)
+            if (response.code == 204 || (response.isSuccessful && responseBodyString.isBlank())) {
+                if (normalizedMethod != "GET") invalidateCacheForMutation(path)
+                return@use JSONObject().put("code", 0).put("message", "ok")
+            }
+
             val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
             if (response.code == 401) {
                 token = null
                 onUnauthorized?.invoke()
             }
-            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败"), json.optInt("code", -1), json.optJSONObject("data"))
+            if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败: ${response.code}"), json.optInt("code", -1), json.optJSONObject("data"))
             if (normalizedMethod != "GET") invalidateCacheForMutation(path)
             else if (cacheTtl != null) cacheResponse(path, json.toString())
             json
