@@ -141,7 +141,7 @@ struct StatusPill: View {
     // 颜色匹配逻辑，完美还原 Android 的 when(text) 逻辑
     private func getStyle(for text: String) -> (text: Color, bg: Color) {
         switch text {
-        case "加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款":
+        case "加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款", "已确认":
             return (.success, .successSoft)
         case "自提":
             return (.appPrimary, .appPrimarySoft)
@@ -260,6 +260,9 @@ struct SegmentedButton: View {
         Button(action: action) {
             Text(label)
                 .scaledFont(13, weight: isSelected ? .semibold : .regular)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(isSelected ? Color.white : Color.ink)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)

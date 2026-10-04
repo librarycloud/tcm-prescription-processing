@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AudioToolbox
 import CoreImage
 import UIKit
 
@@ -348,8 +349,15 @@ public struct LiveScannerView: View {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isResolving else { return }
         
-        // 触感反馈（唯一触发点，由 isResolving 保证只振动一次）
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // 触感反馈（由 isResolving 保证只触发一次）
+        if UserDefaults.standard.object(forKey: "scan_haptic_enabled") as? Bool ?? true {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        
+        // 声音反馈
+        if UserDefaults.standard.object(forKey: "scan_sound_enabled") as? Bool ?? true {
+            AudioServicesPlaySystemSound(1057)
+        }
         
         if let onScanned = router.scannerOnScanned {
             closeScanner()

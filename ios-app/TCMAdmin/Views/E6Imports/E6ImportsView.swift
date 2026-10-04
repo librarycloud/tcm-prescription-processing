@@ -10,6 +10,7 @@ public struct E6ImportsView: View {
     @State private var page: Int = 1
     @State private var hasMore: Bool = true
     @State private var isLoadingMore: Bool = false
+    @State private var totalCount: Int = 0
     @State private var showDatePicker = false
     @State private var tempPickerDate = Date()
     @State private var e6Imports: [E6ImportItem] = []
@@ -123,63 +124,97 @@ public struct E6ImportsView: View {
                         onScan: { router.presentScanner() }
                     )
                     
-                    // 日期快捷切换
+                    // 日期快捷切换与日期选择（选择与展示合二为一）
                     HStack(spacing: 8) {
-                        SegmentedButton(
-                            label: "全部日期",
-                            isSelected: orderDate.isEmpty,
-                            action: {
-                                orderDate = ""
-                                startLoadE6Imports()
-                            }
-                        )
-                        SegmentedButton(
-                            label: "今日订单",
-                            isSelected: orderDate == todayString,
-                            action: {
-                                orderDate = orderDate == todayString ? "" : todayString
-                                startLoadE6Imports()
-                            }
-                        )
-                        
-                        if !orderDate.isEmpty && orderDate != todayString {
-                            Button(action: {
-                                orderDate = ""
-                                startLoadE6Imports()
-                            }) {
-                                HStack(spacing: 4) {
-                                    Text(orderDate)
-                                    Image(systemName: "xmark.circle.fill")
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    orderDate = orderDate == todayString ? "" : todayString
+                                    startLoadE6Imports()
+                                }) {
+                                    Text("今日订单")
+                                        .scaledFont(12, weight: orderDate == todayString ? .semibold : .medium)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                        .foregroundStyle(orderDate == todayString ? Color.appPrimary : Color.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(orderDate == todayString ? Color.appPrimarySoft : Color.surface)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(orderDate == todayString ? Color.appPrimary.opacity(0.4) : Color.cardBorder, lineWidth: 1)
+                                        )
                                 }
-                                .scaledFont(12, weight: .semibold)
-                                .foregroundStyle(Color.appPrimary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.appPrimarySoft)
-                                .clipShape(.rect(cornerRadius: 6))
+                                
+                                Button(action: {
+                                    orderDate = ""
+                                    startLoadE6Imports()
+                                }) {
+                                    Text("全部日期")
+                                        .scaledFont(12, weight: orderDate.isEmpty ? .semibold : .medium)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                        .foregroundStyle(orderDate.isEmpty ? Color.appPrimary : Color.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(orderDate.isEmpty ? Color.appPrimarySoft : Color.surface)
+                                        .clipShape(.rect(cornerRadius: 6))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(orderDate.isEmpty ? Color.appPrimary.opacity(0.4) : Color.cardBorder, lineWidth: 1)
+                                        )
+                                }
                             }
                         }
                         
-                        Spacer()
+                        Spacer(minLength: 4)
                         
-                        // 自定义日期选择按钮
+                        // 自定义日期选择与当前日期展示合二为一
                         Button(action: {
                             let formatter = DateFormatter()
                             formatter.dateFormat = "yyyy-MM-dd"
                             tempPickerDate = formatter.date(from: orderDate) ?? Date()
                             showDatePicker = true
                         }) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 5) {
                                 Image(systemName: "calendar")
-                                Text("选择日期")
+                                    .scaledFont(12)
+                                    .foregroundStyle(orderDate.isEmpty ? Color.ink : Color.appPrimary)
+                                
+                                Text(orderDate.isEmpty ? "选择日期" : "日期: \(orderDate)")
+                                    .scaledFont(12, weight: orderDate.isEmpty ? .medium : .semibold)
+                                    .foregroundStyle(orderDate.isEmpty ? Color.ink : Color.appPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                if !orderDate.isEmpty {
+                                    Button(action: {
+                                        orderDate = ""
+                                        startLoadE6Imports()
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .scaledFont(11)
+                                            .foregroundStyle(Color.appPrimary.opacity(0.8))
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    // 占位符保证按钮不显示时宽度完全一致
+                                    Image(systemName: "xmark.circle.fill")
+                                        .scaledFont(11)
+                                        .opacity(0)
+                                }
                             }
-                            .scaledFont(12, weight: .medium)
-                            .foregroundStyle(Color.ink)
+                            .frame(width: 140)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Color.surface)
+                            .background(orderDate.isEmpty ? Color.surface : Color.appPrimarySoft)
                             .clipShape(.rect(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cardBorder, lineWidth: 1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(orderDate.isEmpty ? Color.cardBorder : Color.appPrimary.opacity(0.4), lineWidth: 1)
+                            )
                         }
                     }
                     
@@ -235,8 +270,14 @@ public struct E6ImportsView: View {
                     Spacer()
                 } else {
                     AppScrollView {
-                        LazyVGrid(columns: self.gridColumns, spacing: 12) {
-                            ForEach(e6Imports) { item in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("共 \(totalCount) 条记录")
+                                .scaledFont(12)
+                                .foregroundStyle(Color.muted)
+                                .padding(.horizontal, 4)
+                            
+                            LazyVGrid(columns: self.gridColumns, spacing: 12) {
+                                ForEach(e6Imports) { item in
                                 AppCard(padding: 16) {
                                     VStack(alignment: .leading, spacing: 8) {
                                         HStack(alignment: .center) {
@@ -360,6 +401,7 @@ public struct E6ImportsView: View {
                                 }
                             }
                         }
+                        }
                         .padding(16)
                         Group {
                             if hasMore && !e6Imports.isEmpty {
@@ -453,21 +495,11 @@ public struct E6ImportsView: View {
         }
         .sheet(isPresented: $showDatePicker) {
             NavigationStack {
-                VStack(spacing: 16) {
+                VStack(spacing: 0) {
                     DatePicker("选择订单日期", selection: $tempPickerDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .environment(\.locale, Locale(identifier: "zh_CN"))
                         .padding()
-                        .onChange(of: tempPickerDate) { _, newValue in
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-                            orderDate = formatter.string(from: newValue)
-                            // 必须延迟收起，否则在 iOS 17 上 SwiftUI 的 sheet 状态机可能会卡住导致无法 dismiss
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                showDatePicker = false
-                                startLoadE6Imports()
-                            }
-                        }
                     Spacer()
                 }
                 .navigationTitle("选择订单日期")
@@ -487,7 +519,7 @@ public struct E6ImportsView: View {
                     }
                 }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.height(450)])
         }
         .scrollDismissesKeyboard(.interactively)
         .task {
@@ -539,11 +571,12 @@ public struct E6ImportsView: View {
             guard !Task.isCancelled else { return }
             
             if isLoadMore {
-                self.e6Imports.append(contentsOf: res)
+                self.e6Imports.append(contentsOf: res.items)
             } else {
-                self.e6Imports = res
+                self.e6Imports = res.items
             }
-            self.hasMore = res.count == 20
+            self.totalCount = res.total
+            self.hasMore = self.e6Imports.count < res.total
         } catch is CancellationError {
             return
         } catch {

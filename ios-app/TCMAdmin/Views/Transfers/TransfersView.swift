@@ -336,7 +336,7 @@ public struct TransfersView: View {
         .scrollDismissesKeyboard(.interactively)
         .task {
             // 三个请求完全并行：门店列表、统计数据、调拨记录
-            async let fetchedStores = (try? ApiClient.shared.fetchStores()) ?? []
+            async let fetchedStores = (try? ApiClient.shared.fetchTransferStores()) ?? []
             async let statsTask: () = loadStats()
             async let transfersTask: () = loadTransfers()
             
@@ -421,8 +421,8 @@ public struct TransferFormView: View {
     @Environment(\.dismiss) private var dismiss
     var session = SessionManager.shared
     
-    @State private var fromStoreId: Int = 0
-    @State private var toStoreId: Int = 0
+    @State private var fromStoreId: Int = -1
+    @State private var toStoreId: Int = -1
     @State private var expectedReturnDate: String = ""
     @State private var itemName: String = ""
     @State private var itemSpecification: String = ""
@@ -436,8 +436,16 @@ public struct TransferFormView: View {
         self.onSaved = onSaved
     }
     
+    private var isSuperAdmin: Bool {
+        SessionManager.shared.currentUser?.role == 0
+    }
+    
+    private var userStoreId: Int {
+        SessionManager.shared.currentUser?.store?.id ?? 0
+    }
+    
     private var isValid: Bool {
-        fromStoreId > 0 && toStoreId > 0 && fromStoreId != toStoreId &&
+        fromStoreId >= 0 && toStoreId >= 0 && fromStoreId != toStoreId &&
         !itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         (Double(itemQuantity) ?? 0.0) > 0 &&
         !isBusy
@@ -453,12 +461,13 @@ public struct TransferFormView: View {
                             
                             Divider().foregroundStyle(Color.cardBorder)
                             
-                            // 调出门店
+                            // 调出门店 (提供方)
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("调出门店 *").scaledFont(13, weight: .medium).foregroundStyle(Color.ink)
+                                Text("调出门店 (提供方) *").scaledFont(13, weight: .medium).foregroundStyle(Color.ink)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
-                                        ForEach(stores) { s in
+                                        let availableFrom = isSuperAdmin ? stores.filter { $0.id != toStoreId } : stores.filter { $0.id != userStoreId }
+                                        ForEach(availableFrom) { s in
                                             SegmentedButton(label: s.name, isSelected: fromStoreId == s.id) {
                                                 fromStoreId = s.id
                                             }
@@ -467,14 +476,27 @@ public struct TransferFormView: View {
                                 }
                             }
                             
-                            // 调入门店
+                            // 调入门店 (申请方)
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("调入门店 *").scaledFont(13, weight: .medium).foregroundStyle(Color.ink)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(stores) { s in
-                                            SegmentedButton(label: s.name, isSelected: toStoreId == s.id) {
-                                                toStoreId = s.id
+                                Text("调入门店 (申请方) *").scaledFont(13, weight: .medium).foregroundStyle(Color.ink)
+                                if !isSuperAdmin && userStoreId > 0 {
+                                    let myStoreName = stores.first(where: { $0.id == userStoreId })?.name ?? SessionManager.shared.currentUser?.store?.name ?? "当前门店"
+                                    Text(myStoreName)
+                                        .scaledFont(13, weight: .bold)
+                                        .foregroundStyle(Color.appPrimary)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
+                                        .background(Color.appPrimary.opacity(0.1))
+                                        .clipShape(Capsule())
+                                        .overlay(Capsule().stroke(Color.appPrimary.opacity(0.3), lineWidth: 1))
+                                } else {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 8) {
+                                            let availableTo = stores.filter { $0.id != fromStoreId }
+                                            ForEach(availableTo) { s in
+                                                SegmentedButton(label: s.name, isSelected: toStoreId == s.id) {
+                                                    toStoreId = s.id
+                                                }
                                             }
                                         }
                                     }
@@ -574,6 +596,11 @@ public struct TransferFormView: View {
             }
             .background(Color.pageBackground.ignoresSafeArea(.all))
             .navigationTitle("新建调拨")
+            .onAppear {
+                if !isSuperAdmin && userStoreId > 0 {
+                    toStoreId = userStoreId
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
                                 .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1016,59 +1043,28 @@ public struct TransferDetailView: View {
         .navigationTitle("调拨详情")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await loadDetail()
+            await loadDetail(showSpinner: true)
         }
         .refreshable {
+            // 下拉刷新不设 isLoading，避免触发 UI 结构重建导致 SwiftUI 误杀任务
             ApiClient.shared.clearResponseCache()
-            await loadDetail()
+            await loadDetail(showSpinner: false)
         }
         .sheet(item: $returnDialogItem) { item in
-            NavigationStack {
-                VStack(spacing: 16) {
-                    AppCard(padding: 16) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("归还物资：\(item.displayName)")
-                                .scaledFont(15, weight: .bold)
-                            
-                            Text("剩余可归还数量：\(String(format: "%g", item.availableReturnQuantity ?? 0.0)) \(item.unit ?? "")")
-                                .scaledFont(13)
-                                .foregroundStyle(Color.muted)
-                            
-                            TextField("请输入归还数量", text: $returnQuantityText)
-                                .keyboardType(.decimalPad)
-                                .padding(.horizontal, 12)
-                                .frame(height: 44)
-                                .background(Color.surface)
-                                .clipShape(.rect(cornerRadius: 8))
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
-                        }
-                    }
-                    
-                    Button(action: {
-                        submitReturnAction(item: item)
-                    }) {
-                        Text("提交归还申请")
-                            .scaledFont(15, weight: .bold)
-                            .foregroundStyle(Color.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 46)
-                            .background(Color.appPrimary)
-                            .clipShape(.rect(cornerRadius: 8))
-                    }
-                    .disabled((Double(returnQuantityText) ?? 0.0) <= 0)
-                    
-                    Spacer()
+            TransferReturnSheet(
+                item: item,
+                transferId: id,
+                recordId: returnRecordId,
+                qty: returnQuantityText,
+                date: returnDate,
+                remark: returnRemark,
+                onDismiss: { returnDialogItem = nil; returnRecordId = nil },
+                onSuccess: {
+                    returnDialogItem = nil
+                    returnRecordId = nil
+                    Task { await loadDetail() }
                 }
-                .padding(16)
-                .background(Color.pageBackground.ignoresSafeArea(.all))
-                .navigationTitle("申请归还")
-                .navigationBarTitleDisplayMode(.inline)
-                                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("取消") { returnDialogItem = nil }
-                    }
-                }
-            }
+            )
         }
         .alert("二次确认", isPresented: $showActionConfirm) {
             Button("取消", role: .cancel) { }
@@ -1080,14 +1076,19 @@ public struct TransferDetailView: View {
         }
     }
     
-    private func loadDetail() async {
+    private func loadDetail(showSpinner: Bool = true) async {
         let taskID = UUID()
         currentTaskID = taskID
-        isLoading = true
+        if showSpinner { isLoading = true }
         errorMessage = nil
         do {
-            self.transfer = try await ApiClient.shared.fetchTransferDetail(id: id)
+            let fetched = try await ApiClient.shared.fetchTransferDetail(id: id)
+            guard currentTaskID == taskID else { return }
+            self.transfer = fetched
+        } catch is CancellationError {
+            // ignore
         } catch {
+            guard currentTaskID == taskID else { return }
             errorMessage = error.localizedDescription
         }
         if currentTaskID == taskID { isLoading = false }
@@ -1201,37 +1202,152 @@ public struct TransferDetailView: View {
             }
         }
     }
+}
+
+// MARK: - 申请/修改归还独立弹窗
+@MainActor
+struct TransferReturnSheet: View {
+    let item: TransferItemModel
+    let transferId: Int
+    let recordId: Int?
     
-    private func submitReturnAction(item: TransferItemModel) {
-        guard let qty = Double(returnQuantityText), qty > 0 else { return }
+    @State private var quantityText: String
+    @State private var date: Date
+    @State private var remark: String
+    
+    let onDismiss: () -> Void
+    let onSuccess: () -> Void
+    
+    @State private var isBusy = false
+    @State private var errorMessage: String? = nil
+    
+    init(item: TransferItemModel, transferId: Int, recordId: Int?, qty: String, date: Date, remark: String, onDismiss: @escaping () -> Void, onSuccess: @escaping () -> Void) {
+        self.item = item
+        self.transferId = transferId
+        self.recordId = recordId
+        self._quantityText = State(initialValue: qty)
+        self._date = State(initialValue: date)
+        self._remark = State(initialValue: remark)
+        self.onDismiss = onDismiss
+        self.onSuccess = onSuccess
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                AppCard(padding: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("归还物资：\(item.displayName)")
+                            .scaledFont(15, weight: .bold)
+                        
+                        Text("剩余可归还数量：\(String(format: "%g", item.availableReturnQuantity ?? 0.0)) \(item.unit ?? "")")
+                            .scaledFont(13)
+                            .foregroundStyle(Color.muted)
+                        
+                        TextField("请输入归还数量", text: $quantityText)
+                            .keyboardType(.decimalPad)
+                            .padding(.horizontal, 12)
+                            .frame(height: 44)
+                            .background(Color.surface)
+                            .clipShape(.rect(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                        
+                        HStack {
+                            Text("归还日期").scaledFont(13).foregroundStyle(Color.muted)
+                            Spacer()
+                            DatePicker("", selection: $date, displayedComponents: .date)
+                                .labelsHidden()
+                        }
+                        
+                        TextField("备注 (选填)", text: $remark)
+                            .padding(.horizontal, 12)
+                            .frame(height: 44)
+                            .background(Color.surface)
+                            .clipShape(.rect(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cardBorder, lineWidth: 1))
+                    }
+                }
+                
+                if let error = errorMessage {
+                    AppCard(padding: 12) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.danger)
+                            Text(error).scaledFont(13).foregroundStyle(Color.danger)
+                        }
+                    }
+                }
+
+                Button(action: submit) {
+                    if isBusy {
+                        ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Text(recordId != nil ? "保存修改" : "提交归还申请")
+                            .scaledFont(15, weight: .bold)
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(((Double(quantityText.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) ?? 0.0) <= 0 || isBusy) ? Color.appPrimary.opacity(0.5) : Color.appPrimary)
+                .clipShape(.rect(cornerRadius: 8))
+                .disabled((Double(quantityText.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) ?? 0.0) <= 0 || isBusy)
+                
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.pageBackground.ignoresSafeArea(.all))
+            .navigationTitle(recordId != nil ? "修改归还" : "申请归还")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { onDismiss() }
+                }
+            }
+        }
+    }
+    
+    private func submit() {
+        let text = quantityText.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+        guard let qty = Double(text), qty > 0 else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        returnDialogItem = nil
-        isActionBusy = true
+        errorMessage = nil
+        isBusy = true
         
         Task {
             do {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd"
-                let todayStr = formatter.string(from: Date())
+                let dateStr = formatter.string(from: date)
                 
-                let payload: [String: Any] = [
-                    "returnDate": todayStr,
-                    "items": [
-                        [
-                            "transferItemId": item.id,
-                            "quantity": qty
+                if let rId = recordId {
+                    let payload: [String: Any] = [
+                        "returnDate": dateStr,
+                        "quantity": qty,
+                        "remark": remark
+                    ]
+                    try await ApiClient.shared.updateTransferReturn(transferId: transferId, returnId: rId, payload: payload)
+                } else {
+                    let payload: [String: Any] = [
+                        "returnDate": dateStr,
+                        "items": [
+                            [
+                                "transferItemId": item.id,
+                                "quantity": qty,
+                                "remark": remark
+                            ]
                         ]
                     ]
-                ]
-                try await ApiClient.shared.addTransferReturns(transferId: id, payload: payload)
-                await MainActor.run {
-                    isActionBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    try await ApiClient.shared.addTransferReturns(transferId: transferId, payload: payload)
                 }
-                await loadDetail()
+                
+                await MainActor.run {
+                    isBusy = false
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    onSuccess()
+                }
             } catch {
                 await MainActor.run {
-                    isActionBusy = false
+                    isBusy = false
                     errorMessage = error.localizedDescription
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
