@@ -257,15 +257,8 @@ private fun TcmAdminApp() {
 
     LaunchedEffect(restoredSession) {
         if (restoredSession != null) {
-            try {
-                // Directly attempt FCM registration.
-                // If GMS is completely missing, this will fail or throw,
-                // and the FCM Service's OnCompleteListener will catch it and fallback to JPush.
-                TcmFcmService.registerCurrentToken(appContext)
-            } catch (e: Exception) {
-                // Absolute fallback just in case the FCM API classes are completely missing
-                TcmJPushReceiver.registerCurrentToken(appContext)
-            }
+            // Backend FCM is unreachable in mainland China without proxy, so enforce JPush for all devices
+            TcmJPushReceiver.registerCurrentToken(appContext)
         }
     }
 
