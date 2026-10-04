@@ -204,13 +204,30 @@ class MainActivity : ComponentActivity() {
                     onAgree = {
                         sharedPrefs.edit().putBoolean("agreed_privacy", true).apply()
                         hasAgreedPrivacy = true
-                        // TODO: Initialize third-party SDKs here (e.g., Push SDK, Analytics SDK)
                     }
                 )
             } else {
                 TcmAdminApp() 
             }
         }
+
+        // 极光诊断弹窗 — 5秒后弹出，调试完删掉
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            @Suppress("DEPRECATION")
+            val connected = cn.jpush.android.api.JPushInterface.getConnectionState(this)
+            val regId = cn.jpush.android.api.JPushInterface.getRegistrationID(this)
+            var appKey = "读取失败"
+            try {
+                val ai = packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA)
+                appKey = ai.metaData?.getString("JPUSH_APPKEY") ?: "未找到"
+            } catch (_: Exception) {}
+
+            android.app.AlertDialog.Builder(this)
+                .setTitle("极光推送诊断")
+                .setMessage("连接状态: $connected\nRegID: ${if (regId.isNullOrEmpty()) "空" else regId}\nAppKey: $appKey\n包名: $packageName")
+                .setPositiveButton("确定", null)
+                .show()
+        }, 5000)
     }
 
     override fun onTrimMemory(level: Int) {
