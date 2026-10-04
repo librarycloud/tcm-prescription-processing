@@ -460,18 +460,19 @@ object ApiClient {
         val receivedToken = sanitizeToken(result.getString("token"))
             ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
         val session = AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
-        // Attempt to upload token immediately after session starts. Context needed since JPush SDK needs it.
-        context?.let { TcmJPushReceiver.registerCurrentToken(it) }
+        context?.let { TcmFcmService.registerCurrentToken(it) }
         return session
     }
 
     /** Registers a push notification device token with the backend. */
-    suspend fun registerDeviceToken(context: Context, platform: String, token: String) {
+    suspend fun registerDeviceToken(context: Context, platform: String, token: String): Boolean {
         try {
             val body = JSONObject().put("platform", platform).put("token", token)
             request("/admin/device-tokens", "POST", body)
+            return true
         } catch (e: Exception) {
             android.util.Log.w("TcmApiClient", "registerDeviceToken failed: ${e.message}")
+            return false
         }
     }
 

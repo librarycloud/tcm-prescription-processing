@@ -207,6 +207,16 @@ class ScannerActivity : ComponentActivity() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+
         ocrEnabled = intent.getBooleanExtra(EXTRA_ENABLE_SKU_OCR, false)
         if (ocrEnabled) {
             latestOcrDebugLog = "⏳ 正在初始化 PP-OCRv6 引擎..."
@@ -576,6 +586,24 @@ class ScannerActivity : ComponentActivity() {
         }
 
         setContentView(root)
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val sysBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            topBar.setPadding((16 * density).toInt(), sysBars.top + (16 * density).toInt(), (16 * density).toInt(), 0)
+            
+            // Find debugLogPanel dynamically if it exists
+            for (i in 0 until root.childCount) {
+                val child = root.getChildAt(i)
+                if (child is LinearLayout && child.visibility != View.VISIBLE && child.background is GradientDrawable) {
+                    val params = child.layoutParams as? FrameLayout.LayoutParams
+                    if (params != null && params.gravity == Gravity.BOTTOM) {
+                        val m = (12 * density).toInt()
+                        params.setMargins(m, 0, m, sysBars.bottom + (16 * density).toInt())
+                        child.layoutParams = params
+                    }
+                }
+            }
+            insets
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {

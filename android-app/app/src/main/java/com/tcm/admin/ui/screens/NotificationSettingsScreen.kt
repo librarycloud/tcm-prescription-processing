@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import cn.jpush.android.api.JPushInterface
-import com.tcm.admin.ui.isAppDarkTheme
+import com.tcm.admin.isAppDarkTheme
 
 @Composable
 internal fun NotificationSettingsScreen() {

@@ -36,7 +36,6 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                         if (!retryRegId.isNullOrEmpty()) {
                             Log.d(TAG, "Registration ID available after ${(attempt + 1) * 5}s, uploading...")
                             uploadToken(context, retryRegId)
-                            TcmFcmService.unregisterToken(context)
                             return@launch
                         }
                     }
@@ -47,7 +46,6 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                 return
             }
             uploadToken(context, regId)
-            TcmFcmService.unregisterToken(context)
         }
 
         /** Call on logout to remove this device's JPush token from the backend. */
@@ -71,8 +69,17 @@ class TcmJPushReceiver : JPushMessageReceiver() {
             }
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ApiClient.registerDeviceToken(context, platform = "jpush", token = regId)
-                    Log.d(TAG, "JPush Registration ID uploaded: ${regId.take(20)}...")
+                    if (ApiClient.registerDeviceToken(context, platform = "jpush", token = regId)) {
+                        val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
+                        if (prefs.getString("active_provider", null) != "fcm") {
+                            prefs.edit().putString("active_provider", "jpush").apply()
+                            JPushInterface.resumePush(context)
+                            TcmFcmService.unregisterToken(context)
+                        }
+                        Log.d(TAG, "JPush Registration ID uploaded: ${regId.take(20)}...")
+                    } else {
+                        Log.w(TAG, "JPush Registration ID registration failed")
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload JPush Registration ID: ${e.message}")
                 }
@@ -83,9 +90,8 @@ class TcmJPushReceiver : JPushMessageReceiver() {
     override fun onRegister(context: Context, registrationId: String) {
         Log.d(TAG, "onRegister: ${registrationId.take(20)}...")
         val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
-        if (prefs.getString("active_provider", null) == "fcm") {
+        if (prefs.getString("active_provider", null) != "jpush") {
             Log.d(TAG, "Device is actively using FCM, skipping JPush token upload")
-            cn.jpush.android.api.JPushInterface.stopPush(context)
             return
         }
         uploadToken(context, registrationId)

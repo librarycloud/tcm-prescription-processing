@@ -11,23 +11,29 @@ import kotlinx.coroutines.launch
 class TcmFcmService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "TcmFcmService"
+        private const val PUSH_PREFS = "push_prefs"
+        private const val ACTIVE_PROVIDER = "active_provider"
 
         fun registerCurrentToken(context: Context) {
+            context.getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
+                .edit().putString(ACTIVE_PROVIDER, "fcm_pending").apply()
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
                     Log.w(TAG, "Fetching FCM registration token failed, falling back to JPush", task.exception)
-                    TcmJPushReceiver.registerCurrentToken(context)
+                    activateJPush(context)
                     return@addOnCompleteListener
                 }
                 val token = task.result
                 Log.d(TAG, "FCM Token obtained: ${token.take(20)}...")
-                context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("active_provider", "fcm").apply()
-                // Stop JPush immediately so it doesn't run concurrently with FCM
-                cn.jpush.android.api.JPushInterface.stopPush(context)
                 uploadToken(context, token)
-                // Proactively unregister JPush from backend to avoid duplicates
-                TcmJPushReceiver.unregisterToken(context)
             }
+        }
+
+        private fun activateJPush(context: Context) {
+            context.getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
+                .edit().putString(ACTIVE_PROVIDER, "jpush").apply()
+            cn.jpush.android.api.JPushInterface.resumePush(context)
+            TcmJPushReceiver.registerCurrentToken(context)
         }
 
         fun unregisterToken(context: Context) {
@@ -53,10 +59,19 @@ class TcmFcmService : FirebaseMessagingService() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ApiClient.registerDeviceToken(context, platform = "android", token = token)
-                    Log.d(TAG, "FCM Token uploaded successfully")
+                    if (ApiClient.registerDeviceToken(context, platform = "android", token = token)) {
+                        context.getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
+                            .edit().putString(ACTIVE_PROVIDER, "fcm").apply()
+                        cn.jpush.android.api.JPushInterface.stopPush(context)
+                        TcmJPushReceiver.unregisterToken(context)
+                        Log.d(TAG, "FCM Token uploaded successfully; FCM is active")
+                    } else {
+                        Log.w(TAG, "FCM token registration failed; falling back to JPush")
+                        activateJPush(context)
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload FCM Token: ${e.message}")
+                    activateJPush(context)
                 }
             }
         }
@@ -64,8 +79,9 @@ class TcmFcmService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         Log.d(TAG, "FCM onNewToken: ${token.take(20)}...")
+        getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(ACTIVE_PROVIDER, "fcm_pending").apply()
         uploadToken(applicationContext, token)
-        TcmJPushReceiver.unregisterToken(applicationContext)
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
