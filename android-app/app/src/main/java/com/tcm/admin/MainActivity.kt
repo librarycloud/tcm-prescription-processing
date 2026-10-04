@@ -258,7 +258,7 @@ private fun TcmAdminApp() {
                 val planId = json.optString("planId")
                 val action = json.optString("action")
                 
-                if (session == null) return@collect
+                if (session == null) continue
                 
                 if (transferId.isNotEmpty()) {
                     // Navigate to home, clearing everything else
