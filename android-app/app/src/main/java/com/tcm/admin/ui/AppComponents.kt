@@ -198,7 +198,7 @@ internal val Pink: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val PinkSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
 internal val Brown: Color @Composable get() = MaterialTheme.colorScheme.secondary
 internal val BrownSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
-private val isAppDarkTheme: Boolean
+internal val isAppDarkTheme: Boolean
     @Composable
     get() {
         val bg = MaterialTheme.colorScheme.background
@@ -330,7 +330,7 @@ internal fun StatusPill(
     bgColor: Color? = null,
 ) {
     val (defaultColor, defaultBgColor) = when {
-        text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款") ->
+        text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款", "已确认") ->
             Pair(Success, SuccessSoft)
         text == "自提" ->
             Pair(Primary, PrimarySoft)
