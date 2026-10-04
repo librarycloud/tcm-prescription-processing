@@ -17,6 +17,8 @@ import okhttp3.ConnectionPool
 import java.security.MessageDigest
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class AdminSession(val token: String, val user: JSONObject)
 
@@ -64,9 +66,15 @@ object ApiClient {
     private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
     @Volatile
     private var token: String? = null
+    private val _baseUrlFlow = MutableStateFlow(BuildConfig.API_BASE_URL)
+    val baseUrlFlow = _baseUrlFlow.asStateFlow()
+
     @Volatile
     var currentBaseUrl: String = BuildConfig.API_BASE_URL
-        private set
+        private set(value) {
+            field = value
+            _baseUrlFlow.value = value
+        }
     @Volatile
     private var cacheContext: Context? = null
     private data class CacheEntry(val route: String, val savedAt: Long, val data: String)

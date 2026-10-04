@@ -115,6 +115,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1001,27 +1002,24 @@ private fun TcmAdminApp() {
 @Composable
 private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, String) -> Unit) {
     val context = LocalContext.current
+    val baseUrl by ApiClient.baseUrlFlow.collectAsState()
+    var configInput by remember { mutableStateOf("") }
+    var showConfigDialog by remember { mutableStateOf(false) }
+
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == android.app.Activity.RESULT_OK && value.isNotBlank()) {
             val uri = android.net.Uri.parse(value)
             val importResult = ApiClient.importServerConfig(context, uri)
             Toast.makeText(context, importResult.second, Toast.LENGTH_LONG).show()
+            if (importResult.first) {
+                configInput = ApiClient.currentBaseUrl
+            }
         }
     }
 
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var baseUrl by remember { mutableStateOf(ApiClient.currentBaseUrl) }
-
-    LaunchedEffect(Unit) {
-        ServerConfigNotifier.importResult.collect {
-            baseUrl = ApiClient.currentBaseUrl
-        }
-    }
-
-    var showConfigDialog by remember { mutableStateOf(false) }
-    var configInput by remember { mutableStateOf("") }
 
     if (showConfigDialog) {
         androidx.compose.material3.AlertDialog(
@@ -1053,7 +1051,6 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                         val result = ApiClient.importServerConfig(context, android.net.Uri.parse(configInput))
                         Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
                         if (result.first) {
-                            baseUrl = ApiClient.currentBaseUrl
                             showConfigDialog = false
                         }
                     }
@@ -1195,12 +1192,28 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                     Spacer(Modifier.height(4.dp))
                     Text(baseUrl, fontSize = 12.sp, color = Muted, maxLines = 1)
                 }
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = "Edit config",
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.IconButton(
+                        onClick = {
+                            scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            contentDescription = "扫码配置服务器",
+                            tint = Primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit config",
+                        tint = Muted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

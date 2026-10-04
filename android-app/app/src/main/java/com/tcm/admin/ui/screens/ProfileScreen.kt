@@ -54,6 +54,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1328,13 +1329,7 @@ internal fun SettingsScreen(
         Text("网络与服务器", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Ink)
         Spacer(Modifier.height(10.dp))
         
-        var baseUrl by remember { mutableStateOf(ApiClient.currentBaseUrl) }
-        LaunchedEffect(Unit) {
-            ServerConfigNotifier.importResult.collect {
-                baseUrl = ApiClient.currentBaseUrl
-            }
-        }
-        
+        val baseUrl by ApiClient.baseUrlFlow.collectAsState()
         var showEditDialog by remember { mutableStateOf(false) }
         var urlInput by remember { mutableStateOf(baseUrl) }
         var showServerChangeConfirmDialog by remember { mutableStateOf(false) }
@@ -1359,7 +1354,6 @@ internal fun SettingsScreen(
                         scope.launch {
                             runCatching { ApiClient.logout() }
                             ApiClient.importServerConfig(context, android.net.Uri.parse(pendingServerUrl))
-                            baseUrl = ApiClient.currentBaseUrl
                             ApiClient.clearSession(context)
                             onLogout?.invoke()
                         }
@@ -1408,7 +1402,6 @@ internal fun SettingsScreen(
                                 val result = ApiClient.importServerConfig(context, android.net.Uri.parse(urlInput))
                                 Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
                                 if (result.first) {
-                                    baseUrl = ApiClient.currentBaseUrl
                                     showEditDialog = false
                                 }
                             }
