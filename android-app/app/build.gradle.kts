@@ -189,9 +189,8 @@ dependencies {
     implementation("androidx.paging:paging-runtime:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
 
-    // JPush (极光推送) — handles both GMS and non-GMS Android devices automatically
+    // JPush (极光推送) — jpush 5.0+ 自动拉取 jcore，无需手动添加
     implementation("cn.jiguang.sdk:jpush:5.4.0")
-    implementation("cn.jiguang.sdk:jcore:4.2.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
