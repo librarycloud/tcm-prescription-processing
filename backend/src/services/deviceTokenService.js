@@ -20,7 +20,15 @@ export async function registerDeviceToken(prisma, adminId, platform, token) {
   const tokenStr = String(token).trim();
   if (!tokenStr) return;
 
-  await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
+    // If registering 'android' (FCM), delete any existing 'jpush' tokens for this admin to prevent duplicate notifications.
+    // If registering 'jpush', delete any 'android' tokens for the same reason.
+    if (platform === 'android') {
+      await tx.adminDeviceToken.deleteMany({ where: { adminId, platform: 'jpush' } });
+    } else if (platform === 'jpush') {
+      await tx.adminDeviceToken.deleteMany({ where: { adminId, platform: 'android' } });
+    }
+
     // Upsert: token is unique — if it belongs to another admin, move it here.
     await tx.adminDeviceToken.upsert({
       where: { token: tokenStr },
