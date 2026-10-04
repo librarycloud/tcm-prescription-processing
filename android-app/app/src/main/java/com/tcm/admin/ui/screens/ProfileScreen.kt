@@ -85,6 +85,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1351,11 +1352,16 @@ internal fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         showServerChangeConfirmDialog = false
-                        scope.launch {
-                            runCatching { ApiClient.logout() }
-                            ApiClient.importServerConfig(context, android.net.Uri.parse(pendingServerUrl))
-                            ApiClient.clearSession(context)
-                            onLogout?.invoke()
+                        val oldToken = ApiClient.token
+                        ApiClient.clearSession(context)
+                        ApiClient.importServerConfig(context, android.net.Uri.parse(pendingServerUrl))
+                        onLogout?.invoke()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            runCatching {
+                                if (!oldToken.isNullOrBlank()) {
+                                    ApiClient.logout(oldToken)
+                                }
+                            }
                         }
                     }) {
                         Text("确认切换", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
@@ -1881,6 +1887,12 @@ internal fun ProfileDetailScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                ProfileDetailRow(
+                    icon = Icons.Default.Person,
+                    label = "姓名/昵称",
+                    value = user?.displayField("nickname", "")?.takeIf { it.isNotBlank() } ?: "未设置",
+                )
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ProfileDetailRow(
                     icon = Icons.Default.Person,
                     label = "用户名",

@@ -65,7 +65,8 @@ object ApiClient {
     private const val OPERATION_CACHE_TTL = 30 * 1000L
     private const val DETAIL_CACHE_TTL = 5 * 60 * 1000L
     @Volatile
-    private var token: String? = null
+    var token: String? = null
+        private set
     private val _baseUrlFlow = MutableStateFlow(BuildConfig.API_BASE_URL)
     val baseUrlFlow = _baseUrlFlow.asStateFlow()
 
@@ -449,8 +450,8 @@ object ApiClient {
     val isAuthenticated: Boolean
         get() = token != null
 
-    suspend fun logout() {
-        request("/auth/logout", "POST")
+    suspend fun logout(tokenOverride: String? = null) {
+        request("/auth/logout", "POST", tokenOverride = tokenOverride)
     }
 
     suspend fun login(identifier: String, password: String, context: Context? = null): AdminSession {
@@ -1066,11 +1067,11 @@ object ApiClient {
         else -> JSONArray()
     }
 
-    private fun applyAuthorizationHeader(builder: Request.Builder) {
-        val currentToken = sanitizeToken(token)
+    private fun applyAuthorizationHeader(builder: Request.Builder, tokenOverride: String? = null) {
+        val currentToken = sanitizeToken(tokenOverride ?: token)
         if (currentToken != null) {
             builder.header("Authorization", "Bearer $currentToken")
-        } else if (token != null) {
+        } else if (token != null && tokenOverride == null) {
             token = null
             onUnauthorized?.invoke()
             throw ApiException("登录凭证异常，请重新登录", 401)
@@ -1208,7 +1209,12 @@ object ApiClient {
         return null
     }
 
-    private suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun request(
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+        tokenOverride: String? = null
+    ): JSONObject = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val normalizedMethod = method.uppercase()
         val cacheTtl = if (normalizedMethod == "GET") cacheTtlMillis(path) else null
         if (cacheTtl != null) {
@@ -1224,7 +1230,7 @@ object ApiClient {
             requestBuilder.header("Content-Type", "application/json")
         }
 
-        applyAuthorizationHeader(requestBuilder)
+        applyAuthorizationHeader(requestBuilder, tokenOverride)
 
         val requestBody = body?.toString()?.toRequestBody("application/json".toMediaTypeOrNull())
 

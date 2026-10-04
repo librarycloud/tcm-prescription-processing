@@ -145,9 +145,13 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tcm.admin.util.CacheManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.json.JSONObject
 
 import dagger.hilt.android.AndroidEntryPoint
@@ -412,6 +416,60 @@ private fun TcmAdminApp() {
         }
         onDispose { ApiClient.onUnauthorized = null }
     }
+    val performLogout: () -> Unit = {
+        val tokenToRevoke = ApiClient.token ?: session?.token
+        // 1. Immediately clear local session & navigate to Login (0ms instant response)
+        ApiClient.clearSession(appContext)
+        clearRetainedListValues()
+        session = null
+        navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
+
+        // 2. Unregister push tokens and notify server asynchronously in background
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                TcmJPushReceiver.unregisterToken(appContext)
+                TcmFcmService.unregisterToken(appContext)
+                if (!tokenToRevoke.isNullOrBlank()) {
+                    ApiClient.logout(tokenToRevoke)
+                }
+            }
+        }
+    }
+
+    val refreshUserProfile: () -> Unit = {
+        val currentToken = session?.token ?: ApiClient.token
+        if (!currentToken.isNullOrBlank()) {
+            scope.launch {
+                runCatching {
+                    val latestUser = withContext(Dispatchers.IO) { ApiClient.me() }
+                    val updatedSession = AdminSession(currentToken, latestUser)
+                    ApiClient.saveSession(appContext, updatedSession)
+                    session = updatedSession
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(session?.token) {
+        if (session != null) {
+            refreshUserProfile()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, session?.token) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (session != null) {
+                    refreshUserProfile()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     fun navigateTo(target: Route) {
     navController.navigate(target) {
@@ -554,24 +612,30 @@ private fun TcmAdminApp() {
                     TextButton(onClick = {
                         val target = pendingServerConfig ?: return@TextButton
                         pendingServerConfig = null
-                        scope.launch {
-                            var wasLoggedIn = false
-                            if (session != null) {
-                                wasLoggedIn = true
-                                runCatching { withContext(Dispatchers.IO) { ApiClient.logout() } }
-                                ApiClient.clearSession(appContext)
-                                clearRetainedListValues()
-                                session = null
+                        val wasLoggedIn = session != null
+                        val oldToken = ApiClient.token ?: session?.token
+                        if (wasLoggedIn) {
+                            ApiClient.clearSession(appContext)
+                            clearRetainedListValues()
+                            session = null
+                            navController.navigate(Route.Login) {
+                                popUpTo(navController.graph.id) { inclusive = true }
                             }
+                            CoroutineScope(Dispatchers.IO).launch {
+                                runCatching {
+                                    TcmJPushReceiver.unregisterToken(appContext)
+                                    TcmFcmService.unregisterToken(appContext)
+                                    if (!oldToken.isNullOrBlank()) {
+                                        ApiClient.logout(oldToken)
+                                    }
+                                }
+                            }
+                        }
+                        scope.launch {
                             val result = withContext(Dispatchers.IO) {
                                 ApiClient.importServerConfig(appContext, target)
                             }
                             ServerConfigNotifier.notify(result.first, result.second)
-                            if (wasLoggedIn) {
-                                navController.navigate(Route.Login) {
-                                    popUpTo(navController.graph.id) { inclusive = true }
-                                }
-                            }
                         }
                     }) { Text("确认") }
                 },
@@ -722,7 +786,10 @@ private fun TcmAdminApp() {
                             onOpenDetails = { navigateTo(Route.ProfileDetail) },
                             onOpenSettings = { navigateTo(Route.Settings) },
                             onOpenAbout = { navigateTo(Route.About) },
-                            onEntered = ::checkForAppUpdateIfDue,
+                            onEntered = {
+                                checkForAppUpdateIfDue()
+                                refreshUserProfile()
+                            },
                             hasAppUpdate = hasAppUpdate,
                             scrollState = profileScrollState,
                             onSessionUpdated = { updated ->
@@ -738,18 +805,13 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.ProfileDetail> {
+                    LaunchedEffect(Unit) {
+                        refreshUserProfile()
+                    }
                     DetailShell("个人资料", onBack = { navigateBack() }) {
                         ProfileDetailScreen(
                             user = session?.user,
-                            onLogout = {
-                                scope.launch {
-                                    runCatching { ApiClient.logout() }
-                                    ApiClient.clearSession(appContext)
-                                    clearRetainedListValues()
-                                    session = null
-                                    navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
-                                }
-                            },
+                            onLogout = performLogout,
                             onSessionUpdated = { updated ->
                                 ApiClient.saveSession(appContext, updated)
                                 session = updated
@@ -766,14 +828,7 @@ private fun TcmAdminApp() {
                             selectedTheme = themeMode,
                             themeAccentKey = themeAccentKey,
                             textScale = textScale,
-                            onLogout = {
-                                scope.launch {
-                                    runCatching { ApiClient.logout() }
-                                    ApiClient.clearSession(appContext)
-                                    session = null
-                                    navController.navigate(Route.Login) { popUpTo(navController.graph.id) { inclusive = true } }
-                                }
-                            }
+                            onLogout = performLogout
                         )
                     }
                 }
