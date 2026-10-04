@@ -31,3 +31,15 @@
 # Apache Commons Compress (used by BsPatch)
 -keep class org.apache.commons.compress.** { *; }
 -dontwarn org.apache.commons.compress.**
+
+# JPush / Jiguang
+-dontwarn cn.jpush.**
+-keep class cn.jpush.** { *; }
+-dontwarn cn.jiguang.**
+-keep class cn.jiguang.** { *; }
+-keep class * extends cn.jpush.android.service.JPushMessageReceiver { *; }
+-keep class com.tcm.admin.TcmJPushReceiver { *; }
+
+# JPush explicit optimization preventions
+-dontoptimize
+-dontpreverify
