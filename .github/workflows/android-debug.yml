@@ -75,11 +75,11 @@ jobs:
           AGCONNECT_SERVICES_JSON: ${{ secrets.AGCONNECT_SERVICES_JSON }}
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            echo "$GOOGLE_SERVICES_JSON" > android-app/app/google-services.json
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
             echo "Injected google-services.json"
           fi
           if [ -n "$AGCONNECT_SERVICES_JSON" ]; then
-            echo "$AGCONNECT_SERVICES_JSON" > android-app/app/agconnect-services.json
+            echo "$AGCONNECT_SERVICES_JSON" > app/agconnect-services.json
             echo "Injected agconnect-services.json"
           fi
       - name: Build debug APK
