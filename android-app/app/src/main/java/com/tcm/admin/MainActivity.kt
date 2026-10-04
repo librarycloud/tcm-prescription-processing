@@ -531,10 +531,11 @@ private fun TcmAdminApp() {
                 }
             )
         }
-                        NavHost(
-    navController = navController,
-    startDestination = if (session != null) Route.Inventory() else Route.Login,
-    modifier = Modifier.fillMaxSize(),
+        val initialStart = remember { if (restoredSession != null) Route.Inventory() else Route.Login }
+        NavHost(
+            navController = navController,
+            startDestination = initialStart,
+            modifier = Modifier.fillMaxSize(),
     enterTransition = { EnterTransition.None },
     exitTransition = { ExitTransition.None },
     popEnterTransition = { EnterTransition.None },
