@@ -54,11 +54,11 @@ function parseFcmServiceAccount() {
       const resolvedPath = path.isAbsolute(trimmed) ? trimmed : path.resolve(process.cwd(), trimmed);
       if (fs.existsSync(resolvedPath)) {
         _fcmSaCached = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
-        console.log('[Push] FCM service account loaded from env path:', resolvedPath, '(project_id:', _fcmSaCached.project_id, ')');
+        console.log('[Push] FCM service account loaded from env path (project_id:', _fcmSaCached.project_id, ')');
         return _fcmSaCached;
       }
     } catch (e) {
-      console.error('[Push] Failed to read FCM key from path:', trimmed, e.message);
+      console.error('[Push] Failed to read FCM key from configured env path:', e.message);
     }
   }
 
