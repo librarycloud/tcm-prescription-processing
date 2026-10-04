@@ -1,6 +1,7 @@
 package com.tcm.admin
 
 import android.content.Context
+import android.provider.Settings
 import java.util.UUID
 
 object PushNotificationPreference {
@@ -12,8 +13,11 @@ object PushNotificationPreference {
 
     fun deviceId(context: Context): String {
         val preferences = context.getSharedPreferences("TcmPrefs", Context.MODE_PRIVATE)
-        return preferences.getString(DEVICE_ID_KEY, null) ?: UUID.randomUUID().toString().also {
-            preferences.edit().putString(DEVICE_ID_KEY, it).apply()
-        }
+        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        val deviceId = androidId?.takeIf { it.isNotBlank() }?.let { "android:$it" }
+            ?: preferences.getString(DEVICE_ID_KEY, null)
+            ?: "install:${UUID.randomUUID()}"
+        preferences.edit().putString(DEVICE_ID_KEY, deviceId).apply()
+        return deviceId
     }
 }
