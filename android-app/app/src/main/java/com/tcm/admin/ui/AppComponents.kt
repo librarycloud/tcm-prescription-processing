@@ -330,7 +330,7 @@ internal fun StatusPill(
     bgColor: Color? = null,
 ) {
     val (defaultColor, defaultBgColor) = when {
-        text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款") ->
+        text in listOf("加工完成", "已领取", "已完成", "已调平", "正常", "盘点完成", "已核销", "已付款", "已确认") ->
             Pair(Success, SuccessSoft)
         text == "自提" ->
             Pair(Primary, PrimarySoft)
