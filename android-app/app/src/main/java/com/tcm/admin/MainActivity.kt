@@ -496,7 +496,7 @@ private fun TcmAdminApp() {
         if (navController.previousBackStackEntry != null) {
             return navController.popBackStack()
         }
-        return false
+        return navController.navigateUp() || navController.popBackStack()
     }
 
     fun switchTab(target: Route) {
@@ -817,7 +817,7 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.About> {
-                    DetailShell("关于药房助手", onBack = { navigateBack() }) {
+                    DetailShell("关于药房助手", onBack = { if (!navigateBack()) switchTab(Route.Profile) }) {
                         AboutScreen { hasAppUpdate = it }
                     }
                 }
@@ -825,7 +825,7 @@ private fun TcmAdminApp() {
                     LaunchedEffect(Unit) {
                         refreshUserProfile()
                     }
-                    DetailShell("个人资料", onBack = { navigateBack() }) {
+                    DetailShell("个人资料", onBack = { if (!navigateBack()) switchTab(Route.Profile) }) {
                         ProfileDetailScreen(
                             user = session?.user,
                             onLogout = performLogout,
@@ -837,7 +837,7 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.Settings> {
-                    DetailShell("设置", onBack = { navigateBack() }) {
+                    DetailShell("设置", onBack = { if (!navigateBack()) switchTab(Route.Profile) }) {
                         SettingsScreen(
                             onOpenThemeAppearance = { navigateTo(Route.ThemeAppearance) },
                             onOpenSecurityPrivacy = { navigateTo(Route.SecurityPrivacy) },
@@ -850,17 +850,17 @@ private fun TcmAdminApp() {
                     }
                 }
                 composable<Route.NotificationSettings> {
-                    DetailShell("通知和声音", onBack = { navigateBack() }) {
+                    DetailShell("通知和声音", onBack = { if (!navigateBack()) navigateTo(Route.Settings) }) {
                         NotificationSettingsScreen()
                     }
                 }
                 composable<Route.SecurityPrivacy> {
-                    DetailShell("安全与隐私", onBack = { navigateBack() }) {
+                    DetailShell("安全与隐私", onBack = { if (!navigateBack()) navigateTo(Route.Settings) }) {
                         SecurityPrivacyScreen()
                     }
                 }
                 composable<Route.ThemeAppearance> {
-                    DetailShell("主题与外观", onBack = { navigateBack() }) {
+                    DetailShell("主题与外观", onBack = { if (!navigateBack()) navigateTo(Route.Settings) }) {
                         ThemeAppearanceScreen(
                             selectedTheme = themeMode,
                             onThemeSelected = { mode ->
@@ -1620,6 +1620,7 @@ private fun DetailShell(
     lazyListState: LazyListState? = null,
     content: @Composable () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     Scaffold(
         topBar = {
             Column {
