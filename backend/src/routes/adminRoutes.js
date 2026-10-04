@@ -224,7 +224,7 @@ import {
   getClientDisplayInfoController,
 } from "../controllers/clientDisplayController.js";
 import { getLegalDocsController, saveLegalDocsController } from "../controllers/legalDocsController.js";
-import { registerTokenController, unregisterTokenController } from "../controllers/deviceTokenController.js";
+import { getTokensController, registerTokenController, unregisterTokenController } from "../controllers/deviceTokenController.js";
 
 export default async function adminRoutes(fastify, options) {
   fastify.get("/system-configs", getConfigsController);
@@ -237,6 +237,7 @@ export default async function adminRoutes(fastify, options) {
   fastify.addHook("preHandler", verifyStoreStaffRoute);
 
   // Push notification device token registration
+  fastify.get("/device-tokens", storeStaffRoute, getTokensController);
   fastify.post("/device-tokens", storeStaffRoute, registerTokenController);
   fastify.delete("/device-tokens", storeStaffRoute, unregisterTokenController);
 

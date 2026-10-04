@@ -91,6 +91,12 @@ class TcmJPushReceiver : JPushMessageReceiver() {
 
     override fun onRegister(context: Context, registrationId: String) {
         Log.d(TAG, "onRegister: ${registrationId.take(20)}...")
+        val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
+        if (prefs.getString("active_provider", null) == "fcm") {
+            Log.d(TAG, "Device is actively using FCM, stopping JPush and skipping token upload")
+            cn.jpush.android.api.JPushInterface.stopPush(context)
+            return
+        }
         uploadToken(context, registrationId)
     }
 

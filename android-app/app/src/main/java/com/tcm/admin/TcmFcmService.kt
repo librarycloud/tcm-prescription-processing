@@ -16,13 +16,18 @@ class TcmFcmService : FirebaseMessagingService() {
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
                     Log.w(TAG, "Fetching FCM registration token failed, falling back to JPush", task.exception)
+                    context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("active_provider", "jpush").apply()
+                    cn.jpush.android.api.JPushInterface.resumePush(context)
                     TcmJPushReceiver.registerCurrentToken(context)
                     return@addOnCompleteListener
                 }
                 val token = task.result
                 Log.d(TAG, "FCM Token obtained: ${token.take(20)}...")
+                context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("active_provider", "fcm").apply()
+                // Stop JPush to prevent dual push and duplicate notifications
+                cn.jpush.android.api.JPushInterface.stopPush(context)
                 uploadToken(context, token)
-                // If FCM is successful, proactively unregister JPush to avoid duplicates
+                // Proactively unregister JPush from backend to avoid duplicates
                 TcmJPushReceiver.unregisterToken(context)
             }
         }
@@ -76,12 +81,11 @@ class TcmFcmService : FirebaseMessagingService() {
         // When the app is in the foreground, FCM does NOT display notifications automatically.
         // We must build and display it manually to ensure the user gets alerted (with sound).
         val notification = remoteMessage.notification
-        if (notification != null) {
-            val title = notification.title ?: "新通知"
-            val body = notification.body ?: ""
-            
-            // Convert data payload to a JSON string for MainActivity to parse
-            val dataMap = remoteMessage.data
+        val dataMap = remoteMessage.data
+        val title = notification?.title ?: dataMap["title"] ?: "新通知"
+        val body = notification?.body ?: dataMap["body"] ?: ""
+
+        if (title.isNotEmpty() || body.isNotEmpty()) {
             val extrasJson = if (dataMap.isNotEmpty()) {
                 org.json.JSONObject(dataMap as Map<*, *>).toString()
             } else {
@@ -90,7 +94,7 @@ class TcmFcmService : FirebaseMessagingService() {
 
             val intent = android.content.Intent(this, MainActivity::class.java).apply {
                 flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("jpush_extras", extrasJson) // Reuse the same intent extra logic as JPush
+                putExtra("jpush_extras", extrasJson) // Reuse the same intent extra logic
             }
 
             val pendingIntent = android.app.PendingIntent.getActivity(
