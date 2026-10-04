@@ -204,7 +204,6 @@ class MainActivity : ComponentActivity() {
                     onAgree = {
                         sharedPrefs.edit().putBoolean("agreed_privacy", true).apply()
                         TcmApplication.initializeJPush(this@MainActivity)
-                        scheduleJPushDiagnostic()
                         hasAgreedPrivacy = true
                     }
                 )
@@ -212,23 +211,6 @@ class MainActivity : ComponentActivity() {
                 TcmAdminApp() 
             }
         }
-
-        if (getSharedPreferences("app_settings", MODE_PRIVATE).getBoolean("agreed_privacy", false)) {
-            scheduleJPushDiagnostic()
-        }
-    }
-
-    private fun scheduleJPushDiagnostic() {
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            @Suppress("DEPRECATION")
-            val connected = cn.jpush.android.api.JPushInterface.getConnectionState(this)
-            val regId = cn.jpush.android.api.JPushInterface.getRegistrationID(this)
-            android.app.AlertDialog.Builder(this)
-                .setTitle("极光推送诊断")
-                .setMessage("连接状态: $connected\nRegID: ${if (regId.isNullOrEmpty()) "空" else regId}\n包名: $packageName")
-                .setPositiveButton("确定", null)
-                .show()
-        }, 5000)
     }
 
     override fun onTrimMemory(level: Int) {
