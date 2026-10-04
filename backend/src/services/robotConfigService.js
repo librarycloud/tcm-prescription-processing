@@ -236,11 +236,22 @@ export async function testRobotConfig(prisma, actor, idValue, payload = {}) {
   });
   if (!eventConfig) throw new AppError('请选择有效的测试事件', 400);
   const content = renderRobotTemplate(eventConfig.templateContent, sampleVariables(eventCode));
-  await sendRobotMessage(robot.platform, {
-    webhook: decryptSetting(robot.webhookEncrypted),
-    secret: robot.secretEncrypted ? decryptSetting(robot.secretEncrypted) : '',
-    content
-  });
+  if (robot.platform === ROBOT_PLATFORMS.APP_PUSH) {
+    const lines = content.trim().split("\n");
+    let title = lines[0] || "系统通知";
+    let body = lines.slice(1).join("\n").replace(/[#*`>]/g, "").trim();
+    if (!body) {
+      body = title;
+      title = "系统通知";
+    }
+    await sendPushToAdmins(prisma, [actor.id], { title, body });
+  } else {
+    await sendRobotMessage(robot.platform, {
+      webhook: decryptSetting(robot.webhookEncrypted),
+      secret: robot.secretEncrypted ? decryptSetting(robot.secretEncrypted) : '',
+      content
+    });
+  }
   await recordOperation(prisma, actor, {
     module: 'robot-notification', action: 'test', targetId: robot.id, storeId: robot.storeId,
     description: `向群机器人「${robot.name}」发送测试消息`
