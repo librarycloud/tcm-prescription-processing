@@ -16,32 +16,24 @@ class TcmFcmService : FirebaseMessagingService() {
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
                     Log.w(TAG, "Fetching FCM registration token failed, falling back to JPush", task.exception)
-                    context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("active_provider", "jpush").apply()
-                    cn.jpush.android.api.JPushInterface.resumePush(context)
                     TcmJPushReceiver.registerCurrentToken(context)
                     return@addOnCompleteListener
                 }
                 val token = task.result
                 Log.d(TAG, "FCM Token obtained: ${token.take(20)}...")
-                context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("active_provider", "fcm").apply()
-                // Stop JPush to prevent dual push and duplicate notifications
-                cn.jpush.android.api.JPushInterface.stopPush(context)
                 uploadToken(context, token)
-                // Proactively unregister JPush from backend to avoid duplicates
+                // If FCM is successful, proactively unregister JPush to avoid duplicates
                 TcmJPushReceiver.unregisterToken(context)
             }
         }
 
         fun unregisterToken(context: Context) {
-            val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                val token = if (task.isSuccessful) task.result else prefs.getString("last_fcm_token", null)
-                if (!token.isNullOrEmpty()) {
+                if (task.isSuccessful) {
+                    val token = task.result
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             ApiClient.unregisterDeviceToken(context, token)
-                            prefs.edit().remove("last_fcm_token").apply()
-                            Log.d(TAG, "FCM Token unregistered from backend")
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to unregister FCM token: ${e.message}")
                         }
@@ -51,8 +43,6 @@ class TcmFcmService : FirebaseMessagingService() {
         }
 
         private fun uploadToken(context: Context, token: String) {
-            context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("last_fcm_token", token).apply()
-
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
             }
@@ -81,11 +71,12 @@ class TcmFcmService : FirebaseMessagingService() {
         // When the app is in the foreground, FCM does NOT display notifications automatically.
         // We must build and display it manually to ensure the user gets alerted (with sound).
         val notification = remoteMessage.notification
-        val dataMap = remoteMessage.data
-        val title = notification?.title ?: dataMap["title"] ?: "新通知"
-        val body = notification?.body ?: dataMap["body"] ?: ""
-
-        if (title.isNotEmpty() || body.isNotEmpty()) {
+        if (notification != null) {
+            val title = notification.title ?: "新通知"
+            val body = notification.body ?: ""
+            
+            // Convert data payload to a JSON string for MainActivity to parse
+            val dataMap = remoteMessage.data
             val extrasJson = if (dataMap.isNotEmpty()) {
                 org.json.JSONObject(dataMap as Map<*, *>).toString()
             } else {
@@ -94,7 +85,7 @@ class TcmFcmService : FirebaseMessagingService() {
 
             val intent = android.content.Intent(this, MainActivity::class.java).apply {
                 flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("jpush_extras", extrasJson) // Reuse the same intent extra logic
+                putExtra("jpush_extras", extrasJson) // Reuse the same intent extra logic as JPush
             }
 
             val pendingIntent = android.app.PendingIntent.getActivity(
