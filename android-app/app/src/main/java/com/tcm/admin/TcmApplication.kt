@@ -3,12 +3,22 @@ package com.tcm.admin
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.os.Build
 import cn.jpush.android.api.JPushInterface
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
 class TcmApplication : Application() {
+    companion object {
+        fun initializeJPush(context: Context) {
+            JPushInterface.setDebugMode(BuildConfig.DEBUG)
+            @Suppress("DEPRECATION")
+            cn.jiguang.api.utils.JCollectionAuth.setAuth(context.applicationContext, true)
+            JPushInterface.init(context.applicationContext)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -24,9 +34,8 @@ class TcmApplication : Application() {
                 .createNotificationChannel(channel)
         }
 
-        JPushInterface.setDebugMode(true)
-        @Suppress("DEPRECATION")
-        cn.jiguang.api.utils.JCollectionAuth.setAuth(this.applicationContext, true)
-        JPushInterface.init(this.applicationContext)
+        if (getSharedPreferences("app_settings", MODE_PRIVATE).getBoolean("agreed_privacy", false)) {
+            initializeJPush(this)
+        }
     }
 }

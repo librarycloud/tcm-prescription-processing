@@ -48,7 +48,7 @@
             android:name=".TcmJPushReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="cn.jpush.android.intent.RECEIVE_MESSAGE" />
+                <action android:name="cn.jpush.android.intent.RECEIVER_MESSAGE" />
                 <category android:name="${applicationId}" />
             </intent-filter>
         </receiver>
@@ -64,4 +64,3 @@
         </provider>
     </application>
 </manifest>
-
