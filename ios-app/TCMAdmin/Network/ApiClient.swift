@@ -555,6 +555,10 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         return (res.token, res.user)
     }
     
+    public func me() async throws -> UserItem {
+        return try await request(path: "/user/me")
+    }
+    
     public func fetchSessions() async throws -> [SessionItem] {
         return try await request(path: "/auth/sessions")
     }

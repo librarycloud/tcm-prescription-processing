@@ -45,6 +45,16 @@ public class SessionManager {
         }
     }
     
+    public func refreshUserProfile() async {
+        guard let token = self.token, isAuthenticated else { return }
+        do {
+            let user: UserItem = try await ApiClient.shared.me()
+            self.saveSession(token: token, user: user)
+        } catch {
+            print("[SessionManager] refreshUserProfile failed:", error.localizedDescription)
+        }
+    }
+    
     public func restoreSession() {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: tokenKey, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var item: CFTypeRef?

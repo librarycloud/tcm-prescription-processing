@@ -110,6 +110,9 @@ struct ProfileView: View {
         } message: {
             Text(updateErrorMessage)
         }
+        .task {
+            await session.refreshUserProfile()
+        }
     }
     
     private var hasUpdate: Bool {

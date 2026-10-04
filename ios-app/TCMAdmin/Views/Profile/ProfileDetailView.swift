@@ -113,7 +113,8 @@ public struct ProfileDetailView: View {
         .background(Color.pageBackground.ignoresSafeArea())
         .navigationTitle("个人资料")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
+        .task {
+            await session.refreshUserProfile()
             if let user = session.currentUser {
                 name = user.name ?? ""
                 nickname = user.nickname ?? ""

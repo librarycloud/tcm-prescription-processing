@@ -96,6 +96,7 @@ struct TCMAdminApp: App {
     @AppStorage("keep_screen_awake") private var keepScreenAwake: Bool = false
     @State private var pendingConfigURL: URL? = nil
     @State private var showConfirmConfigAlert = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -191,6 +192,13 @@ struct TCMAdminApp: App {
             }
             .onChange(of: keepScreenAwake) { _, newValue in
                 UIApplication.shared.isIdleTimerDisabled = newValue
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active && session.isAuthenticated {
+                    Task {
+                        await session.refreshUserProfile()
+                    }
+                }
             }
             .onChange(of: session.isAuthenticated) { _, isAuth in
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
