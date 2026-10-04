@@ -88,6 +88,8 @@
 		71164D88B378BCF82F3E0E27 /* clipper.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = clipper.cpp; path = ThirdParty/Clipper1/clipper.cpp; sourceTree = "<group>"; };
 		71A64C7188F8A5DAD9AD9FD8 /* OCRParameterResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OCRParameterResolver.swift; path = PaddleOCREngine/OCRParameterResolver.swift; sourceTree = "<group>"; };
 		78DC430EBD831227A8F2D8C6 /* TCMAdmin-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TCMAdmin-Bridging-Header.h"; sourceTree = "<group>"; };
+		7C1BA4B83070CE45002B8269 /* TCMAdminDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TCMAdminDebug.entitlements; sourceTree = "<group>"; };
+		7C1BA4B93070F74C002B8269 /* TCMAdmin.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TCMAdmin.entitlements; sourceTree = "<group>"; };
 		7C6DC4233059647800D4F198 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		7C6DC4253059647800D4F198 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		7C6DC4273059647800D4F198 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
@@ -156,6 +158,8 @@
 		000000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				7C1BA4B83070CE45002B8269 /* TCMAdminDebug.entitlements */,
+				7C1BA4B93070F74C002B8269 /* TCMAdmin.entitlements */,
 				000000000000000000000010 /* 药房助手 */,
 				7C6DC4243059647800D4F198 /* Models */,
 				7C6DC4263059647800D4F198 /* Navigation */,
@@ -703,9 +707,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				CODE_SIGN_ENTITLEMENTS = TCMAdminDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 27;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -775,9 +780,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				CODE_SIGN_ENTITLEMENTS = TCMAdmin.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 27;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;

@@ -427,6 +427,66 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             throw ApiError.decodingError(error)
         }
     }
+
+    /// 发送不需要解析 JSON 返回体的请求，只要 HTTP Status 为 2xx 即算成功
+    public func requestRaw(
+        path: String,
+        method: String = "GET",
+        body: [String: Any]? = nil
+    ) async throws -> Data {
+        let requestBaseURL = baseURL
+        let requestToken = await SessionManager.shared.token ?? ""
+        let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
+        
+        guard let url = URL(string: urlString) else {
+            throw ApiError.invalidURL
+        }
+        
+        var request = URLRequest(url: url, timeoutInterval: 15.0)
+        request.httpMethod = method
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        if !requestToken.isEmpty {
+            request.addValue("Bearer \(requestToken)", forHTTPHeaderField: "Authorization")
+        }
+        
+        #if os(iOS)
+        let deviceName = await UIDevice.current.name
+        request.addValue(deviceName, forHTTPHeaderField: "X-Device-Name")
+        #endif
+        
+        if let body = body {
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
+        
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await defaultSession.data(for: request)
+        } catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled || error is CancellationError {
+                throw CancellationError()
+            }
+            throw ApiError.networkError(error)
+        }
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ApiError.invalidResponse(statusCode: -1, message: "服务器未响应")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            await MainActor.run { SessionManager.shared.clearSession() }
+            throw ApiError.unauthorized
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String ?? "请求失败 (\(httpResponse.statusCode))"
+            throw ApiError.invalidResponse(statusCode: httpResponse.statusCode, message: errorMsg)
+        }
+        
+        return data
+    }
     
     // MARK: - 1. 认证接口
     public func login(identifier: String, password: String) async throws -> (token: String, user: UserItem) {
@@ -441,10 +501,43 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         )
         return (res.token, res.user)
     }
-    
-    
-    public func updateMe(nickname: String?, username: String?, phone: String?, password: String?) async throws -> (token: String, user: UserItem) {
+
+    /// Registers an APNs device token with the backend. Called after login and on token refresh.
+    public func registerDeviceToken(_ tokenData: Data) async {
+        let token = tokenData.map { String(format: "%02x", $0) }.joined()
+        guard !token.isEmpty else { return }
+        do {
+            let _ = try await requestRaw(
+                path: "/admin/device-tokens",
+                method: "POST",
+                body: ["platform": "ios", "token": token]
+            )
+        } catch {
+            // Non-critical: log but don't surface to user
+            print("[Push] registerDeviceToken failed:", error.localizedDescription)
+        }
+    }
+
+    /// Removes the APNs device token from the backend on logout.
+    public func unregisterDeviceToken(_ tokenData: Data) async {
+        let token = tokenData.map { String(format: "%02x", $0) }.joined()
+        guard !token.isEmpty else { return }
+        do {
+            let _ = try await requestRaw(
+                path: "/admin/device-tokens",
+                method: "DELETE",
+                body: ["token": token]
+            )
+        } catch {
+            print("[Push] unregisterDeviceToken failed:", error.localizedDescription)
+        }
+    }
+
+
+
+    public func updateMe(name: String? = nil, nickname: String?, username: String?, phone: String?, password: String?) async throws -> (token: String, user: UserItem) {
         var body: [String: Any] = [:]
+        if let name = name { body["name"] = name }
         if let nickname = nickname { body["nickname"] = nickname }
         if let username = username { body["username"] = username }
         if let phone = phone { body["phone"] = phone }
@@ -460,6 +553,10 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             body: body
         )
         return (res.token, res.user)
+    }
+    
+    public func me() async throws -> UserItem {
+        return try await request(path: "/user/me")
     }
     
     public func fetchSessions() async throws -> [SessionItem] {
@@ -591,6 +688,11 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         return try await request(path: "/stores", queryParams: ["status": "1"])
     }
     
+    // 调拨专属门店列表（所有员工可用）
+    public func fetchTransferStores() async throws -> [StoreItem] {
+        return try await request(path: "/admin/store-transfers/stores")
+    }
+    
     // MARK: - 6. 库存商品查询 (E6 Pharmacy)
     public func fetchInventory(
         keyword: String = "",
@@ -617,18 +719,24 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         storeId: Int? = nil,
         page: Int = 1,
         pageSize: Int = 20
-    ) async throws -> [E6ImportItem] {
+    ) async throws -> (items: [E6ImportItem], total: Int) {
         var params: [String: String] = ["page": "\(page)", "pageSize": "\(pageSize)"]
         if let s = status { params["status"] = "\(s)" }
         if let od = orderDate, !od.isEmpty { params["orderDate"] = od }
         if let st = storeId { params["storeId"] = "\(st)" }
         if !keyword.isEmpty { params["keyword"] = keyword }
         
+        struct E6Pagination: Decodable {
+            let total: Int?
+        }
         struct E6Response: Decodable {
             let list: [E6ImportItem]?
+            let pagination: E6Pagination?
         }
         let res: E6Response = try await request(path: "/admin/e6/imports", queryParams: params)
-        return res.list ?? []
+        let list = res.list ?? []
+        let total = res.pagination?.total ?? list.count
+        return (list, total)
     }
     
     // MARK: - 8. 斗谱与货位

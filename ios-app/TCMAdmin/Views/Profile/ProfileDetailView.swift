@@ -5,6 +5,7 @@ public struct ProfileDetailView: View {
     var session = SessionManager.shared
     @Environment(\.dismiss) private var dismiss
     
+    @State private var name: String = ""
     @State private var nickname: String = ""
     @State private var username: String = ""
     @State private var phone: String = ""
@@ -45,7 +46,8 @@ public struct ProfileDetailView: View {
                 
                 // Form Fields
                 VStack(spacing: 16) {
-                    InputField(title: "昵称 (真实姓名)", placeholder: "请输入昵称", text: $nickname)
+                    InputField(title: "真实姓名", placeholder: "请输入真实姓名", text: $name)
+                    InputField(title: "昵称", placeholder: "请输入昵称", text: $nickname)
                     InputField(title: "登录账号", placeholder: "请输入登录账号", text: $username)
                     InputField(title: "手机号码", placeholder: "请输入手机号码", text: $phone, keyboardType: .numberPad)
                     InputField(title: "重置密码", placeholder: "不修改请留空", text: $password, isSecure: true)
@@ -111,9 +113,11 @@ public struct ProfileDetailView: View {
         .background(Color.pageBackground.ignoresSafeArea())
         .navigationTitle("个人资料")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
+        .task {
+            await session.refreshUserProfile()
             if let user = session.currentUser {
-                nickname = user.displayName
+                name = user.name ?? ""
+                nickname = user.nickname ?? ""
                 username = user.username ?? ""
                 phone = user.phone ?? ""
             }
@@ -130,6 +134,7 @@ public struct ProfileDetailView: View {
                 Task {
                     struct EmptyResponse: Decodable {}
                     do {
+                        await PushTokenStore.shared.unregisterCurrentToken()
                         _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
                         session.clearSession()
                     } catch is CancellationError {
@@ -149,8 +154,8 @@ public struct ProfileDetailView: View {
     }
     
     private func saveProfile() {
-        guard !nickname.isEmpty, !username.isEmpty else {
-            errorMessage = "昵称和登录账号不能为空"
+        guard !username.isEmpty || !phone.isEmpty else {
+            errorMessage = "登录账号和手机号码至少填写一个"
             return
         }
         
@@ -160,7 +165,8 @@ public struct ProfileDetailView: View {
         Task {
             do {
                 let (_, updatedUser) = try await ApiClient.shared.updateMe(
-                    nickname: nickname,
+                    name: name.isEmpty ? nil : name,
+                    nickname: nickname.isEmpty ? nil : nickname,
                     username: username,
                     phone: phone,
                     password: password.isEmpty ? nil : password

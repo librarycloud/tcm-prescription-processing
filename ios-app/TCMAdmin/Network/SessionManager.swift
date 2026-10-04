@@ -45,6 +45,16 @@ public class SessionManager {
         }
     }
     
+    public func refreshUserProfile() async {
+        guard let token = self.token, isAuthenticated else { return }
+        do {
+            let user: UserItem = try await ApiClient.shared.me()
+            self.saveSession(token: token, user: user)
+        } catch {
+            print("[SessionManager] refreshUserProfile failed:", error.localizedDescription)
+        }
+    }
+    
     public func restoreSession() {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: tokenKey, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var item: CFTypeRef?
@@ -74,6 +84,11 @@ public class SessionManager {
         SecItemDelete(query as CFDictionary)
         UserDefaults.standard.removeObject(forKey: userKey)
         ApiClient.shared.clearResponseCache()
+        
+        // 彻底清空所有路由栈，防止下一次登录时旧页面“复活”
+        Task { @MainActor in
+            Router.shared.popToRoot()
+        }
     }
 }
 

@@ -61,6 +61,30 @@ ios-app/TCMAdmin/
 
 ---
 
+
+## 响应式布局与 iPad 分屏适配 (Split View Architecture)
+
+为了在 iPhone 和 iPad 上提供最佳的原生操作体验，本项目针对 iPad 等大屏设备（`horizontalSizeClass == .regular`）对核心业务列表页进行了深度的**左右分屏架构**适配。
+
+- **动态 Master-Detail (主从) 视图**：
+  在 iPad 宽屏模式下，左侧保留全量功能列表与搜索栏，右侧使用独立的 `VStack`/`HStack` 容器动态挂载详情模块（例如 `PackageDetailView`、`TransferDetailView`）。
+- **极速状态刷新**：
+  由于 SwiftUI 对右侧容器可能存在的重用缓存，分屏架构中针对所有子级 DetailView 注入了 `.id(detailId)` 令牌，强制在每次切换列表项时彻底销毁并重建右侧视图状态，实现了零卡顿、零假死的页面无缝秒切。
+- **与 iPhone 端解耦隔离**：
+  在小屏设备或 iPad 侧滑小窗（`horizontalSizeClass == .compact`）下，系统自动降级为原生遮罩 (`ZStack`) 或标准推入 (`NavigationStack`) 模式，且完美保留了独享的 `.allowsHitTesting(selectedProduct == nil)` 等移动端防误触机制。
+
+目前已完成原生适配的核心模块包括：
+- 库存查询 (`InventoryView`)
+- 门店调拨 (`TransfersView`)
+- 包裹核销 (`PackagesView`)
+- 加工排产 (`ProcessingView`)
+- 处方流转 (`PrescriptionsView`)
+- 盘点复核 (`StocktakingView`)
+- E6 进销存导入 (`E6ImportsView`)
+- 斗谱落位 (`HerbsView`)
+
+---
+
 ## 本地开发与构建指南
 
 ### 环境要求
