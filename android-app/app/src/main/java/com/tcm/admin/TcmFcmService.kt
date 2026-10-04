@@ -21,8 +21,11 @@ class TcmFcmService : FirebaseMessagingService() {
                 }
                 val token = task.result
                 Log.d(TAG, "FCM Token obtained: ${token.take(20)}...")
+                context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE).edit().putString("active_provider", "fcm").apply()
+                // Stop JPush immediately so it doesn't run concurrently with FCM
+                cn.jpush.android.api.JPushInterface.stopPush(context)
                 uploadToken(context, token)
-                // If FCM is successful, proactively unregister JPush to avoid duplicates
+                // Proactively unregister JPush from backend to avoid duplicates
                 TcmJPushReceiver.unregisterToken(context)
             }
         }
