@@ -20,7 +20,10 @@ export async function registerDeviceToken(prisma, adminId, platform, token) {
   const tokenStr = String(token).trim();
   if (!tokenStr) return;
 
-  await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
+    // We no longer indiscriminately delete by platform here, because a user might 
+    // be logged into a Sony phone (FCM) and a Huawei phone (JPush) simultaneously.
+
     // Upsert: token is unique — if it belongs to another admin, move it here.
     await tx.adminDeviceToken.upsert({
       where: { token: tokenStr },
@@ -37,7 +40,7 @@ export async function registerDeviceToken(prisma, adminId, platform, token) {
     if (tokens.length > MAX_TOKENS_PER_ADMIN) {
       const staleIds = tokens.slice(MAX_TOKENS_PER_ADMIN).map((t) => t.id);
       await tx.adminDeviceToken.deleteMany({ where: { id: { in: staleIds } } });
-    }
+    console.log(`[DeviceToken] Registered token for adminId=${adminId}, platform=${platform}, token=${tokenStr.slice(0, 15)}...`);
   });
 }
 
@@ -50,9 +53,11 @@ export async function registerDeviceToken(prisma, adminId, platform, token) {
  */
 export async function unregisterDeviceToken(prisma, adminId, token) {
   if (!token) return;
-  await prisma.adminDeviceToken.deleteMany({
-    where: { adminId, token: String(token).trim() },
+  const tokenStr = String(token).trim();
+  const result = await prisma.adminDeviceToken.deleteMany({
+    where: { adminId, token: tokenStr },
   });
+  console.log(`[DeviceToken] Unregistered token for adminId=${adminId}, token=${tokenStr.slice(0, 15)}..., deletedCount=${result.count}`);
 }
 
 /**

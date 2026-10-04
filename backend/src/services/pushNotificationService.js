@@ -27,17 +27,24 @@ import { sendJPushNotification } from './jpushService.js';
 
 // ─── FCM ─────────────────────────────────────────────────────────────────────
 
+
+
 let _fcmAccessToken = null;
 let _fcmAccessTokenExpiry = 0;
+let _fcmSaCached = undefined;
 
 function parseFcmServiceAccount() {
+  if (_fcmSaCached !== undefined) return _fcmSaCached;
+
   const raw = process.env.FCM_SERVICE_ACCOUNT_KEY;
   if (raw) {
     const trimmed = raw.trim();
     // 1. Direct JSON string
     if (trimmed.startsWith('{')) {
       try {
-        return JSON.parse(trimmed);
+        _fcmSaCached = JSON.parse(trimmed);
+        console.log('[Push] FCM service account loaded from env JSON string (project_id:', _fcmSaCached.project_id, ')');
+        return _fcmSaCached;
       } catch {
         console.error('[Push] FCM_SERVICE_ACCOUNT_KEY is not valid JSON string');
       }
@@ -46,7 +53,9 @@ function parseFcmServiceAccount() {
     try {
       const resolvedPath = path.isAbsolute(trimmed) ? trimmed : path.resolve(process.cwd(), trimmed);
       if (fs.existsSync(resolvedPath)) {
-        return JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+        _fcmSaCached = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+        console.log('[Push] FCM service account loaded from env path:', resolvedPath, '(project_id:', _fcmSaCached.project_id, ')');
+        return _fcmSaCached;
       }
     } catch (e) {
       console.error('[Push] Failed to read FCM key from path:', trimmed, e.message);
@@ -55,6 +64,7 @@ function parseFcmServiceAccount() {
 
   // 3. Fallback: Auto-detect any *firebase-adminsdk*.json or firebase-key.json in cwd or backend dir
   const candidateDirs = [process.cwd(), path.resolve(process.cwd(), 'backend')];
+  
   for (const dir of candidateDirs) {
     try {
       if (!fs.existsSync(dir)) continue;
@@ -62,11 +72,15 @@ function parseFcmServiceAccount() {
       const keyFile = files.find(f => (f.includes('firebase-adminsdk') || f.includes('firebase-service-account')) && f.endsWith('.json'));
       if (keyFile) {
         const fullPath = path.join(dir, keyFile);
-        return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+        _fcmSaCached = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+        console.log('[Push] FCM service account auto-detected at:', fullPath, '(project_id:', _fcmSaCached.project_id, ')');
+        return _fcmSaCached;
       }
     } catch {}
   }
 
+  console.warn('[Push] WARNING: No FCM service account key found! Checked paths:', candidateDirs);
+  _fcmSaCached = null;
   return null;
 }
 
@@ -123,10 +137,16 @@ async function getFcmAccessToken() {
  */
 async function sendFcmNotification(deviceToken, { title, body, data = {} }) {
   const sa = parseFcmServiceAccount();
-  if (!sa?.project_id) return;
+  if (!sa?.project_id) {
+    console.warn('[Push] Cannot send FCM: No valid service account (sa is null or missing project_id)');
+    return;
+  }
 
   const accessToken = await getFcmAccessToken();
-  if (!accessToken) return;
+  if (!accessToken) {
+    console.warn('[Push] Cannot send FCM: Failed to obtain OAuth2 access token from Google');
+    return;
+  }
 
   const message = {
     message: {
@@ -140,20 +160,26 @@ async function sendFcmNotification(deviceToken, { title, body, data = {} }) {
     },
   };
 
-  const response = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+  try {
+    const response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
       },
-      body: JSON.stringify(message),
-    },
-  );
-  if (!response.ok) {
-    const text = await response.text();
-    console.warn('[Push] FCM send failed for token:', deviceToken.slice(0, 20), text);
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      console.warn('[Push] FCM send failed for token:', deviceToken.slice(0, 20), text);
+    } else {
+      console.log('[Push] FCM send SUCCESS for token:', deviceToken.slice(0, 20));
+    }
+  } catch (err) {
+    console.error('[Push] FCM fetch network error:', err.message);
   }
 }
 
@@ -337,6 +363,8 @@ export async function sendPushToAdmins(prisma, adminIds, payload) {
     console.warn('[Push] Failed to load device tokens:', err?.message);
     return;
   }
+
+  console.log(`[Push] sendPushToAdmins adminIds=${JSON.stringify(adminIds)}, tokens found (${tokens?.length || 0}):`, tokens?.map(t => ({ platform: t.platform, token: t.token.slice(0, 15) + '...' })));
 
   // Batch JPush tokens — one API call for all registration IDs
   const jpushTokens = tokens.filter((t) => t.platform === 'jpush').map((t) => t.token);
