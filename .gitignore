@@ -41,6 +41,12 @@ wechat-miniprogram/project.private.config.json
 android-app/release.keystore
 android-app/app/build/
 android-app/.gradle/
+**/google-services.json
+**/agconnect-services.json
+*firebase-adminsdk*.json
+*.p8
+*.orig
+*.rej
 /*.py
 /*.swift
 /ios-app/.build/
