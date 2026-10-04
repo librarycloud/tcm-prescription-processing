@@ -198,7 +198,7 @@ internal val Pink: Color @Composable get() = MaterialTheme.colorScheme.error
 internal val PinkSoft: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
 internal val Brown: Color @Composable get() = MaterialTheme.colorScheme.secondary
 internal val BrownSoft: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
-private val isAppDarkTheme: Boolean
+internal val isAppDarkTheme: Boolean
     @Composable
     get() {
         val bg = MaterialTheme.colorScheme.background

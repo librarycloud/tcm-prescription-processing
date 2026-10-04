@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import cn.jpush.android.api.JPushInterface
+import com.tcm.admin.ui.isAppDarkTheme
 
 @Composable
 internal fun NotificationSettingsScreen() {
@@ -147,32 +148,45 @@ internal fun NotificationSettingsScreen() {
         
         if (!systemNotificationAuthorized) {
             Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFFFF3CD))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            val isDark = isAppDarkTheme
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = if (isDark) Color(0xFF2E2405) else Color(0xFFFFFBEB),
+                border = BorderStroke(1.dp, if (isDark) Color(0xFF785E00) else Color(0xFFFDE68A)),
             ) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFF856404), modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "系统通知权限已关闭，建议前往系统设置开启通知，以便及时收到业务消息。",
-                    color = Color(0xFF856404),
-                    fontSize = 12.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "去开启",
-                    color = Primary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable {
-                        openAppSettings(context)
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (isDark) Color(0xFFFBBF24) else Color(0xFFB45309),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "系统通知权限已关闭，建议前往系统设置开启通知，以便及时收到业务消息。",
+                        color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    FilledTonalButton(
+                        onClick = { openAppSettings(context) },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (isDark) Color(0xFF4D3800) else Color(0xFFFEF3C7),
+                            contentColor = if (isDark) Color(0xFFFBBF24) else Color(0xFF92400E),
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.height(34.dp),
+                    ) {
+                        Text("去开启", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                )
+                }
             }
         }
     }
@@ -185,6 +199,7 @@ private fun ToggleRow(
     isOn: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
+    val isDark = isAppDarkTheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -201,8 +216,12 @@ private fun ToggleRow(
             checked = isOn,
             onCheckedChange = onToggle,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = androidx.compose.ui.graphics.Color.White,
-                checkedTrackColor = Primary
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Primary,
+                checkedBorderColor = Color.Transparent,
+                uncheckedThumbColor = if (isDark) Color(0xFFD4D4D8) else Color.White,
+                uncheckedTrackColor = if (isDark) Color(0xFF3F3F46) else Color(0xFFE4E4E7),
+                uncheckedBorderColor = if (isDark) Color(0xFF52525B) else Color.Transparent,
             )
         )
     }
