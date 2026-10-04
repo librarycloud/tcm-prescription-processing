@@ -22,7 +22,6 @@ import { nextStoreTransferNo } from "./storeTransferNoService.js";
 import { prescriptionBusinessDate } from "./prescriptionNoService.js";
 import { storeTransferRepository } from "../repositories/storeTransferRepository.js";
 import { publishTransferRobotEvent } from "./robotBusinessEventService.js";
-import { sendPushToStores } from "./pushNotificationService.js";
 
 const MAX_ITEMS = 50;
 const RETURN_STATUS = TRANSFER_RETURN_STATUS;
@@ -413,17 +412,6 @@ export async function createStoreTransfer(prisma, actor, payload) {
     return withComputed(created, actor);
   });
   publishTransferRobotEvent(prisma, "TRANSFER_REQUESTED", created, actor).catch(err => console.error(err));
-  // 通知调出门店：有新的调拨申请待确认调出
-  sendPushToStores(
-    prisma,
-    [created.fromStoreId],
-    {
-      title: "新的调拨申请待确认",
-      body: `单号：${created.transferNo}\n${created.toStore.name} 申请调拨 ${created.items.length} 种药品，请确认。`,
-      data: { action: "transfer_outbound_pending", transferId: String(created.id) }
-    },
-    [actor.id]
-  ).catch(err => console.error(err));
   return created;
 }
 
@@ -542,17 +530,6 @@ export async function confirmStoreTransferOutbound(prisma, actor, idValue) {
     result,
     actor,
   ).catch(err => console.error(err));
-  // 通知调入门店：调出门店已确认调出，物资即将到达
-  sendPushToStores(
-    prisma,
-    [result.toStoreId],
-    {
-      title: "调拨物资即将到达",
-      body: `单号：${result.transferNo}\n${result.fromStore.name} 已确认调出，物资在途，请关注。`,
-      data: { action: "transfer_outbound_confirmed", transferId: String(result.id) }
-    },
-    [actor.id]
-  ).catch(err => console.error(err));
   return result;
 }
 
@@ -661,17 +638,6 @@ export async function submitStoreTransferReturns(
     transactionResult.transfer,
     actor,
     transactionResult.createdReturnIds.join("-"),
-  ).catch(err => console.error(err));
-  // 通知调出门店：调入门店已提交归还申请，请确认收货
-  sendPushToStores(
-    prisma,
-    [transactionResult.transfer.fromStoreId],
-    {
-      title: "调拨物资归还待确认",
-      body: `单号：${transactionResult.transfer.transferNo}\n${transactionResult.transfer.toStore.name} 已发起归还，请核对物资并确认收货。`,
-      data: { action: "transfer_return_pending", transferId: String(transactionResult.transfer.id) }
-    },
-    [actor.id]
   ).catch(err => console.error(err));
   return transactionResult.transfer;
 }
@@ -846,17 +812,6 @@ export async function confirmStoreTransferReturn(
     actor,
     returnId,
   ).catch(err => console.error(err));
-  // 通知调入门店：调出门店已确认收到归还物资
-  sendPushToStores(
-    prisma,
-    [result.toStoreId],
-    {
-      title: "归还确认完成",
-      body: `单号：${result.transferNo}\n${result.fromStore.name} 已确认收到你归还的物资。`,
-      data: { action: "transfer_return_confirmed", transferId: String(result.id) }
-    },
-    [actor.id]
-  ).catch(err => console.error(err));
   return result;
 }
 
@@ -890,17 +845,6 @@ export async function cancelStoreTransfer(prisma, actor, idValue, payload) {
   });
   const result = withComputed(updated, actor);
   await publishTransferRobotEvent(prisma, "TRANSFER_CANCELLED", result, actor);
-  // 通知双方门店（排除操作人自己）
-  sendPushToStores(
-    prisma,
-    [result.fromStoreId, result.toStoreId].filter(Boolean),
-    {
-      title: "调拨已取消",
-      body: `调拨单 ${result.transferNo} 已取消`,
-      data: { action: "transfer_cancelled", transferId: String(result.id) },
-    },
-    [Number(actor.id)],
-  ).catch(() => {});
   return result;
 }
 

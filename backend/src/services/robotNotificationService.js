@@ -249,7 +249,19 @@ async function deliverClaimed(prisma, log, logger) {
         let title = lines[0] || "系统通知";
         title = title.replace(/^【(.*?)】/, "$1").trim();
         const body = lines.slice(1).join("\n").trim() || title;
-        await sendPushToStores(prisma, storeIds, { title, body, data: { eventCode: log.event?.eventCode } });
+        
+        const extraData = { 
+          eventCode: log.event?.eventCode,
+          action: log.event?.eventCode?.toLowerCase()
+        };
+        if (log.event?.variables) {
+          const v = typeof log.event.variables === 'string' ? JSON.parse(log.event.variables) : log.event.variables;
+          if (v.transferId) extraData.transferId = String(v.transferId);
+          if (v.planId) extraData.planId = String(v.planId);
+          if (v.planCode) extraData.planCode = String(v.planCode);
+        }
+        
+        await sendPushToStores(prisma, storeIds, { title, body, data: extraData }, log.event?.operatorId ? [log.event.operatorId] : []);
       }
     } else {
       result = await sendRobotMessage(log.platform, {

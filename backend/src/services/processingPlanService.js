@@ -31,7 +31,6 @@ import { PROCESSING_STAGE } from "../constants/processingWorkflow.js";
 import { generateProcessingPlanIdentity } from "../utils/processingCode.js";
 import { assertProcessingWorkflowComplete } from "./processingWorkflowService.js";
 import { withPickupQrContent } from "../utils/pickupQr.js";
-import { sendPushToStores } from "./pushNotificationService.js";
 
 const scope = (actor, requestedStoreId) => ({
   ...businessScope(actor, requestedStoreId),
@@ -979,20 +978,6 @@ async function finishProcessingPlan(
     });
     await publishProcessingCompletedRobotEvent(prisma, result, actor);
     // 通知门店其他人员：加工已完成
-    sendPushToStores(
-      prisma,
-      [result.storeId],
-      {
-        title: "加工已完成",
-        body: `加工计划 ${result.planCode} 已完成`,
-        data: {
-          action: "processing_completed",
-          planId: String(result.id),
-          planCode: result.planCode ?? "",
-        },
-      },
-      [Number(actor.id)],
-    ).catch(() => {});
     return result;
   } catch (error) {
     if (error?.code === "P2002")
