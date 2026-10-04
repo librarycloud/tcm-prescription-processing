@@ -484,11 +484,12 @@ private fun TcmAdminApp() {
     }
 
     fun navigateTo(target: Route) {
-    navController.navigate(target) {
-        if (target is Route.Inventory && currentDestination?.hasRoute<Route.Inventory>() == true) {
-            popUpTo<Route.Inventory> { inclusive = true }
+        navController.navigate(target) {
+            launchSingleTop = true
+            if (target is Route.Inventory && currentDestination?.hasRoute<Route.Inventory>() == true) {
+                popUpTo<Route.Inventory> { inclusive = true }
+            }
         }
-    }
     }
 
     fun navigateBack(): Boolean {
