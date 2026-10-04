@@ -1121,11 +1121,12 @@ model SystemConfig {
   @@map("system_configs")
 }
 
-/// Push notification device tokens — one row per admin × device.
-/// platform: "android" (FCM) | "ios" (APNs)
+/// Push notification tokens — multiple provider tokens may share an admin and device.
+/// platform: "android" (FCM) | "jpush" | "ios" (APNs)
 model AdminDeviceToken {
   id        Int      @id @default(autoincrement())
   adminId   Int      @map("admin_id")
+  deviceId  String?  @map("device_id") @db.VarChar(64)
   platform  String   @db.VarChar(10)
   token     String   @unique @db.VarChar(255)
   createdAt DateTime @default(now()) @map("created_at")
@@ -1134,5 +1135,6 @@ model AdminDeviceToken {
   admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId])
+  @@index([adminId, deviceId])
   @@map("admin_device_tokens")
 }

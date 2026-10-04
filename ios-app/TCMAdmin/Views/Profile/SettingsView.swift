@@ -153,6 +153,7 @@ public struct SettingsView: View {
                     // 通知旧服务器退出当前 session；切换服务器时仍会清除本地会话。
                     struct EmptyResponse: Decodable {}
                     do {
+                        await PushTokenStore.shared.unregisterCurrentToken()
                         _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
                     } catch is CancellationError {
                         return

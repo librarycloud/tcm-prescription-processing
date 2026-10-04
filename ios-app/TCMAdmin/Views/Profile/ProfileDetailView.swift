@@ -134,6 +134,7 @@ public struct ProfileDetailView: View {
                 Task {
                     struct EmptyResponse: Decodable {}
                     do {
+                        await PushTokenStore.shared.unregisterCurrentToken()
                         _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
                         session.clearSession()
                     } catch is CancellationError {

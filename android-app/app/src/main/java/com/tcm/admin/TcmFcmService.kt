@@ -11,29 +11,24 @@ import kotlinx.coroutines.launch
 class TcmFcmService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "TcmFcmService"
-        private const val PUSH_PREFS = "push_prefs"
-        private const val ACTIVE_PROVIDER = "active_provider"
-
         fun registerCurrentToken(context: Context) {
-            context.getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
-                .edit().putString(ACTIVE_PROVIDER, "fcm_pending").apply()
-            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                if (!task.isSuccessful) {
-                    Log.w(TAG, "Fetching FCM registration token failed, falling back to JPush", task.exception)
-                    activateJPush(context)
-                    return@addOnCompleteListener
+            if (!PushNotificationPreference.isEnabled(context)) return
+            try {
+                com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                    if (!task.isSuccessful) {
+                        Log.w(TAG, "Fetching FCM registration token failed, falling back to JPush", task.exception)
+                        TcmJPushReceiver.registerCurrentToken(context)
+                        return@addOnCompleteListener
+                    }
+                    val token = task.result
+                    Log.d(TAG, "FCM Token obtained: ${token.take(20)}...")
+                    uploadToken(context, token)
+                    TcmJPushReceiver.registerCurrentToken(context)
                 }
-                val token = task.result
-                Log.d(TAG, "FCM Token obtained: ${token.take(20)}...")
-                uploadToken(context, token)
+            } catch (e: Exception) {
+                Log.w(TAG, "FCM token request unavailable, falling back to JPush", e)
+                TcmJPushReceiver.registerCurrentToken(context)
             }
-        }
-
-        private fun activateJPush(context: Context) {
-            context.getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
-                .edit().putString(ACTIVE_PROVIDER, "jpush").apply()
-            cn.jpush.android.api.JPushInterface.resumePush(context)
-            TcmJPushReceiver.registerCurrentToken(context)
         }
 
         fun unregisterToken(context: Context) {
@@ -52,6 +47,7 @@ class TcmFcmService : FirebaseMessagingService() {
         }
 
         private fun uploadToken(context: Context, token: String) {
+            if (!PushNotificationPreference.isEnabled(context)) return
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
             }
@@ -59,19 +55,13 @@ class TcmFcmService : FirebaseMessagingService() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    if (ApiClient.registerDeviceToken(context, platform = "android", token = token)) {
-                        context.getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
-                            .edit().putString(ACTIVE_PROVIDER, "fcm").apply()
-                        cn.jpush.android.api.JPushInterface.stopPush(context)
-                        TcmJPushReceiver.unregisterToken(context)
-                        Log.d(TAG, "FCM Token uploaded successfully; FCM is active")
+                    if (ApiClient.registerDeviceToken(context, platform = "android", token = token, deviceId = PushNotificationPreference.deviceId(context))) {
+                        Log.d(TAG, "FCM Token uploaded successfully")
                     } else {
-                        Log.w(TAG, "FCM token registration failed; falling back to JPush")
-                        activateJPush(context)
+                        Log.w(TAG, "FCM token registration failed; JPush remains available")
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload FCM Token: ${e.message}")
-                    activateJPush(context)
                 }
             }
         }
@@ -79,12 +69,11 @@ class TcmFcmService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         Log.d(TAG, "FCM onNewToken: ${token.take(20)}...")
-        getSharedPreferences(PUSH_PREFS, Context.MODE_PRIVATE)
-            .edit().putString(ACTIVE_PROVIDER, "fcm_pending").apply()
         uploadToken(applicationContext, token)
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        if (!PushNotificationPreference.isEnabled(this)) return
         Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
         
         // When the app is in the foreground, FCM does NOT display notifications automatically.

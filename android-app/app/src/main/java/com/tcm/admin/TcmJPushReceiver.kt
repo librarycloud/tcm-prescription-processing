@@ -24,6 +24,8 @@ class TcmJPushReceiver : JPushMessageReceiver() {
 
         /** Call after login to register the current Registration ID with the backend. */
         fun registerCurrentToken(context: Context) {
+            if (!PushNotificationPreference.isEnabled(context)) return
+            JPushInterface.resumePush(context)
             val regId = JPushInterface.getRegistrationID(context)
             if (regId.isNullOrEmpty()) {
                 Log.d(TAG, "Registration ID not yet available, polling every 5s for up to 30s")
@@ -61,6 +63,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         }
 
         private fun uploadToken(context: Context, regId: String) {
+            if (!PushNotificationPreference.isEnabled(context)) return
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
             }
@@ -69,13 +72,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
             }
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    if (ApiClient.registerDeviceToken(context, platform = "jpush", token = regId)) {
-                        val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
-                        if (prefs.getString("active_provider", null) != "fcm") {
-                            prefs.edit().putString("active_provider", "jpush").apply()
-                            JPushInterface.resumePush(context)
-                            TcmFcmService.unregisterToken(context)
-                        }
+                    if (ApiClient.registerDeviceToken(context, platform = "jpush", token = regId, deviceId = PushNotificationPreference.deviceId(context))) {
                         Log.d(TAG, "JPush Registration ID uploaded: ${regId.take(20)}...")
                     } else {
                         Log.w(TAG, "JPush Registration ID registration failed")
@@ -89,11 +86,6 @@ class TcmJPushReceiver : JPushMessageReceiver() {
 
     override fun onRegister(context: Context, registrationId: String) {
         Log.d(TAG, "onRegister: ${registrationId.take(20)}...")
-        val prefs = context.getSharedPreferences("push_prefs", Context.MODE_PRIVATE)
-        if (prefs.getString("active_provider", null) != "jpush") {
-            Log.d(TAG, "Device is actively using FCM, skipping JPush token upload")
-            return
-        }
         uploadToken(context, registrationId)
     }
 
@@ -112,6 +104,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         context.startActivity(intent)
     }
     override fun onNotifyMessageArrived(context: Context, message: cn.jpush.android.api.NotificationMessage) {
+        if (!PushNotificationPreference.isEnabled(context)) return
         Log.d(TAG, "JPush Message arrived: ${message.notificationTitle}")
         
         // When app is in foreground, manually build notification so sound plays

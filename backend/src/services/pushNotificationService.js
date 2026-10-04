@@ -139,13 +139,13 @@ async function sendFcmNotification(deviceToken, { title, body, data = {} }) {
   const sa = parseFcmServiceAccount();
   if (!sa?.project_id) {
     console.warn('[Push] Cannot send FCM: No valid service account (sa is null or missing project_id)');
-    return;
+    return { status: 'rejected', invalidToken: false };
   }
 
   const accessToken = await getFcmAccessToken();
   if (!accessToken) {
     console.warn('[Push] Cannot send FCM: Failed to obtain OAuth2 access token from Google');
-    return;
+    return { status: 'rejected', invalidToken: false };
   }
 
   const message = {
@@ -175,11 +175,19 @@ async function sendFcmNotification(deviceToken, { title, body, data = {} }) {
     if (!response.ok) {
       const text = await response.text();
       console.warn('[Push] FCM send failed for token:', deviceToken.slice(0, 20), text);
+      let invalidToken = false;
+      try {
+        const error = JSON.parse(text).error;
+        invalidToken = error?.details?.some((detail) => detail.errorCode === 'UNREGISTERED') === true;
+      } catch {}
+      return { status: response.status >= 500 ? 'unknown' : 'rejected', invalidToken };
     } else {
       console.log('[Push] FCM send SUCCESS for token:', deviceToken.slice(0, 20));
+      return { status: 'accepted', invalidToken: false };
     }
   } catch (err) {
     console.error('[Push] FCM fetch network error:', err.message);
+    return { status: 'unknown', invalidToken: false };
   }
 }
 
@@ -251,73 +259,90 @@ function getApnsJwt() {
  * Sends a single APNs notification to an iOS device token.
  * Uses the HTTP/2 APNs provider API via Node's built-in `https` module.
  */
-function sendApnsNotification(deviceToken, { title, body, data = {} }) {
-  return new Promise((resolve) => {
-    const jwt = getApnsJwt();
-    const bundleId = process.env.APNS_BUNDLE_ID;
-    if (!jwt) {
-      console.warn('[Push] APNs abort: JWT missing');
-      return resolve();
-    }
-    if (!bundleId) {
-      console.warn('[Push] APNs abort: APNS_BUNDLE_ID missing');
-      return resolve();
-    }
+async function sendApnsNotification(deviceToken, { title, body, data = {} }) {
+  const jwt = getApnsJwt();
+  const bundleId = process.env.APNS_BUNDLE_ID;
+  if (!jwt || !bundleId) {
+    console.warn('[Push] APNs abort: credentials or bundle ID missing');
+    return false;
+  }
 
-    const isProduction = process.env.APNS_PRODUCTION === 'true';
-    const host = isProduction ? 'api.push.apple.com' : 'api.sandbox.push.apple.com';
-    console.log(`[Push] Sending APNs to ${deviceToken.slice(0, 10)}... via ${host} for bundle ${bundleId}`);
-
-    const apnsPayload = JSON.stringify({
-      aps: {
-        alert: { title, body },
-        sound: 'default',
-        badge: 1,
-      },
-      ...data,
-    });
-
-    const client = http2.connect(`https://${host}`);
-    client.on('error', (err) => {
-      console.warn('[Push] APNs http2 client error:', err.message);
-      resolve();
-    });
-
-    const req = client.request({
-      [http2.constants.HTTP2_HEADER_METHOD]: 'POST',
-      [http2.constants.HTTP2_HEADER_PATH]: `/3/device/${deviceToken}`,
-      authorization: `bearer ${jwt}`,
-      'apns-topic': bundleId,
-      'apns-push-type': 'alert',
-      'apns-priority': '10',
-      'content-type': 'application/json',
-      'content-length': Buffer.byteLength(apnsPayload),
-    });
-
-    req.on('response', (headers, flags) => {
-      const status = headers[http2.constants.HTTP2_HEADER_STATUS];
-      let raw = '';
-      req.on('data', (chunk) => { raw += chunk; });
-      req.on('end', () => {
-        client.close();
-        if (status !== 200) {
-          console.warn('[Push] APNs send failed:', status, raw.slice(0, 200), 'Token:', deviceToken.slice(0, 10) + '...');
-        } else {
-          console.log(`[Push] APNs send success to token: ${deviceToken.slice(0, 10)}...`);
-        }
-        resolve();
-      });
-    });
-
-    req.on('error', (err) => {
-      console.warn('[Push] APNs request error:', err.message);
-      client.close();
-      resolve();
-    });
-
-    req.write(apnsPayload);
-    req.end();
+  const primaryHost = process.env.APNS_PRODUCTION === 'true'
+    ? 'api.push.apple.com'
+    : 'api.sandbox.push.apple.com';
+  const alternateHost = primaryHost === 'api.push.apple.com'
+    ? 'api.sandbox.push.apple.com'
+    : 'api.push.apple.com';
+  const apnsPayload = JSON.stringify({
+    aps: { alert: { title, body }, sound: 'default', badge: 1 },
+    ...data,
   });
+
+  const sendToHost = (host) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    let client;
+    try {
+      client = http2.connect(`https://${host}`);
+      client.on('error', (err) => {
+        console.warn('[Push] APNs http2 client error:', err.message);
+        client.destroy();
+        finish({ accepted: false });
+      });
+      client.setTimeout(15_000, () => {
+        console.warn('[Push] APNs request timed out');
+        client.destroy();
+        finish({ accepted: false });
+      });
+      const req = client.request({
+        [http2.constants.HTTP2_HEADER_METHOD]: 'POST',
+        [http2.constants.HTTP2_HEADER_PATH]: `/3/device/${deviceToken}`,
+        authorization: `bearer ${jwt}`,
+        'apns-topic': bundleId,
+        'apns-push-type': 'alert',
+        'apns-priority': '10',
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(apnsPayload),
+      });
+      req.on('response', (headers) => {
+        const status = headers[http2.constants.HTTP2_HEADER_STATUS];
+        let raw = '';
+        req.on('data', (chunk) => { raw += chunk; });
+        req.on('end', () => {
+          client.close();
+          if (status !== 200) {
+            console.warn('[Push] APNs send failed:', status, raw.slice(0, 200), 'Token:', deviceToken.slice(0, 10) + '...');
+            let reason = null;
+            try { reason = JSON.parse(raw).reason; } catch {}
+            finish({ accepted: false, reason });
+          } else {
+            console.log(`[Push] APNs send success to token: ${deviceToken.slice(0, 10)}...`);
+            finish({ accepted: true });
+          }
+        });
+      });
+      req.on('error', (err) => {
+        console.warn('[Push] APNs request error:', err.message);
+        client.close();
+        finish({ accepted: false });
+      });
+      req.end(apnsPayload);
+    } catch (err) {
+      client?.close();
+      console.warn('[Push] APNs request setup failed:', err.message);
+      finish({ accepted: false });
+    }
+  });
+
+  const result = await sendToHost(primaryHost);
+  if (!result.accepted && result.reason === 'BadDeviceToken') {
+    return (await sendToHost(alternateHost)).accepted;
+  }
+  return result.accepted;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -342,6 +367,50 @@ export async function sendPushToToken(platform, token, payload) {
   }
 }
 
+export async function dispatchAndroidPushes(tokens, payload, sendFcm, sendJPush, removeInvalidFcm) {
+  const admins = new Map();
+  for (const token of tokens) {
+    const adminKey = `${token.adminId}:${token.deviceId ?? 'legacy'}`;
+    const admin = admins.get(adminKey) || { fcm: [], jpush: [] };
+    admin[token.platform === 'jpush' ? 'jpush' : 'fcm'].push(token);
+    admins.set(adminKey, admin);
+  }
+
+  await Promise.all([...admins.values()].map(async ({ fcm, jpush }) => {
+    if (!fcm.length) {
+      if (jpush.length) await sendJPush(jpush.map((token) => token.token), payload);
+      return;
+    }
+
+    let accepted = false;
+    let resultUnknown = false;
+    for (const token of fcm) {
+      let result;
+      try {
+        result = await sendFcm(token.token, payload);
+      } catch (error) {
+        console.warn('[Push] FCM dispatch error:', error?.message);
+        result = { status: 'unknown', invalidToken: false };
+      }
+      const delivery = typeof result === 'boolean'
+        ? { status: result ? 'accepted' : 'rejected', invalidToken: false }
+        : result;
+      if (delivery?.invalidToken) {
+        try {
+          await removeInvalidFcm(token.token);
+        } catch (error) {
+          console.warn('[Push] Failed to remove unregistered FCM token:', error?.message);
+        }
+      }
+      accepted ||= delivery?.status === 'accepted' || delivery?.accepted === true;
+      resultUnknown ||= delivery?.status === 'unknown';
+    }
+    if (!accepted && !resultUnknown && jpush.length) {
+      await sendJPush(jpush.map((token) => token.token), payload);
+    }
+  }));
+}
+
 /**
  * Loads all device tokens for the given admin IDs and sends push notifications.
  * JPush tokens are batched into a single API call for efficiency.
@@ -357,7 +426,7 @@ export async function sendPushToAdmins(prisma, adminIds, payload) {
   try {
     tokens = await prisma.adminDeviceToken.findMany({
       where: { adminId: { in: adminIds } },
-      select: { platform: true, token: true },
+      select: { adminId: true, deviceId: true, platform: true, token: true },
     });
   } catch (err) {
     console.warn('[Push] Failed to load device tokens:', err?.message);
@@ -366,13 +435,21 @@ export async function sendPushToAdmins(prisma, adminIds, payload) {
 
   console.log(`[Push] sendPushToAdmins adminIds=${JSON.stringify(adminIds)}, tokens found (${tokens?.length || 0}):`, tokens?.map(t => ({ platform: t.platform, token: t.token.slice(0, 15) + '...' })));
 
-  // Batch JPush tokens — one API call for all registration IDs
-  const jpushTokens = tokens.filter((t) => t.platform === 'jpush').map((t) => t.token);
-  const otherTokens = tokens.filter((t) => t.platform !== 'jpush');
+  const androidTokens = tokens.filter((token) => token.platform === 'android' || token.platform === 'jpush');
+  const iosTokens = tokens.filter((token) => token.platform === 'ios');
 
   await Promise.allSettled([
-    ...(jpushTokens.length ? [sendJPushNotification(jpushTokens, payload)] : []),
-    ...otherTokens.map((t) => sendPushToToken(t.platform, t.token, payload)),
+    dispatchAndroidPushes(
+      androidTokens,
+      payload,
+      sendFcmNotification,
+      async (registrationIds, message) => {
+        const result = await sendJPushNotification(registrationIds, message);
+        return result?.accepted === true;
+      },
+      (token) => prisma.adminDeviceToken.deleteMany({ where: { platform: 'android', token } }),
+    ),
+    ...iosTokens.map((token) => sendPushToToken('ios', token.token, payload)),
   ]);
 }
 

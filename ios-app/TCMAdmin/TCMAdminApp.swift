@@ -84,6 +84,11 @@ final class PushTokenStore {
             await ApiClient.shared.registerDeviceToken(token)
         }
     }
+
+    func unregisterCurrentToken() async {
+        guard let token = latestToken else { return }
+        await ApiClient.shared.unregisterDeviceToken(token)
+    }
 }
 
 @main
@@ -154,6 +159,7 @@ struct TCMAdminApp: App {
                         var logoutWarning: String?
                         if wasLoggedIn {
                             struct EmptyResponse: Decodable {}
+                            await PushTokenStore.shared.unregisterCurrentToken()
                             do {
                                 _ = try await ApiClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
                             } catch is CancellationError {

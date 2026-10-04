@@ -2,12 +2,12 @@ import { registerDeviceToken, unregisterDeviceToken } from '../services/deviceTo
 
 /**
  * POST /admin/device-tokens
- * Body: { platform: "android"|"ios", token: "..." }
+ * Body: { platform: "android"|"ios"|"jpush", token: "...", deviceId?: "..." }
  * Registers or refreshes the calling admin's push token for this device.
  */
 export async function registerTokenController(request, reply) {
-  const { platform, token } = request.body ?? {};
-  await registerDeviceToken(request.server.prisma, request.user.id, platform, token);
+  const { platform, token, deviceId } = request.body ?? {};
+  await registerDeviceToken(request.server.prisma, request.user.id, platform, token, deviceId);
   return reply.status(204).send();
 }
 

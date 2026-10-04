@@ -57,9 +57,11 @@ internal fun NotificationSettingsScreen() {
     // Toggle JPush Push Service based on receiveNotifications
     LaunchedEffect(receiveNotifications) {
         if (receiveNotifications) {
-            JPushInterface.resumePush(context)
+            TcmFcmService.registerCurrentToken(context)
         } else {
             JPushInterface.stopPush(context)
+            TcmJPushReceiver.unregisterToken(context)
+            TcmFcmService.unregisterToken(context)
         }
     }
 

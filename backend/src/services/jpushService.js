@@ -27,9 +27,9 @@ function getJPushAuth() {
  * @param {{ title: string, body: string, data?: Record<string,string> }} payload
  */
 export async function sendJPushNotification(registrationIds, { title, body, data = {} }) {
-  if (!registrationIds?.length) return;
+  if (!registrationIds?.length) return { accepted: false };
   const auth = getJPushAuth();
-  if (!auth) return;
+  if (!auth) return { accepted: false };
 
   const message = {
     platform: 'android',   // iOS uses native APNs directly, not JPush
@@ -61,8 +61,11 @@ export async function sendJPushNotification(registrationIds, { title, body, data
     if (!response.ok) {
       const text = await response.text();
       console.warn('[Push] JPush send failed:', response.status, text.slice(0, 200));
+      return { accepted: false };
     }
+    return { accepted: true };
   } catch (err) {
     console.warn('[Push] JPush request error:', err?.message);
+    return { accepted: false };
   }
 }

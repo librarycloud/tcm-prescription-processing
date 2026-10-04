@@ -465,9 +465,9 @@ object ApiClient {
     }
 
     /** Registers a push notification device token with the backend. */
-    suspend fun registerDeviceToken(context: Context, platform: String, token: String): Boolean {
+    suspend fun registerDeviceToken(context: Context, platform: String, token: String, deviceId: String): Boolean {
         try {
-            val body = JSONObject().put("platform", platform).put("token", token)
+            val body = JSONObject().put("platform", platform).put("token", token).put("deviceId", deviceId)
             request("/admin/device-tokens", "POST", body)
             return true
         } catch (e: Exception) {
