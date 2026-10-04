@@ -73,6 +73,9 @@ class TcmJPushReceiver : JPushMessageReceiver() {
 
         private fun uploadToken(context: Context, regId: String) {
             if (!ApiClient.isAuthenticated) {
+                ApiClient.loadSession(context)
+            }
+            if (!ApiClient.isAuthenticated) {
                 showToast(context, "未登录，跳过上传极光ID")
                 return
             }

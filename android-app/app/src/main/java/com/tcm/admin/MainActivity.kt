@@ -227,6 +227,13 @@ class MainActivity : ComponentActivity() {
 private fun TcmAdminApp() {
     val appContext = LocalContext.current.applicationContext
     val restoredSession = remember { ApiClient.loadSession(appContext) }
+
+    LaunchedEffect(restoredSession) {
+        if (restoredSession != null) {
+            TcmJPushReceiver.registerCurrentToken(appContext)
+        }
+    }
+
     val navController = rememberNavController()
     val e6ImportsListState = rememberE6ImportsListState()
     val prescriptionsListState = rememberLazyListState()
