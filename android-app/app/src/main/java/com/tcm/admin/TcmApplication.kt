@@ -16,7 +16,6 @@ import dagger.hilt.android.HiltAndroidApp
 class TcmApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        // 创建通知渠道 (Android 8+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 "transfer_alerts",
@@ -30,31 +29,35 @@ class TcmApplication : Application() {
                 .createNotificationChannel(channel)
         }
 
-        // 极光推送初始化
-        JPushInterface.setDebugMode(true) // 强制开启日志以便排查
-
+        JPushInterface.setDebugMode(true)
         @Suppress("DEPRECATION")
         cn.jiguang.api.utils.JCollectionAuth.setAuth(this, true)
-
         JPushInterface.init(this)
 
-        // 诊断：启动后 3 秒检查极光初始化状态
-        Handler(Looper.getMainLooper()).postDelayed({
+        val handler = Handler(Looper.getMainLooper())
+        // 3秒后弹第一条
+        handler.postDelayed({
+            @Suppress("DEPRECATION")
             val connected = JPushInterface.getConnectionState(this)
+            Toast.makeText(this, "极光连接: $connected", Toast.LENGTH_LONG).show()
+        }, 3000)
+        // 5秒后弹第二条
+        handler.postDelayed({
             val regId = JPushInterface.getRegistrationID(this)
-
-            // 读取 Manifest 中实际注入的 JPUSH_APPKEY 值
-            var manifestAppKey = "读取失败"
+            Toast.makeText(this, "RegID: ${if (regId.isNullOrEmpty()) "空" else regId}", Toast.LENGTH_LONG).show()
+        }, 5000)
+        // 7秒后弹第三条
+        handler.postDelayed({
+            var key = "读取失败"
             try {
                 val ai = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-                manifestAppKey = ai.metaData?.getString("JPUSH_APPKEY") ?: "未找到"
-            } catch (e: Exception) {
-                manifestAppKey = "异常: ${e.message}"
-            }
-
-            val msg = "极光诊断:\n连接=${connected}\nRegID=${if (regId.isNullOrEmpty()) "空" else regId.take(16) + "..."}\nAppKey=${manifestAppKey}\n包名=${packageName}"
-            Log.w("TcmJPush", msg)
-            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-        }, 3000)
+                key = ai.metaData?.getString("JPUSH_APPKEY") ?: "未找到"
+            } catch (_: Exception) {}
+            Toast.makeText(this, "AppKey: $key", Toast.LENGTH_LONG).show()
+        }, 7000)
+        // 9秒后弹第四条
+        handler.postDelayed({
+            Toast.makeText(this, "包名: $packageName", Toast.LENGTH_LONG).show()
+        }, 9000)
     }
 }
