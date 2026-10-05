@@ -183,7 +183,9 @@ internal fun InventoryScreen(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val value = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && value.isNotBlank()) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (InteractionFeedback.isHapticEnabled(context)) {
+                InteractionFeedback.haptic(context)
+            }
             viewModel.query.value = value
             addSearchHistory(value)
             lastAutoSearchQuery = value

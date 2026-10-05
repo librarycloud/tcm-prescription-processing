@@ -288,10 +288,12 @@ internal fun StocktakingScreen(
                                     )
                                 }
                             }.onSuccess {
+                                InteractionFeedback.success(context)
                                 createVisible = false
                                 checkName = ""
                                 checks.refresh()
                             }.onFailure {
+                                InteractionFeedback.error(context)
                                 Toast.makeText(context, it.message ?: "创建盘点单失败", Toast.LENGTH_SHORT).show()
                             }
                         }
@@ -681,7 +683,9 @@ internal fun StocktakingEntryScreen(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (InteractionFeedback.isHapticEnabled(context)) {
+                InteractionFeedback.haptic(context)
+            }
             keyboardController?.hide()
             focusManager.clearFocus(force = false)
             selectedItem = null
@@ -1046,6 +1050,7 @@ internal fun StocktakingEntryScreen(
                                 }
                             }
                         }.onSuccess {
+                            InteractionFeedback.success(context)
                             selectedItem = null
                             addingBatch = false
                             onSaved()
@@ -1056,7 +1061,10 @@ internal fun StocktakingEntryScreen(
                                 candidates = emptyList()
                             }
                         }
-                            .onFailure { error = it.message ?: "录入实盘失败" }
+                        .onFailure {
+                            InteractionFeedback.error(context)
+                            error = it.message ?: "录入实盘失败"
+                        }
                         saving = false
                     }
                 },

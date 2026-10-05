@@ -553,6 +553,7 @@ internal fun SearchBarField(
     onScan: (() -> Unit)? = null,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -616,7 +617,9 @@ internal fun SearchBarField(
                         if (value.isNotEmpty()) {
                             IconButton(
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (InteractionFeedback.isHapticEnabled(context)) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
                                     onValueChange("")
                                 },
                                 modifier = Modifier.size(28.dp),

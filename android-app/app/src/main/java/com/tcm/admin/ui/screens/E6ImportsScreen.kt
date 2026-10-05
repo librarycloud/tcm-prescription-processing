@@ -238,6 +238,7 @@ internal fun E6ImportsScreen(
             try {
                 withContext(Dispatchers.IO) { action() }
                 notice = success
+                InteractionFeedback.success(context)
                 selectedIds = emptySet()
                 ApiClient.clearResponseCache(context)
                 refreshFromServer()
@@ -245,6 +246,7 @@ internal fun E6ImportsScreen(
                 throw cancelled
             } catch (failure: Throwable) {
                 error = failure.message ?: "操作失败"
+                InteractionFeedback.error(context)
             }
             actionLoading = false
         }
@@ -1003,11 +1005,16 @@ internal fun E6ImportConfirmScreen(
                             }
                         }
                     }.onSuccess {
+                        InteractionFeedback.success(context)
                         ApiClient.clearE6ImportCache(context)
                         ApiClient.clearResponseCache(context)
                         onDone()
                     }
-                    .onFailure { rethrowCancellation(it); error = it.message ?: "生成处方和加工计划失败" }
+                    .onFailure {
+                        rethrowCancellation(it)
+                        InteractionFeedback.error(context)
+                        error = it.message ?: "生成处方和加工计划失败"
+                    }
                     loading = false
                 }
             },
