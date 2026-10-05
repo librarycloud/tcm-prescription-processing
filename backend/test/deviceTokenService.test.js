@@ -11,38 +11,75 @@ test('prunes whole device groups instead of separating paired provider tokens', 
     );
   }
   const calls = { deletes: [] };
-  const tx = {
-    adminDeviceToken: {
-      async upsert(args) { calls.upsert = args; },
-      async findMany() { return rows; },
-      async deleteMany(args) { calls.deletes.push(args); },
+  const adminDeviceToken = {
+    async upsert(args) { calls.upsert = args; },
+    async findMany(args) {
+      if (args.where.deviceId) {
+        return [{ id: 999 }];
+      }
+      return rows;
     },
+    async deleteMany(args) { calls.deletes.push(args); },
   };
-  const prisma = { async $transaction(callback) { return callback(tx); } };
+  const prisma = { adminDeviceToken };
 
   await registerDeviceToken(prisma, 7, 'android', 'new-fcm-token', 'device-0');
 
   assert.equal(calls.upsert.create.deviceId, 'device-0');
-  assert.deepEqual(calls.deletes[0].where, {
-    adminId: 7,
-    deviceId: 'device-0',
-    platform: 'android',
-    token: { not: 'new-fcm-token' },
-  });
+  
+  assert.deepEqual(calls.deletes[0].where.id.in, [999]);
   assert.deepEqual(calls.deletes[1].where.id.in, [21, 22]);
 });
 
 test('legacy callers may register tokens without a device ID', async () => {
   let created;
-  const tx = {
-    adminDeviceToken: {
-      async upsert(args) { created = args.create; },
-      async findMany() { return []; },
-      async deleteMany() {},
-    },
+  const adminDeviceToken = {
+    async upsert(args) { created = args.create; },
+    async findMany() { return []; },
+    async deleteMany() {},
   };
+  const prisma = { adminDeviceToken };
 
-  await registerDeviceToken({ async $transaction(callback) { return callback(tx); } }, 7, 'ios', 'apns-token');
+  await registerDeviceToken(prisma, 7, 'ios', 'apns-token');
 
   assert.equal(created.deviceId, null);
+});
+
+test('updates notification category preferences with the provider token', async () => {
+  let upsert;
+  const adminDeviceToken = {
+    async upsert(args) { upsert = args; },
+    async findMany() { return []; },
+    async deleteMany() {},
+  };
+  const prisma = { adminDeviceToken };
+
+  await registerDeviceToken(prisma, 7, 'android', 'fcm-token', 'device-1', {
+    prescriptionNotify: false,
+    transferNotify: true,
+  });
+
+  assert.equal(upsert.update.prescriptionNotify, false);
+  assert.equal(upsert.update.transferNotify, true);
+});
+
+test('retries transient concurrent token write conflicts', async () => {
+  let attempts = 0;
+  const adminDeviceToken = {
+    async upsert() {
+      attempts += 1;
+      if (attempts < 3) {
+        const error = new Error('Record has changed since last read');
+        error.code = 'P2039';
+        throw error;
+      }
+    },
+    async findMany() { return []; },
+    async deleteMany() {},
+  };
+  const prisma = { adminDeviceToken };
+
+  await registerDeviceToken(prisma, 7, 'android', 'fcm-token', 'device-1');
+
+  assert.equal(attempts, 3);
 });

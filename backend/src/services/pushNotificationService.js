@@ -367,9 +367,23 @@ export async function sendPushToToken(platform, token, payload) {
   }
 }
 
+function notificationCategory(payload) {
+  const eventCode = String(payload?.data?.eventCode || '').toUpperCase();
+  if (eventCode.startsWith('TRANSFER_') || eventCode.startsWith('STOCKTAKING') || eventCode.startsWith('GOODS_CHECK')) return 'transfer';
+  if (eventCode.startsWith('PACKAGE_') || eventCode === 'PROCESSING_COMPLETED' || eventCode.startsWith('E6') || eventCode.startsWith('PRESCRIPTION')) return 'prescription';
+  return null;
+}
+
+function acceptsNotification(token, category) {
+  if (category === 'transfer') return token.transferNotify !== false;
+  if (category === 'prescription') return token.prescriptionNotify !== false;
+  return true;
+}
+
 export async function dispatchAndroidPushes(tokens, payload, sendFcm, sendJPush, removeInvalidFcm) {
+  const category = notificationCategory(payload);
   const admins = new Map();
-  for (const token of tokens) {
+  for (const token of tokens.filter((item) => acceptsNotification(item, category))) {
     const adminKey = `${token.adminId}:${token.deviceId ?? 'legacy'}`;
     const admin = admins.get(adminKey) || { fcm: [], jpush: [] };
     admin[token.platform === 'jpush' ? 'jpush' : 'fcm'].push(token);
@@ -426,17 +440,27 @@ export async function sendPushToAdmins(prisma, adminIds, payload) {
   try {
     tokens = await prisma.adminDeviceToken.findMany({
       where: { adminId: { in: adminIds } },
-      select: { adminId: true, deviceId: true, platform: true, token: true },
+      select: {
+        adminId: true,
+        deviceId: true,
+        platform: true,
+        token: true,
+        prescriptionNotify: true,
+        transferNotify: true,
+      },
     });
   } catch (err) {
     console.warn('[Push] Failed to load device tokens:', err?.message);
     return;
   }
 
-  console.log(`[Push] sendPushToAdmins adminIds=${JSON.stringify(adminIds)}, tokens found (${tokens?.length || 0}):`, tokens?.map(t => ({ platform: t.platform, token: t.token.slice(0, 15) + '...' })));
+  console.log(`[Push] sendPushToAdmins adminIds=${JSON.stringify(adminIds)}, tokens found (${tokens?.length || 0}):`, tokens?.map(t => ({ platform: t.platform, deviceId: t.deviceId, token: t.token.slice(0, 15) + '...' })));
 
   const androidTokens = tokens.filter((token) => token.platform === 'android' || token.platform === 'jpush');
-  const iosTokens = tokens.filter((token) => token.platform === 'ios');
+  const category = notificationCategory(payload);
+  const iosTokens = tokens
+    .filter((token) => token.platform === 'ios')
+    .filter((token) => acceptsNotification(token, category));
 
   await Promise.allSettled([
     dispatchAndroidPushes(

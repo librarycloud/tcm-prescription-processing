@@ -71,6 +71,23 @@ test('does not fall back when the FCM outcome is unknown', async () => {
   assert.deepEqual(calls, ['fcm:fcm-token']);
 });
 
+test('filters Android notifications by the device category preference', async () => {
+  const calls = [];
+  await dispatchAndroidPushes(
+    [
+      { adminId: 1, deviceId: 'device-a', platform: 'android', token: 'fcm-a', transferNotify: false },
+      { adminId: 1, deviceId: 'device-a', platform: 'jpush', token: 'jpush-a', transferNotify: false },
+      { adminId: 1, deviceId: 'device-b', platform: 'android', token: 'fcm-b', transferNotify: true },
+    ],
+    { title: 'title', body: 'body', data: { eventCode: 'TRANSFER_REQUESTED' } },
+    async (token) => { calls.push(`fcm:${token}`); return { status: 'accepted' }; },
+    async (tokens) => calls.push(`jpush:${tokens.join(',')}`),
+    async () => {},
+  );
+
+  assert.deepEqual(calls, ['fcm:fcm-b']);
+});
+
 test('falls back only on the device whose FCM request was rejected', async () => {
   const calls = [];
   await dispatchAndroidPushes(

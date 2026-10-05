@@ -5,6 +5,24 @@
  */
 
 const MAX_DEVICES_PER_ADMIN = 10;
+const TOKEN_WRITE_RETRIES = 3;
+
+function isRetryableTokenWriteError(error) {
+  return error?.code === 'P2039'
+    || error?.code === 'P2034'
+    || error?.meta?.driverAdapterError?.cause?.originalCode === 1020;
+}
+
+async function upsertDeviceToken(prisma, args) {
+  for (let attempt = 0; attempt < TOKEN_WRITE_RETRIES; attempt += 1) {
+    try {
+      return await prisma.adminDeviceToken.upsert(args);
+    } catch (error) {
+      if (!isRetryableTokenWriteError(error) || attempt === TOKEN_WRITE_RETRIES - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+    }
+  }
+}
 
 /**
  * Upserts a device token for the authenticated admin.
@@ -15,8 +33,9 @@ const MAX_DEVICES_PER_ADMIN = 10;
  * @param {'android'|'ios'|'jpush'} platform
  * @param {string} token
  * @param {string} [deviceId]
+ * @param {{ prescriptionNotify?: boolean, transferNotify?: boolean }} [notificationPreferences]
  */
-export async function registerDeviceToken(prisma, adminId, platform, token, deviceId) {
+export async function registerDeviceToken(prisma, adminId, platform, token, deviceId, notificationPreferences = {}) {
   if (!token || !['android', 'ios', 'jpush'].includes(platform)) return;
   const tokenStr = String(token).trim();
   if (!tokenStr) return;
@@ -24,40 +43,64 @@ export async function registerDeviceToken(prisma, adminId, platform, token, devi
   const deviceIdStr = deviceId?.trim() || null;
   if (deviceId != null && (!deviceIdStr || deviceIdStr.length > 64)) return;
 
-  await prisma.$transaction(async (tx) => {
-    // Keep provider tokens from the same installation linked while allowing multiple devices.
+  const preferenceData = {};
+  const asBoolean = (value) => {
+    if (typeof value === 'boolean') return value;
+    if (value === 1 || value === '1' || value === 'true') return true;
+    if (value === 0 || value === '0' || value === 'false') return false;
+    return undefined;
+  };
+  if (notificationPreferences.prescriptionNotify !== undefined) {
+    const value = asBoolean(notificationPreferences.prescriptionNotify);
+    if (value !== undefined) preferenceData.prescriptionNotify = value;
+  }
+  if (notificationPreferences.transferNotify !== undefined) {
+    const value = asBoolean(notificationPreferences.transferNotify);
+    if (value !== undefined) preferenceData.transferNotify = value;
+  }
 
-    // Upsert: token is unique — if it belongs to another admin, move it here.
-    await tx.adminDeviceToken.upsert({
-      where: { token: tokenStr },
-      update: { adminId, platform, ...(deviceIdStr ? { deviceId: deviceIdStr } : {}) },
-      create: { adminId, platform, token: tokenStr, deviceId: deviceIdStr },
+  // Upsert: token is unique — if it belongs to another admin, move it here.
+  // Execute sequentially without a long transaction to prevent MySQL gap-lock deadlocks on concurrent logins.
+  await upsertDeviceToken(prisma, {
+    where: { token: tokenStr },
+    update: { adminId, platform, ...(deviceIdStr ? { deviceId: deviceIdStr } : {}), ...preferenceData },
+    create: { adminId, platform, token: tokenStr, deviceId: deviceIdStr, ...preferenceData },
+  });
+
+  if (deviceIdStr) {
+    const staleSameDevice = await prisma.adminDeviceToken.findMany({
+      where: { adminId, deviceId: deviceIdStr, platform, token: { not: tokenStr } },
+      select: { id: true }
     });
-    if (deviceIdStr) {
-      await tx.adminDeviceToken.deleteMany({
-        where: { adminId, deviceId: deviceIdStr, platform, token: { not: tokenStr } },
+    if (staleSameDevice.length > 0) {
+      await prisma.adminDeviceToken.deleteMany({
+        where: { id: { in: staleSameDevice.map(s => s.id) } }
       });
     }
+  }
 
-    // Keep all provider tokens for the most recent MAX_DEVICES_PER_ADMIN devices.
-    const tokens = await tx.adminDeviceToken.findMany({
-      where: { adminId },
-      orderBy: { updatedAt: 'desc' },
-      select: { id: true, deviceId: true },
-    });
-    if (tokens.length > MAX_DEVICES_PER_ADMIN) {
-      const retainedDevices = new Set();
-      const staleIds = [];
-      for (const row of tokens) {
-        const deviceKey = row.deviceId ? `device:${row.deviceId}` : `token:${row.id}`;
-        if (retainedDevices.has(deviceKey)) continue;
-        if (retainedDevices.size < MAX_DEVICES_PER_ADMIN) retainedDevices.add(deviceKey);
-        else staleIds.push(row.id);
-      }
-      await tx.adminDeviceToken.deleteMany({ where: { id: { in: staleIds } } });
-    }
-    console.log(`[DeviceToken] Registered token for adminId=${adminId}, platform=${platform}, token=${tokenStr.slice(0, 15)}...`);
+  // Keep all provider tokens for the most recent MAX_DEVICES_PER_ADMIN devices.
+  const tokens = await prisma.adminDeviceToken.findMany({
+    where: { adminId },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, deviceId: true },
   });
+  
+  if (tokens.length > MAX_DEVICES_PER_ADMIN) {
+    const retainedDevices = new Set();
+    const staleIds = [];
+    for (const row of tokens) {
+      const deviceKey = row.deviceId ? `device:${row.deviceId}` : `token:${row.id}`;
+      if (retainedDevices.has(deviceKey)) continue;
+      if (retainedDevices.size < MAX_DEVICES_PER_ADMIN) retainedDevices.add(deviceKey);
+      else staleIds.push(row.id);
+    }
+    if (staleIds.length > 0) {
+      await prisma.adminDeviceToken.deleteMany({ where: { id: { in: staleIds } } });
+    }
+  }
+  
+  console.log(`[DeviceToken] Registered token for adminId=${adminId}, platform=${platform}, token=${tokenStr.slice(0, 15)}...`);
 }
 
 /**
