@@ -62,7 +62,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
             }
         }
 
-        private fun uploadToken(context: Context, regId: String) {
+        private fun uploadToken(context: Context, regId: String, attempt: Int = 0) {
             if (!PushNotificationPreference.isEnabled(context)) return
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
@@ -76,10 +76,20 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                         Log.d(TAG, "JPush Registration ID uploaded: ${regId.take(20)}...")
                     } else {
                         Log.w(TAG, "JPush Registration ID registration failed")
+                        retryUpload(context, regId, attempt)
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload JPush Registration ID: ${e.message}")
+                    retryUpload(context, regId, attempt)
                 }
+            }
+        }
+
+        private fun retryUpload(context: Context, regId: String, attempt: Int) {
+            if (attempt >= 2) return
+            CoroutineScope(Dispatchers.IO).launch {
+                delay((attempt + 1) * 2_000L)
+                uploadToken(context, regId, attempt + 1)
             }
         }
     }

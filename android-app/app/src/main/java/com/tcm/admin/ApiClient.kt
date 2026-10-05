@@ -48,7 +48,6 @@ object ApiClient {
         .readTimeout(5, TimeUnit.MINUTES)
         .writeTimeout(5, TimeUnit.MINUTES)
         .build()
-    private const val SESSION_PREFS = "admin_session"
     private const val TOKEN_KEY = "token"
     private const val USER_KEY = "user"
     private const val CUSTOM_BASE_URL_KEY = "custom_base_url"
@@ -184,16 +183,15 @@ object ApiClient {
         currentBaseUrl = finalURL
         if (changed) clearResponseCache(context)
         
-        // Save to standard SharedPreferences to avoid EncryptedSharedPreferences Keystore invalidation bugs on updates
-        val plainPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        plainPrefs.edit().putString(CUSTOM_BASE_URL_KEY, finalURL).commit()
+        getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
         
         return true to "成功导入服务器地址:\n\n$finalURL"
     }
 
     fun initBaseUrl(context: Context) {
-        val plainPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val saved = plainPrefs.getString(CUSTOM_BASE_URL_KEY, null)
+        val saved = runCatching {
+            getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
+        }.getOrNull()
         
         if (!saved.isNullOrBlank()) {
             currentBaseUrl = saved
@@ -393,26 +391,6 @@ object ApiClient {
 
     fun loadSession(context: Context): AdminSession? {
         cacheContext = context.applicationContext
-        
-        // Migrate from old plain prefs if needed
-        val oldPrefs = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
-        if (oldPrefs.contains(TOKEN_KEY) || oldPrefs.contains(USER_KEY)) {
-            val oldRawToken = oldPrefs.getString(TOKEN_KEY, null)
-            val oldRawUser = oldPrefs.getString(USER_KEY, null)
-            val migrated = if (oldRawToken != null && oldRawUser != null) {
-                runCatching {
-                    getSessionPrefs(context).edit()
-                        .putString(TOKEN_KEY, oldRawToken)
-                        .putString(USER_KEY, oldRawUser)
-                        .apply()
-                    true
-                }.getOrDefault(false)
-            } else false
-            // Do not destroy the legacy session until the encrypted copy succeeds.
-            if (migrated) {
-                oldPrefs.edit().clear().apply()
-            }
-        }
 
         val preferences = runCatching { getSessionPrefs(context) }.getOrNull() ?: return null
         val rawToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
@@ -441,7 +419,6 @@ object ApiClient {
         runCatching {
             getSessionPrefs(context).edit().clear().apply()
         }
-        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         clearE6ImportCache(context)
         clearResponseCache(context)
         clearProcessingPhotoCache(context)
@@ -454,13 +431,12 @@ object ApiClient {
         request("/auth/logout", "POST", tokenOverride = tokenOverride)
     }
 
-    suspend fun login(identifier: String, password: String, context: Context? = null): AdminSession {
+    suspend fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
         val receivedToken = sanitizeToken(result.getString("token"))
             ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
         val session = AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
-        context?.let { TcmFcmService.registerCurrentToken(it) }
         return session
     }
 

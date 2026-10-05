@@ -731,9 +731,10 @@ private fun TcmAdminApp() {
                         loginError = null
                         scope.launch {
                             runCatching {
-                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password, appContext) }
+                                withContext(Dispatchers.IO) { ApiClient.login(identifier, password) }
                             }.onSuccess { value ->
                                 ApiClient.saveSession(appContext, value)
+                                TcmFcmService.registerCurrentToken(appContext)
                                 session = value
                                 navController.navigate(Route.Inventory()) {
                                     popUpTo(navController.graph.id) { inclusive = true }
