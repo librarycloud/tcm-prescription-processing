@@ -1703,95 +1703,93 @@ private fun BottomNav(
         Route.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
         Route.Profile to ("我的" to Icons.Default.AccountCircle),
     )
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 58.dp)
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                        items.forEach { (target, pair) ->
-                            val isSelected = when (target) {
-                                is Route.Inventory -> dest?.hasRoute<Route.Inventory>() == true
-                                is Route.Herbs -> dest?.hasRoute<Route.Herbs>() == true
-                                is Route.Processing -> dest?.hasRoute<Route.Processing>() == true
-                                is Route.Packages -> dest?.hasRoute<Route.Packages>() == true
-                                is Route.Profile -> dest?.hasRoute<Route.Profile>() == true
-                                else -> false
-                            }
-                    val iconScale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.12f else 1.0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow,
-                        ),
-                        label = "navIconScale",
-                    )
-                    val contentColor by animateColorAsState(
-                        targetValue = if (isSelected) Primary else Muted,
-                        label = "navContentColor",
-                    )
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) {
-                                        if (isSelected) onReselect() else onSwitchTab(target)
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
+            Column(modifier = Modifier.fillMaxWidth()) {
+                HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 58.dp)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    items.forEach { (target, pair) ->
+                        val isSelected = when (target) {
+                            is Route.Inventory -> dest?.hasRoute<Route.Inventory>() == true
+                            is Route.Herbs -> dest?.hasRoute<Route.Herbs>() == true
+                            is Route.Processing -> dest?.hasRoute<Route.Processing>() == true
+                            is Route.Packages -> dest?.hasRoute<Route.Packages>() == true
+                            is Route.Profile -> dest?.hasRoute<Route.Profile>() == true
+                            else -> false
+                        }
+                        val iconScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.12f else 1.0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow,
+                            ),
+                            label = "navIconScale",
+                        )
+                        val contentColor by animateColorAsState(
+                            targetValue = if (isSelected) Primary else Muted,
+                            label = "navContentColor",
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
                                 ) {
-                                    Box(
+                                    if (isSelected) onReselect() else onSwitchTab(target)
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) PrimarySoft else Color.Transparent)
+                                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        pair.second,
+                                        contentDescription = pair.first,
+                                        tint = contentColor,
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) PrimarySoft else Color.Transparent)
-                                            .padding(horizontal = 10.dp, vertical = 2.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            pair.second,
-                                            contentDescription = pair.first,
-                                            tint = contentColor,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .graphicsLayer(
-                                                    scaleX = iconScale,
-                                                    scaleY = iconScale,
-                                                ),
-                                        )
-                                    }
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = pair.first,
-                                        fontSize = 10.5.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = contentColor,
-                                        maxLines = 1,
+                                            .size(20.dp)
+                                            .graphicsLayer(
+                                                scaleX = iconScale,
+                                                scaleY = iconScale,
+                                            ),
                                     )
                                 }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = pair.first,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = contentColor,
+                                    maxLines = 1,
+                                )
                             }
                         }
                     }
                 }
             }
         }
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+    }
+}
 
 @Composable
 private fun ScrollToTopButton(
