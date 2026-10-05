@@ -1708,8 +1708,12 @@ private fun BottomNav(
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-                HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars),
+        ) {
+            HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1781,11 +1785,9 @@ private fun BottomNav(
                                     maxLines = 1,
                                 )
                             }
-                        }
                     }
                 }
-        }
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+            }
         }
     }
 }
