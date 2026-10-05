@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBars
 import android.graphics.drawable.ColorDrawable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring

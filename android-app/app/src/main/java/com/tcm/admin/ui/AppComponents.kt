@@ -553,6 +553,7 @@ internal fun SearchBarField(
     onScan: (() -> Unit)? = null,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier = modifier
             .fillMaxWidth()
