@@ -44,3 +44,21 @@ test('legacy callers may register tokens without a device ID', async () => {
 
   assert.equal(created.deviceId, null);
 });
+
+test('updates notification category preferences with the provider token', async () => {
+  let upsert;
+  const adminDeviceToken = {
+    async upsert(args) { upsert = args; },
+    async findMany() { return []; },
+    async deleteMany() {},
+  };
+  const prisma = { adminDeviceToken };
+
+  await registerDeviceToken(prisma, 7, 'android', 'fcm-token', 'device-1', {
+    prescriptionNotify: false,
+    transferNotify: true,
+  });
+
+  assert.equal(upsert.update.prescriptionNotify, false);
+  assert.equal(upsert.update.transferNotify, true);
+});

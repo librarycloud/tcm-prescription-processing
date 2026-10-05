@@ -51,11 +51,11 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         }
 
         /** Call on logout to remove this device's JPush token from the backend. */
-        fun unregisterToken(context: Context) {
+        fun unregisterToken(context: Context, authToken: String? = null) {
             val regId = JPushInterface.getRegistrationID(context) ?: return
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ApiClient.unregisterDeviceToken(context, regId)
+                    ApiClient.unregisterDeviceToken(context, regId, authToken)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
                 }
@@ -106,6 +106,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
     }
 
     override fun onNotifyMessageOpened(context: Context, message: cn.jpush.android.api.NotificationMessage) {
+        if (!NotificationPreference.accepts(context, NotificationPreference.eventCodeFromJson(message.notificationExtras))) return
         Log.d(TAG, "Notification clicked. Extras: ${message.notificationExtras}")
         val intent = android.content.Intent(context, MainActivity::class.java).apply {
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -115,6 +116,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
     }
     override fun onNotifyMessageArrived(context: Context, message: cn.jpush.android.api.NotificationMessage) {
         if (!PushNotificationPreference.isEnabled(context)) return
+        if (!NotificationPreference.accepts(context, NotificationPreference.eventCodeFromJson(message.notificationExtras))) return
         Log.d(TAG, "JPush Message arrived: ${message.notificationTitle}")
         
         // When app is in foreground, manually build notification so sound plays

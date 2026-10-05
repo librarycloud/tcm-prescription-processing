@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -419,8 +421,9 @@ private fun TcmAdminApp() {
     val scope = rememberCoroutineScope()
 
     DisposableEffect(appContext) {
-        ApiClient.onUnauthorized = {
+        ApiClient.onUnauthorized = { expiredToken ->
             scope.launch {
+                if (session?.token != expiredToken) return@launch
                 ApiClient.clearSession(appContext)
                 clearRetainedListValues()
                 session = null
@@ -441,8 +444,8 @@ private fun TcmAdminApp() {
         // 2. Unregister push tokens and notify server asynchronously in background
         CoroutineScope(Dispatchers.IO).launch {
             runCatching {
-                TcmJPushReceiver.unregisterToken(appContext)
-                TcmFcmService.unregisterToken(appContext)
+                TcmJPushReceiver.unregisterToken(appContext, tokenToRevoke)
+                TcmFcmService.unregisterToken(appContext, tokenToRevoke)
                 if (!tokenToRevoke.isNullOrBlank()) {
                     ApiClient.logout(tokenToRevoke)
                 }
@@ -644,8 +647,8 @@ private fun TcmAdminApp() {
                             }
                             CoroutineScope(Dispatchers.IO).launch {
                                 runCatching {
-                                    TcmJPushReceiver.unregisterToken(appContext)
-                                    TcmFcmService.unregisterToken(appContext)
+                                    TcmJPushReceiver.unregisterToken(appContext, oldToken)
+                                    TcmFcmService.unregisterToken(appContext, oldToken)
                                     if (!oldToken.isNullOrBlank()) {
                                         ApiClient.logout(oldToken)
                                     }
@@ -1695,32 +1698,36 @@ private fun BottomNav(
         Route.Profile to ("我的" to Icons.Default.AccountCircle),
     )
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
+        color = Color.Transparent,
+        tonalElevation = 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 58.dp)
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                items.forEach { (target, pair) ->
-                    val isSelected = when (target) {
-                        is Route.Inventory -> dest?.hasRoute<Route.Inventory>() == true
-                        is Route.Herbs -> dest?.hasRoute<Route.Herbs>() == true
-                        is Route.Processing -> dest?.hasRoute<Route.Processing>() == true
-                        is Route.Packages -> dest?.hasRoute<Route.Packages>() == true
-                        is Route.Profile -> dest?.hasRoute<Route.Profile>() == true
-                        else -> false
-                    }
+                Column {
+                    HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 58.dp)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        items.forEach { (target, pair) ->
+                            val isSelected = when (target) {
+                                is Route.Inventory -> dest?.hasRoute<Route.Inventory>() == true
+                                is Route.Herbs -> dest?.hasRoute<Route.Herbs>() == true
+                                is Route.Processing -> dest?.hasRoute<Route.Processing>() == true
+                                is Route.Packages -> dest?.hasRoute<Route.Packages>() == true
+                                is Route.Profile -> dest?.hasRoute<Route.Profile>() == true
+                                else -> false
+                            }
                     val iconScale by animateFloatAsState(
                         targetValue = if (isSelected) 1.12f else 1.0f,
                         animationSpec = spring(
@@ -1734,52 +1741,55 @@ private fun BottomNav(
                         label = "navContentColor",
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
-                                if (isSelected) onReselect() else onSwitchTab(target)
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) PrimarySoft else Color.Transparent)
-                                    .padding(horizontal = 10.dp, vertical = 2.dp),
+                                    .weight(1f)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) {
+                                        if (isSelected) onReselect() else onSwitchTab(target)
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    pair.second,
-                                    contentDescription = pair.first,
-                                    tint = contentColor,
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .graphicsLayer(
-                                            scaleX = iconScale,
-                                            scaleY = iconScale,
-                                        ),
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) PrimarySoft else Color.Transparent)
+                                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            pair.second,
+                                            contentDescription = pair.first,
+                                            tint = contentColor,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .graphicsLayer(
+                                                    scaleX = iconScale,
+                                                    scaleY = iconScale,
+                                                ),
+                                        )
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = pair.first,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = contentColor,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = pair.first,
-                                fontSize = 10.5.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = contentColor,
-                                maxLines = 1,
-                            )
                         }
                     }
                 }
             }
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }

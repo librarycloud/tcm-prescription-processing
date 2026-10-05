@@ -1517,7 +1517,7 @@ public struct E6ImportDetailView: View {
     }
     
     private func confirmAction() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         isConfirming = true
         errorMessage = nil
         Task {

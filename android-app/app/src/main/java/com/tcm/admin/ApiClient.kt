@@ -35,7 +35,7 @@ data class SessionItem(
 
 object ApiClient {
     private const val LOG_TAG = "TcmApiClient"
-    var onUnauthorized: (() -> Unit)? = null
+    var onUnauthorized: ((String) -> Unit)? = null
     private val client = OkHttpClient.Builder()
         .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -417,7 +417,12 @@ object ApiClient {
         cacheContext = context.applicationContext
         token = null
         runCatching {
-            getSessionPrefs(context).edit().clear().apply()
+            val preferences = getSessionPrefs(context)
+            val savedBaseUrl = preferences.getString(CUSTOM_BASE_URL_KEY, null)
+            preferences.edit().clear().apply()
+            if (!savedBaseUrl.isNullOrBlank()) {
+                preferences.edit().putString(CUSTOM_BASE_URL_KEY, savedBaseUrl).apply()
+            }
         }
         clearE6ImportCache(context)
         clearResponseCache(context)
@@ -443,7 +448,13 @@ object ApiClient {
     /** Registers a push notification device token with the backend. */
     suspend fun registerDeviceToken(context: Context, platform: String, token: String, deviceId: String): Boolean {
         try {
-            val body = JSONObject().put("platform", platform).put("token", token).put("deviceId", deviceId)
+            val notificationPreferences = context.getSharedPreferences("TcmPrefs", Context.MODE_PRIVATE)
+            val body = JSONObject()
+                .put("platform", platform)
+                .put("token", token)
+                .put("deviceId", deviceId)
+                .put("prescriptionNotify", notificationPreferences.getBoolean("prescriptionNotify", true))
+                .put("transferNotify", notificationPreferences.getBoolean("transferNotify", true))
             request("/admin/device-tokens", "POST", body)
             return true
         } catch (e: Exception) {
@@ -453,10 +464,10 @@ object ApiClient {
     }
 
     /** Removes a push notification device token from the backend (logout). */
-    suspend fun unregisterDeviceToken(context: Context, token: String) {
+    suspend fun unregisterDeviceToken(context: Context, token: String, authToken: String? = null) {
         try {
             val body = JSONObject().put("token", token)
-            request("/admin/device-tokens", "DELETE", body)
+            request("/admin/device-tokens", "DELETE", body, tokenOverride = authToken)
         } catch (e: Exception) {
             android.util.Log.w("TcmApiClient", "unregisterDeviceToken failed: ${e.message}")
         }
@@ -1044,13 +1055,23 @@ object ApiClient {
         else -> JSONArray()
     }
 
+    private fun handleUnauthorized(requestToken: String?) {
+        if (requestToken == null) return
+        val callback = synchronized(this) {
+            if (token != requestToken) return
+            token = null
+            onUnauthorized
+        }
+        callback?.invoke(requestToken)
+    }
+
     private fun applyAuthorizationHeader(builder: Request.Builder, tokenOverride: String? = null) {
-        val currentToken = sanitizeToken(tokenOverride ?: token)
+        val rawToken = tokenOverride ?: token
+        val currentToken = sanitizeToken(rawToken)
         if (currentToken != null) {
             builder.header("Authorization", "Bearer $currentToken")
-        } else if (token != null && tokenOverride == null) {
-            token = null
-            onUnauthorized?.invoke()
+        } else if (rawToken != null && tokenOverride == null) {
+            handleUnauthorized(rawToken)
             throw ApiException("登录凭证异常，请重新登录", 401)
         }
         builder.header("X-Device-Name", android.os.Build.MODEL)
@@ -1156,8 +1177,7 @@ object ApiClient {
                 JSONObject().put("code", -1).put("message", msg)
             }
             if (response.code == 401) {
-                token = null
-                onUnauthorized?.invoke()
+                handleUnauthorized(response.request.header("Authorization")?.removePrefix("Bearer "))
             }
             if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
             invalidateCacheForMutation(path)
@@ -1232,8 +1252,7 @@ object ApiClient {
 
             val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
             if (response.code == 401) {
-                token = null
-                onUnauthorized?.invoke()
+                handleUnauthorized(response.request.header("Authorization")?.removePrefix("Bearer "))
             }
             if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败: ${response.code}"), json.optInt("code", -1), json.optJSONObject("data"))
             if (normalizedMethod != "GET") invalidateCacheForMutation(path)

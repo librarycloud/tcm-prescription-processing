@@ -106,10 +106,10 @@ public class UpdateManager {
            storeVersion.compare(currentVersion, options: .numeric) == .orderedDescending {
             
             let releaseNotes = appInfo["releaseNotes"] as? String ?? appInfo["description"] as? String ?? "有新版本发布，快去看看吧！"
-            let trackId = appInfo["trackId"] as? Int ?? 0
-            
-            // 使用 itms-apps:// 协议可直接在 iOS 端唤起 App Store 并跳转至对应应用页面
-            let downloadUrl = "itms-apps://itunes.apple.com/app/id\(trackId)"
+            let trackId = appInfo["trackId"] as? Int
+            // 优先使用 Apple 返回的商店链接，避免缺少 trackId 时生成 id0 的无效地址。
+            let downloadUrl = (appInfo["trackViewUrl"] as? String)
+                ?? trackId.map { "itms-apps://itunes.apple.com/app/id\($0)" }
             
             let resData = AppUpdateInfo(
                 hasUpdate: true,

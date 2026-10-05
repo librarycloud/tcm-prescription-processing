@@ -420,7 +420,7 @@ public struct DifferencesView: View {
     
     private func submitWriteOffAction(product: DifferenceProductModel) {
         guard let qty = Double(writeOffQuantityText), qty > 0 else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         isWriteOffBusy = true
         
         Task {
@@ -438,14 +438,14 @@ public struct DifferencesView: View {
                 await MainActor.run {
                     isWriteOffBusy = false
                     writeOffProduct = nil
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                 }
                 startLoadData()
             } catch {
                 await MainActor.run {
                     isWriteOffBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
@@ -632,7 +632,7 @@ public struct RegisterDifferenceSheet: View {
     
     private func submitRegister() {
         guard let prod = selectedProduct, let qty = Double(quantityText), qty > 0 else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         isSubmitting = true
         errorMessage = nil
         
@@ -655,7 +655,7 @@ public struct RegisterDifferenceSheet: View {
                 try await ApiClient.shared.registerDifference(payload: payload)
                 await MainActor.run {
                     isSubmitting = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                     onSaved()
                     dismiss()
                 }
@@ -663,7 +663,7 @@ public struct RegisterDifferenceSheet: View {
                 await MainActor.run {
                     isSubmitting = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }

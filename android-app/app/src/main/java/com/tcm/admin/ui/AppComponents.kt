@@ -616,7 +616,9 @@ internal fun SearchBarField(
                         if (value.isNotEmpty()) {
                             IconButton(
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (InteractionFeedback.isHapticEnabled(context)) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
                                     onValueChange("")
                                 },
                                 modifier = Modifier.size(28.dp),

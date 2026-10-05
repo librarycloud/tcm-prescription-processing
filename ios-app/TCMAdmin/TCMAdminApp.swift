@@ -1,6 +1,27 @@
 import SwiftUI
 import UserNotifications
 
+enum NotificationPreference {
+    static var receives: Bool { UserDefaults.standard.object(forKey: "receive_notifications") as? Bool ?? true }
+    static var prescription: Bool { UserDefaults.standard.object(forKey: "prescription_notify") as? Bool ?? true }
+    static var transfer: Bool { UserDefaults.standard.object(forKey: "transfer_notify") as? Bool ?? true }
+
+    static func eventCode(from userInfo: [AnyHashable: Any]) -> String {
+        if let code = userInfo["eventCode"] as? String { return code.uppercased() }
+        if let data = userInfo["data"] as? [String: Any], let code = data["eventCode"] as? String { return code.uppercased() }
+        if let data = userInfo["data"] as? NSDictionary, let code = data["eventCode"] as? String { return code.uppercased() }
+        return ""
+    }
+
+    static func accepts(userInfo: [AnyHashable: Any]) -> Bool {
+        guard receives else { return false }
+        let code = eventCode(from: userInfo)
+        if code.hasPrefix("TRANSFER_") || code.hasPrefix("STOCKTAKING") || code.hasPrefix("GOODS_CHECK") { return transfer }
+        if code.hasPrefix("PACKAGE_") || code == "PROCESSING_COMPLETED" || code.hasPrefix("E6") || code.hasPrefix("PRESCRIPTION") { return prescription }
+        return true
+    }
+}
+
 // MARK: - AppDelegate for APNs token callbacks
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
@@ -15,6 +36,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        guard NotificationPreference.accepts(userInfo: notification.request.content.userInfo) else {
+            completionHandler([])
+            return
+        }
         completionHandler([.banner, .sound, .badge])
     }
 
@@ -25,6 +50,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
+        guard NotificationPreference.accepts(userInfo: userInfo) else {
+            completionHandler()
+            return
+        }
         let action = userInfo["action"] as? String
 
         var destination: AppRoute? = nil
@@ -76,12 +105,38 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 // MARK: - Token store (survives across scenes)
 final class PushTokenStore {
     static let shared = PushTokenStore()
-    var latestToken: Data?
+    var latestToken: Data? {
+        didSet {
+            UserDefaults.standard.set(latestToken, forKey: "apns_device_token")
+        }
+    }
 
-    func uploadIfNeeded() {
+    private init() {
+        latestToken = UserDefaults.standard.data(forKey: "apns_device_token")
+    }
+
+    private var uploadInFlight = false
+    private var lastUploadedToken: Data?
+    private var lastUploadAt: Date?
+
+    func uploadIfNeeded(force: Bool = false) {
+        guard NotificationPreference.receives else { return }
         guard let token = latestToken else { return }
+        if !force {
+            if uploadInFlight { return }
+            if lastUploadedToken == token,
+               let lastUploadAt,
+               Date().timeIntervalSince(lastUploadAt) < 5 { return }
+        }
+        if uploadInFlight { return }
+        uploadInFlight = true
         Task {
-            await ApiClient.shared.registerDeviceToken(token)
+            let uploaded = await ApiClient.shared.registerDeviceToken(token)
+            uploadInFlight = false
+            if uploaded {
+                lastUploadedToken = token
+                lastUploadAt = Date()
+            }
         }
     }
 
@@ -228,6 +283,7 @@ struct TCMAdminApp: App {
 
     /// Asks for notification permission and registers for remote notifications.
     private func requestPushPermission() {
+        guard NotificationPreference.receives else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         // Always register for remote notifications to get the APNs token, 
         // regardless of whether the user granted alert permissions (needed for silent push / logic).

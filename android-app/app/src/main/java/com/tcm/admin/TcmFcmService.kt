@@ -31,13 +31,13 @@ class TcmFcmService : FirebaseMessagingService() {
             }
         }
 
-        fun unregisterToken(context: Context) {
+        fun unregisterToken(context: Context, authToken: String? = null) {
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val token = task.result
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            ApiClient.unregisterDeviceToken(context, token)
+                            ApiClient.unregisterDeviceToken(context, token, authToken)
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to unregister FCM token: ${e.message}")
                         }
@@ -58,12 +58,10 @@ class TcmFcmService : FirebaseMessagingService() {
                     if (ApiClient.registerDeviceToken(context, platform = "android", token = token, deviceId = PushNotificationPreference.deviceId(context))) {
                         Log.d(TAG, "FCM Token uploaded successfully")
                     } else {
-                        Log.w(TAG, "FCM token registration failed; registering JPush token")
-                        TcmJPushReceiver.registerCurrentToken(context)
+                        Log.w(TAG, "FCM token registration failed")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to upload FCM Token; registering JPush token: ${e.message}")
-                    TcmJPushReceiver.registerCurrentToken(context)
+                    Log.w(TAG, "Failed to upload FCM Token: ${e.message}")
                 }
             }
         }
@@ -72,6 +70,7 @@ class TcmFcmService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         Log.d(TAG, "FCM onNewToken: ${token.take(20)}...")
         uploadToken(applicationContext, token)
+        TcmJPushReceiver.registerCurrentToken(applicationContext)
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -81,6 +80,7 @@ class TcmFcmService : FirebaseMessagingService() {
         // When the app is in the foreground, FCM does NOT display notifications automatically.
         // We must build and display it manually to ensure the user gets alerted (with sound).
         val notification = remoteMessage.notification
+        if (!NotificationPreference.accepts(this, remoteMessage.data["eventCode"])) return
         if (notification != null) {
             val title = notification.title ?: "新通知"
             val body = notification.body ?: ""

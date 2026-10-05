@@ -16,9 +16,6 @@ import android.hardware.camera2.CaptureRequest
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -199,6 +196,7 @@ class ScannerActivity : ComponentActivity() {
         if (isGranted) {
             startCamera()
         } else {
+            InteractionFeedback.error(this)
             Toast.makeText(this, "需要相机权限才能使用扫码功能", Toast.LENGTH_SHORT).show()
             finish()
         }
@@ -614,17 +612,7 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun triggerVibration() {
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(50)
-            }
-        }
+        InteractionFeedback.haptic(this)
     }
 
     private fun startCamera() {
@@ -979,7 +967,7 @@ class ScannerActivity : ComponentActivity() {
 
     private fun deliverResult(resultText: String) {
         if (!delivered.compareAndSet(false, true)) return
-        triggerVibration()
+        InteractionFeedback.success(this)
         val data = Intent().putExtra(SCAN_RESULT, resultText)
         setResult(RESULT_OK, data)
         finish()

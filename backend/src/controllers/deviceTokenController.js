@@ -6,8 +6,11 @@ import { registerDeviceToken, unregisterDeviceToken } from '../services/deviceTo
  * Registers or refreshes the calling admin's push token for this device.
  */
 export async function registerTokenController(request, reply) {
-  const { platform, token, deviceId } = request.body ?? {};
-  await registerDeviceToken(request.server.prisma, request.user.id, platform, token, deviceId);
+  const { platform, token, deviceId, prescriptionNotify, transferNotify } = request.body ?? {};
+  await registerDeviceToken(request.server.prisma, request.user.id, platform, token, deviceId, {
+    prescriptionNotify,
+    transferNotify,
+  });
   return reply.status(204).send();
 }
 

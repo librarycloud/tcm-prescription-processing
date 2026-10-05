@@ -54,6 +54,10 @@ internal fun NotificationSettingsScreen() {
         prefs.edit().putBoolean(key, value).apply()
     }
 
+    fun syncNotificationPreferences() {
+        if (receiveNotifications) TcmFcmService.registerCurrentToken(context)
+    }
+
     // Toggle JPush Push Service based on receiveNotifications
     LaunchedEffect(receiveNotifications) {
         if (receiveNotifications) {
@@ -132,6 +136,7 @@ internal fun NotificationSettingsScreen() {
                         onToggle = { 
                             prescriptionNotify = it
                             saveBoolean("prescriptionNotify", it)
+                            syncNotificationPreferences()
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp))
@@ -142,6 +147,7 @@ internal fun NotificationSettingsScreen() {
                         onToggle = { 
                             transferNotify = it
                             saveBoolean("transferNotify", it)
+                            syncNotificationPreferences()
                         }
                     )
                 }

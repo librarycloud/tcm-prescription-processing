@@ -620,7 +620,7 @@ public struct ProcessingPlanFormView: View {
     }
     
     private func submitForm() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         isSubmitting = true
         errorMessage = nil
         

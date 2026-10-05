@@ -15,8 +15,9 @@ const MAX_DEVICES_PER_ADMIN = 10;
  * @param {'android'|'ios'|'jpush'} platform
  * @param {string} token
  * @param {string} [deviceId]
+ * @param {{ prescriptionNotify?: boolean, transferNotify?: boolean }} [notificationPreferences]
  */
-export async function registerDeviceToken(prisma, adminId, platform, token, deviceId) {
+export async function registerDeviceToken(prisma, adminId, platform, token, deviceId, notificationPreferences = {}) {
   if (!token || !['android', 'ios', 'jpush'].includes(platform)) return;
   const tokenStr = String(token).trim();
   if (!tokenStr) return;
@@ -24,12 +25,28 @@ export async function registerDeviceToken(prisma, adminId, platform, token, devi
   const deviceIdStr = deviceId?.trim() || null;
   if (deviceId != null && (!deviceIdStr || deviceIdStr.length > 64)) return;
 
+  const preferenceData = {};
+  const asBoolean = (value) => {
+    if (typeof value === 'boolean') return value;
+    if (value === 1 || value === '1' || value === 'true') return true;
+    if (value === 0 || value === '0' || value === 'false') return false;
+    return undefined;
+  };
+  if (notificationPreferences.prescriptionNotify !== undefined) {
+    const value = asBoolean(notificationPreferences.prescriptionNotify);
+    if (value !== undefined) preferenceData.prescriptionNotify = value;
+  }
+  if (notificationPreferences.transferNotify !== undefined) {
+    const value = asBoolean(notificationPreferences.transferNotify);
+    if (value !== undefined) preferenceData.transferNotify = value;
+  }
+
   // Upsert: token is unique — if it belongs to another admin, move it here.
   // Execute sequentially without a long transaction to prevent MySQL gap-lock deadlocks on concurrent logins.
   await prisma.adminDeviceToken.upsert({
     where: { token: tokenStr },
-    update: { adminId, platform, ...(deviceIdStr ? { deviceId: deviceIdStr } : {}) },
-    create: { adminId, platform, token: tokenStr, deviceId: deviceIdStr },
+    update: { adminId, platform, ...(deviceIdStr ? { deviceId: deviceIdStr } : {}), ...preferenceData },
+    create: { adminId, platform, token: tokenStr, deviceId: deviceIdStr, ...preferenceData },
   });
 
   if (deviceIdStr) {
