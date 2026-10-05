@@ -1781,13 +1781,12 @@ private fun BottomNav(
                                         maxLines = 1,
                                     )
                                 }
+                            }
                         }
                     }
                 }
             }
         }
-    }
-}
 
 @Composable
 private fun ScrollToTopButton(
