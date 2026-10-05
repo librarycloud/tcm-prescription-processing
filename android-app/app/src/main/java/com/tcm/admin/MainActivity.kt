@@ -1514,7 +1514,7 @@ private fun MainShell(
                 ScrollToTopButton(
                     scrollState = scrollState,
                     lazyListState = lazyListState,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars).padding(16.dp),
                 )
             }
         }
@@ -1649,13 +1649,17 @@ private fun DetailShell(
             }
         },
         containerColor = PageBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).dismissKeyboardOnTap()) {
+        Box(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).dismissKeyboardOnTap()) {
             content()
             ScrollToTopButton(
                 scrollState = scrollState,
                 lazyListState = lazyListState,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(16.dp),
             )
         }
     }

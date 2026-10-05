@@ -197,6 +197,7 @@ internal fun NotificationSettingsScreen() {
                 }
             }
         }
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 }
 

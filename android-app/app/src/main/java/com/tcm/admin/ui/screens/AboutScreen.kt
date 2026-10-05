@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
@@ -716,6 +719,7 @@ internal fun AboutScreen(
                 modifier = Modifier.clickable { webUrlToShow = "user_agreement" }.padding(8.dp)
             )
         }
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
 
         if (webUrlToShow != null) {
             androidx.compose.ui.window.Dialog(
