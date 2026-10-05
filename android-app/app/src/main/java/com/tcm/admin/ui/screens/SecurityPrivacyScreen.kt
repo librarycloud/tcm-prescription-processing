@@ -127,7 +127,6 @@ internal fun SecurityPrivacyScreen() {
                 }
             }
         }
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 
     if (showRevokeAllAlert) {

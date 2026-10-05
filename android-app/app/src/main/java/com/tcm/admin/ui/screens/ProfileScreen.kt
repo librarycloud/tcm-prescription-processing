@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -1801,7 +1798,6 @@ internal fun ThemeAppearanceScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 }
 
@@ -2030,7 +2026,6 @@ internal fun ProfileDetailScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 
     if (showLogoutConfirm) {
