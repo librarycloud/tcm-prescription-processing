@@ -62,3 +62,24 @@ test('updates notification category preferences with the provider token', async 
   assert.equal(upsert.update.prescriptionNotify, false);
   assert.equal(upsert.update.transferNotify, true);
 });
+
+test('retries transient concurrent token write conflicts', async () => {
+  let attempts = 0;
+  const adminDeviceToken = {
+    async upsert() {
+      attempts += 1;
+      if (attempts < 3) {
+        const error = new Error('Record has changed since last read');
+        error.code = 'P2039';
+        throw error;
+      }
+    },
+    async findMany() { return []; },
+    async deleteMany() {},
+  };
+  const prisma = { adminDeviceToken };
+
+  await registerDeviceToken(prisma, 7, 'android', 'fcm-token', 'device-1');
+
+  assert.equal(attempts, 3);
+});

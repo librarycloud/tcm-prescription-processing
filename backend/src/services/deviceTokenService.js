@@ -5,6 +5,24 @@
  */
 
 const MAX_DEVICES_PER_ADMIN = 10;
+const TOKEN_WRITE_RETRIES = 3;
+
+function isRetryableTokenWriteError(error) {
+  return error?.code === 'P2039'
+    || error?.code === 'P2034'
+    || error?.meta?.driverAdapterError?.cause?.originalCode === 1020;
+}
+
+async function upsertDeviceToken(prisma, args) {
+  for (let attempt = 0; attempt < TOKEN_WRITE_RETRIES; attempt += 1) {
+    try {
+      return await prisma.adminDeviceToken.upsert(args);
+    } catch (error) {
+      if (!isRetryableTokenWriteError(error) || attempt === TOKEN_WRITE_RETRIES - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+    }
+  }
+}
 
 /**
  * Upserts a device token for the authenticated admin.
@@ -43,7 +61,7 @@ export async function registerDeviceToken(prisma, adminId, platform, token, devi
 
   // Upsert: token is unique — if it belongs to another admin, move it here.
   // Execute sequentially without a long transaction to prevent MySQL gap-lock deadlocks on concurrent logins.
-  await prisma.adminDeviceToken.upsert({
+  await upsertDeviceToken(prisma, {
     where: { token: tokenStr },
     update: { adminId, platform, ...(deviceIdStr ? { deviceId: deviceIdStr } : {}), ...preferenceData },
     create: { adminId, platform, token: tokenStr, deviceId: deviceIdStr, ...preferenceData },

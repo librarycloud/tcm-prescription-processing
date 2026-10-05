@@ -1699,27 +1699,23 @@ private fun BottomNav(
         Route.Profile to ("我的" to Icons.Default.AccountCircle),
     )
     Surface(
-        color = Color.Transparent,
-        tonalElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth(),
+            HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 58.dp)
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column {
-                    HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 58.dp)
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
                         items.forEach { (target, pair) ->
                             val isSelected = when (target) {
                                 is Route.Inventory -> dest?.hasRoute<Route.Inventory>() == true
@@ -1785,12 +1781,10 @@ private fun BottomNav(
                                         maxLines = 1,
                                     )
                                 }
-                            }
                         }
                     }
                 }
             }
-            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }
