@@ -1703,13 +1703,12 @@ private fun BottomNav(
         Route.Packages to ("包裹" to Icons.Default.AssignmentTurnedIn),
         Route.Profile to ("我的" to Icons.Default.AccountCircle),
     )
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
                 HorizontalDivider(color = CardBorderColor.copy(alpha = 0.65f), thickness = 0.5.dp)
                 Row(
                     modifier = Modifier
@@ -1785,9 +1784,9 @@ private fun BottomNav(
                         }
                     }
                 }
-            }
         }
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
     }
 }
 
