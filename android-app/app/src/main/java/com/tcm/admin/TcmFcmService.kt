@@ -58,10 +58,12 @@ class TcmFcmService : FirebaseMessagingService() {
                     if (ApiClient.registerDeviceToken(context, platform = "android", token = token, deviceId = PushNotificationPreference.deviceId(context))) {
                         Log.d(TAG, "FCM Token uploaded successfully")
                     } else {
-                        Log.w(TAG, "FCM token registration failed; JPush remains available")
+                        Log.w(TAG, "FCM token registration failed; registering JPush token")
+                        TcmJPushReceiver.registerCurrentToken(context)
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to upload FCM Token: ${e.message}")
+                    Log.w(TAG, "Failed to upload FCM Token; registering JPush token: ${e.message}")
+                    TcmJPushReceiver.registerCurrentToken(context)
                 }
             }
         }
