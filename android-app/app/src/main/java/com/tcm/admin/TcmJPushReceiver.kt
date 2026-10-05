@@ -8,6 +8,7 @@ import cn.jpush.android.service.JPushMessageReceiver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * Receives JPush lifecycle events:
