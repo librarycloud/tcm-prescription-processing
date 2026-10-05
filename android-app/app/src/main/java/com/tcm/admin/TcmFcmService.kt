@@ -4,9 +4,10 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 class TcmFcmService : FirebaseMessagingService() {
     companion object {
@@ -31,18 +32,19 @@ class TcmFcmService : FirebaseMessagingService() {
             }
         }
 
-        fun unregisterToken(context: Context, authToken: String? = null) {
-            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val token = task.result
-                    CoroutineScope(Dispatchers.IO).launch {
-                        try {
-                            ApiClient.unregisterDeviceToken(context, token, authToken)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to unregister FCM token: ${e.message}")
-                        }
+        suspend fun unregisterToken(context: Context, authToken: String? = null) {
+            try {
+                val task = com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                val token = suspendCancellableCoroutine<String?> { continuation ->
+                    task.addOnCompleteListener { completedTask ->
+                        continuation.resume(completedTask.takeIf { it.isSuccessful }?.result)
                     }
                 }
+                if (!token.isNullOrBlank()) {
+                    ApiClient.unregisterDeviceToken(context, token, authToken)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister FCM token: ${e.message}")
             }
         }
 

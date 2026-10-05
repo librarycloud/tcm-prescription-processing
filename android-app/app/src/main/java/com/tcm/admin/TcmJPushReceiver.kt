@@ -5,7 +5,6 @@ import android.util.Log
 import cn.jpush.android.api.JPushInterface
 import cn.jpush.android.api.JPushMessage
 import cn.jpush.android.service.JPushMessageReceiver
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -51,14 +50,12 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         }
 
         /** Call on logout to remove this device's JPush token from the backend. */
-        fun unregisterToken(context: Context, authToken: String? = null) {
+        suspend fun unregisterToken(context: Context, authToken: String? = null) {
             val regId = JPushInterface.getRegistrationID(context) ?: return
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    ApiClient.unregisterDeviceToken(context, regId, authToken)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
-                }
+            try {
+                ApiClient.unregisterDeviceToken(context, regId, authToken)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
             }
         }
 
