@@ -35,7 +35,7 @@ data class SessionItem(
 
 object ApiClient {
     private const val LOG_TAG = "TcmApiClient"
-    var onUnauthorized: (() -> Unit)? = null
+    var onUnauthorized: ((String) -> Unit)? = null
     private val client = OkHttpClient.Builder()
         .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -48,7 +48,6 @@ object ApiClient {
         .readTimeout(5, TimeUnit.MINUTES)
         .writeTimeout(5, TimeUnit.MINUTES)
         .build()
-    private const val SESSION_PREFS = "admin_session"
     private const val TOKEN_KEY = "token"
     private const val USER_KEY = "user"
     private const val CUSTOM_BASE_URL_KEY = "custom_base_url"
@@ -184,16 +183,15 @@ object ApiClient {
         currentBaseUrl = finalURL
         if (changed) clearResponseCache(context)
         
-        // Save to standard SharedPreferences to avoid EncryptedSharedPreferences Keystore invalidation bugs on updates
-        val plainPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        plainPrefs.edit().putString(CUSTOM_BASE_URL_KEY, finalURL).commit()
+        getSessionPrefs(context).edit().putString(CUSTOM_BASE_URL_KEY, finalURL).apply()
         
         return true to "成功导入服务器地址:\n\n$finalURL"
     }
 
     fun initBaseUrl(context: Context) {
-        val plainPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val saved = plainPrefs.getString(CUSTOM_BASE_URL_KEY, null)
+        val saved = runCatching {
+            getSessionPrefs(context).getString(CUSTOM_BASE_URL_KEY, null)
+        }.getOrNull()
         
         if (!saved.isNullOrBlank()) {
             currentBaseUrl = saved
@@ -393,26 +391,6 @@ object ApiClient {
 
     fun loadSession(context: Context): AdminSession? {
         cacheContext = context.applicationContext
-        
-        // Migrate from old plain prefs if needed
-        val oldPrefs = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
-        if (oldPrefs.contains(TOKEN_KEY) || oldPrefs.contains(USER_KEY)) {
-            val oldRawToken = oldPrefs.getString(TOKEN_KEY, null)
-            val oldRawUser = oldPrefs.getString(USER_KEY, null)
-            val migrated = if (oldRawToken != null && oldRawUser != null) {
-                runCatching {
-                    getSessionPrefs(context).edit()
-                        .putString(TOKEN_KEY, oldRawToken)
-                        .putString(USER_KEY, oldRawUser)
-                        .apply()
-                    true
-                }.getOrDefault(false)
-            } else false
-            // Do not destroy the legacy session until the encrypted copy succeeds.
-            if (migrated) {
-                oldPrefs.edit().clear().apply()
-            }
-        }
 
         val preferences = runCatching { getSessionPrefs(context) }.getOrNull() ?: return null
         val rawToken = preferences.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
@@ -439,9 +417,13 @@ object ApiClient {
         cacheContext = context.applicationContext
         token = null
         runCatching {
-            getSessionPrefs(context).edit().clear().apply()
+            val preferences = getSessionPrefs(context)
+            val savedBaseUrl = preferences.getString(CUSTOM_BASE_URL_KEY, null)
+            preferences.edit().clear().apply()
+            if (!savedBaseUrl.isNullOrBlank()) {
+                preferences.edit().putString(CUSTOM_BASE_URL_KEY, savedBaseUrl).apply()
+            }
         }
-        context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         clearE6ImportCache(context)
         clearResponseCache(context)
         clearProcessingPhotoCache(context)
@@ -454,20 +436,25 @@ object ApiClient {
         request("/auth/logout", "POST", tokenOverride = tokenOverride)
     }
 
-    suspend fun login(identifier: String, password: String, context: Context? = null): AdminSession {
+    suspend fun login(identifier: String, password: String): AdminSession {
         val data = request("/auth/login", "POST", JSONObject().put("identifier", identifier).put("password", password))
         val result = data.getJSONObject("data")
         val receivedToken = sanitizeToken(result.getString("token"))
             ?: throw IllegalStateException("服务器返回的登录凭证格式无效")
         val session = AdminSession(receivedToken, result.getJSONObject("user")).also { token = it.token }
-        context?.let { TcmFcmService.registerCurrentToken(it) }
         return session
     }
 
     /** Registers a push notification device token with the backend. */
     suspend fun registerDeviceToken(context: Context, platform: String, token: String, deviceId: String): Boolean {
         try {
-            val body = JSONObject().put("platform", platform).put("token", token).put("deviceId", deviceId)
+            val notificationPreferences = context.getSharedPreferences("TcmPrefs", Context.MODE_PRIVATE)
+            val body = JSONObject()
+                .put("platform", platform)
+                .put("token", token)
+                .put("deviceId", deviceId)
+                .put("prescriptionNotify", notificationPreferences.getBoolean("prescriptionNotify", true))
+                .put("transferNotify", notificationPreferences.getBoolean("transferNotify", true))
             request("/admin/device-tokens", "POST", body)
             return true
         } catch (e: Exception) {
@@ -477,10 +464,10 @@ object ApiClient {
     }
 
     /** Removes a push notification device token from the backend (logout). */
-    suspend fun unregisterDeviceToken(context: Context, token: String) {
+    suspend fun unregisterDeviceToken(context: Context, token: String, authToken: String? = null) {
         try {
             val body = JSONObject().put("token", token)
-            request("/admin/device-tokens", "DELETE", body)
+            request("/admin/device-tokens", "DELETE", body, tokenOverride = authToken)
         } catch (e: Exception) {
             android.util.Log.w("TcmApiClient", "unregisterDeviceToken failed: ${e.message}")
         }
@@ -1068,13 +1055,23 @@ object ApiClient {
         else -> JSONArray()
     }
 
+    private fun handleUnauthorized(requestToken: String?) {
+        if (requestToken == null) return
+        val callback = synchronized(this) {
+            if (token != requestToken) return
+            token = null
+            onUnauthorized
+        }
+        callback?.invoke(requestToken)
+    }
+
     private fun applyAuthorizationHeader(builder: Request.Builder, tokenOverride: String? = null) {
-        val currentToken = sanitizeToken(tokenOverride ?: token)
+        val rawToken = tokenOverride ?: token
+        val currentToken = sanitizeToken(rawToken)
         if (currentToken != null) {
             builder.header("Authorization", "Bearer $currentToken")
-        } else if (token != null && tokenOverride == null) {
-            token = null
-            onUnauthorized?.invoke()
+        } else if (rawToken != null && tokenOverride == null) {
+            handleUnauthorized(rawToken)
             throw ApiException("登录凭证异常，请重新登录", 401)
         }
         builder.header("X-Device-Name", android.os.Build.MODEL)
@@ -1180,8 +1177,7 @@ object ApiClient {
                 JSONObject().put("code", -1).put("message", msg)
             }
             if (response.code == 401) {
-                token = null
-                onUnauthorized?.invoke()
+                handleUnauthorized(response.request.header("Authorization")?.removePrefix("Bearer "))
             }
             if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "上传失败"), json.optInt("code", -1), json.optJSONObject("data"))
             invalidateCacheForMutation(path)
@@ -1256,8 +1252,7 @@ object ApiClient {
 
             val json = runCatching { JSONObject(responseBodyString) }.getOrElse { JSONObject().put("code", -1).put("message", "服务器响应格式错误") }
             if (response.code == 401) {
-                token = null
-                onUnauthorized?.invoke()
+                handleUnauthorized(response.request.header("Authorization")?.removePrefix("Bearer "))
             }
             if (json.optInt("code", -1) != 0) throw ApiException(json.optString("message", "请求失败: ${response.code}"), json.optInt("code", -1), json.optJSONObject("data"))
             if (normalizedMethod != "GET") invalidateCacheForMutation(path)

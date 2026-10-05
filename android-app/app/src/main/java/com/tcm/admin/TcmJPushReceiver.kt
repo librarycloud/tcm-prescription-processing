@@ -5,10 +5,10 @@ import android.util.Log
 import cn.jpush.android.api.JPushInterface
 import cn.jpush.android.api.JPushMessage
 import cn.jpush.android.service.JPushMessageReceiver
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * Receives JPush lifecycle events:
@@ -51,18 +51,16 @@ class TcmJPushReceiver : JPushMessageReceiver() {
         }
 
         /** Call on logout to remove this device's JPush token from the backend. */
-        fun unregisterToken(context: Context) {
+        suspend fun unregisterToken(context: Context, authToken: String? = null) {
             val regId = JPushInterface.getRegistrationID(context) ?: return
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    ApiClient.unregisterDeviceToken(context, regId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
-                }
+            try {
+                ApiClient.unregisterDeviceToken(context, regId, authToken)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister JPush token: ${e.message}")
             }
         }
 
-        private fun uploadToken(context: Context, regId: String) {
+        private fun uploadToken(context: Context, regId: String, attempt: Int = 0) {
             if (!PushNotificationPreference.isEnabled(context)) return
             if (!ApiClient.isAuthenticated) {
                 ApiClient.loadSession(context)
@@ -76,10 +74,20 @@ class TcmJPushReceiver : JPushMessageReceiver() {
                         Log.d(TAG, "JPush Registration ID uploaded: ${regId.take(20)}...")
                     } else {
                         Log.w(TAG, "JPush Registration ID registration failed")
+                        retryUpload(context, regId, attempt)
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload JPush Registration ID: ${e.message}")
+                    retryUpload(context, regId, attempt)
                 }
+            }
+        }
+
+        private fun retryUpload(context: Context, regId: String, attempt: Int) {
+            if (attempt >= 2) return
+            CoroutineScope(Dispatchers.IO).launch {
+                delay((attempt + 1) * 2_000L)
+                uploadToken(context, regId, attempt + 1)
             }
         }
     }
@@ -96,6 +104,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
     }
 
     override fun onNotifyMessageOpened(context: Context, message: cn.jpush.android.api.NotificationMessage) {
+        if (!NotificationPreference.accepts(context, NotificationPreference.eventCodeFromJson(message.notificationExtras))) return
         Log.d(TAG, "Notification clicked. Extras: ${message.notificationExtras}")
         val intent = android.content.Intent(context, MainActivity::class.java).apply {
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -105,6 +114,7 @@ class TcmJPushReceiver : JPushMessageReceiver() {
     }
     override fun onNotifyMessageArrived(context: Context, message: cn.jpush.android.api.NotificationMessage) {
         if (!PushNotificationPreference.isEnabled(context)) return
+        if (!NotificationPreference.accepts(context, NotificationPreference.eventCodeFromJson(message.notificationExtras))) return
         Log.d(TAG, "JPush Message arrived: ${message.notificationTitle}")
         
         // When app is in foreground, manually build notification so sound plays
