@@ -281,7 +281,7 @@ public struct PackageFormView: View {
     }
     
     private func saveAction() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         guard !isBusy else { return }
         isBusy = true
         errorMessage = nil
@@ -305,7 +305,7 @@ public struct PackageFormView: View {
                 
                 await MainActor.run {
                     isBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                     onSaved()
                     dismiss()
                 }
@@ -313,7 +313,7 @@ public struct PackageFormView: View {
                 await MainActor.run {
                     isBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
@@ -535,7 +535,7 @@ public struct PackageVerifyView: View {
     }
     
     private func verifyAction() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         isVerifying = true
         errorMessage = nil
         
@@ -555,13 +555,13 @@ public struct PackageVerifyView: View {
                 await MainActor.run {
                     self.verifiedPackage = res
                     self.isVerifying = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                 }
             } catch {
                 await MainActor.run {
                     self.errorMessage = error.localizedDescription
                     self.isVerifying = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }

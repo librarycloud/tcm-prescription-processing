@@ -209,7 +209,18 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var modifiedRequest = request
-        modifiedRequest.setValue(nil, forHTTPHeaderField: "Authorization")
+        let previousURL = task.currentRequest?.url
+        let nextURL = request.url
+        let sameHost = previousURL?.host?.lowercased() == nextURL?.host?.lowercased()
+            && previousURL?.port == nextURL?.port
+        let safeSchemeChange = previousURL?.scheme?.lowercased() == nextURL?.scheme?.lowercased()
+            || nextURL?.scheme?.lowercased() == "https"
+        if sameHost && safeSchemeChange,
+           let authorization = task.currentRequest?.value(forHTTPHeaderField: "Authorization") {
+            modifiedRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
+        } else {
+            modifiedRequest.setValue(nil, forHTTPHeaderField: "Authorization")
+        }
         completionHandler(modifiedRequest)
     }
     
@@ -378,7 +389,12 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         }
         
         if httpResponse.statusCode == 401 {
-            await MainActor.run { SessionManager.shared.clearSession() }
+            await MainActor.run {
+                // A stale request must not clear a newer login session.
+                if SessionManager.shared.token == requestToken {
+                    SessionManager.shared.clearSession()
+                }
+            }
             throw ApiError.unauthorized
         }
         
@@ -476,7 +492,11 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         }
         
         if httpResponse.statusCode == 401 {
-            await MainActor.run { SessionManager.shared.clearSession() }
+            await MainActor.run {
+                if SessionManager.shared.token == requestToken {
+                    SessionManager.shared.clearSession()
+                }
+            }
             throw ApiError.unauthorized
         }
         
@@ -503,18 +523,26 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     }
 
     /// Registers an APNs device token with the backend. Called after login and on token refresh.
-    public func registerDeviceToken(_ tokenData: Data) async {
+    @discardableResult
+    public func registerDeviceToken(_ tokenData: Data) async -> Bool {
         let token = tokenData.map { String(format: "%02x", $0) }.joined()
-        guard !token.isEmpty else { return }
+        guard !token.isEmpty else { return false }
         do {
             let _ = try await requestRaw(
                 path: "/admin/device-tokens",
                 method: "POST",
-                body: ["platform": "ios", "token": token]
+                body: [
+                    "platform": "ios",
+                    "token": token,
+                    "prescriptionNotify": UserDefaults.standard.object(forKey: "prescription_notify") as? Bool ?? true,
+                    "transferNotify": UserDefaults.standard.object(forKey: "transfer_notify") as? Bool ?? true
+                ]
             )
+            return true
         } catch {
             // Non-critical: log but don't surface to user
             print("[Push] registerDeviceToken failed:", error.localizedDescription)
+            return false
         }
     }
 
@@ -889,6 +917,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         onProgress: ((Double) -> Void)? = nil
     ) async throws -> [String: Any] {
         let requestBaseURL = baseURL
+        let requestToken = await SessionManager.shared.token ?? ""
         try Task.checkCancellation()
         final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
             let onProgress: ((Double) -> Void)?
@@ -976,8 +1005,8 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = await SessionManager.shared.token, !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !requestToken.isEmpty {
+            request.setValue("Bearer \(requestToken)", forHTTPHeaderField: "Authorization")
         }
         
         var body = Data()
@@ -993,7 +1022,11 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
             throw ApiError.invalidResponse(statusCode: -1, message: "服务器未响应")
         }
         if httpRes.statusCode == 401 {
-            await MainActor.run { SessionManager.shared.clearSession() }
+            await MainActor.run {
+                if SessionManager.shared.token == requestToken {
+                    SessionManager.shared.clearSession()
+                }
+            }
             throw ApiError.unauthorized
         }
         guard (200...299).contains(httpRes.statusCode) else {
@@ -1004,9 +1037,12 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     }
     
     public func requestBytes(path: String) async throws -> Data {
-        let cacheKey = "bytes_" + path
-        let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
         let requestBaseURL = baseURL
+        let requestToken = await SessionManager.shared.token ?? ""
+        let cacheScopeData = Data("\(requestBaseURL)|\(requestToken)".utf8)
+        let cacheScope = SHA256.hash(data: cacheScopeData).map { String(format: "%02x", $0) }.joined()
+        let cacheKey = "bytes_" + path + "|scope:" + cacheScope
+        let requestCacheGeneration = cacheQueue.sync { cacheGeneration }
         var cachedData: Data? = nil
         
         cacheQueue.sync {
@@ -1023,15 +1059,26 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
         let urlString = requestBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path
         guard let url = URL(string: urlString) else { throw ApiError.invalidURL }
         var request = URLRequest(url: url, timeoutInterval: 60.0)
-        if let token = await SessionManager.shared.token, !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !requestToken.isEmpty {
+            request.setValue("Bearer \(requestToken)", forHTTPHeaderField: "Authorization")
         }
         #if os(iOS)
         let deviceName = await UIDevice.current.name
         request.setValue(deviceName, forHTTPHeaderField: "X-Device-Name")
         #endif
         let (data, response) = try await defaultSession.data(for: request)
-        guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
+        guard let httpRes = response as? HTTPURLResponse else {
+            throw ApiError.invalidResponse(statusCode: -1, message: "获取文件失败")
+        }
+        if httpRes.statusCode == 401 {
+            await MainActor.run {
+                if SessionManager.shared.token == requestToken {
+                    SessionManager.shared.clearSession()
+                }
+            }
+            throw ApiError.unauthorized
+        }
+        guard (200...299).contains(httpRes.statusCode) else {
             throw ApiError.invalidResponse(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1, message: "获取文件失败")
         }
         

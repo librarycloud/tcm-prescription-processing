@@ -1209,14 +1209,20 @@ public class HapticManager {
     public static let shared = HapticManager()
     
     private init() {}
+
+    private var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: "action_haptic_enabled") as? Bool ?? true
+    }
     
     public func impact(style: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
+        guard isEnabled else { return }
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.prepare()
         generator.impactOccurred()
     }
     
     public func notify(type: UINotificationFeedbackGenerator.FeedbackType) {
+        guard isEnabled else { return }
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(type)

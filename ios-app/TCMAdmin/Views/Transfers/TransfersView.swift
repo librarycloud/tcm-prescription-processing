@@ -627,7 +627,7 @@ public struct TransferFormView: View {
     }
     
     private func createAction() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         guard !isBusy else { return }
         isBusy = true
         errorMessage = nil
@@ -658,7 +658,7 @@ public struct TransferFormView: View {
                 
                 await MainActor.run {
                     isBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                     onSaved()
                     dismiss()
                 }
@@ -666,7 +666,7 @@ public struct TransferFormView: View {
                 await MainActor.run {
                     isBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
@@ -1095,7 +1095,7 @@ public struct TransferDetailView: View {
     }
     
     private func confirmOutboundAction() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         confirmActionMessage = "确定要确认调出该订单吗？确认后物品将正式发出。"
         confirmActionBlock = {
             self.executeConfirmOutbound()
@@ -1110,35 +1110,35 @@ public struct TransferDetailView: View {
                 try await ApiClient.shared.confirmOutbound(id: id)
                 await MainActor.run {
                     isActionBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                 }
                 await loadDetail()
             } catch {
                 await MainActor.run {
                     isActionBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
     }
     
     private func cancelTransferAction() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         isActionBusy = true
         Task {
             do {
                 try await ApiClient.shared.cancelTransfer(id: id, reason: "iOS端取消调拨")
                 await MainActor.run {
                     isActionBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                     dismiss()
                 }
             } catch {
                 await MainActor.run {
                     isActionBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
@@ -1146,7 +1146,7 @@ public struct TransferDetailView: View {
     
     
     private func cancelReturnAction(returnId: Int) {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         confirmActionMessage = "确定要取消这条归还申请吗？"
         confirmActionBlock = {
             self.executeCancelReturn(returnId: returnId)
@@ -1161,21 +1161,21 @@ public struct TransferDetailView: View {
                 try await ApiClient.shared.cancelTransferReturn(transferId: id, returnId: returnId)
                 await MainActor.run {
                     isActionBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                 }
                 await loadDetail()
             } catch {
                 await MainActor.run {
                     isActionBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
     }
 
     private func confirmReturnAction(returnId: Int) {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         confirmActionMessage = "确定要确认归还这笔物资吗？"
         confirmActionBlock = {
             self.executeConfirmReturn(returnId: returnId)
@@ -1190,14 +1190,14 @@ public struct TransferDetailView: View {
                 try await ApiClient.shared.confirmReturn(transferId: id, returnId: returnId)
                 await MainActor.run {
                     isActionBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                 }
                 await loadDetail()
             } catch {
                 await MainActor.run {
                     isActionBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }
@@ -1309,7 +1309,7 @@ struct TransferReturnSheet: View {
     private func submit() {
         let text = quantityText.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
         guard let qty = Double(text), qty > 0 else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact()
         errorMessage = nil
         isBusy = true
         
@@ -1342,14 +1342,14 @@ struct TransferReturnSheet: View {
                 
                 await MainActor.run {
                     isBusy = false
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    HapticManager.shared.notify(type: .success)
                     onSuccess()
                 }
             } catch {
                 await MainActor.run {
                     isBusy = false
                     errorMessage = error.localizedDescription
-                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    HapticManager.shared.notify(type: .error)
                 }
             }
         }

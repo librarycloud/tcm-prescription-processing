@@ -1059,6 +1059,23 @@ public struct NotificationSoundView: View {
         .background(Color.pageBackground.ignoresSafeArea())
         .navigationTitle("通知和声音")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: receiveNotifications) { _, enabled in
+            Task {
+                if enabled {
+                    _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                    await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+                    PushTokenStore.shared.uploadIfNeeded(force: true)
+                } else {
+                    await PushTokenStore.shared.unregisterCurrentToken()
+                }
+            }
+        }
+        .onChange(of: prescriptionNotify) { _, _ in
+            if receiveNotifications { PushTokenStore.shared.uploadIfNeeded(force: true) }
+        }
+        .onChange(of: transferNotify) { _, _ in
+            if receiveNotifications { PushTokenStore.shared.uploadIfNeeded(force: true) }
+        }
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             systemNotificationAuthorized = (settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional)
