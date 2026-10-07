@@ -680,7 +680,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
     doseCount: first.doseCount,
     batches: payload.batches,
     bagsPerDose: payload.bagsPerDose,
-    processTypeId: batch.processTypeId ?? payload.processTypeId,
+    processTypeId: payload.processTypeId,
     scheduleType: payload.scheduleType,
     processDate: payload.processDate,
     pickupMethod: payload.pickupMethod,
@@ -732,7 +732,7 @@ export async function mergeE6Imports(prisma, actor, payload = {}) {
       plans.push(await createProcessingPlanRecord(tx, actor, {
         prescriptionId: prescription.id,
         batchNo: index + 1,
-        processTypeId: mergedPayload.processTypeId,
+        processTypeId: batch.processTypeId ?? mergedPayload.processTypeId,
         totalDose: batch.totalDose,
         bagCount: batch.bagCount ?? (mergedPayload.bagsPerDose
           ? batch.totalDose * Number(mergedPayload.bagsPerDose)
