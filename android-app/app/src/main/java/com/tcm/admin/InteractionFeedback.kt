@@ -42,12 +42,17 @@ object InteractionFeedback {
             } else {
                 @Suppress("DEPRECATION")
                 context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibration?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+            } ?: return@runCatching
+
+            if (!vibration.hasVibrator()) return@runCatching
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibration.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibration.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vibration?.vibrate(50)
+                vibration.vibrate(20)
             }
         }
     }

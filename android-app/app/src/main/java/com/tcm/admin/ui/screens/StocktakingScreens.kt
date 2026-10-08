@@ -683,9 +683,6 @@ internal fun StocktakingEntryScreen(
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val scanned = result.data?.getStringExtra(ScannerActivity.SCAN_RESULT)?.trim().orEmpty()
         if (result.resultCode == Activity.RESULT_OK && scanned.isNotBlank()) {
-            if (InteractionFeedback.isHapticEnabled(context)) {
-                InteractionFeedback.haptic(context)
-            }
             keyboardController?.hide()
             focusManager.clearFocus(force = false)
             selectedItem = null
