@@ -1102,6 +1102,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
 
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var webUrlToShow by remember { mutableStateOf<String?>(null) }
 
     if (showConfigDialog) {
         androidx.compose.material3.AlertDialog(
@@ -1300,7 +1301,65 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
                 }
             }
         }
+
+        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(24.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "《隐私政策》",
+                color = Primary,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .clickable { webUrlToShow = "privacy_policy" }
+                    .padding(4.dp)
+            )
+            Text(
+                "·",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+            Text(
+                "《用户协议》",
+                color = Primary,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .clickable { webUrlToShow = "user_agreement" }
+                    .padding(4.dp)
+            )
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = "沪ICP备2026040883号-2A",
+            color = Muted,
+            fontSize = 11.5.sp,
+            modifier = Modifier
+                .clickable {
+                    runCatching {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://beian.miit.gov.cn/")).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+                .padding(vertical = 2.dp)
+        )
+
+        Text(
+            text = "上海光影韵律科技有限公司 版权所有",
+            color = Muted.copy(alpha = 0.7f),
+            fontSize = 11.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
     }
+
+    LegalDocViewerDialog(docType = webUrlToShow, onDismiss = { webUrlToShow = null })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

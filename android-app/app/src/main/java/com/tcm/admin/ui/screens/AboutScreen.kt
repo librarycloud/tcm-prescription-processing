@@ -717,69 +717,33 @@ internal fun AboutScreen(
             )
         }
 
-        if (webUrlToShow != null) {
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { webUrlToShow = null },
-                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Column {
-                        @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-                        androidx.compose.material3.TopAppBar(
-                            title = { Text(if (webUrlToShow == "privacy_policy") "隐私政策" else "用户协议") },
-                            navigationIcon = {
-                                androidx.compose.material3.IconButton(onClick = { webUrlToShow = null }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                                }
-                            }
-                        )
-                        androidx.compose.ui.viewinterop.AndroidView(
-                            factory = { ctx ->
-                                android.webkit.WebView(ctx).apply {
-                                    webViewClient = android.webkit.WebViewClient()
-                                    settings.javaScriptEnabled = true
-                                    val baseUrl = com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')
-                                    val htmlData = """
-                                        <!DOCTYPE html>
-                                        <html lang="zh-CN">
-                                        <head>
-                                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-                                            <style>
-                                                body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 16px; color: #333; }
-                                                .loading { text-align: center; color: #666; margin-top: 50px; }
-                                                img { max-width: 100%; height: auto; }
-                                                pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
-                                                blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
-                                                li { margin: 4px 0; }
-                                            </style>
-                                        </head>
-                                        <body>
-                                            <div id="content"><div class="loading">加载中...</div></div>
-                                            <script>
-                                                fetch('${com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
-                                                    .then(res => res.json())
-                                                    .then(json => {
-                                                        const data = json.code === 0 ? json.data : (json || {});
-                                                        const md = data.${if(webUrlToShow == "privacy_policy") "privacy_policy" else "user_agreement"} || '暂无内容';
-                                                        document.getElementById('content').innerHTML = marked.parse(md);
-                                                    })
-                                                    .catch(e => {
-                                                        document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络并重试</div>';
-                                                    });
-                                            </script>
-                                        </body>
-                                        </html>
-                                    """.trimIndent()
-                                    loadDataWithBaseURL(null, htmlData, "text/html", "utf-8", null)
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+        Text(
+            text = "沪ICP备2026040883号-2A",
+            color = Muted,
+            fontSize = 12.sp,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .clickable {
+                    runCatching {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://beian.miit.gov.cn/")).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
                     }
                 }
-            }
-        }
+                .padding(top = 4.dp)
+        )
+
+        Text(
+            text = "上海光影韵律科技有限公司 版权所有",
+            color = Muted.copy(alpha = 0.7f),
+            fontSize = 11.sp,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 12.dp)
+        )
+
+        com.tcm.admin.LegalDocViewerDialog(docType = webUrlToShow, onDismiss = { webUrlToShow = null })
     }
 }
 

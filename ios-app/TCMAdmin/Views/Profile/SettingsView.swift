@@ -611,6 +611,18 @@ public struct AboutView: View {
             .foregroundStyle(Color.appPrimary)
             .padding(.top, 8)
             
+            if let beianURL = URL(string: "https://beian.miit.gov.cn/") {
+                Link("沪ICP备2026040883号-2A", destination: beianURL)
+                    .scaledFont(12)
+                    .foregroundStyle(Color.muted)
+                    .padding(.top, 4)
+            }
+            
+            Text("上海光影韵律科技有限公司 版权所有")
+                .scaledFont(11)
+                .foregroundStyle(Color.muted.opacity(0.8))
+                .padding(.top, 2)
+            
             Spacer()
         }
         .background(Color.pageBackground.ignoresSafeArea())
