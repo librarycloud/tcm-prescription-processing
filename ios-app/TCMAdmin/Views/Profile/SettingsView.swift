@@ -548,70 +548,87 @@ public struct AboutView: View {
     public init() {}
     
     public var body: some View {
-        VStack(spacing: 24) {
-            Spacer().frame(height: 32)
-            
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.appPrimary)
-                .frame(width: 80, height: 80)
-                .overlay(
-                    Image(systemName: "cross.case.fill")
-                        .scaledFont(40)
-                        .foregroundStyle(Color.white)
-                )
-                .shadow(color: Color.appPrimary.opacity(0.3), radius: 8, x: 0, y: 4)
-            
-            VStack(spacing: 6) {
-                Text("药房助手 iOS 端")
-                    .scaledFont(20, weight: .bold)
-                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.5.0"
-                let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "20260915"
-                Text("Version \(version) (Build \(build))")
-                    .scaledFont(13)
-                    .foregroundStyle(Color.muted)
-            }
-            
-            Button(action: checkUpdate) {
-                if updateManager.isChecking {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                } else {
-                    Text("检查新版本")
-                        .scaledFont(15, weight: .bold)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 20) {
+                    Spacer().frame(height: 16)
+                    
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.appPrimary)
+                        .frame(width: 80, height: 80)
+                        .overlay(
+                            Image(systemName: "cross.case.fill")
+                                .scaledFont(40)
+                                .foregroundStyle(Color.white)
+                        )
+                        .shadow(color: Color.appPrimary.opacity(0.3), radius: 8, x: 0, y: 4)
+                    
+                    VStack(spacing: 6) {
+                        Text("药房助手 iOS 端")
+                            .scaledFont(20, weight: .bold)
+                        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.5.0"
+                        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "20260915"
+                        Text("Version \(version) (Build \(build))")
+                            .scaledFont(13)
+                            .foregroundStyle(Color.muted)
+                    }
+                    
+                    Button(action: checkUpdate) {
+                        if updateManager.isChecking {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("检查新版本")
+                                .scaledFont(15, weight: .bold)
+                        }
+                    }
+                    .foregroundStyle(Color.white)
+                    .frame(width: 160, height: 44)
+                    .background(Color.appPrimary)
+                    .clipShape(.rect(cornerRadius: 22))
+                    .disabled(updateManager.isChecking)
+                    
+                    AppCard(padding: 16) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("功能特性").scaledFont(14, weight: .bold)
+                            Text("• 现代化 SwiftUI 全量原生重构\n• 本地 OCR 与条码识别\n• 4路智能条码扫码分发（取货码、加工计划、设备、库存）\n• 适配 iOS 18 及以上版本")
+                                .scaledFont(13)
+                                .foregroundStyle(Color.muted)
+                                .lineSpacing(4)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    
+                    Spacer(minLength: 24)
+                    
+                    VStack(spacing: 4) {
+                        HStack(spacing: 12) {
+                            Button("《隐私政策》") {
+                                webUrlToShow = "privacy_policy"
+                            }
+                            Text("·")
+                                .foregroundStyle(Color.muted)
+                            Button("《用户协议》") {
+                                webUrlToShow = "user_agreement"
+                            }
+                        }
+                        .scaledFont(12)
+                        .foregroundStyle(Color.appPrimary)
+                        
+                        if let beianURL = URL(string: "https://beian.miit.gov.cn/") {
+                            Link("沪ICP备2026040883号-2A", destination: beianURL)
+                                .scaledFont(11.5)
+                                .foregroundStyle(Color.muted)
+                        }
+                        
+                        Text("上海光影韵律科技有限公司 版权所有")
+                            .scaledFont(11)
+                            .foregroundStyle(Color.muted.opacity(0.8))
+                    }
+                    .padding(.bottom, 16)
                 }
+                .frame(minHeight: geometry.size.height)
             }
-            .foregroundStyle(Color.white)
-            .frame(width: 160, height: 44)
-            .background(Color.appPrimary)
-            .clipShape(.rect(cornerRadius: 22))
-            .disabled(updateManager.isChecking)
-            .padding(.top, 8)
-
-            
-            AppCard(padding: 16) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("功能特性").scaledFont(14, weight: .bold)
-                    Text("• 现代化 SwiftUI 全量原生重构\n• 本地 OCR 与条码识别\n• 4路智能条码扫码分发（取货码、加工计划、设备、库存）\n• 适配 iOS 18 及以上版本")
-                        .scaledFont(13)
-                        .foregroundStyle(Color.muted)
-                        .lineSpacing(4)
-                }
-            }
-            .padding(.horizontal, 16)
-            
-            HStack(spacing: 16) {
-                Button("《隐私政策》") {
-                    webUrlToShow = "privacy_policy"
-                }
-                Button("《用户协议》") {
-                    webUrlToShow = "user_agreement"
-                }
-            }
-            .scaledFont(13)
-            .foregroundStyle(Color.appPrimary)
-            .padding(.top, 8)
-            
-            Spacer()
         }
         .background(Color.pageBackground.ignoresSafeArea())
         .navigationTitle("关于药房助手")

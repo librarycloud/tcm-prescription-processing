@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -485,13 +488,26 @@ internal fun AboutScreen(
         ?: latest?.optLong("fallbackSize", 0L).takeIf { (it ?: 0L) > 0L }
         ?: latest?.optLong("size", 0L) ?: 0L
 
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .fillMaxSize()
+            .navigationBarsPadding(),
     ) {
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = CardShape) {
+        val minHeight = maxHeight
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = minHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = CardShape) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(color = PrimarySoft, shape = CardShape, modifier = Modifier.size(68.dp)) {
                     Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = Primary, modifier = Modifier.padding(17.dp))
@@ -694,93 +710,71 @@ internal fun AboutScreen(
                 }
             }
         }
+        }
         
         var webUrlToShow by remember { mutableStateOf<String?>(null) }
         
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp, bottom = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "《隐私政策》",
+                    color = Primary,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier
+                        .clickable { webUrlToShow = "privacy_policy" }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+                Text(
+                    "·",
+                    color = Muted,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                Text(
+                    "《用户协议》",
+                    color = Primary,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier
+                        .clickable { webUrlToShow = "user_agreement" }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+
             Text(
-                "《隐私政策》",
-                color = Primary,
-                fontSize = 13.sp,
-                modifier = Modifier.clickable { webUrlToShow = "privacy_policy" }.padding(8.dp)
+                text = "沪ICP备2026040883号-2A",
+                color = Muted,
+                fontSize = 11.5.sp,
+                modifier = Modifier
+                    .clickable {
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://beian.miit.gov.cn/")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
+                    }
+                    .padding(vertical = 1.dp)
             )
-            Spacer(Modifier.width(16.dp))
+
             Text(
-                "《用户协议》",
-                color = Primary,
-                fontSize = 13.sp,
-                modifier = Modifier.clickable { webUrlToShow = "user_agreement" }.padding(8.dp)
+                text = "上海光影韵律科技有限公司 版权所有",
+                color = Muted.copy(alpha = 0.7f),
+                fontSize = 11.sp,
             )
         }
 
-        if (webUrlToShow != null) {
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { webUrlToShow = null },
-                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Column {
-                        @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-                        androidx.compose.material3.TopAppBar(
-                            title = { Text(if (webUrlToShow == "privacy_policy") "隐私政策" else "用户协议") },
-                            navigationIcon = {
-                                androidx.compose.material3.IconButton(onClick = { webUrlToShow = null }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                                }
-                            }
-                        )
-                        androidx.compose.ui.viewinterop.AndroidView(
-                            factory = { ctx ->
-                                android.webkit.WebView(ctx).apply {
-                                    webViewClient = android.webkit.WebViewClient()
-                                    settings.javaScriptEnabled = true
-                                    val baseUrl = com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')
-                                    val htmlData = """
-                                        <!DOCTYPE html>
-                                        <html lang="zh-CN">
-                                        <head>
-                                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-                                            <style>
-                                                body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 16px; color: #333; }
-                                                .loading { text-align: center; color: #666; margin-top: 50px; }
-                                                img { max-width: 100%; height: auto; }
-                                                pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }
-                                                blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 0 0 16px 0; }
-                                                li { margin: 4px 0; }
-                                            </style>
-                                        </head>
-                                        <body>
-                                            <div id="content"><div class="loading">加载中...</div></div>
-                                            <script>
-                                                fetch('${com.tcm.admin.ApiClient.currentBaseUrl.trimEnd('/')}/app/legal-docs')
-                                                    .then(res => res.json())
-                                                    .then(json => {
-                                                        const data = json.code === 0 ? json.data : (json || {});
-                                                        const md = data.${if(webUrlToShow == "privacy_policy") "privacy_policy" else "user_agreement"} || '暂无内容';
-                                                        document.getElementById('content').innerHTML = marked.parse(md);
-                                                    })
-                                                    .catch(e => {
-                                                        document.getElementById('content').innerHTML = '<div class="loading">加载失败，请检查网络并重试</div>';
-                                                    });
-                                            </script>
-                                        </body>
-                                        </html>
-                                    """.trimIndent()
-                                    loadDataWithBaseURL(null, htmlData, "text/html", "utf-8", null)
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
-        }
+        com.tcm.admin.LegalDocViewerDialog(docType = webUrlToShow, onDismiss = { webUrlToShow = null })
     }
+}
 }
 
 private data class DownloadState(

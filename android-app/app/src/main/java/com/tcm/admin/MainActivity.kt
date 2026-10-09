@@ -30,6 +30,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -59,6 +60,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1102,6 +1104,7 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
 
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var webUrlToShow by remember { mutableStateOf<String?>(null) }
 
     if (showConfigDialog) {
         androidx.compose.material3.AlertDialog(
@@ -1148,159 +1151,234 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String, Stri
         )
     }
 
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .navigationBarsPadding(),
     ) {
-        Spacer(Modifier.height(48.dp))
-
-        Surface(
-            modifier = Modifier.size(64.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = Primary,
+        val minHeight = maxHeight
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = minHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Assignment,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(36.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Spacer(Modifier.height(16.dp))
+
+                Surface(
+                    modifier = Modifier.size(60.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Primary,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Assignment,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    text = "药房助手 管理端",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink,
                 )
-            }
-        }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "中药代加工与药房工作台管理系统",
+                    fontSize = 13.sp,
+                    color = Muted,
+                )
 
-        Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(24.dp))
 
-        Text(
-            text = "药房助手 管理端",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = Ink,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "中药代加工与药房工作台管理系统",
-            fontSize = 13.sp,
-            color = Muted,
-        )
-
-        Spacer(Modifier.height(36.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = CardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, Border),
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                OutlinedTextField(
-                    value = identifier,
-                    onValueChange = { identifier = it },
-                    label = { Text("用户名 / 手机号") },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Muted) },
-                    singleLine = true,
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = FieldShape,
-                )
+                    shape = CardShape,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Border),
+                ) {
+                    Column(Modifier.padding(20.dp)) {
+                        OutlinedTextField(
+                            value = identifier,
+                            onValueChange = { identifier = it },
+                            label = { Text("用户名 / 手机号") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Muted) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = FieldShape,
+                        )
 
-                Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(14.dp))
 
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("登录密码") },
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Muted) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = FieldShape,
-                )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("登录密码") },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Muted) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = FieldShape,
+                        )
 
-                if (error != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = error,
-                        color = Danger,
-                        fontSize = 13.sp,
-                    )
+                        if (error != null) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = error,
+                                color = Danger,
+                                fontSize = 13.sp,
+                            )
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        Button(
+                            onClick = { onLogin(identifier.trim(), password) },
+                            enabled = identifier.isNotBlank() && password.isNotBlank() && !loading,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = FieldShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        ) {
+                            Text(
+                                text = if (loading) "正在登录..." else "登 录",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(20.dp))
 
-                Button(
-                    onClick = { onLogin(identifier.trim(), password) },
-                    enabled = identifier.isNotBlank() && password.isNotBlank() && !loading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(46.dp),
-                    shape = FieldShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                // 服务器配置快速入口
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        configInput = baseUrl
+                        showConfigDialog = true
+                    },
+                    shape = CardShape,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Border),
                 ) {
-                    Text(
-                        text = if (loading) "正在登录..." else "登 录",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Settings, contentDescription = null, tint = Primary, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("服务器配置", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(baseUrl, fontSize = 12.sp, color = Muted, maxLines = 1)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.IconButton(
+                                onClick = {
+                                    scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.QrCodeScanner,
+                                    contentDescription = "扫码配置服务器",
+                                    tint = Primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit config",
+                                tint = Muted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(36.dp))
-
-        // 服务器配置快速入口
-        Card(
-            modifier = Modifier.fillMaxWidth().clickable {
-                configInput = baseUrl
-                showConfigDialog = true
-            },
-            shape = CardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, Border),
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // 底部协议与版权
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp, bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Settings, contentDescription = null, tint = Primary, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("服务器配置", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(baseUrl, fontSize = 12.sp, color = Muted, maxLines = 1)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.IconButton(
-                        onClick = {
-                            scannerLauncher.launch(Intent(context, ScannerActivity::class.java))
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.QrCodeScanner,
-                            contentDescription = "扫码配置服务器",
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Edit config",
-                        tint = Muted,
-                        modifier = Modifier.size(18.dp)
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "《隐私政策》",
+                        color = Primary,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .clickable { webUrlToShow = "privacy_policy" }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                    Text(
+                        "·",
+                        color = Muted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 2.dp)
+                    )
+                    Text(
+                        "《用户协议》",
+                        color = Primary,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .clickable { webUrlToShow = "user_agreement" }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
+
+                Text(
+                    text = "沪ICP备2026040883号-2A",
+                    color = Muted,
+                    fontSize = 11.5.sp,
+                    modifier = Modifier
+                        .clickable {
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://beian.miit.gov.cn/")).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                        .padding(vertical = 1.dp)
+                )
+
+                Text(
+                    text = "上海光影韵律科技有限公司 版权所有",
+                    color = Muted.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                )
             }
         }
     }
+
+    LegalDocViewerDialog(docType = webUrlToShow, onDismiss = { webUrlToShow = null })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
