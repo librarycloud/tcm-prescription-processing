@@ -21,6 +21,8 @@ import {
 } from './controllers/clientDisplayController.js';
 import { initializeIpLookup } from './utils/ipLookup.js';
 import { startRobotDeliveryWorker } from './services/robotNotificationService.js';
+import { startExpiryReminderScheduler } from './services/inventoryExpiryScheduler.js';
+import { backfillMissingRobotEventConfigs } from './services/robotConfigService.js';
 
 export async function buildApp() {
   const fastify = Fastify({
@@ -61,6 +63,11 @@ export async function buildApp() {
   await fastify.register(e6IntegrationRoutes, { prefix: '/integrations/e6/v1' });
   await fastify.register(appRoutes, { prefix: '/app' });
   startRobotDeliveryWorker(fastify);
+  startExpiryReminderScheduler(fastify);
+  // Backfill new event types for existing robot configs (no-op if already seeded)
+  backfillMissingRobotEventConfigs(fastify.prisma).catch((err) =>
+    fastify.log.warn({ err }, 'backfillMissingRobotEventConfigs failed')
+  );
 
   const defaultJsonParser = fastify.getDefaultJsonParser('ignore', 'ignore');
   fastify.addContentTypeParser('application/json', { parseAs: 'string' }, function (req, body, done) {

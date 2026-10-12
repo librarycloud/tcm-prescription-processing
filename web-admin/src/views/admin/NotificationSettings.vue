@@ -60,6 +60,36 @@
       </el-tab-pane>
 
       <el-tab-pane label="事件配置" name="events">
+        <div class="expiry-schedule-card">
+          <div class="expiry-schedule-info">
+            <span class="expiry-schedule-title">效期提醒调度配置</span>
+            <span class="expiry-schedule-desc">系统定时扫描库存 &gt; 0 的临期批次（1/3/6个月）并触发提醒</span>
+          </div>
+          <div class="expiry-schedule-actions">
+            <div class="schedule-control">
+              <span class="control-label">每日发送时间：</span>
+              <el-time-select
+                v-model="scheduleConfig.expiry_reminder_time"
+                start="00:00"
+                step="00:30"
+                end="23:30"
+                placeholder="发送时间"
+                style="width: 120px"
+              />
+            </div>
+            <div class="schedule-control">
+              <span class="control-label">发送频率：</span>
+              <el-radio-group v-model="scheduleConfig.expiry_reminder_frequency">
+                <el-radio-button value="daily">每天</el-radio-button>
+                <el-radio-button value="weekly">每周</el-radio-button>
+                <el-radio-button value="monthly">每月</el-radio-button>
+              </el-radio-group>
+            </div>
+            <el-button type="primary" :loading="savingSchedule" @click="saveScheduleConfig">保存调度</el-button>
+            <el-button :loading="scanningExpiry" @click="handleTriggerExpiryScan">立即触发扫描</el-button>
+          </div>
+        </div>
+
         <div class="event-toolbar">
           <span class="toolbar-label">选择渠道</span>
           <el-select
@@ -319,6 +349,7 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { Plus, Refresh, RefreshLeft, Search } from '@element-plus/icons-vue';
 import Pagination from '@/components/Pagination.vue';
 import { getStores } from '@/api/store';
+import { getSystemConfigs, updateSystemConfigs, triggerExpiryScan } from '@/api/systemConfig';
 import {
   createRobot,
   deleteRobot,
@@ -608,8 +639,53 @@ async function retryLog(row) {
   await loadLogs();
 }
 
+const scheduleConfig = ref({
+  expiry_reminder_time: '08:00',
+  expiry_reminder_frequency: 'daily'
+});
+const savingSchedule = ref(false);
+const scanningExpiry = ref(false);
+
+async function fetchScheduleConfig() {
+  try {
+    const res = await getSystemConfigs();
+    if (res) {
+      scheduleConfig.value.expiry_reminder_time = res.expiry_reminder_time || '08:00';
+      scheduleConfig.value.expiry_reminder_frequency = res.expiry_reminder_frequency || 'daily';
+    }
+  } catch (err) {
+    console.error('Failed to load schedule config:', err);
+  }
+}
+
+async function saveScheduleConfig() {
+  try {
+    savingSchedule.value = true;
+    await updateSystemConfigs(scheduleConfig.value);
+    ElMessage.success('效期调度配置已保存！');
+  } catch (err) {
+    console.error(err);
+    ElMessage.error('保存失败');
+  } finally {
+    savingSchedule.value = false;
+  }
+}
+
+async function handleTriggerExpiryScan() {
+  try {
+    scanningExpiry.value = true;
+    const res = await triggerExpiryScan();
+    ElMessage.success(`扫描完成：共扫描 ${res.scanned} 条批次，触发 ${res.fired} 条通知`);
+  } catch (err) {
+    console.error(err);
+    ElMessage.error('扫描触发失败');
+  } finally {
+    scanningExpiry.value = false;
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadRobots(), loadStores()]);
+  await Promise.all([loadRobots(), loadStores(), fetchScheduleConfig()]);
 });
 </script>
 
@@ -639,6 +715,47 @@ onMounted(async () => {
 .toolbar-label {
   color: var(--app-muted);
   font-size: 14px;
+}
+.expiry-schedule-card {
+  margin: 12px 0 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--app-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.expiry-schedule-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.expiry-schedule-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+.expiry-schedule-desc {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.expiry-schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.schedule-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.control-label {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
 }
 .form-grid {
   display: grid;

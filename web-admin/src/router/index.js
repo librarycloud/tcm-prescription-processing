@@ -160,30 +160,7 @@ const routes = [
         component: () => import('@/views/admin/OperationLogs.vue'),
         meta: { title: '操作日志', icon: 'DocumentChecked', group: 'system', allowedRoles: [0] }
       },
-      {
-        path: 'sms-settings',
-        name: 'SmsSettings',
-        component: () => import('@/views/admin/SmsSettings.vue'),
-        meta: { title: '短信设置', icon: 'Message', group: 'system', allowedRoles: [0] }
-      },
-      {
-        path: 'email-settings',
-        name: 'EmailSettings',
-        component: () => import('@/views/admin/EmailSettings.vue'),
-        meta: { title: '邮件设置', icon: 'MessageBox', group: 'system', allowedRoles: [0] }
-      },
-      {
-        path: 'upload-settings',
-        name: 'UploadSettings',
-        component: () => import('@/views/admin/UploadSettings.vue'),
-        meta: { title: '上传设置', icon: 'Upload', group: 'system', allowedRoles: [0] }
-      },
-      {
-        path: 'legal-docs',
-        name: 'LegalDocs',
-        component: () => import('@/views/admin/LegalDocs.vue'),
-        meta: { title: '法律文档', icon: 'Document', group: 'system', allowedRoles: [0] }
-      },
+
       {
         path: 'notifications',
         name: 'NotificationSettings',

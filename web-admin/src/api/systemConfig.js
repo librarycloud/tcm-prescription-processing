@@ -11,3 +11,7 @@ export function updateSystemConfigs(data) {
 export function getPublicConfigs() {
   return request.get('/auth/public-configs');
 }
+
+export function triggerExpiryScan() {
+  return request.post('/admin/system-configs/trigger-expiry-scan');
+}

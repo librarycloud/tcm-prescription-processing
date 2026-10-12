@@ -1,40 +1,93 @@
 <template>
-  <div class="app-container">
-    <el-card shadow="never">
-      <template #header>
-        <div class="clearfix">
-          <span>安全与验证码配置</span>
-        </div>
-      </template>
+  <div class="page system-config-page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">系统设置</h1>
+        <p class="page-subtitle">集中管理系统安全、存储上传、短信服务、邮件服务及法律文档</p>
+      </div>
+    </div>
 
-      <el-form ref="formRef" :model="form" label-width="180px" style="max-width: 600px;">
-        <el-form-item label="开启验证码登录">
-          <el-switch v-model="form.enable_captcha" active-value="1" inactive-value="0" />
-          <div class="form-tip">开启后，管理后台和店员 App 登录将强制要求完成验证码校验。</div>
-        </el-form-item>
-        
-        <template v-if="form.enable_captcha === '1'">
-          <el-form-item label="极验 4.0 Captcha ID">
-            <el-input v-model="form.geetest_captcha_id" placeholder="请输入申请到的极验 Captcha ID" />
-          </el-form-item>
-          
-          <el-form-item label="极验 4.0 Captcha Key">
-            <el-input v-model="form.geetest_captcha_key" type="password" show-password placeholder="请输入极验 Captcha Key" />
-          </el-form-item>
-        </template>
+    <el-tabs v-model="activeTab" class="system-tabs" @tab-change="handleTabChange">
+      <el-tab-pane label="常规与安全" name="general">
+        <el-card shadow="never" class="config-card">
+          <template #header>
+            <div class="card-header">
+              <span>安全验证与登录控制</span>
+            </div>
+          </template>
 
-        <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleSave">保存配置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          <el-form ref="formRef" :model="form" label-width="180px" style="max-width: 680px;">
+            <el-form-item label="开启验证码登录">
+              <el-switch v-model="form.enable_captcha" active-value="1" inactive-value="0" />
+              <div class="form-tip">开启后，管理后台和店员 App 登录将强制要求完成验证码校验。</div>
+            </el-form-item>
+            
+            <template v-if="form.enable_captcha === '1'">
+              <el-form-item label="极验 4.0 Captcha ID">
+                <el-input v-model="form.geetest_captcha_id" placeholder="请输入申请到的极验 Captcha ID" />
+              </el-form-item>
+              
+              <el-form-item label="极验 4.0 Captcha Key">
+                <el-input v-model="form.geetest_captcha_key" type="password" show-password placeholder="请输入极验 Captcha Key" />
+              </el-form-item>
+            </template>
+
+            <el-form-item>
+              <el-button type="primary" :loading="loading" @click="handleSave">保存配置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="存储与上传" name="upload">
+        <UploadSettings :embedded="true" />
+      </el-tab-pane>
+
+      <el-tab-pane label="短信服务" name="sms">
+        <SmsSettings :embedded="true" />
+      </el-tab-pane>
+
+      <el-tab-pane label="邮件服务" name="email">
+        <EmailSettings :embedded="true" />
+      </el-tab-pane>
+
+      <el-tab-pane label="法律文档" name="legal">
+        <LegalDocs :embedded="true" />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { getSystemConfigs, updateSystemConfigs } from '@/api/systemConfig';
+import UploadSettings from './UploadSettings.vue';
+import SmsSettings from './SmsSettings.vue';
+import EmailSettings from './EmailSettings.vue';
+import LegalDocs from './LegalDocs.vue';
+
+const route = useRoute();
+const router = useRouter();
+
+const validTabs = ['general', 'upload', 'sms', 'email', 'legal'];
+const activeTab = ref(
+  validTabs.includes(route.query.tab) ? route.query.tab : 'general'
+);
+
+function handleTabChange(tab) {
+  router.replace({ query: { ...route.query, tab } });
+}
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab && validTabs.includes(tab) && tab !== activeTab.value) {
+      activeTab.value = tab;
+    }
+  }
+);
 
 const loading = ref(false);
 const formRef = ref(null);
@@ -76,10 +129,28 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.system-config-page {
+  padding: 0;
+}
+.system-tabs {
+  padding: 0 16px 16px;
+  border: 1px solid var(--app-border);
+  background: var(--el-bg-color);
+}
+.config-card {
+  margin-top: 12px;
+}
+.card-header {
+  font-weight: 600;
+  font-size: 14px;
+}
 .form-tip {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
   margin-top: 4px;
+}
+:deep(.embedded-tab-pane) {
+  padding: 12px 0 0;
 }
 </style>

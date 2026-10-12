@@ -1,5 +1,6 @@
 import { AppError } from "../utils/appError.js";
 import { authenticateStore } from "./e6IntegrationService.js";
+import { publishRobotNotificationEventSafely } from "./robotNotificationService.js";
 
 const PRODUCT_FIELDS = [
   "productCode", "name", "category", "categoryCode", "barcode", "specification",
@@ -257,6 +258,15 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         writes.push({ type: "deleteMany", ids: staleIds });
         deleted += staleIds.length;
       }
+      // Track batches that go to zero (from non-zero) for INVENTORY_ZERO notification
+      for (const item of productBatches) {
+        if (Number(item.quantity) === 0) {
+          const existingRow = existingRows.find((row) => row.batchNo === item.batchNo && row.locationName === item.locationName);
+          if (existingRow && Number(existingRow.quantity) > 0) {
+            writes.push({ type: "notifyZero", storeId: store.id, productId, item, rowId: existingRow.id });
+          }
+        }
+      }
     } else {
       // 场景 B：商品全线断货（clearProductCodes 路径），保留最近一条货位记录置为 0
       if (existingRows.length > 0) {
@@ -264,7 +274,7 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
         const keepRow = existingRows[0];
         seen.add(`${productId}\u0000${keepRow.batchNo}\u0000${keepRow.locationName || ""}`);
         if (Number(keepRow.quantity) !== 0) {
-          writes.push({ type: "updateOne", id: keepRow.id });
+          writes.push({ type: "updateOne", id: keepRow.id, storeId: store.id, productId, row: keepRow });
           updated++;
         }
         const toDeleteIds = existingRows.slice(1).map((r) => r.id);
@@ -308,12 +318,16 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
   }
 
   // ── 阶段二：单一事务执行所有写操作，失败则全部回滚 ──
-  if (writes.length === 0 && productCodes.length === 0) {
+  const notifyZeroWrites = writes.filter((w) => w.type === "notifyZero");
+  const updateOneWrites = writes.filter((w) => w.type === "updateOne");
+  const dbWrites = writes.filter((w) => w.type !== "notifyZero");
+
+  if (dbWrites.length === 0 && productCodes.length === 0) {
     return { received: normalized.length, created, updated, deleted, fullSync: payload?.fullSync === true };
   }
 
   await prisma.$transaction(async (tx) => {
-    for (const w of writes) {
+    for (const w of dbWrites) {
       if (w.type === "upsert") {
         const { item } = w;
         await tx.e6PharmacyInventoryBatch.upsert({
@@ -344,6 +358,68 @@ export async function uploadE6PharmacyInventory(prisma, payload, apiKey) {
       }
     }
   }, { timeout: 120000 }); // 全量同步写入量大，最多等 2 分钟
+
+  // ── 阶段三：事务提交后触发零库存通知（事务外，失败不影响主流程）──
+  // 收集需要通知的批次：upsert 到 0 的 + updateOne（场景B归零）
+  const zeroNotifyItems = [];
+  if (notifyZeroWrites.length || updateOneWrites.length) {
+    const allProductIds = [
+      ...new Set([
+        ...notifyZeroWrites.map((w) => w.productId),
+        ...updateOneWrites.map((w) => w.productId),
+      ])
+    ];
+    if (allProductIds.length) {
+      const products = typeof prisma?.e6PharmacyProduct?.findMany === "function"
+        ? await prisma.e6PharmacyProduct.findMany({
+            where: { id: { in: allProductIds } },
+            select: { id: true, name: true, productCode: true, specification: true, manufacturer: true, unit: true, retailPrice: true },
+          })
+        : [];
+      const storeName = store?.name || (typeof prisma?.store?.findUnique === "function" ? (await prisma.store.findUnique({ where: { id: store.id }, select: { name: true } }))?.name : null) || store?.code || "-";
+      const productMap = new Map(products.map((p) => [p.id, p]));
+      for (const w of notifyZeroWrites) {
+        const product = productMap.get(w.productId);
+        if (product) zeroNotifyItems.push({ storeId: w.storeId, storeName, product, item: w.item });
+      }
+      for (const w of updateOneWrites) {
+        const product = productMap.get(w.productId);
+        if (product && w.row) {
+          zeroNotifyItems.push({ storeId: w.storeId, storeName, product, item: w.row });
+        }
+      }
+    }
+  }
+  for (const { storeId, storeName, product, item } of zeroNotifyItems) {
+    const batchKey = `${product.id}:${item.batchNo || ""}:${item.locationName || ""}`;
+    const expiryStr = item.expiryDate ? new Date(item.expiryDate).toISOString().slice(0, 10) : "-";
+    const inboundStr = item.inboundDate ? new Date(item.inboundDate).toISOString().slice(0, 10) : "-";
+    const priceStr = product.retailPrice !== null && product.retailPrice !== undefined ? String(Number(product.retailPrice)) : "-";
+    await publishRobotNotificationEventSafely(prisma, {
+      eventKey: `INVENTORY_ZERO:${batchKey}:${new Date().toISOString().slice(0, 10)}`,
+      eventCode: "INVENTORY_ZERO",
+      businessId: product.id,
+      primaryStoreId: storeId,
+      relatedStoreIds: [storeId],
+      occurredAt: new Date(),
+      variables: {
+        storeName: storeName || "-",
+        eventTime: new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" }),
+        operatorName: "-",
+        productName: product.name,
+        productCode: product.productCode,
+        specification: product.specification || "-",
+        manufacturer: product.manufacturer || "-",
+        unit: product.unit || "-",
+        price: priceStr,
+        retailPrice: priceStr,
+        batchNo: item.batchNo || "-",
+        inboundDate: inboundStr,
+        expiryDate: expiryStr,
+        locationName: item.locationName || "-",
+      },
+    }).catch(() => {}); // 通知失败不影响同步结果
+  }
 
   return { received: normalized.length, created, updated, deleted, fullSync: payload?.fullSync === true };
 }

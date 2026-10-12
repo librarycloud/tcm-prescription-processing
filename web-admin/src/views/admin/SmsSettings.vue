@@ -1,6 +1,6 @@
 <template>
-  <div class="page">
-    <div class="page-header">
+  <div :class="embedded ? 'embedded-tab-pane' : 'page'">
+    <div v-if="!embedded" class="page-header">
       <div>
         <h1 class="page-title">短信设置</h1>
         <p class="page-subtitle">配置短信供应商、取货方式模板与测试发送</p>
@@ -194,6 +194,13 @@ import {
   updateSmsTemplate
 } from '@/api/notification';
 import { pickupMethodText } from '@/utils/status';
+
+defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const loading = ref(false);
 const savingProvider = ref('');

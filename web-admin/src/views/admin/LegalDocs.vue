@@ -1,7 +1,7 @@
 <template>
-  <div class="legal-docs-page">
-    <div class="page-header">
-      <h2>法律文档配置</h2>
+  <div :class="embedded ? 'embedded-tab-pane' : 'legal-docs-page'">
+    <div :class="embedded ? 'embedded-action-bar' : 'page-header'">
+      <h2 v-if="!embedded">法律文档配置</h2>
       <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
     </div>
 
@@ -43,6 +43,13 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/api/request';
+
+defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const activeTab = ref('privacy_policy');
 const loading = ref(false);
@@ -89,6 +96,11 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+.embedded-action-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 .page-header h2 {
   margin: 0;

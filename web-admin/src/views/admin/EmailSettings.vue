@@ -1,6 +1,6 @@
 <template>
-  <div class="page">
-    <div class="page-header">
+  <div :class="embedded ? 'embedded-tab-pane' : 'page'">
+    <div v-if="!embedded" class="page-header">
       <div>
         <h1 class="page-title">邮件设置</h1>
         <p class="page-subtitle">配置 SMTP、邮箱验证码和包裹邮件模板</p>
@@ -73,6 +73,13 @@
 import { onMounted, reactive, ref } from 'vue';
 import { Promotion, Refresh } from '@element-plus/icons-vue';
 import { getEmailSettings, sendEmailTest, updateEmailConfig, updateEmailTemplate } from '@/api/email';
+
+defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const loading = ref(false);
 const saving = ref(false);

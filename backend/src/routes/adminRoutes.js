@@ -229,6 +229,11 @@ import { getTokensController, registerTokenController, unregisterTokenController
 export default async function adminRoutes(fastify, options) {
   fastify.get("/system-configs", getConfigsController);
   fastify.put("/system-configs", updateConfigsController);
+  fastify.post("/system-configs/trigger-expiry-scan", { preHandler: [fastify.rateLimit(), verifySuperAdmin] }, async (request, reply) => {
+    const { runExpiryReminderScan } = await import('../services/inventoryExpiryScheduler.js');
+    const result = await runExpiryReminderScan(request.server.prisma, request.log);
+    return reply.send({ code: 0, data: result, message: '效期扫描已完成' });
+  });
 
   const storeStaffRoute = { config: { storeStaff: true } };
   fastify.addHook("preHandler", fastify.rateLimit());

@@ -11,6 +11,39 @@ import { decryptSetting, encryptSetting } from '../utils/settingsEncryption.js';
 import { recordOperation } from './operationLogService.js';
 import { eventDefinitionList, renderRobotTemplate, validateRobotTemplate } from './robotTemplateService.js';
 
+/**
+ * Backfill any event configs that are missing for existing robots.
+ * Called once at startup so new event types get seeded automatically.
+ */
+export async function backfillMissingRobotEventConfigs(prisma) {
+  const robots = await prisma.robotConfig.findMany({ select: { id: true } });
+  if (!robots.length) return;
+
+  const existing = await prisma.robotEventConfig.findMany({
+    select: { robotId: true, eventCode: true }
+  });
+  const existingSet = new Set(existing.map((r) => `${r.robotId}:${r.eventCode}`));
+
+  const toCreate = [];
+  for (const robot of robots) {
+    for (const [eventCode, definition] of Object.entries(ROBOT_EVENT_DEFINITIONS)) {
+      if (!existingSet.has(`${robot.id}:${eventCode}`)) {
+        toCreate.push({
+          robotId: robot.id,
+          eventCode,
+          enabled: definition.defaultEnabled ? 1 : 0,
+          templateContent: definition.defaultTemplate,
+        });
+      }
+    }
+  }
+
+  if (toCreate.length) {
+    await prisma.robotEventConfig.createMany({ data: toCreate, skipDuplicates: true });
+  }
+}
+
+
 const PLATFORM_VALUES = new Set(Object.values(ROBOT_PLATFORMS));
 const SCOPE_VALUES = new Set(Object.values(ROBOT_SCOPE_TYPES));
 
@@ -225,6 +258,8 @@ function sampleVariables(eventCode) {
   const common = { eventTime: now, operatorName: '测试管理员', storeName: '测试门店' };
   if (eventCode.startsWith('PACKAGE_')) return { ...common, packageId: 1001, pickupCode: '123456', receiverName: '张三', receiverPhoneMasked: '138****8000', itemName: '中药包裹', itemInfo: '测试消息', pickupMethod: '自提', createdAt: now, verifiedAt: now };
   if (eventCode === 'PROCESSING_COMPLETED') return { ...common, planId: 2001, prescriptionNo: 'CF202607240001', customerName: '张三', processType: '代煎', totalDose: 7, bagCount: 14, pickupCode: '123456', pickupMethod: '自提', notifyType: '微信', finishTime: now };
+  if (eventCode === 'INVENTORY_ZERO') return { ...common, productName: '黄芪（颗粒）', productCode: 'HQ-001', specification: '500g/袋', manufacturer: '某某制药', unit: '袋', price: '45.00', retailPrice: '45.00', batchNo: '20240901', inboundDate: '2024-09-10', expiryDate: '2026-09-01', locationName: 'A区-01' };
+  if (eventCode.startsWith('EXPIRY_REMINDER_')) return { ...common, productName: '人参（颗粒）', productCode: 'RS-002', specification: '250g/袋', manufacturer: '某某制药', unit: '袋', price: '120.00', retailPrice: '120.00', batchNo: '20240601', inboundDate: '2024-06-15', expiryDate: '2026-11-01', daysLeft: '20', quantity: '5', locationName: 'B区-03' };
   return { ...common, transferId: 3001, transferNo: 'DB202607240001', fromStoreName: '中心店', toStoreName: '园区店', itemCount: 2, itemSummary: '黄芪 5kg、党参 3kg', transferDate: '2026-07-24', expectedReturnDate: '2026-08-24', remark: '测试消息' };
 }
 

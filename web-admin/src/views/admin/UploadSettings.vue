@@ -1,6 +1,6 @@
 <template>
-  <div class="page">
-    <div class="page-header">
+  <div :class="embedded ? 'embedded-tab-pane' : 'page'">
+    <div v-if="!embedded" class="page-header">
       <div>
         <h1 class="page-title">S3/OSS 上传设置</h1>
         <p class="page-subtitle">配置兼容 S3 协议的对象存储（阿里云、腾讯云、SeaweedFS、MinIO 等）</p>
@@ -58,6 +58,13 @@
 import { ref, onMounted } from 'vue';
 import { Refresh } from '@element-plus/icons-vue';
 import request from '@/api/request';
+
+defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const loading = ref(false);
 const saving = ref(false);

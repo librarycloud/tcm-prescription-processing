@@ -177,6 +177,133 @@ export const ROBOT_EVENT_DEFINITIONS = Object.freeze({
 操作人：{{operatorName}}
 取消时间：{{eventTime}}`,
   },
+  INVENTORY_ZERO: {
+    name: "商品库存归零",
+    businessType: "INVENTORY_BATCH",
+    defaultEnabled: false,
+    variables: [
+      { key: "eventTime", label: "更新时间" },
+      { key: "operatorName", label: "操作人" },
+      { key: "storeName", label: "门店名称" },
+      { key: "productName", label: "商品名称" },
+      { key: "productCode", label: "商品编码" },
+      { key: "specification", label: "规格" },
+      { key: "manufacturer", label: "生产厂商" },
+      { key: "unit", label: "单位" },
+      { key: "price", label: "价格" },
+      { key: "retailPrice", label: "零售价" },
+      { key: "batchNo", label: "批号" },
+      { key: "inboundDate", label: "入库时间" },
+      { key: "expiryDate", label: "有效期至" },
+      { key: "locationName", label: "货位名称" },
+    ],
+    defaultTemplate: `【商品库存归零提醒】
+门店：{{storeName}}
+商品：{{productName}}
+商品编码：{{productCode}}
+规格：{{specification}}
+生产厂商：{{manufacturer}}
+单位：{{unit}}
+价格：{{price}}
+批号：{{batchNo}}
+入库时间：{{inboundDate}}
+有效期至：{{expiryDate}}
+货位：{{locationName}}
+更新时间：{{eventTime}}`,
+  },
+  EXPIRY_REMINDER_1M: {
+    name: "效期提醒（1个月内到期）",
+    businessType: "INVENTORY_BATCH",
+    defaultEnabled: false,
+    variables: [
+      ...commonVariables,
+      { key: "productName", label: "商品名称" },
+      { key: "productCode", label: "商品编码" },
+      { key: "specification", label: "规格" },
+      { key: "manufacturer", label: "生产厂商" },
+      { key: "price", label: "价格" },
+      { key: "retailPrice", label: "零售价" },
+      { key: "batchNo", label: "批号" },
+      { key: "inboundDate", label: "入库时间" },
+      { key: "expiryDate", label: "有效期至" },
+      { key: "daysLeft", label: "剩余天数" },
+      { key: "quantity", label: "库存数量" },
+      { key: "unit", label: "单位" },
+      { key: "locationName", label: "货位名称" },
+    ],
+    defaultTemplate: `【效期提醒 · 1个月内到期】
+门店：{{storeName}}
+商品：{{productName}}（{{productCode}}）
+规格：{{specification}}
+价格：{{price}}
+批号：{{batchNo}}
+入库时间：{{inboundDate}}
+有效期至：{{expiryDate}}（剩余 {{daysLeft}} 天）
+当前库存：{{quantity}}{{unit}}
+货位：{{locationName}}`,
+  },
+  EXPIRY_REMINDER_3M: {
+    name: "效期提醒（3个月内到期）",
+    businessType: "INVENTORY_BATCH",
+    defaultEnabled: false,
+    variables: [
+      ...commonVariables,
+      { key: "productName", label: "商品名称" },
+      { key: "productCode", label: "商品编码" },
+      { key: "specification", label: "规格" },
+      { key: "manufacturer", label: "生产厂商" },
+      { key: "price", label: "价格" },
+      { key: "retailPrice", label: "零售价" },
+      { key: "batchNo", label: "批号" },
+      { key: "inboundDate", label: "入库时间" },
+      { key: "expiryDate", label: "有效期至" },
+      { key: "daysLeft", label: "剩余天数" },
+      { key: "quantity", label: "库存数量" },
+      { key: "unit", label: "单位" },
+      { key: "locationName", label: "货位名称" },
+    ],
+    defaultTemplate: `【效期提醒 · 3个月内到期】
+门店：{{storeName}}
+商品：{{productName}}（{{productCode}}）
+规格：{{specification}}
+价格：{{price}}
+批号：{{batchNo}}
+入库时间：{{inboundDate}}
+有效期至：{{expiryDate}}（剩余 {{daysLeft}} 天）
+当前库存：{{quantity}}{{unit}}
+货位：{{locationName}}`,
+  },
+  EXPIRY_REMINDER_6M: {
+    name: "效期提醒（6个月内到期）",
+    businessType: "INVENTORY_BATCH",
+    defaultEnabled: false,
+    variables: [
+      ...commonVariables,
+      { key: "productName", label: "商品名称" },
+      { key: "productCode", label: "商品编码" },
+      { key: "specification", label: "规格" },
+      { key: "manufacturer", label: "生产厂商" },
+      { key: "price", label: "价格" },
+      { key: "retailPrice", label: "零售价" },
+      { key: "batchNo", label: "批号" },
+      { key: "inboundDate", label: "入库时间" },
+      { key: "expiryDate", label: "有效期至" },
+      { key: "daysLeft", label: "剩余天数" },
+      { key: "quantity", label: "库存数量" },
+      { key: "unit", label: "单位" },
+      { key: "locationName", label: "货位名称" },
+    ],
+    defaultTemplate: `【效期提醒 · 6个月内到期】
+门店：{{storeName}}
+商品：{{productName}}（{{productCode}}）
+规格：{{specification}}
+价格：{{price}}
+批号：{{batchNo}}
+入库时间：{{inboundDate}}
+有效期至：{{expiryDate}}（剩余 {{daysLeft}} 天）
+当前库存：{{quantity}}{{unit}}
+货位：{{locationName}}`,
+  },
 });
 
 const transferVariables = [
