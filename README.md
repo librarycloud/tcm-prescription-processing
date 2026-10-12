@@ -47,13 +47,13 @@ flowchart TD
 
 | 模块 | 目录 | 技术栈 | 适用场景与终端 |
 | --- | --- | --- | --- |
-| **后端服务** | `backend/` | Node.js 24 LTS, Fastify 5, Prisma 7, MariaDB, Redis, JWT, bcrypt, Nodemailer, 阿里云/腾讯云/火山短信 SDK, ExcelJS | 高性能业务 API、数据校验、权限鉴权、异步通知队列、E6 数据接入池 |
-| **管理端 Web** | `web-admin/` | Vue 3, Vite, Pinia, Vue Router, Element Plus, ECharts, Axios, qrcode | 全局及门店管理员：处方管理、加工调度、斗谱配置、盘点调拨、打印模板、系统设置 |
+| **后端服务** | `backend/` | Node.js 24 LTS, Fastify 5, Prisma 7, MariaDB, Redis, JWT, bcrypt, Nodemailer, 阿里云/腾讯云/火山短信 SDK, APNs (HTTP/2), 极光 JPush, FCM, ExcelJS | 高性能业务 API、数据校验、权限鉴权、多通道通知（短信/邮件/群机器人/APP 推送）、设备令牌管理、零库存与效期调度器、E6 数据接入池 |
+| **管理端 Web** | `web-admin/` | Vue 3, Vite, Pinia, Vue Router, Element Plus, ECharts, Axios, qrcode | 全局及门店管理员：处方多附件管理、加工调度看板、斗谱配置、盘点调拨闭环、热敏打印模板设计、多通道通知设置与系统维护 |
 | **用户端 Web** | `web-user/` | Vue 3, Vite, Pinia, Vue Router, Element Plus, Axios, qrcode | 顾客端独立门户：查验处方进度、待取/已取包裹、查看 6 位取货码与二维码凭证 |
-| **微信小程序** | `wechat-miniprogram/` | 微信原生小程序, TDesign Miniprogram, ES6 | 双端合一：管理员/员工移动工作台（扫码核销、斗谱查药、加工打卡）+ 顾客查件 |
-| **Android 端** | `android-app/` | Kotlin, Jetpack Compose, CameraX, Google ML Kit (离线OCR/条码), ONNX PP-OCR | 门店现场专用手持终端（药房助手）：离线快速扫码、调配拍照留档、工序流转 |
-| **iOS 端** | `ios-app/` | Swift 5.9+, SwiftUI, Apple Vision OCR, AVFoundation, CoreImage | 门店现场 iOS 手持终端（药房助手）：Vision 离线文字识别、中心优先纠错、极速扫码核销 |
-| **E6 同步工具** | `E6Sync/` | C#, .NET Framework 4.6.2, WinForms, ADO.NET (SqlClient) | Windows Server 运行工具：单向只读提取浪潮 E6 诊所处方及药店商品库存并上传 |
+| **微信小程序** | `wechat-miniprogram/` | 微信原生小程序, TDesign Miniprogram, ES6 | 双端合一：管理员/员工移动工作台（扫码核销、斗谱查药、加工打卡、调拨确认）+ 顾客查件 |
+| **Android 端** | `android-app/` | Kotlin, Jetpack Compose, CameraX, Google ML Kit (离线OCR/条码), ONNX PP-OCR, 极光 JPush, FCM | 门店现场手持终端（药房助手）：离线快速扫码、处方多图平滑缩放/拍照留档、工序流水打卡、私有化服务器配置、远程推送与深度链接 |
+| **iOS 端** | `ios-app/` | Swift 5.9+, SwiftUI, Apple Vision OCR, AVFoundation, APNs, UserNotifications, QuickLook | 门店现场 iOS/iPadOS 原生终端（药房助手）：Vision 离线 OCR 中心加权纠偏、iPad Split View 响应式分栏、原生 APNs 推送、触觉反馈与深色模式 |
+| **E6 同步工具** | `E6Sync/` | C#, .NET Framework 4.6.2, WinForms, ADO.NET (SqlClient) | Windows Server 运行工具：单向只读提取浪潮 E6 门诊处方与药店库存/货位并上传，全局 WITH (NOLOCK) 高并发查询与来源统计 |
 
 ---
 
@@ -67,11 +67,11 @@ flowchart TD
     B --> C[拆分为 1~N 个 ProcessingPlan]
     C --> D[系统预生成唯一 6 位取货码]
     D --> E[加工工作台排队调度 / 加急排序]
-    E --> F[调配完成拍照留存凭证]
+    E --> F[调配完成拍照留存凭证 多图/自动旋转]
     F --> G[工序流转: 浸泡 -> 煎煮 -> 打包]
-    G --> H[完成加工 -> 自动生成 Package]
-    H --> I[Package 沿用 6 位取货码并生成二维码]
-    I --> J[多渠道通知: 短信 / 邮件 / 企微钉钉飞书机器人]
+    G --> H[完成加工 -> 决策立即生成或暂缓生成包裹]
+    H --> I[Package 沿用 6 位取货码并生成核销二维码]
+    I --> J[多渠道通知: 短信 / 邮件 / 群机器人 / APP 原生推送]
     J --> K{顾客取货方式}
     K -->|到店自提| L[核验 6 位取货码 / 扫二维码]
     K -->|同城跑腿| M[核对跑腿配送信息并核销]
@@ -89,36 +89,50 @@ flowchart TD
 ## 系统功能矩阵
 
 ### 1. 处方全流程与加工工作台
-- **处方全生命周期**：支持门店录入自建处方或外部处方（登记外方机构/外方医生），支持图片/文档等多附件上传与在线预览；支持按门店、医生、剂数、总额多维检索。
-- **灵活分批计划**：单张处方可自由拆解为多个加工批次（`ProcessingPlan`），各批次独立指定加工方式（水煎、膏方、颗粒等）、取货方式（自提/跑腿/快递）、预计完工时间与优先级。
-- **加工调度与排队看板**：支持今日待办、逾期任务、加急任务与明日任务快速视图；支持看板任务手动拖拽排序与一键恢复默认调度。
-- **工序流水线与设备监控**：细化支持**浸泡 ➔ 煎煮 ➔ 浓缩 ➔ 打包**等工序打卡；支持录入设备机号并监控工作时长；支持设备故障工序一键转移与异常工序作废；支持调配完成照片上传留存合规凭据。
+- **处方全生命周期**：支持门店录入自建处方或外部处方（登记外方机构/外方医生）；支持**多张处方照片及文档附件上传**，提供水平缩略图轮播与全屏无级平滑缩放预览，支持 EXIF 自动校正拍摄朝向；支持按门店、医生、销售员、剂数、总额多维检索。
+- **灵活分批计划**：单张处方可自由拆解为多个加工批次（`ProcessingPlan`），各批次独立指定加工工艺（水煎、膏方、颗粒、打粉等）、取货方式（自提/跑腿/快递）、预计完工时间与优先级。
+- **加工调度与排队看板**：支持今日待办、逾期任务、加急任务与明日任务快速视图；支持看板任务手动拖拽排序与一键恢复加急默认调度规则。
+- **工序流水线与设备监控**：细化支持**浸泡 ➔ 煎煮 ➔ 浓缩 ➔ 打包**等工序打卡；支持录入设备机号并监控工作时长；支持设备故障工序一键转移与异常工序作废；支持调配完成照片上传留存合规凭据；支持完工时**立即生成包裹**与**暂缓生成包裹**（用于汤剂降温澄清或合并打包）灵活决策。
 
 ### 2. 智能斗谱与库位可视化
 - **多区域库位建模**：支持对门店百子柜（斗架）、大柜、冰箱、仓库等不同存药区域进行参数化建模（抽屉层数、列数、顶层列数可自定义配置）。
-- **药材绑定与格内序号**：支持药材快速绑定到具体斗位并设置格内序（如前/后/左/右）；支持按药材名、拼音简码、编码与物理货位快速检索。
-- **模板化批量迁移**：提供标准 Excel 模板，支持斗谱药材全量导出、批量导入，以及跨货位调迁的一键导入调整。
+- **药材绑定与格内序号**：支持药材快速绑定到具体斗位并设置格内序（如前/后/左/右）；支持一斗多药。
+- **智能拼音与多音字检索**：全面升级中药搜索算法，原生支持药名全拼、拼音首字母简码以及**常见中药多音字智能解析**（如茜草、重楼、参类），秒级定位斗架网格坐标。
+- **模板化批量迁移与货位维护**：提供标准 Excel 模板，支持斗谱药材全量导出、批量导入与大换斗调迁；支持单独增量同步与筛选商品物理货位。
 
 ### 3. 包裹生命周期与取药核销
 - **取货码终身绑定**：每个加工批次创建时即固定生成唯一的 6 位数字取货码（展示为 `XXX-XXX`），加工完成自动生成包裹并无缝复用该码，彻底避免单据重印与混淆。
 - **全渠道极速核销**：支持扫码枪扫描二维码、手工录入 6 位取货码或移动端摄像头快速扫码；支持自提、同城跑腿和快递配送三种取货方式，快递出库强制核验快递单号。
 - **状态联动自愈**：严格防重复核销；多批次处方在最后一个包裹核销完毕后自动将到处方标记为已完成。
+- **多端设备会话管理**：支持在线设备会话查验与远程下线踢出，退出登录自动解绑销毁推送令牌，防范隐私泄露。
 
 ### 4. 药店商品盘点与库存管理
-- **药店商品盘点工作流**：支持新建盘点单、商品候选圈选、初盘录入、复盘比对、系统自动标记异常差异；支持两级审核确认与盘点明细（全部/待复盘/需调整）导出。
+- **药店商品盘点工作流**：支持新建盘点单、商品候选圈选、初盘录入、复盘比对、系统自动标记异常差异；支持两级审核确认与盘点明细（全部/待复盘/需调整）导出；盘点时支持直接核对与修正商品货位。
 - **库存差异台账**：支持商品期初差异登记、手工库存微调、差异核销与撤销审计，支持 Excel 模板导入预检。
-- **跨门店借调管理**：规范门店间药材与物品借调，记录调出门店、调入门店、借调数量、预计归还日期；支持出库确认、部分归还、全量归还、逾期监控与撤销。
+- **跨门店调拨全流程闭环**：规范门店间药材与物品借调，覆盖调入申请 ➔ 调出确认出库 ➔ 调入收货 ➔ 调入发起归还 ➔ **调出核实确认归还** 全链路状态流转；新增「待归还确认」状态胶囊与调拨双方门店权限物理隔离。
+- **智能库存与效期预警**：
+  - `INVENTORY_ZERO`：药店商品正库存降为零或低于安全阈值时即刻触发预警；
+  - `EXPIRY_REMINDER`：内置每日定时 Cron 调度器，自动扫描临期药品批号并推送批量预警报告。
 
 ### 5. 多通道通知矩阵与标签打印
-- **全通道通知集成**：内置阿里云 SMS、腾讯云 SMS、火山引擎 SMS、SMTP 邮件服务，支持动态参数替换与连通性测试。
-- **Webhook 群机器人**：支持针对各门店或全局配置企业微信、钉钉、飞书群机器人；支持按业务事件（加工完成、逾期提醒、取消异常等）订阅、异步投递与失败重试。
+- **多渠道提货通知集成**：内置阿里云 SMS、腾讯云 SMS、火山引擎 SMS、SMTP 邮件服务，支持动态参数替换与连通性测试。
+- **移动端 APP 远程推送 (Push)**：深度集成 iOS 原生 APNs 与 Android 极光 (JPush) / FCM 双通道推送体系；支持 Deep Link 深度链接直接点击直达处方、调拨或包裹详情。
+- **通知偏好云端同步**：店员可跨端自主配置接收的通知分类开关（加急处方、包裹上架、库存预警等），数据云端实时同步。
+- **Webhook 群机器人**：支持针对各门店或全局配置企业微信、钉钉、飞书群机器人；支持按业务事件（加工完成、逾期提醒、取消异常、零库存等）订阅、异步投递与失败重试。
 - **可视化标签设计器**：支持加工单、包装标签、取货标签多模板设计；支持配置纸张尺寸（80×50、60×40 等）、DPI、条码/二维码尺寸与自定义展示字段。
 
 ### 6. E6 ERP 综合对接与数据中台
 - **双模同步架构**：
-  - **诊所处方同步**：接收外部处方入驻待确认池，提供医师映射、操作员映射、冲突检测与异常重校验，由管理员审查后批量一键生成处方。
-  - **药店库存与商品同步**：增量同步商品零售价、分类映射、条码关联与正库存数据。
-- **防重复机制**：采用 `storeCode + externalOrderNo` 联合指纹识别，已生成处方的变更自动拦截并置为冲突状态。
+  - **诊所处方同步**：接收外部处方入驻待确认池，全面重构支持**销售员号映射**（原医师工号对应 E6 销售员）与操作员工号映射；支持审核池按批次独立指定加工方式与多方合并。
+  - **药店库存与商品同步**：增量同步商品零售价、分类映射、条码关联、正库存以及**物理货位编号**。
+  - **多单位换算适配**：除克（`g`）外，原生支持盒、袋、包、瓶、支等多种包装单位，自动识别无需拆零。
+- **高并发与防重复**：E6 SQL Server 读取语句全局添加 `WITH (NOLOCK)` 避免锁表；增量同步日志记录触发来源统计；采用 `storeCode + externalOrderNo` 联合指纹识别，已生成处方的变更自动拦截并置为冲突状态。
+
+### 7. 移动端专属能力与合规私有化部署
+- **双原生移动终端**：Android（Kotlin + Jetpack Compose）与 iOS（SwiftUI + Apple Vision OCR），离线高精度识别药盒 SKU 与条形码，支持中心加权与字符智能容错。
+- **iPad Split View 双栏架构**：iOS 针对 iPadOS 进行响应式适配，处方、工序、斗谱、调拨全功能支持分栏侧边栏浏览，大幅提升调配中心台式平板作业效率。
+- **局域网私有化部署便捷性**：登录页与个人中心支持扫码或手动录入服务器地址（支持纯局域网 IP:Port），配套标准 HTTP 落地页规避微信内置浏览器拦截自定义 URL Scheme。
+- **法律合规与品牌展示**：登录页与关于页底部常驻 ICP 备案号、公司版权信息，并内置《用户协议》与《隐私政策》长文本富文本弹窗查阅。
 
 ---
 
@@ -126,16 +140,18 @@ flowchart TD
 
 | 文档名称 | 路径 | 适用群体与说明 |
 | --- | --- | --- |
-| **系统综合使用手册** | [docs/使用说明.md](docs/使用说明.md) | 全体管理员与操作人员必读：SOP 业务全流程、移动端使用与业务规范 |
+| **系统综合使用手册 (SOP)** | [docs/使用说明.md](docs/使用说明.md) | 全体管理员与操作人员必读：SOP 业务全流程、移动端使用与业务规范 |
 | **生产部署与运维手册** | [docs/生产部署与运维手册.md](docs/生产部署与运维手册.md) | 运维/实施工程师：Linux 环境配置、Node 24、MariaDB/Redis 调优、Nginx 反代与 PM2 集群 |
 | **常见问题排障手册 (FAQ)** | [docs/常见问题与排障指南(FAQ).md](docs/常见问题与排障指南(FAQ).md) | 药房一线与实施支持：扫码枪/热敏打印机外设排查、E6 连接、短信失败与单据异常处理 |
-| **E6 处方同步对接文档** | [docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md) | 外部实施与开发人员：E6 同步接口规范、鉴权、报文定义与联调指南 |
-| **后端核心服务文档** | [backend/README.md](backend/README.md) | 后端开发：Fastify 5 框架、Prisma MariaDB 适配、Redis 锁、环境变量字典与 RBAC |
+| **E6 处方同步对接文档** | [docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md) | 外部实施与开发人员：E6 同步接口规范、销售员映射、多包装单位与联调指南 |
+| **SeaweedFS 对象存储手册** | [docs/SeaweedFS对象存储部署手册.md](docs/SeaweedFS对象存储部署手册.md) | 运维架构师：高并发处方附件与调剂拍照影像对象存储集群搭建与灾备 |
+| **后端核心服务文档** | [backend/README.md](backend/README.md) | 后端开发：Fastify 5 框架、Prisma MariaDB 适配、Redis 锁、推送通知与 RBAC |
 | **微信小程序端文档** | [wechat-miniprogram/README.md](wechat-miniprogram/README.md) | 前端开发：双端合一架构、TDesign 组件、Canvas 2D 凭证与页面清单 |
-| **管理端前端工程文档** | [web-admin/README.md](web-admin/README.md) | 前端开发：Web 管理端环境配置、路由权限守卫与业务组件说明 |
+| **管理端前端工程文档** | [web-admin/README.md](web-admin/README.md) | 前端开发：Web 管理端环境配置、通知设置、路由权限守卫与业务组件说明 |
 | **用户端前端工程文档** | [web-user/README.md](web-user/README.md) | 前端开发：普通用户查件端配置与独立打包说明 |
-| **Android 药房助手说明** | [android-app/README.md](android-app/README.md) | 移动端开发：Kotlin + Compose 构建、扫码引擎、Keystore 签名与 CI/CD |
-| **E6Sync 同步客户端说明** | [E6Sync/README.md](E6Sync/README.md) | Windows 部署人员：WinForms .NET 4.6.2 客户端配置与定时同步规则 |
+| **Android 药房助手说明** | [android-app/README.md](android-app/README.md) | 移动端开发：Kotlin + Compose 构建、扫码引擎、极光/FCM 推送与 CI/CD |
+| **iOS 药房助手说明** | [ios-app/README.md](ios-app/README.md) | 移动端开发：SwiftUI 构建、Vision OCR、iPad Split View、APNs 原生推送 |
+| **E6Sync 同步客户端说明** | [E6Sync/README.md](E6Sync/README.md) | Windows 部署人员：WinForms .NET 4.6.2 客户端配置、销售员同步与定时规则 |
 | **数据库与迁移规范** | [backend/prisma/README.md](backend/prisma/README.md) | 后端运维：Prisma Migrate 迁移指南与数据库升级维护规范 |
 
 ---
@@ -148,6 +164,7 @@ flowchart TD
 - **数据库**：MariaDB `10.6+` 或 MySQL `8.0+`（字符集 `utf8mb4`）
 - **内存缓存**：Redis `6.2+` 或 `7.x`（管理有效登录会话与防重并发控制）
 - **Java / Android 环境**（可选，用于 Android 端编译）：JDK 21, Android SDK 36, Gradle 8.10+
+- **iOS / macOS 环境**（可选，用于 iOS 端编译）：macOS 14+ (Sonoma/Sequoia), Xcode 15.0+, CocoaPods 1.14+, iOS 15.0+ 部署目标
 - **.NET 环境**（可选，用于编译 E6Sync）：.NET Framework 4.6.2 Targeting Pack, Visual Studio 2022
 
 ---
@@ -414,66 +431,80 @@ tar -czf /srv/backup/tcm-uploads-$(date +%F).tar.gz -C /srv/tcm-data uploads
 
 所有业务接口均带有统一状态码格式响应：`{ "code": 0, "message": "", "data": ... }`。
 
-### 1. 认证鉴权 (`/auth`)
-- `POST /auth/login`：管理员/员工用户名密码登录（返回 JWT 与角色）
-- `POST /auth/user-login`：普通用户手机号登录
+### 1. 认证鉴权与设备会话 (`/auth`, `/app`)
+- `POST /auth/login`：管理员/员工用户名密码登录（返回 JWT、角色与登录会话 JTI）
+- `POST /auth/user-login`：普通用户手机号快速登录
 - `POST /auth/wechat-login`：微信小程序一键授权/登录
-- `POST /auth/wechat-bind`：绑定微信 OpenID
+- `POST /auth/wechat-bind` / `unbind`：绑定/解绑微信 OpenID
+- `POST /auth/logout`：退出登录并自动清理注销当前移动设备推送令牌
+- `GET /auth/sessions`：当前账号多端活跃设备会话清单
+- `DELETE /auth/sessions/:jti`：远程踢出/吊销指定端登录会话
+- `GET /auth/public-configs`：获取系统公开品牌、ICP 备案号、版权声明与服务配置
+- `GET /app/legal-docs`：获取系统《用户协议》与《隐私政策》长文本富文本
 
-### 2. 处方管理 (`/admin/prescriptions`)
-- `GET /admin/prescriptions`：处方列表查询（支持门店、状态、顾客、医生、日期筛选）
-- `POST /admin/prescriptions`：新建处方（自建或外方）
-- `GET /admin/prescriptions/:id`：处方详情及附件关联
-- `PUT /admin/prescriptions/:id`：修改未加工处方
-- `DELETE /admin/prescriptions/:id`：删除未排产处方
-- `POST /admin/prescriptions/:id/attachments`：上传处方照片或附件
-- `DELETE /admin/prescriptions/:id/attachments/:attachmentId`：删除指定附件
+### 2. 处方与多附件管理 (`/admin/prescriptions`)
+- `GET /admin/prescriptions`：处方列表多维筛选（门店、状态、顾客、医生、日期）
+- `POST /admin/prescriptions`：新建处方（自建处方或登记外方机构/外院医生）
+- `GET /admin/prescriptions/:id`：处方详情、拆分批次与多附件明细
+- `PUT /admin/prescriptions/:id`：修改未加工处方基本信息
+- `DELETE /admin/prescriptions/:id`：物理删除未排产的草稿处方
+- `POST /admin/prescriptions/:id/attachments`：上传处方照片或附件（支持多图同时上传、EXIF 自动校正）
+- `GET /admin/prescriptions/:id/attachments/:attachmentId`：获取/下载指定处方附件
+- `DELETE /admin/prescriptions/:id/attachments/:attachmentId`：精准删除指定附件
 
 ### 3. 加工工作台与工序设备 (`/admin/processing-plans`, `/admin/processing-equipment`)
-- `GET /admin/processing-plans`：加工计划列表与看板
-- `GET /admin/processing-plans/calendar`：加工日历视图
+- `GET /admin/processing-plans`：加工批次列表与实时排队看板
+- `GET /admin/processing-plans/calendar`：月度加工日历视图
 - `POST /admin/processing-plans` / `POST /admin/processing-plans/batch`：单笔/批量创建加工计划
-- `POST /admin/processing-plans/queue/reorder`：拖拽调整今日加工队列
-- `POST /admin/processing-plans/queue/restore`：恢复系统默认排队顺序
+- `POST /admin/processing-plans/queue/reorder`：看板拖拽调整今日加工排产队列
+- `POST /admin/processing-plans/queue/restore`：一键恢复系统默认加急排队调度
 - `POST /admin/processing-plans/:id/transition`：加工状态流转（开工、完工、取消、恢复）
-- `POST /admin/processing-plans/:id/generate-package`：完工并手动生成待取包裹
-- `POST /admin/processing-plans/:id/dispensing-photo`：调配完成凭证拍照上传
+- `POST /admin/processing-plans/:id/generate-package`：完工并生成待取包裹（支持暂缓生成后手动补生成）
+- `POST /admin/processing-plans/:id/dispensing-photo`：调配抓配完成影像凭据上传
 - `POST /admin/processing-plans/:id/equipment-usages/start`：工序开始（绑定机号与批次）
-- `POST /admin/processing-plans/:id/equipment-usages/finish`：工序完成
-- `POST /admin/processing-plans/:id/equipment-usages/transfer`：设备故障紧急转移
-- `GET /admin/processing-equipment`：加工设备状态监控列表
+- `POST /admin/processing-plans/:id/equipment-usages/finish`：工序完工打卡
+- `POST /admin/processing-plans/:id/equipment-usages/transfer`：设备突发故障工序紧急迁移
+- `GET /admin/processing-equipment`：煎药/浓缩设备在线运行状态监控
 
-### 4. 包裹流转与核销 (`/admin/packages`)
-- `GET /admin/packages`：包裹列表与待取看板
-- `GET /admin/packages/:id`：包裹详情（二维码、取货码、流转时间轴）
-- `POST /admin/packages/verify`：**取货核销核心接口**（通过 6 位取货码或二维码核验，区分自提/跑腿/快递出库）
-- `POST /admin/packages/:id/notifications`：手动重发取药通知
+### 4. 包裹流转与多端核销 (`/admin/packages`)
+- `GET /admin/packages`：包裹列表与待取货看板
+- `GET /admin/packages/:id`：包裹详情（展示 6 位永久取货码、核销二维码、全生命周期流转时间轴）
+- `POST /admin/packages/verify`：**核心核销接口**（支持自提、同城跑腿与快递配送扫码出库）
+- `POST /admin/packages/:id/notifications`：手动补发提货短信/通知
 
 ### 5. 智能斗谱与库位 (`/admin/herb-locations`)
-- `GET /admin/herb-locations`：门店斗谱网格与药材明细
-- `GET /admin/herb-locations/layout`：获取门店百子柜/大柜物理布局参数
-- `PUT /admin/herb-locations/layout`：保存门店物理布局配置
-- `POST /admin/herb-locations/assignments`：药材绑定到货位
+- `GET /admin/herb-locations`：门店百子柜网格布局与药材分布图
+- `GET /admin/herb-locations/layout` / `PUT /layout`：获取/保存门店抽屉层列等物理布局参数
+- `POST /admin/herb-locations/assignments`：药材绑定至具体斗位与格内序号（前/后/左/右）
 - `POST /admin/herb-locations/import`：Excel 批量导入斗谱数据
-- `GET /admin/herb-locations/export`：导出当前门店斗谱 Excel
-- `POST /admin/herb-locations/import-moves`：导入库位调迁表格
+- `GET /admin/herb-locations/export`：全量导出当前门店斗谱 Excel
+- `POST /admin/herb-locations/import-moves`：导入库位大换斗调迁表格
 
-### 6. 盘点、差异与调拨 (`/admin/yd-goods-checks`, `/admin/product-differences`, `/admin/store-transfers`)
+### 6. 盘点、差异与调拨闭环 (`/admin/yd-goods-checks`, `/admin/product-differences`, `/admin/store-transfers`)
 - `GET /admin/yd-goods-checks`：药店商品盘点单列表
-- `POST /admin/yd-goods-checks`：创建新盘点任务
-- `POST /admin/yd-goods-checks/:id/initial`：录入初盘数量
-- `POST /admin/yd-goods-checks/:id/recount`：录入复盘数据并确认差异
+- `POST /admin/yd-goods-checks`：圈选范围创建盘点任务
+- `POST /admin/yd-goods-checks/:id/initial`：录入初盘数量（支持直接修正货位）
+- `POST /admin/yd-goods-checks/:id/recount`：复盘比对并确认账实差异
 - `GET /admin/product-differences/stats` / `logs`：商品库存差异台账与调整日志
-- `POST /admin/store-transfers`：发起门店间调拨申请
-- `POST /admin/store-transfers/:id/confirm-outbound`：调出门店确认出库
-- `POST /admin/store-transfers/:id/confirm-return`：调入门店确认归还
+- `POST /admin/store-transfers`：发起跨门店借调申请
+- `POST /admin/store-transfers/:id/confirm-outbound`：调出门店确认出库发运
+- `POST /admin/store-transfers/:id/returns`：调入门店登记归还明细
+- `POST /admin/store-transfers/:id/returns/:returnId/confirm`：调出门店核实验收并**确认归还（结案闭环）**
+- `POST /admin/store-transfers/:id/cancel`：撤销借调单
 
-### 7. E6 ERP 集成 (`/integrations/e6`, `/admin/e6-*`)
-- `POST /integrations/e6/v1/prescriptions`：E6 诊所处方单向同步接收（X-API-Key 鉴权）
-- `GET /admin/e6-imports`：E6 导入处方审核池
-- `POST /admin/e6-imports/:id/confirm`：审核通过并生成正式处方与加工计划
-- `POST /admin/e6-imports/merge`：合并相同顾客的 E6 处方导入单
-- `GET /admin/e6-pharmacy/products`：E6 药店商品与实时正库存列表
+### 7. 移动端推送与预警调度 (`/admin/device-tokens`, `/admin/system-configs`)
+- `GET /admin/device-tokens`：查询已注册设备推送令牌
+- `POST /admin/device-tokens`：注册移动端设备推送令牌（支持 APNs / JPush / FCM 与个性化通知偏好）
+- `DELETE /admin/device-tokens`：注销删除当前设备推送令牌
+- `POST /admin/system-configs/trigger-expiry-scan`：手动立即触发药品效期临期巡检扫描
+
+### 8. E6 ERP 集成 (`/integrations/e6`, `/admin/e6-*`)
+- `POST /integrations/e6/v1/prescriptions`：E6 诊所处方单向安全接收（X-API-Key 鉴权）
+- `GET /admin/e6-imports`：E6 待确认导入池（支持状态筛选、模糊搜索）
+- `POST /admin/e6-imports/:id/confirm`：审核通过并按批次独立指定加工工艺生成正式处方
+- `POST /admin/e6-imports/merge`：同顾客多张单据一键合并处方导入
+- `GET /admin/e6-pharmacy/products`：E6 药店商品档案与实时正库存列表
+- `GET /admin/e6-pharmacy/locations`：E6 药店商品物理货位编号列表
 
 ---
 
@@ -481,9 +512,11 @@ tar -czf /srv/backup/tcm-uploads-$(date +%F).tar.gz -C /srv/tcm-data uploads
 
 详细报文与联调流程请参阅专属对接指南：[docs/E6处方同步API对接文档.md](docs/E6处方同步API对接文档.md)。
 
-- **同步机制**：接口遵循轻量、幂等、安全的原则，调用方通过 `X-API-Key` 请求头认证。
+- **同步机制**：接口遵循轻量、幂等、安全的原则，调用方通过 `X-API-Key` 请求头认证；E6 本地采用单向读取（ADO.NET），查询语句全局带 `WITH (NOLOCK)`，杜绝收银排队锁表。
+- **销售员与人员映射**：原“医师编码”全面重构为「销售员号」（`salespersonCode`），在系统内可灵活建立销售员与执业医师的映射，支持收银员/操作员映射。
+- **多单位支持**：原生识别重量单位（`g`）及包装规格单位（`盒`、`袋`、`包`、`瓶`、`支`），无需强拆单位。
 - **状态流转机制**：外部推送进入待审核池（状态：`0=待确认`、`1=待映射`、`2=导入异常`、`3=已生成处方`、`4=已驳回`、`5=已取消`、`6=数据冲突`、`7=处理中`）。
-- **字段规范**：支持订单主表与多行明细（`items`），中药剂数统一换算，重量单位规范归一化为 `g`。
+- **防重复机制**：采用 `storeCode + externalOrderNo` 联合指纹识别，已生成处方的单据发生外部二次变更时自动置为冲突保护状态。
 
 ---
 

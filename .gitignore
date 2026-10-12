@@ -8,6 +8,7 @@
 *.tsbuildinfo
 *.pdf
 *.zip
+*_temp.html
 
 # Local environment configuration
 **/.env
@@ -66,4 +67,8 @@ ios-app/Podfile.lock
 
 # 软著申请自动生成的文件
 软著*
+
+
+# 软著PDF文件
+*.pdf
 

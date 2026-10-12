@@ -50,7 +50,8 @@ Content-Type: application/json; charset=utf-8
 | `storeCode` | `string` | **是** | 2-50 字符 | **门店编码**。需与系统中配置的门店编码一致（通常为全大写）。 |
 | `customerName` | `string` | 否 | ≤ 64 字符 | 顾客姓名（允许传空字符串）。 |
 | `phone` | `string` | 否 | 11位合规手机号 | 顾客手机号（若无联系方式可传空，但建议尽量获取以便发送取药短信）。 |
-| `e6DoctorCode` | `string` | 否* | 1-100 字符 | **E6 医师工号**。中药系统将根据配置的「医师映射表」将其转换。 |
+| `salespersonCode` | `string` | 否* | 1-100 字符 | **E6 销售员号**（原 `e6DoctorCode`）。中药系统将根据配置的「销售员映射表」将其转换为对应的执业中医师。若门店仅有一位启用映射，可缺省。 |
+| `cashierName` | `string` | 否 | ≤ 200 字符 | **操作员/收银员姓名**。用于记录 E6 录单操作员，便于前后台对账审计。 |
 | `totalPrice` | `string` | **是** | 金额字符串 | **订单总价**（精确到 2 位小数）。推荐传字符串防止浮点数精度丢失，如 `"268.00"`。 |
 | `paymentStatus` | `string` | 否 | `PAID` / `UNPAID` | 订单支付状态，根据 E6 收款台状态计算（结单为 PAID）。 |
 | `sourceStatus` | `string` | 否 | `ACTIVE` / `CANCELLED` | 单据存续状态，若订单在 E6 被作废请传入 `CANCELLED`。 |
@@ -66,9 +67,9 @@ Content-Type: application/json; charset=utf-8
 |---|---|:---:|---|
 | `sequence` | `integer`| **是** | 明细显示顺序（对应 E6 `ri` 字段）。单张处方内不可重复。 |
 | `name` | `string` | **是** | 中药饮片名称（如 `黄芪`）。 |
-| `quantity` | `string` | **是** | **单剂数量**。请先在 E6 本地将所有重量单位折算为 `克`（不乘付数）。件数单位（条/个）保持原数。 |
-| `totalQuantity` | `string` | **是** | **总数量**。请在 E6 本地将重量单位折算为 `克`。 |
-| `unit` | `string` | **是** | 单位。重量统一传 `g`，计件可传 `条` 或 `个`。 |
+| `quantity` | `string` | **是** | **单剂数量**。重量单位统一折算为克数值（不乘付数）；包装或计件单位保持原数。 |
+| `totalQuantity` | `string` | **是** | **总数量**。重量单位统一折算为克数值；包装或计件单位保持总数。 |
+| `unit` | `string` | **是** | 单位。重量单位传 `g`，包装与计件单位支持 `条`、`个`、`盒`、`袋`、`包`、`瓶`、`支`。 |
 | `doseCount` | `integer`| **是** | 该味药的具体付数（通常与主表一致，个别引药可能不同）。 |
 
 ### 3.3 请求 JSON 报文示例
@@ -79,13 +80,15 @@ Content-Type: application/json; charset=utf-8
   "storeCode": "SZ001",
   "customerName": "张三",
   "phone": "13800138000",
-  "e6DoctorCode": "D001",
+  "salespersonCode": "D001",
+  "cashierName": "李药师",
   "totalPrice": "268.00",
   "doseCount": 7,
   "items": [
     { "sequence": 1, "name": "北柴胡", "quantity": "6", "totalQuantity": "42", "unit": "g", "doseCount": 7 },
     { "sequence": 2, "name": "白芍", "quantity": "15", "totalQuantity": "75", "unit": "g", "doseCount": 5 },
-    { "sequence": 3, "name": "阿胶", "quantity": "1", "totalQuantity": "7", "unit": "条", "doseCount": 7 }
+    { "sequence": 3, "name": "阿胶", "quantity": "1", "totalQuantity": "7", "unit": "条", "doseCount": 7 },
+    { "sequence": 4, "name": "生脉饮", "quantity": "1", "totalQuantity": "1", "unit": "盒", "doseCount": 1 }
   ],
   "remark": "饭后温服",
   "sourceCreatedAt": "2026-07-26T10:22:00+08:00",
@@ -123,12 +126,12 @@ Content-Type: application/json; charset=utf-8
 stateDiagram-v2
     direction LR
     [*] --> 0_待确认 : 首次正常接收
-    [*] --> 1_待映射 : 医师映射未配置
+    [*] --> 1_待映射 : 销售员映射未配置
     [*] --> 2_导入异常 : 数据格式错乱
 
     0_待确认 --> 4_已驳回 : 管理员人工拒单
     0_待确认 --> 3_已生成处方 : 管理员审核通过
-    1_待映射 --> 0_待确认 : 后台补充配置医师映射
+    1_待映射 --> 0_待确认 : 后台补充配置销售员映射
 
     3_已生成处方 --> 6_数据冲突 : E6 强制推送更改
     [*] --> 5_已取消 : 接收到作废报文
@@ -185,6 +188,8 @@ curl -X POST "https://api.tcm.example.com/integrations/e6/v1/prescriptions" \
   -d '{
     "externalOrderNo":"E6-2026-12345",
     "storeCode":"SZ001",
+    "salespersonCode":"D001",
+    "cashierName":"李药师",
     "totalPrice":"100.00",
     "doseCount":7,
     "items":[{"sequence":1,"name":"人参","quantity":"10","totalQuantity":"70","unit":"g","doseCount":7}]
