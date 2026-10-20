@@ -75,15 +75,13 @@ public class UpdateManager {
         self.isChecking = true
         defer { self.isChecking = false }
         
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.tcm.admin"
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         
-        let storefront = await Storefront.current
-        let countryCode = (storefront?.countryCode ?? Locale.current.region?.identifier ?? "CN").lowercased()
+        // 直接用 App Store 数字 ID 查询，无需 country 参数（数字 ID 全球唯一）
+        // App Store id: 6815532478
         var components = URLComponents(string: "https://itunes.apple.com/lookup")
         components?.queryItems = [
-            URLQueryItem(name: "bundleId", value: bundleId),
-            URLQueryItem(name: "country", value: countryCode)
+            URLQueryItem(name: "id", value: "6815532478")
         ]
         guard let url = components?.url else {
             throw URLError(.badURL)
