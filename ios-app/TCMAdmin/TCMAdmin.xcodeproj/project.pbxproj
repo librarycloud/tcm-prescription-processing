@@ -710,7 +710,7 @@
 				CODE_SIGN_ENTITLEMENTS = TCMAdminDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 34;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -755,7 +755,7 @@
 					"$(SRCROOT)/Models/det",
 					"$(SRCROOT)/Models/rec",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -Wno-error=quoted-include-in-framework-header";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcm.admin;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -783,7 +783,7 @@
 				CODE_SIGN_ENTITLEMENTS = TCMAdmin.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 34;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -828,7 +828,7 @@
 					"$(SRCROOT)/Models/det",
 					"$(SRCROOT)/Models/rec",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -Wno-error=quoted-include-in-framework-header";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcm.admin;
 				PRODUCT_NAME = "$(TARGET_NAME)";

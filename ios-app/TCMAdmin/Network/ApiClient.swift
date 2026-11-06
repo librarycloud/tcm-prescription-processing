@@ -1288,7 +1288,7 @@ public class ApiClient: NSObject, URLSessionTaskDelegate {
     public func fetchTransferStats(storeId: Int? = nil) async throws -> [String: Int] {
         var qp: [String: String]? = nil
         if let s = storeId { qp = ["storeId": "\(s)"] }
-        return (try? await request(path: "/admin/store-transfers/stats", queryParams: qp)) ?? [:]
+        return try await request(path: "/admin/store-transfers/stats", queryParams: qp)
     }
     
     // MARK: - 库存差异接口

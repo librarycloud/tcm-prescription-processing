@@ -319,8 +319,9 @@ public struct TransfersView: View {
             .background(Color.pageBackground.ignoresSafeArea(.all))
             .refreshable {
                 ApiClient.shared.clearResponseCache()
-                await loadTransfers()
-                await loadStats()
+                async let transfersTask: () = loadTransfers(showSpinner: false)
+                async let statsTask: () = loadStats()
+                _ = await (transfersTask, statsTask)
             }
             
         }
@@ -386,13 +387,19 @@ public struct TransfersView: View {
     }
 
     private func loadStats() async {
-        stats = (try? await ApiClient.shared.fetchTransferStats(storeId: selectedStoreId)) ?? [:]
+        do {
+            let res = try await ApiClient.shared.fetchTransferStats(storeId: selectedStoreId)
+            guard !Task.isCancelled else { return }
+            self.stats = res
+        } catch {
+            // 请求失败或被取消时保留原有统计数值，绝不清空为 0
+        }
     }
     
-    private func loadTransfers() async {
+    private func loadTransfers(showSpinner: Bool = true) async {
         let taskID = UUID()
         currentTaskID = taskID
-        isLoading = true
+        if showSpinner { isLoading = true }
         errorMessage = nil
         do {
             let result = try await ApiClient.shared.fetchTransfers(
@@ -404,11 +411,14 @@ public struct TransfersView: View {
             guard !Task.isCancelled else { return }
             guard currentTaskID == taskID else { return }
             self.transfers = result
+        } catch is CancellationError {
+            // ignore cancellation
         } catch {
             guard !Task.isCancelled else { return }
+            guard currentTaskID == taskID else { return }
             errorMessage = error.localizedDescription
         }
-        if currentTaskID == taskID { isLoading = false }
+        if currentTaskID == taskID && showSpinner { isLoading = false }
     }
 }
 
