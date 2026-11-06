@@ -203,16 +203,29 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         intent?.let { handleIntent(it) }
     }
 
     private fun handleIntent(intent: android.content.Intent?) {
-        val jpushExtras = intent?.getStringExtra("jpush_extras")
-        if (jpushExtras != null) {
-            ApiClient.clearResponseCache(applicationContext)
-            pushExtrasChannel.trySend(jpushExtras)
+        if (intent == null) return
+        var extrasJson = intent.getStringExtra("jpush_extras")
+        if (extrasJson.isNullOrBlank()) {
+            intent.extras?.let { bundle ->
+                val map = mutableMapOf<String, Any?>()
+                for (key in bundle.keySet()) {
+                    map[key] = bundle.get(key)
+                }
+                if (map.containsKey("transferId") || map.containsKey("transfer_id") || map.containsKey("planId") || map.containsKey("eventCode") || map.containsKey("businessId")) {
+                    extrasJson = org.json.JSONObject(map).toString()
+                }
+            }
         }
-        if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
+        if (!extrasJson.isNullOrBlank()) {
+            ApiClient.clearResponseCache(applicationContext)
+            pushExtrasChannel.trySend(extrasJson)
+        }
+        if (intent.action == android.content.Intent.ACTION_VIEW && intent.data != null) {
             val uri = intent.data!!
             if (uri.scheme == "tcmadmin" || uri.scheme == "tcm") {
                 // Never switch the API endpoint from an external intent without an
@@ -292,32 +305,62 @@ private fun TcmAdminApp() {
     val navController = rememberNavController()
 
     LaunchedEffect(Unit) {
+        // 等待 NavHost 完成初始化，确保 Navigation Graph 已绑定
+        while (true) {
+            val hasGraph = try {
+                navController.currentDestination != null
+            } catch (e: Exception) {
+                false
+            }
+            if (hasGraph) break
+            kotlinx.coroutines.delay(50)
+        }
+
         for (extrasJson in MainActivity.pushExtrasChannel) {
             try {
-                val json = org.json.JSONObject(extrasJson)
-                val transferId = json.optString("transferId")
+                android.util.Log.d("PushNav", "Handling push extras: $extrasJson")
+                val rootJson = org.json.JSONObject(extrasJson)
+                val json = rootJson.optJSONObject("extras") ?: rootJson.optJSONObject("data") ?: rootJson
+                
+                val transferIdStr = json.optString("transferId")
+                    .ifEmpty { json.optString("transfer_id") }
+                    .ifEmpty { json.optString("businessId") }
+                    .ifEmpty { json.optString("id") }
+                    .ifEmpty { rootJson.optString("transferId") }
+                    .ifEmpty { rootJson.optString("businessId") }
+                
                 val planId = json.optString("planId")
+                    .ifEmpty { rootJson.optString("planId") }
                 val action = json.optString("action")
+                    .ifEmpty { rootJson.optString("action") }
                 
                 val currentSession = session ?: ApiClient.loadSession(appContext)?.also { session = it }
-                if (currentSession == null) continue
+                if (currentSession == null) {
+                    android.util.Log.w("PushNav", "No active session, skipping push navigation")
+                    continue
+                }
                 
-                val targetTransferId = transferId.toIntOrNull()
+                val targetTransferId = transferIdStr.toIntOrNull() 
+                    ?: json.optInt("transferId", 0).takeIf { it > 0 }
+                    ?: rootJson.optInt("transferId", 0).takeIf { it > 0 }
+                    ?: json.optInt("businessId", 0).takeIf { it > 0 }
+                    ?: rootJson.optInt("businessId", 0).takeIf { it > 0 }
+                
                 if (targetTransferId != null) {
-                    // Navigate to home, clearing everything else
-                    navController.navigate(Route.Inventory()) {
-                        popUpTo(navController.graph.id) { inclusive = true }
+                    android.util.Log.d("PushNav", "Navigating to TransferDetail($targetTransferId)")
+                    navController.navigate(Route.Transfers) {
+                        launchSingleTop = true
                     }
-                    // Push the intermediate transfers list
-                    navController.navigate(Route.Transfers)
-                    // Push the final detail page
-                    navController.navigate(Route.TransferDetail(targetTransferId))
+                    navController.navigate(Route.TransferDetail(targetTransferId)) {
+                        launchSingleTop = true
+                    }
                 } else if (planId.isNotEmpty() && action == "processing_completed") {
-                    navController.navigate(Route.Inventory()) {
-                        popUpTo(navController.graph.id) { inclusive = true }
+                    navController.navigate(Route.Processing) {
+                        launchSingleTop = true
                     }
-                    navController.navigate(Route.Processing)
-                    navController.navigate(Route.WorkflowOperation(planId, "processing_completed", action))
+                    navController.navigate(Route.WorkflowOperation(planId, "processing_completed", action)) {
+                        launchSingleTop = true
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("PushNav", "Failed to parse push extras", e)

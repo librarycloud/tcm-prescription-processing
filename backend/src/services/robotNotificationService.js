@@ -260,6 +260,12 @@ async function deliverClaimed(prisma, log, logger) {
           if (v.planId) extraData.planId = String(v.planId);
           if (v.planCode) extraData.planCode = String(v.planCode);
         }
+        if (!extraData.transferId && (log.event?.businessType === "STORE_TRANSFER" || log.event?.eventCode?.startsWith("TRANSFER_")) && log.event?.businessId) {
+          extraData.transferId = String(log.event.businessId);
+        }
+        if (log.event?.businessId) {
+          extraData.businessId = String(log.event.businessId);
+        }
         
         await sendPushToStores(prisma, storeIds, { title, body, data: extraData }, log.event?.operatorId ? [log.event.operatorId] : []);
       }

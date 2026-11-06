@@ -104,7 +104,6 @@ class TcmJPushReceiver : JPushMessageReceiver() {
     }
 
     override fun onNotifyMessageOpened(context: Context, message: cn.jpush.android.api.NotificationMessage) {
-        if (!NotificationPreference.accepts(context, NotificationPreference.eventCodeFromJson(message.notificationExtras))) return
         Log.d(TAG, "Notification clicked. Extras: ${message.notificationExtras}")
         val intent = android.content.Intent(context, MainActivity::class.java).apply {
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
